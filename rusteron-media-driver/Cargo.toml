@@ -1,0 +1,20 @@
+[package]
+name = "rusteron-media-driver"
+version = "0.1.0"
+edition = "2021"
+authors = ["Mo Imran <mimran1980@gmail.com>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/mimran1980/rusteron"
+homepage = "https://github.com/mimran1980/rusteron"
+keywords = ["aeron", "low-latency", "client", "bindings", "networking"]
+categories = ["network-programming"]
+documentation = "https://github.com/mimran1980/rusteron"
+
+[dependencies]
+rusteron-common = { path = "../rusteron-common" }
+libaeron_driver-sys = "1.46.5"
+ctrlc = { workspace = true }
+
+[[bin]]
+name = "media_driver"
+path = "src/bin/media_driver.rs"
