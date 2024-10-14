@@ -23,7 +23,8 @@ release:
   cargo build --all-targets --release
 
 docs:
-  cargo doc --open
+  cargo clean --doc
+  cargo doc --workspace --no-deps --open
 
 # run unit tests
 test:

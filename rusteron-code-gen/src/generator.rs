@@ -331,8 +331,8 @@ fn get_docs(docs: &HashSet<String>, _wrappers: &HashMap<String, CWrapper>) -> Ve
         .flat_map(|d| d.lines())
         .map(|doc| {
             let doc = doc
-                .replace("@param", "*param*")
-                .replace("@return", "*return*");
+                .replace("@param", "\n**param**")
+                .replace("@return", "\n**return**");
 
             quote! {
                 #[doc = #doc]
