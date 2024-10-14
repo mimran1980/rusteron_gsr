@@ -2,6 +2,7 @@
 
 [![github-ci](https://github.com/mimran1980/rusteron/actions/workflows/ci.yml/badge.svg)](https://github.com/amoskvin/rusteron/actions/workflows/ci.yml)
 [![docs.rs](https://docs.rs/rusteron/badge.svg)](https://docs.rs/rusteron/)
+[![github docs](https://docs.rs/rusteron/badge.svg)](https://mimran1980.github.io/rusteron)
 
 A Rust client wrapper for Aeron C bindings
 
