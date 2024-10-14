@@ -69,7 +69,7 @@ jobs:
         with:
           components: rustdoc
           toolchain: stable
-          profile: minimal
+          profile: complete
 
       - name: Build documentation
         run: cargo doc --no-deps
