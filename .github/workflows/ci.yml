@@ -53,25 +53,3 @@ jobs:
 
       - name: Test
         run: cargo test --verbose ${{ env.feature-flags }}
-
-
-  deploy_docs:
-    name: Deploy Rust Docs
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' # Only deploy docs on pushes to main branch
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustdoc
-          toolchain: nightly
-
-      - name: Build documentation
-        run: cargo doc --no-deps
-
-      - name: Deploy to GitHub Pages
-        uses: actions/deploy-pages@v4
