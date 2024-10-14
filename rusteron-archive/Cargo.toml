@@ -1,18 +1,15 @@
 [package]
-name = "rusteron-media-driver"
+name = "rusteron-archive"
 version = "0.1.0"
 edition = "2021"
 authors = ["Mo Imran <mimran1980@gmail.com>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/mimran1980/rusteron"
 homepage = "https://github.com/mimran1980/rusteron"
-keywords = ["aeron", "low-latency", "media-driver", "bindings", "networking"]
+keywords = ["aeron", "low-latency", "archive", "bindings", "networking"]
 categories = ["network-programming"]
 documentation = "https://github.com/mimran1980/rusteron"
 #readme = "README.md"
-
-[dependencies]
-ctrlc = { workspace = true }
 
 [build-dependencies]
 bindgen = {  workspace = true }
@@ -27,7 +24,3 @@ rusteron-code-gen = {path = "../rusteron-code-gen"}
 
 [features]
 static = []
-
-[[bin]]
-name = "media_driver"
-path = "src/bin/media_driver.rs"

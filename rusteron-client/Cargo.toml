@@ -9,8 +9,19 @@ homepage = "https://github.com/mimran1980/rusteron"
 keywords = ["aeron", "low-latency", "client", "bindings", "networking"]
 categories = ["network-programming"]
 documentation = "https://github.com/mimran1980/rusteron"
+#readme = "README.md"
 
-[dependencies]
-rusteron-common = { path = "../rusteron-common" }
-libaeron-sys = "1.46.5"
+[build-dependencies]
+bindgen = {  workspace = true }
+cmake = {  workspace = true }
+dunce = {  workspace = true }
+pkg-config = {  workspace = true }
+syn = {  workspace = true }
+proc-macro2 = {  workspace = true }
+quote = {  workspace = true }
+itertools = {  workspace = true }
+rusteron-code-gen = {path = "../rusteron-code-gen"}
 ctrlc = { workspace = true }
+
+[features]
+static = []
