@@ -7,7 +7,8 @@ use std::{any, fmt, ptr};
 /// are properly released when they go out of scope.
 pub struct ManagedCResource<T> {
     resource: *mut T,
-    cleanup: Box<dyn FnMut(*mut *mut T) -> i32>,
+    cleanup: Option<Box<dyn FnMut(*mut *mut T) -> i32>>,
+    cleanup_struct: bool,
 }
 
 impl<T> Debug for ManagedCResource<T> {
@@ -25,20 +26,33 @@ impl<T> ManagedCResource<T> {
     /// The initializer is a closure that attempts to initialize the resource.
     /// If initialization fails, the initializer should return an error code.
     /// The cleanup function is used to release the resource when it's no longer needed.
+    /// `cleanup_struct` where it should clean up the struct in rust
     pub fn new(
         init: impl FnOnce(*mut *mut T) -> i32,
         cleanup: impl FnMut(*mut *mut T) -> i32 + 'static,
+        cleanup_struct: bool,
     ) -> Result<Self, AeronCError> {
         let mut resource: *mut T = ptr::null_mut();
         let result = init(&mut resource);
-        if result < 0 {
+        if result < 0 || resource.is_null() {
             return Err(AeronCError::from_code(result));
         }
 
-        Ok(Self {
+        let result = Self {
             resource,
-            cleanup: Box::new(cleanup),
-        })
+            cleanup: Some(Box::new(cleanup)),
+            cleanup_struct,
+        };
+        println!("created c resource: {:?}", result);
+        Ok(result)
+    }
+
+    pub fn new_borrowed(value: *const T) -> Self {
+        Self {
+            resource: value as *mut _,
+            cleanup: None,
+            cleanup_struct: false,
+        }
     }
 
     /// Gets a raw pointer to the resource.
@@ -50,21 +64,35 @@ impl<T> ManagedCResource<T> {
     ///
     /// If cleanup fails, it returns an `AeronError`.
     pub fn close(&mut self) -> Result<(), AeronCError> {
-        if !self.resource.is_null() {
-            let result = (self.cleanup)(&mut self.resource);
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
+        if let Some(mut cleanup) = self.cleanup.take() {
+            if !self.resource.is_null() {
+                let result = (cleanup)(&mut self.resource);
+                if result < 0 {
+                    return Err(AeronCError::from_code(result));
+                }
+                self.resource = std::ptr::null_mut();
             }
-            self.resource = std::ptr::null_mut();
         }
+
         Ok(())
     }
 }
 
 impl<T> Drop for ManagedCResource<T> {
     fn drop(&mut self) {
-        // Ensure the clean-up function is called when the resource is dropped.
-        let _ = self.close(); // Ignore errors during an automatic drop to avoid panics.
+        if !self.resource.is_null() {
+            let resource = self.resource.clone();
+            // Ensure the clean-up function is called when the resource is dropped.
+            println!("closing c resource: {:?}", self);
+            let _ = self.close(); // Ignore errors during an automatic drop to avoid panics.
+
+            if self.cleanup_struct {
+                println!("closing rust struct resource: {:?}", self);
+                unsafe {
+                    let _ = Box::from_raw(resource);
+                }
+            }
+        }
     }
 }
 
@@ -116,3 +144,13 @@ impl fmt::Display for AeronCError {
 }
 
 impl std::error::Error for AeronCError {}
+
+// fn cleanup_closure<T>(clientd: *mut ::std::os::raw::c_void) {
+//     if !clientd.is_null() {
+//         unsafe {
+//             // Convert the raw pointer back into a Box and drop it.
+//             Box::from_raw(clientd as *mut T);
+//             // The Box is dropped when it goes out of scope, automatically calling the destructor (drop).
+//         }
+//     }
+// }

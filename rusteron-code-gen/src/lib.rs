@@ -57,8 +57,8 @@ pub fn format_token_stream(tokens: TokenStream) -> String {
 
     // Use rustfmt to format the code string
     match format_with_rustfmt(&code) {
-        Ok(formatted_code) => formatted_code,
-        Err(_) => code, // Fallback to unformatted code in case of error
+        Ok(formatted_code) if !formatted_code.trim().is_empty() => formatted_code,
+        _ => code.replace("{", "{\n"), // Fallback to unformatted code in case of error
     }
 }
 
@@ -96,6 +96,11 @@ mod tests {
             write_to_file(code, false, "md.rs");
         }
 
+        for handler in &bindings.handlers {
+            let code = crate::generate_handlers(handler, &bindings);
+            append_to_file(&file, &code.to_string()).unwrap();
+        }
+
         let t = trybuild::TestCases::new();
         append_to_file(&file, MEDIA_DRIVER_BINDINGS).unwrap();
         append_to_file(&file, "\npub fn main() {}\n").unwrap();
@@ -114,13 +119,24 @@ mod tests {
                 .unwrap()
                 .class_name
         );
+        // dbg!(bindings.wrappers.iter().filter(|(_,w)|w.methods.iter().any(|m|m.fn_name.ends_with("_poll")) ).next());
+        assert_eq!(0, bindings.methods.len());
 
         // panic!("{:#?}", bindings.wrappers.values().map(|v| v.class_name.to_string()).collect_vec());
 
         let file = write_to_file(TokenStream::new(), true, "client.rs");
         for (p, w) in bindings.wrappers.values().enumerate() {
             let code = crate::generate_rust_code(w, &bindings.wrappers, p == 0, true);
+            if code.to_string().contains("ndler : Option < AeronCloseClientHandlerImpl > , clientd :) -> Result < Self , AeronCError > { let resource = Manage") {
+                panic!("{}", format_token_stream(code));
+            }
+
             write_to_file(code, false, "client.rs");
+        }
+
+        for handler in &bindings.handlers {
+            let code = crate::generate_handlers(handler, &bindings);
+            append_to_file(&file, &code.to_string()).unwrap();
         }
 
         let t = trybuild::TestCases::new();
@@ -148,6 +164,11 @@ mod tests {
         for (p, w) in bindings.wrappers.values().enumerate() {
             let code = crate::generate_rust_code(w, &bindings.wrappers, p == 0, true);
             write_to_file(code, false, "archive.rs");
+        }
+
+        for handler in &bindings.handlers {
+            let code = crate::generate_handlers(handler, &bindings);
+            append_to_file(&file, &code.to_string()).unwrap();
         }
 
         let t = trybuild::TestCases::new();

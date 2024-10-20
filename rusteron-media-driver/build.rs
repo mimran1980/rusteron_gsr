@@ -59,6 +59,9 @@ pub fn main() {
             println!("cargo:rustc-link-lib=shell32");
             println!("cargo:rustc-link-lib=iphlpapi");
         }
+        if cfg!(target_os = "linux") {
+            println!("cargo:rustc-link-lib=uuid");
+        }
     }
 
     let cmake_output = Config::new(&aeron_path)
@@ -101,7 +104,7 @@ pub fn main() {
     println!("cargo:include={}", header_path.display());
     let bindings = bindgen::Builder::default()
         .clang_arg(format!("-I{}", header_path.display()))
-        // We need to include some of the headers from `libaeron`, so update the include path here
+        // We need to include some of the headers from `rusteron`, so update the include path here
         .clang_arg(format!(
             "-I{}",
             aeron_path.join("aeron-client/src/main/c").display()
@@ -123,6 +126,14 @@ pub fn main() {
         .expect("Couldn't write bindings!");
 
     let bindings = rusteron_code_gen::parse_bindings(&out);
+    assert_eq!(
+        "aeron_driver_conductor_t",
+        bindings
+            .wrappers
+            .get("aeron_driver_conductor_t")
+            .unwrap()
+            .type_name
+    );
     let aeron = out_path.join("aeron.rs");
     let _ = fs::remove_file(aeron.clone());
     for (p, w) in bindings
@@ -134,5 +145,8 @@ pub fn main() {
         let code = rusteron_code_gen::generate_rust_code(w, &bindings.wrappers, p == 0, false);
         append_to_file(aeron.to_str().unwrap(), &code.to_string()).unwrap();
     }
-    // panic!("{}", aeron.to_str().unwrap());
+    for handler in &bindings.handlers {
+        let code = rusteron_code_gen::generate_handlers(handler, &bindings);
+        append_to_file(aeron.to_str().unwrap(), &code.to_string()).unwrap();
+    }
 }
