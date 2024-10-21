@@ -11,7 +11,9 @@ include!("aeron.rs");
 
 #[cfg(test)]
 mod tests {
+    use crate::{AeronContext, AeronErrorHandlerClosure};
     use std::error;
+    use std::time::SystemTime;
 
     #[test]
     fn version_check() -> Result<(), Box<dyn error::Error>> {
@@ -22,6 +24,21 @@ mod tests {
         let aeron_version = format!("{}.{}.{}", major, minor, patch);
         let cargo_version = "1.47.0"; // env!("CARGO_PKG_VERSION");
         assert_eq!(aeron_version, cargo_version);
+
+        // don't want to run just want to enfore that it compiles
+        if SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)?
+            .as_secs()
+            < 1
+        {
+            let ctx = AeronContext::new()?;
+            let mut error_count = 1;
+            let error_handler = Some(AeronErrorHandlerClosure::from(|error_code, msg| {
+                eprintln!("aeron error {}: {}", error_code, msg);
+                error_count += 1;
+            }));
+            ctx.set_error_handler(error_handler.as_ref())?;
+        }
 
         Ok(())
     }

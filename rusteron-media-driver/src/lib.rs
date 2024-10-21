@@ -84,10 +84,17 @@ mod tests {
         ctx.set_dir(&dir)?;
 
         let client = Aeron::new(ctx.clone())?;
+        let mut error_count = 0;
+
+        let error_handler = Some(AeronErrorHandlerClosure::from(|error_code, msg| {
+            eprintln!("Aeron error {}: {}", error_code, msg);
+            error_count += 1;
+        }));
+        ctx.set_error_handler(error_handler.as_ref())?;
 
         struct Test {}
         impl AeronAvailableCounterHandler for Test {
-            fn handle(
+            fn handle_aeron_on_available_counter(
                 &mut self,
                 counters_reader: AeronCountersReader,
                 registration_id: i64,
@@ -98,7 +105,7 @@ mod tests {
         }
 
         impl AeronNewPublicationHandler for Test {
-            fn handle(
+            fn handle_aeron_on_new_publication(
                 &mut self,
                 async_: AeronAsyncAddPublication,
                 channel: &str,
