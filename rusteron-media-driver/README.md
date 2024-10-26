@@ -82,7 +82,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 Since **rusteron-media-driver** relies on Aeron C bindings, it involves the use of `unsafe` Rust code. Users must ensure:
 
 - Resources are properly managed (e.g., starting and stopping drivers in a correct order).
-- Proper synchronization when accessing shared data in a multithreaded environment.
+- Proper synchronisation when accessing shared data in a multithreaded environment.
 
 Improper use of the media driver can lead to crashes or other undefined behaviors.
 

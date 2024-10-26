@@ -15,6 +15,16 @@ The **rusteron-client** module acts as a Rust wrapper around the Aeron C client 
 - **Subscription**: Receive messages from Aeron channels.
 - **Callbacks**: Handle events such as new publications, new subscriptions, and errors.
 
+## General Patterns
+
+The **rusteron-client** module follows several general patterns to simplify the use of Aeron functionalities in Rust:
+
+- **Cloneable Wrappers**: All Rust wrappers in **rusteron-client** can be cloned, and they will refer to the same underlying aeron c instance/resource. This allows you to use multiple references to the same object safely.
+- **Mutable and Immutable Operations**: Modifications can be performed directly with `&self`, allowing flexibility without needing additional ownership complexities.
+- **Automatic Resource Management**: The wrappers attempt to automatically manage resources, clearing objects and calling the appropriate close, destroy, or remove methods when needed.
+- **Manual Handler Management**: Callbacks and handlers require manual management. Handlers are passed into the C bindings using `Handlers::leak(xxx)`, and need to be explicitly released by calling `release()`. This manual process is required due to the complexity of determining when these handlers should be cleaned up once handed off to C.
+
+
 ## Installation
 
 Add the following to your `Cargo.toml` file to include **rusteron-client**:
@@ -117,8 +127,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 Since **rusteron-client** relies on Aeron C bindings, it involves `unsafe` Rust code. Users must ensure:
 
-- Resources are properly managed (e.g., not using a publisher after the Aeron context is closed).
-- Proper synchronization when accessing shared data in a multithreaded environment.
+- Resources are properly managed (e.g., not using a publisher after the aeron client is closed).
+- Proper synchronisation when accessing shared data in a multithreaded environment.
 
 Failing to uphold these safety measures can lead to crashes or undefined behavior.
 
