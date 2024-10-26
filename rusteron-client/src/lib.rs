@@ -359,4 +359,7 @@ mod tests {
         let _ = driver_handle.join().unwrap();
         Ok(())
     }
+
+    #[doc = include_str!("../../README.md")]
+    mod readme_tests {}
 }

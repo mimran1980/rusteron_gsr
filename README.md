@@ -59,8 +59,6 @@ Replace `rusteron-client` with `rusteron-archive` or `rusteron-media-driver` as 
 
 Below is a step-by-step example of creating and using an Aeron client.
 
-#### Step 1: Create and Start Aeron
-
 ```rust
 use rusteron::client::{Aeron, AeronContext};
 use rusteron_media_driver::AeronDriverContext;
