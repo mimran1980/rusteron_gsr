@@ -17,3 +17,7 @@ syn = { version = "2.0", features = ["full"] }
 proc-macro2 = "1.0.86"
 quote = "1.0"
 itertools = "0.13"
+
+[release]
+publish = true
+replace = { "rusteron-code-gen" = "workspace", "rusteron-archive" = "workspace", "rusteron-media-driver" = "workspace", "rusteron-client" = "workspace" }
