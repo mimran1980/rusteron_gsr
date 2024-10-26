@@ -74,7 +74,7 @@ pub fn main() -> Result<(), Box<dyn error::Error>> {
     });
     let closure = Handler::leak(closure);
 
-    for _ in 0..100 {
+    loop {
         if count.get() > 100 {
             break;
         }
