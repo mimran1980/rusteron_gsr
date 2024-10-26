@@ -3,7 +3,7 @@ check:
   cargo check
   cargo fmt --all -- --check
   cargo clippy --all-targets --all-features --all -- --deny warnings
-  cargo clippy --all --features static -- --deny warnings
+  cargo clippy -- --deny warnings
 
 # automatically fromat and fix simple clippy warnings
 fix:
@@ -24,9 +24,9 @@ release:
 
 docs:
   cargo clean --doc
+  cargo test --doc
   cargo doc --workspace --no-deps --open
 
 # run unit tests
 test:
-  cargo test
   cargo test --all-targets --all-features
