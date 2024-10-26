@@ -20,4 +20,9 @@ itertools = "0.13"
 
 [release]
 publish = true
-replace = { "rusteron-code-gen" = "workspace", "rusteron-archive" = "workspace", "rusteron-media-driver" = "workspace", "rusteron-client" = "workspace" }
+workspace = true
+consolidate_commits = true
+auto_publish = true
+push = true
+tag = true
+dependency_version = "update"

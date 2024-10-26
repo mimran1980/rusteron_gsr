@@ -21,7 +21,7 @@ syn = {  workspace = true }
 proc-macro2 = {  workspace = true }
 quote = {  workspace = true }
 itertools = {  workspace = true }
-rusteron-code-gen = {path = "../rusteron-code-gen"}
+rusteron-code-gen = {path = "../rusteron-code-gen", version = "0"}
 ctrlc = { workspace = true }
 
 [dev-dependencies]
