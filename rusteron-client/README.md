@@ -34,7 +34,8 @@ Handlers in **rusteron-client** play an important role in managing events such a
 The preferred approach is to implement the appropriate trait for your handler. This approach does not require allocations and allows you to maintain a performant, safe, and reusable implementation. For example:
 
 ```rust
-#[doc = "The error handler to be called when an error occurs."]
+use rusteron_client::*;
+
 pub trait AeronErrorHandlerCallback {
     fn handle_aeron_error_handler(&mut self, errcode: ::std::os::raw::c_int, message: &str) -> ();
 }
@@ -55,9 +56,8 @@ In this example, the `AeronErrorHandlerCallback` trait is implemented by `AeronE
 Alternatively, you can use closures as handlers. However, due to lifetime issues, all arguments are owned, which results in allocations (e.g., converting strings). This method is not suitable for performance-sensitive roles but is more convenient for simpler, non-critical scenarios. Example:
 
 ```rust
-#[doc = "Utility class designed to simplify the creation of handlers by allowing the use of closures."]
-#[doc = "Note due to lifetime issues with FnMut, all arguments will be owned i.e. performs allocation for strings"]
-#[doc = "This is not the case if you use the trait instead of closure"]
+use rusteron_client::*;
+
 pub struct AeronErrorHandlerClosure<F: FnMut(::std::os::raw::c_int, String) -> ()> {
     closure: F,
 }
@@ -80,6 +80,7 @@ All callbacks need to be wrapped in a `Handler`. This helps ensure proper integr
 If you do not wish to set a handler or callback, you can pass `None`. Since this is a static mapping without dynamic dispatch (`dyn`), specifying the `None` type can be cumbersome. To simplify this, methods starting with `Handlers::no_xxx` are provided, allowing you to easily indicate that no handler is required without manually specifying the type. For example:
 
 ```rust
+use rusteron_client::*;
 impl Handlers {
     #[doc = r" No handler is set i.e. None with correct type"]
     pub fn no_error_handler_handler() -> Option<&'static Handler<AeronErrorHandlerLogger>> {
