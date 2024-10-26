@@ -13,10 +13,6 @@ on:
           - minor
           - patch
 
-  push:
-    branches:
-      - main
-
 jobs:
   release:
     runs-on: ubuntu-latest
