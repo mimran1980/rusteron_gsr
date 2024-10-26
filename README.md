@@ -48,7 +48,7 @@ Add the following line to your `Cargo.toml` to include the specific **rusteron**
 
 ```toml
 [dependencies]
-rusteron-client = "0.1.0"
+rusteron-client = "0.1"
 ```
 
 Replace `rusteron-client` with `rusteron-archive` or `rusteron-media-driver` as per your requirement.
@@ -71,30 +71,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let media_driver_ctx = AeronDriverContext::new()?;
     let (stop, driver_handle) = AeronDriver::launch_embedded(media_driver_ctx.clone(), false);
 
-    // Step 1: create aeron client
     let ctx = AeronContext::new()?;
     ctx.set_dir(media_driver_ctx.get_dir())?;
     let aeron = Aeron::new(ctx)?;
     aeron.start()?;
 
-    // Step 2: Set Up the Publisher
+    let subscription = aeron
+        .async_add_subscription("aeron:ipc", 123, None, None)?
+        .poll_blocking(Duration::from_secs(5))?;
+
     let publisher = aeron
         .async_add_publication("aeron:ipc", 123)?
         .poll_blocking(Duration::from_secs(5))?;
 
     let message = "Hello, Aeron!".as_bytes();
-    std::thread::spawn(move || {
-        while !stop.load(Ordering::Acquire) {
-            publisher.offer(message, None).unwrap();
-            println!("Sent message: Hello, Aeron!");
-            std::thread::sleep(Duration::from_millis(500));
-        }
-    });
-
-    // Step 3: Set Up the Subscription
-    let subscription = aeron
-        .async_add_subscription("aeron:ipc", 123, None, None)?
-        .poll_blocking(Duration::from_secs(5))?;
+    publisher.offer(message, None)?;
 
     loop {
         subscription.poll(Some(&|msg: Vec<u8>, _| {

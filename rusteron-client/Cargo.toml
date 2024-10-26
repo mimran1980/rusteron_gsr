@@ -1,6 +1,6 @@
 [package]
 name = "rusteron-client"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Mo Imran <mimran1980@gmail.com>"]
 license = "MIT OR Apache-2.0"
@@ -10,7 +10,7 @@ keywords = ["aeron", "low-latency", "client", "bindings", "networking"]
 categories = ["network-programming"]
 documentation = "https://github.com/mimran1980/rusteron"
 description = "Provides core client functionalities for interacting with the Aeron protocol, such as establishing connections, subscribing, and publishing. It uses the Aeron C bindings for from aeron-client module."
-#readme = "README.md"
+readme = "README.md"
 
 [build-dependencies]
 bindgen = {  workspace = true }
