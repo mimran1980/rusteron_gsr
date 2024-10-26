@@ -28,7 +28,7 @@ Ensure you have also set up the necessary Aeron C libraries required by **ruster
 
 ## Usage Example
 
-```rust
+```rust ,no_run
 use rusteron_client::*;
 use rusteron_media_driver::{AeronDriverContext, AeronDriver};
 use std::sync::atomic::{AtomicBool, Ordering};

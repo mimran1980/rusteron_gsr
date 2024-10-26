@@ -32,7 +32,7 @@ Ensure that you have also set up the necessary Aeron C libraries required by **r
 
 ### Standard Media Driver Example
 
-```rust
+```rust ,no_run
 use rusteron_media_driver::{AeronDriver, AeronDriverContext};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -50,9 +50,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### Embedded Media Driver Example
 
-```rust
-use rusteron_media_driver::{AeronDriver, AeronDriverContext};
-use rusteron_client::AeronContext;
+```rust ,no_run
+use rusteron_media_driver::*;
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use std::thread;
 use std::time::Duration;

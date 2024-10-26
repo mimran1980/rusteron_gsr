@@ -59,7 +59,7 @@ Replace `rusteron-client` with `rusteron-archive` or `rusteron-media-driver` as 
 
 Below is a step-by-step example of creating and using an Aeron client.
 
-```rust
+```rust ,no_run
 use rusteron::client::{Aeron, AeronContext};
 use rusteron_media_driver::AeronDriverContext;
 use std::sync::atomic::{AtomicBool, Ordering};
