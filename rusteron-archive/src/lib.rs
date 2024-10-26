@@ -1,3 +1,7 @@
+//! # Features
+//!
+//! - **`static`**: When enabled, this feature statically links the Aeron C code.
+//!   By default, the library uses dynamic linking to the Aeron C libraries.
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]

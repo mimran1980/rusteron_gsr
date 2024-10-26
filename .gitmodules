@@ -1,3 +1,9 @@
-[submodule "aeron"]
-	path = aeron
+[submodule "rusteron-archive/aeron"]
+	path = rusteron-archive/aeron
+	url = https://github.com/real-logic/aeron.git
+[submodule "rusteron-media-driver/aeron"]
+	path = rusteron-media-driver/aeron
+	url = https://github.com/real-logic/aeron.git
+[submodule "rusteron-client/aeron"]
+	path = rusteron-client/aeron
 	url = https://github.com/real-logic/aeron.git

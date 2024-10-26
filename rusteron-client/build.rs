@@ -42,7 +42,7 @@ pub fn main() {
         eprintln!("uuid lib not found in path");
     }
 
-    let aeron_path = canonicalize(Path::new("../aeron")).unwrap();
+    let aeron_path = canonicalize(Path::new("./aeron")).unwrap();
     let header_path = aeron_path.join("aeron-client/src/main/c");
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
 
