@@ -28,14 +28,13 @@ Ensure you have also set up the necessary Aeron C libraries required by **ruster
 
 ## Usage Example
 
-### Step 1: Create and Start Aeron
-
 ```rust
-use rusteron_client::{Aeron, AeronContext};
-use rusteron_media_driver::AeronDriverContext;
+use rusteron_client::*;
+use rusteron_media_driver::{AeronDriverContext, AeronDriver};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+use std::io::Write;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Start embedded media driver for testing purposes
@@ -56,8 +55,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let message = "Hello, Aeron!".as_bytes();
     std::thread::spawn(move || {
         while !stop.load(Ordering::Acquire) && !publisher.is_closed() {
-            publisher.offer(message, None).unwrap();
-            println!("Sent message: Hello, Aeron!");
+            if publisher.offer(message, None) > 0 {
+                println!("Sent message: Hello, Aeron!");
+            }
             std::thread::sleep(Duration::from_millis(500));
         }
     });

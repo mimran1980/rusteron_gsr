@@ -28,4 +28,5 @@ docs:
 
 # run unit tests
 test:
-  cargo test --all-targets --all-features
+  cargo test --verbose
+  cargo test --all-targets --all-features --verbose

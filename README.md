@@ -85,7 +85,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .poll_blocking(Duration::from_secs(5))?;
 
     let message = "Hello, Aeron!".as_bytes();
-    publisher.offer(message, None)?;
+    // if <0 its an error
+    let result = publisher.offer(message, None);
 
     loop {
         subscription.poll(Some(&|msg: Vec<u8>, _| {
