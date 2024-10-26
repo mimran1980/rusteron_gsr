@@ -8,6 +8,10 @@ The **rusteron-media-driver** module is designed to help Rust developers interac
 
 The media driver can be used to set up the messaging directory and manage data streams. The embedded media driver is particularly useful for testing purposes or for simplifying deployment scenarios where a separate media driver process is not needed.
 
+## Usage Note
+
+It is recommended to run the media driver using the Aeron Java or C version for production use. This crate primarily serves as a utility to start the media driver embedded within unit or integration tests.
+
 ## Installation
 
 To use **rusteron-media-driver**, add it to your `Cargo.toml`:

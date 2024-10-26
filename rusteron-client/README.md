@@ -40,22 +40,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Start embedded media driver for testing purposes
     let media_driver_ctx = AeronDriverContext::new()?;
     let (stop, driver_handle) = AeronDriver::launch_embedded(media_driver_ctx.clone(), false);
+    let stop3 = stop.clone();
 
     let ctx = AeronContext::new()?;
     ctx.set_dir(media_driver_ctx.get_dir())?;
     let aeron = Aeron::new(ctx)?;
     aeron.start()?;
-    // Set up the publication
     
+    // Set up the publication
     let publisher = aeron
         .async_add_publication("aeron:ipc", 123)?
         .poll_blocking(Duration::from_secs(5))?;
+    let publisher2 = publisher.clone();
 
     // Start publishing messages
     let message = "Hello, Aeron!".as_bytes();
     std::thread::spawn(move || {
-        while !stop.load(Ordering::Acquire) && !publisher.is_closed() {
-            if publisher.offer(message, None) > 0 {
+        while !stop.load(Ordering::Acquire) {
+            if publisher.offer(message, Handlers::no_reserved_value_supplier_handler()) > 0 {
                 println!("Sent message: Hello, Aeron!");
             }
             std::thread::sleep(Duration::from_millis(500));
@@ -63,14 +65,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     
     // Set up the publication with `try_claim`
-    let buffer = AeronBufferClaim::default();
     let string_len = 156;
-    let binding = "1".repeat(string_len);
-    let msg = binding.as_bytes();
 
     std::thread::spawn(move || {
-        while !stop.load(Ordering::Acquire) && !publisher.is_closed() {
-            let result = publisher.try_claim(string_len, &buffer);
+        let buffer = AeronBufferClaim::default();
+        let binding = "1".repeat(string_len);
+        let msg = binding.as_bytes();
+        while !stop3.load(Ordering::Acquire) {
+            let result = publisher2.try_claim(string_len, &buffer);
 
             if result < msg.len() as i64 {
                 eprintln!("ERROR: failed to send message {:?}", AeronCError::from_code(result as i32));
@@ -84,12 +86,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Set up the subscription
     let subscription = aeron
-        .async_add_subscription("aeron:ipc", 123, None, None)?
+        .async_add_subscription("aeron:ipc", 123,                
+                                Handlers::no_available_image_handler(),
+                                Handlers::no_unavailable_image_handler())?
         .poll_blocking(Duration::from_secs(5))?;
 
-    // Use Fragment Assembler to handle fragmented messages
     let string_len = 156;
-    // Use Fragment Assembler to handle fragmented messages
     let closure = AeronFragmentHandlerClosure::from(move |msg: Vec<u8>, header: AeronHeader| {
         println!(
             "Received a message from Aeron [position={:?}], msg length: {}",
@@ -97,7 +99,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             msg.len()
         );
     });
-    let closure = Handler::leak_with_fragment_assembler(closure)?;
+    let closure = Handler::leak(closure);
 
     // Start receiving messages
     loop {

@@ -77,7 +77,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     aeron.start()?;
 
     let subscription = aeron
-        .async_add_subscription("aeron:ipc", 123, None, None)?
+        .async_add_subscription("aeron:ipc", 123,                
+                                Handlers::no_available_image_handler(),
+                                Handlers::no_unavailable_image_handler())?
         .poll_blocking(Duration::from_secs(5))?;
 
     let publisher = aeron
@@ -86,12 +88,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let message = "Hello, Aeron!".as_bytes();
     // if <0 its an error
-    let result = publisher.offer(message, None);
+    let result = publisher.offer(message, Handlers::no_reserved_value_supplier_handler());
+
+    let closure =
+        AeronFragmentHandlerClosure::from(move |msg: Vec<u8>, header: AeronHeader| {
+            println!(
+                "received a message from aeron {:?}, msg length:{}",
+                header.position(),
+                msg.len()
+            );
+        });
+    let closure = Handler::leak_with_fragment_assembler(closure)?;
 
     loop {
-        subscription.poll(Some(&|msg: Vec<u8>, _| {
-            println!("Received message: {}", String::from_utf8_lossy(&msg));
-        }), 128)?;
+        subscription.poll(Some(&closure), 128)?;
     }
     Ok(())
 }

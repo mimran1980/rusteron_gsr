@@ -1,5 +1,7 @@
 unsafe impl Send for AeronPublication {}
+unsafe impl Sync for AeronPublication {}
 unsafe impl Send for AeronCounter {}
+unsafe impl Sync for AeronCounter {}
 
 impl AeronCounter {
     pub fn addr_atomic(&self) -> &std::sync::atomic::AtomicI64 {
