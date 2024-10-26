@@ -79,7 +79,7 @@ All callbacks need to be wrapped in a `Handler`. This helps ensure proper integr
 
 If you do not wish to set a handler or callback, you can pass `None`. Since this is a static mapping without dynamic dispatch (`dyn`), specifying the `None` type can be cumbersome. To simplify this, methods starting with `Handlers::no_xxx` are provided, allowing you to easily indicate that no handler is required without manually specifying the type. For example:
 
-```rust
+```
 use rusteron_client::*;
 impl Handlers {
     #[doc = r" No handler is set i.e. None with correct type"]
