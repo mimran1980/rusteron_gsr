@@ -8,13 +8,13 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
-ctrlc = "3.4.5"
+ctrlc = "3.4"
 bindgen = "0.70"
 cmake = "0.1"
 dunce = "1.0"
 pkg-config = "0.3"
 syn = { version = "2.0", features = ["full"] }
-proc-macro2 = "1.0.86"
+proc-macro2 = "1.0"
 quote = "1.0"
 itertools = "0.13"
 
