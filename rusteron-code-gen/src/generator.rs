@@ -881,13 +881,22 @@ impl CWrapper {
     }
 }
 
-fn get_docs(docs: &HashSet<String>, _wrappers: &HashMap<String, CWrapper>) -> Vec<TokenStream> {
+fn get_docs(docs: &HashSet<String>, wrappers: &HashMap<String, CWrapper>) -> Vec<TokenStream> {
     docs.iter()
         .flat_map(|d| d.lines())
         .map(|doc| {
-            let doc = doc
+            let mut doc = doc
                 .replace("@param", "\n**param**")
-                .replace("@return", "\n**return**");
+                .replace("@return", "\n**return**")
+                .replace("<p>", "\n")
+                .replace("</p>", "\n");
+
+            doc = wrappers.values().fold(doc, |acc, v| {
+                acc.replace(
+                    &v.type_name,
+                    &format!("`{}`/`{}`", v.class_name, v.type_name),
+                )
+            });
 
             quote! {
                 #[doc = #doc]

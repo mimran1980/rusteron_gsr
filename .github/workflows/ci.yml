@@ -52,4 +52,4 @@ jobs:
         run: cargo build --release --verbose ${{ env.feature-flags }}
 
       - name: Test
-        run: cargo test --all ${{ env.feature-flags }}
+        run: cargo test --all --all-targets ${{ env.feature-flags }}
