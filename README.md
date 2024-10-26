@@ -1,7 +1,7 @@
 # Rusteron
 
 [![github-ci](https://github.com/mimran1980/rusteron/actions/workflows/ci.yml/badge.svg)](https://github.com/amoskvin/rusteron/actions/workflows/ci.yml)
-[![docs.rs](https://docs.rs/rusteron/badge.svg)](https://docs.rs/rusteron/)
+[![docs.rs](https://docs.rs/rusteron/badge.svg)](https://docs.rs/rusteron-client/)
 [![github docs](https://custom-icon-badges.demolab.com/badge/docs-blue.svg?logo=log&logoSource=feather)](https://mimran1980.github.io/rusteron)
 
 **rusteron** is a Rust client wrapper for the Aeron C API, designed to help Rust developers interact with Aeron, a high-performance messaging system. This library is built as an extension to the Aeron C bindings, making it easier to leverage Aeron's low-latency communication capabilities in Rust applications.
@@ -127,7 +127,7 @@ Special thanks to the authors of the original [`libaeron-sys`](https://github.co
 
 ## Links
 
-- [Documentation on docs.rs](https://docs.rs/rusteron/)
+- [Documentation on docs.rs](https://docs.rs/rusteron-client/)
 - [API Reference](https://mimran1980.github.io/rusteron)
 - [GitHub Repository](https://github.com/mimran1980/rusteron)
 

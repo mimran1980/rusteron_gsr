@@ -120,6 +120,16 @@ pub fn main() {
 
     let bindings = rusteron_code_gen::parse_bindings(&out);
     let aeron = out_path.join("aeron.rs");
+
+    // include custom aeron code
+    let aeron_custom = out_path.join("aeron_custom.rs");
+    let _ = fs::remove_file(aeron_custom.clone());
+    append_to_file(
+        aeron_custom.to_str().unwrap(),
+        rusteron_code_gen::CUSTOM_AERON_CODE,
+    )
+    .unwrap();
+
     let _ = fs::remove_file(aeron.clone());
     let mut stream = TokenStream::new();
     for (p, w) in bindings.wrappers.values().enumerate() {

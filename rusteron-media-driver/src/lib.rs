@@ -1,13 +1,13 @@
-//! # Features
-//!
-//! - **`static`**: When enabled, this feature statically links the Aeron C code.
-//!   By default, the library uses dynamic linking to the Aeron C libraries.
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![allow(clippy::all)]
 #![allow(unused_unsafe)]
 #![doc = include_str!("../README.md")]
+//! # Features
+//!
+//! - **`static`**: When enabled, this feature statically links the Aeron C code.
+//!   By default, the library uses dynamic linking to the Aeron C libraries.
 
 pub mod bindings {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
@@ -20,7 +20,7 @@ use std::thread::{sleep, JoinHandle};
 use std::time::Duration;
 
 include!(concat!(env!("OUT_DIR"), "/aeron.rs"));
-include!("../../rusteron-client/src/aeron.rs");
+include!(concat!(env!("OUT_DIR"), "/aeron_custom.rs"));
 
 unsafe impl Send for AeronDriverContext {}
 

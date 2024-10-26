@@ -101,7 +101,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 Handlers::no_unavailable_image_handler())?
         .poll_blocking(Duration::from_secs(5))?;
 
-    let string_len = 156;
     let closure = AeronFragmentHandlerClosure::from(move |msg: Vec<u8>, header: AeronHeader| {
         println!(
             "Received a message from Aeron [position={:?}], msg length: {}",
@@ -115,7 +114,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         subscription.poll(Some(&closure), 128)?;
     }
-
 
     stop.store(true, Ordering::SeqCst);
     driver_handle.join().unwrap();

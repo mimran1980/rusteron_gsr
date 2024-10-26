@@ -18,6 +18,9 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::process::{Command, Stdio};
 
+pub const CUSTOM_AERON_CODE: &str = include_str!("./aeron_custom.rs");
+pub const COMMON_CODE: &str = include_str!("./common.rs");
+
 pub fn append_to_file(file_path: &str, code: &str) -> std::io::Result<()> {
     // Open the file in append mode
     let mut file = OpenOptions::new()
