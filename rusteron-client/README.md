@@ -14,16 +14,108 @@ The **rusteron-client** module acts as a Rust wrapper around the Aeron C client 
 - **Publication**: Send messages to various Aeron channels.
 - **Subscription**: Receive messages from Aeron channels.
 - **Callbacks**: Handle events such as new publications, new subscriptions, and errors.
+- **Automatic Resource Management**: Resources are automatically managed, except for handlers, which require manual management.
 
 ## General Patterns
 
 The **rusteron-client** module follows several general patterns to simplify the use of Aeron functionalities in Rust:
 
-- **Cloneable Wrappers**: All Rust wrappers in **rusteron-client** can be cloned, and they will refer to the same underlying aeron c instance/resource. This allows you to use multiple references to the same object safely.
+- **Cloneable Wrappers**: All Rust wrappers in **rusteron-client** can be cloned, and they will refer to the same underlying Aeron C instance/resource. This allows you to use multiple references to the same object safely.
 - **Mutable and Immutable Operations**: Modifications can be performed directly with `&self`, allowing flexibility without needing additional ownership complexities.
 - **Automatic Resource Management**: The wrappers attempt to automatically manage resources, clearing objects and calling the appropriate close, destroy, or remove methods when needed.
 - **Manual Handler Management**: Callbacks and handlers require manual management. Handlers are passed into the C bindings using `Handlers::leak(xxx)`, and need to be explicitly released by calling `release()`. This manual process is required due to the complexity of determining when these handlers should be cleaned up once handed off to C.
 
+## Handlers and Callbacks
+
+Handlers in **rusteron-client** play an important role in managing events such as errors, available images, and unavailable images. There are two ways to use handlers:
+
+### 1. Implementing a Trait
+
+The preferred approach is to implement the appropriate trait for your handler. This approach does not require allocations and allows you to maintain a performant, safe, and reusable implementation. For example:
+
+```rust
+#[doc = "The error handler to be called when an error occurs."]
+pub trait AeronErrorHandlerCallback {
+    fn handle_aeron_error_handler(&mut self, errcode: ::std::os::raw::c_int, message: &str) -> ();
+}
+
+pub struct AeronErrorHandlerLogger;
+
+impl AeronErrorHandlerCallback for AeronErrorHandlerLogger {
+    fn handle_aeron_error_handler(&mut self, _errcode: ::std::os::raw::c_int, _message: &str) -> () {
+        println!("{}", stringify!(handle_aeron_error_handler));
+    }
+}
+```
+
+In this example, the `AeronErrorHandlerCallback` trait is implemented by `AeronErrorHandlerLogger`. This trait-based approach ensures the parameters are passed directly, avoiding unnecessary allocations.
+
+### 2. Using a Closure
+
+Alternatively, you can use closures as handlers. However, due to lifetime issues, all arguments are owned, which results in allocations (e.g., converting strings). This method is not suitable for performance-sensitive roles but is more convenient for simpler, non-critical scenarios. Example:
+
+```rust
+#[doc = "Utility class designed to simplify the creation of handlers by allowing the use of closures."]
+#[doc = "Note due to lifetime issues with FnMut, all arguments will be owned i.e. performs allocation for strings"]
+#[doc = "This is not the case if you use the trait instead of closure"]
+pub struct AeronErrorHandlerClosure<F: FnMut(::std::os::raw::c_int, String) -> ()> {
+    closure: F,
+}
+
+impl<F: FnMut(::std::os::raw::c_int, String) -> ()> AeronErrorHandlerCallback for AeronErrorHandlerClosure<F> {
+    fn handle_aeron_error_handler(&mut self, errcode: ::std::os::raw::c_int, message: &str) -> () {
+        (self.closure)(errcode.to_owned(), message.to_owned())
+    }
+}
+```
+
+Closures are wrapped in the `AeronErrorHandlerClosure` struct, but as noted, this involves allocations.
+
+### Wrapping Callbacks with Handler
+
+All callbacks need to be wrapped in a `Handler`. This helps ensure proper integration with the Aeron C API. You can use `Handlers::leak(xxx)` to pass a handler into C bindings, but remember to call `release()` when the handler is no longer needed to avoid memory leaks.
+
+### Handler Convenience Methods
+
+If you do not wish to set a handler or callback, you can pass `None`. Since this is a static mapping without dynamic dispatch (`dyn`), specifying the `None` type can be cumbersome. To simplify this, methods starting with `Handlers::no_xxx` are provided, allowing you to easily indicate that no handler is required without manually specifying the type. For example:
+
+```rust
+impl Handlers {
+    #[doc = r" No handler is set i.e. None with correct type"]
+    pub fn no_error_handler_handler() -> Option<&'static Handler<AeronErrorHandlerLogger>> {
+        None::<&Handler<AeronErrorHandlerLogger>>
+    }
+}
+```
+
+These methods allow for more readable and concise code when handlers are not needed.
+
+## Error Handling with Aeron C Bindings
+
+The Aeron C bindings use `i32` error codes to indicate the result of an operation. In the **rusteron-client**, these error codes are wrapped using `Result<i32, AeronCError>`. If the error code is negative (i.e., less than 0), it is treated as an error and represented by an `AeronCError` that contains an error type enum. The error type enum provides a detailed classification of the error.
+
+### Error Type Enum
+
+The `AeronErrorType` enum defines various error types that may occur:
+
+| Error Type | Description |
+|------------|-------------|
+| `NullOrNotConnected` | Null value or not connected |
+| `ClientErrorDriverTimeout` | Driver timeout error |
+| `ClientErrorClientTimeout` | Client timeout error |
+| `ClientErrorConductorServiceTimeout` | Conductor service timeout error |
+| `ClientErrorBufferFull` | Buffer is full |
+| `PublicationBackPressured` | Back pressure on publication |
+| `PublicationAdminAction` | Admin action during publication |
+| `PublicationClosed` | Publication has been closed |
+| `PublicationMaxPositionExceeded` | Maximum position exceeded for publication |
+| `PublicationError` | General publication error |
+| `TimedOut` | Operation timed out |
+| `Unknown(i32)` | Unknown error code |
+
+These error types help provide more context on the underlying issues when working with Aeron. For example, if a publication is closed or back-pressured, these specific errors can be captured and managed accordingly.
+
+The `AeronCError` struct encapsulates the error code and provides methods to retrieve the corresponding error type and a human-readable description. Error handling in **rusteron-client** is designed to make working with Aeron C bindings more ergonomic by providing clear error types and descriptions for easier debugging.
 
 ## Installation
 
@@ -125,7 +217,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 Since **rusteron-client** relies on Aeron C bindings, it involves `unsafe` Rust code. Users must ensure:
 
-- Resources are properly managed (e.g., not using a publisher after the aeron client is closed).
+- Resources are properly managed (e.g., not using a publisher after the Aeron client is closed).
 - Proper synchronisation when accessing shared data in a multithreaded environment.
 
 Failing to uphold these safety measures can lead to crashes or undefined behavior.

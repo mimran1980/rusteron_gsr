@@ -32,7 +32,7 @@ The library is divided into several modules, each focusing on specific parts of 
 
 - **rusteron-code-gen**: This module is responsible for generating the Rust wrapper from the raw C bindings. It helps maintain a clean and repeatable way to bridge between the two languages.
 
-- **rusteron-client**: Provides core client functionalities for interacting with the Aeron protocol, such as establishing connections, subscribing, and publishing. It uses the Aeron C bindings for from aeron-client module.
+- **rusteron-client**: Provides core client functionalities for interacting with the Aeron protocol, such as establishing connections, subscribing, and publishing. It uses the Aeron C bindings from aeron-client module.
 
 - **rusterion-archive**: Extends the Aeron client to include archiving features, such as recording streams and handling replay capabilities. It uses the Aeron C bindings from aeron-archive module.
 
