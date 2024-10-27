@@ -15,6 +15,7 @@ The **rusteron-client** module acts as a Rust wrapper around the Aeron C client 
 - **Subscription**: Receive messages from Aeron channels.
 - **Callbacks**: Handle events such as new publications, new subscriptions, and errors.
 - **Automatic Resource Management**: Resources are automatically managed, except for handlers, which require manual management.
+- Updated methods with a single mutable out primitive to return `Result<primitive, AeronCError>`, enhancing usability and consistency by encapsulating return values and error handling.
 
 ## General Patterns
 
@@ -180,7 +181,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if result < msg.len() as i64 {
                 eprintln!("ERROR: failed to send message {:?}", AeronCError::from_code(result as i32));
             } else {
-                buffer.data_mut().write_all(&msg).unwrap();
+                buffer.data().write_all(&msg).unwrap();
                 buffer.commit().unwrap();
                 println!("Sent message [result={}]", result);
             }
