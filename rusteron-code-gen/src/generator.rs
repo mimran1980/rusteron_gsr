@@ -1,3 +1,4 @@
+use crate::get_possible_wrappers;
 #[allow(unused_imports)]
 use crate::snake_to_pascal_case;
 use itertools::Itertools;
@@ -143,7 +144,7 @@ impl ReturnType {
                         "{}HandlerImpl",
                         snake_to_pascal_case(&self.original.c_type)
                     ))
-                    .expect("Invalidclass name in wrapper");
+                    .expect("Invalid class name in wrapper");
                     return quote! { Option<&Handler<#new_type>> };
                 } else {
                     return quote! {};
@@ -440,8 +441,6 @@ impl CWrapper {
                 let return_type = return_type_helper.get_new_return_type(true);
                 let ffi_call = syn::Ident::new(&method.fn_name, proc_macro2::Span::call_site());
 
-                let method_docs: Vec<proc_macro2::TokenStream> = get_docs(&method.docs, wrappers);
-
                 // Filter out arguments that are `*mut` of the struct's type
                 let generic_types: Vec<proc_macro2::TokenStream> = method
                     .arguments
@@ -535,12 +534,16 @@ impl CWrapper {
                     quote! {}
                 };
 
+
+                let method_docs: Vec<proc_macro2::TokenStream> = get_docs(&method.docs, wrappers, Some(&fn_arguments) );
+
                 let mut_primitivies = method.arguments.iter()
                     .filter(|a| a.is_mut_pointer() && a.is_primitive())
                     .collect_vec();
                 let single_mut_field = method.return_type.is_c_raw_int() && mut_primitivies.len() == 1;
 
-                // in aeron some methods return error code but have &mut primitive
+
+               // in aeron some methods return error code but have &mut primitive
                 // ideally we should return that primitive instead of forcing user to pass it in
                 if single_mut_field {
                     let mut_field = mut_primitivies.first().unwrap();
@@ -557,16 +560,31 @@ impl CWrapper {
 
                     arg_names[idx] = quote! { &mut mut_result };
 
-                    let method_docs = method_docs.iter().filter(|d| !d.to_string().contains("**return**"))
+                    let mut first = true;
+                    let mut method_docs = method_docs.iter()
+                        .filter(|d| !d.to_string().contains("# Return"))
                         .map(|d| {
-                            let string = d.to_string();
+                            let mut string = d.to_string();
+                            string = string.replace("# Parameters", "");
                             if string.contains("out param") {
-                                TokenStream::from_str(&string.replace("**param**", "**return**")).unwrap()
+                                TokenStream::from_str(&string.replace("- `", "\n# Return\n`")).unwrap()
                             } else {
-                                d.clone()
+                                if string.contains("- `") && first {
+                                    first = false;
+                                    string = string.replacen("- `","# Parameters\n- `", 1);
+                                }
+                                TokenStream::from_str(&string).unwrap()
                             }
                         })
                         .collect_vec();
+
+                    let filter_param_title = !method_docs.iter().any(|d| d.to_string().contains("- `"));
+
+                    if filter_param_title {
+                        method_docs = method_docs.into_iter()
+                            .map(|s| TokenStream::from_str(s.to_string().replace("# Parameters\n", "").as_str()).unwrap())
+                            .collect_vec();
+                    }
 
                     quote! {
                         #[inline]
@@ -605,6 +623,7 @@ impl CWrapper {
     fn generate_fields(
         &self,
         cwrappers: &HashMap<String, CWrapper>,
+        debug_fields: &mut Vec<TokenStream>,
     ) -> Vec<proc_macro2::TokenStream> {
         self.fields
             .iter()
@@ -638,6 +657,14 @@ impl CWrapper {
                 }
                 let converter = rt.handle_c_to_rs_return(quote! { self.#fn_name }, false, true);
 
+                if rt.original.is_primitive()
+                    || rt.original.is_c_string()
+                    || rt.original.is_byte_array()
+                    || cwrappers.contains_key(&rt.original.c_type)
+                {
+                    debug_fields.push(quote! { .field(stringify!(#fn_name), &self.#fn_name()) });
+                }
+
                 quote! {
                     #[inline]
                     pub fn #fn_name(&self) -> #return_type {
@@ -661,40 +688,20 @@ impl CWrapper {
             .map(|method| {
                 let init_fn = format_ident!("{}", method.fn_name);
 
-                let mut close_method = None;
-                for name in ["_destroy", "_delete"] {
-                    let close_fn = format_ident!(
-                    "{}",
-                    method
-                        .fn_name
-                        .replace("_init", "_close")
-                        .replace("_create", name)
-                        .replace("_add_", "_remove_")
-                );
-                    let method = self
-                        .methods
-                        .iter()
-                        .find(|m| close_fn.to_string().contains(&m.fn_name));
-                    if method.is_some() {
-                        close_method = method;
-                        break;
-                    }
-                }
+                let close_method = self.find_close_method(method);
                 let found_close = close_method.is_some()
                     && close_method.unwrap().return_type.is_c_raw_int()
                     && close_method.unwrap() != method
                     && close_method.unwrap().arguments.iter().skip(1).all(|a| method.arguments.iter().any(|a2| a.name == a2.name));
                 if found_close {
                     let close_fn = format_ident!("{}", close_method.unwrap().fn_name);
-                    let method_docs: Vec<proc_macro2::TokenStream> =
-                        get_docs(&method.docs, wrappers);
                     let init_args: Vec<proc_macro2::TokenStream> = method
                         .arguments
                         .iter()
                         .enumerate()
                         .map(|(idx, arg)| {
                             if idx == 0 {
-                                quote! { ctx }
+                                quote! { ctx_field }
                             } else {
                                 let arg_name = arg.as_ident();
                                 quote! { #arg_name }
@@ -710,9 +717,9 @@ impl CWrapper {
                         .map(|(idx, arg)| {
                             if idx == 0 {
                                 if arg.is_double_mut_pointer() {
-                                    quote! { ctx }
+                                    quote! { ctx_field }
                                 } else {
-                                    quote! { *ctx }
+                                    quote! { *ctx_field }
                                 }
                             } else {
                                 let arg_name = arg.as_ident();
@@ -835,6 +842,9 @@ impl CWrapper {
                     };
 
 
+                    let method_docs: Vec<proc_macro2::TokenStream> =
+                        get_docs(&method.docs, wrappers, Some(&new_args));
+
                     quote! {
                         #(#method_docs)*
                         pub fn #fn_name #where_clause(#(#new_args),*) -> Result<Self, AeronCError> {
@@ -843,8 +853,8 @@ impl CWrapper {
                                 #(#drop_copies);*
                             })));
                             let resource_constructor = ManagedCResource::new(
-                                move |ctx| unsafe { #init_fn(#(#init_args),*) },
-                                move |ctx| {
+                                move |ctx_field| unsafe { #init_fn(#(#init_args),*) },
+                                move |ctx_field| {
                                     let result = unsafe { #close_fn(#(#close_args),*) };
                                     if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
                                        drop_closure();
@@ -875,14 +885,14 @@ impl CWrapper {
                 #[inline]
                 pub fn new_zeroed() -> Result<Self, AeronCError> {
                     let resource = ManagedCResource::new(
-                        move |ctx| {
+                        move |ctx_field| {
                             println!("creating zeroed empty resource {}", stringify!(#type_name));
                             let inst: #type_name = unsafe { std::mem::zeroed() };
                             let inner_ptr: *mut #type_name = Box::into_raw(Box::new(inst));
-                            unsafe { *ctx = inner_ptr };
+                            unsafe { *ctx_field = inner_ptr };
                             0
                         },
-                        move |_ctx| { 0 },
+                        move |_ctx_field| { 0 },
                         true
                     )?;
 
@@ -937,13 +947,13 @@ impl CWrapper {
                     #[inline]
                     pub fn new #where_clause(#(#new_args),*) -> Result<Self, AeronCError> {
                         let r_constructor = ManagedCResource::new(
-                            move |ctx| {
+                            move |ctx_field| {
                                 let inst = #type_name { #(#init_args),* };
                                 let inner_ptr: *mut #type_name = Box::into_raw(Box::new(inst));
-                                unsafe { *ctx = inner_ptr };
+                                unsafe { *ctx_field = inner_ptr };
                                 0
                             },
-                            move |_ctx| { 0 },
+                            move |_ctx_field| { 0 },
                             true
                         )?;
 
@@ -960,6 +970,29 @@ impl CWrapper {
         }
     }
 
+    fn find_close_method(&self, method: &Method) -> Option<&Method> {
+        let mut close_method = None;
+        for name in ["_destroy", "_delete"] {
+            let close_fn = format_ident!(
+                "{}",
+                method
+                    .fn_name
+                    .replace("_init", "_close")
+                    .replace("_create", name)
+                    .replace("_add_", "_remove_")
+            );
+            let method = self
+                .methods
+                .iter()
+                .find(|m| close_fn.to_string().contains(&m.fn_name));
+            if method.is_some() {
+                close_method = method;
+                break;
+            }
+        }
+        close_method
+    }
+
     fn has_default_method(&self) -> bool {
         let has_init_method = !self
             .methods
@@ -972,21 +1005,46 @@ impl CWrapper {
     }
 }
 
-fn get_docs(docs: &HashSet<String>, wrappers: &HashMap<String, CWrapper>) -> Vec<TokenStream> {
+fn get_docs(
+    docs: &HashSet<String>,
+    wrappers: &HashMap<String, CWrapper>,
+    arguments: Option<&Vec<TokenStream>>,
+) -> Vec<TokenStream> {
+    let mut first_param = true;
     docs.iter()
         .flat_map(|d| d.lines())
+        .filter(|s| {
+            arguments.is_none()
+                || !s.contains("@param")
+                || (s.contains("@param")
+                    && arguments.unwrap().iter().any(|a| {
+                        s.contains(
+                            format!(" {}", a.to_string().split_whitespace().next().unwrap())
+                                .as_str(),
+                        )
+                    }))
+        })
         .map(|doc| {
-            let mut doc = doc
-                .replace("@param", "\n**param**")
-                .replace("@return", "\n**return**")
+            let mut doc = doc.to_string();
+            if first_param && doc.contains("@param") {
+                doc = format!("# Parameters\n{}", doc);
+                first_param = false;
+            }
+
+            if doc.contains("@param") {
+                doc = regex::Regex::new("@param\\s+([^ ]+)")
+                    .unwrap()
+                    .replace(doc.as_str(), "\n - `$1`")
+                    .to_string();
+            }
+
+            doc = doc
+                .replace("@return", "\n# Return\n")
                 .replace("<p>", "\n")
                 .replace("</p>", "\n");
 
             doc = wrappers.values().fold(doc, |acc, v| {
-                acc.replace(
-                    &v.type_name,
-                    &format!("`{}`/`{}`", v.class_name, v.type_name),
-                )
+                acc.replace(&v.type_name, &format!("`{}`", v.class_name))
             });
 
             quote! {
@@ -1238,7 +1296,9 @@ pub fn generate_rust_code(
     let methods = wrapper.generate_methods(wrappers);
     let constructor = wrapper.generate_constructor(wrappers);
 
-    let async_impls = if wrapper.type_name.starts_with("aeron_async_") {
+    let async_impls = if wrapper.type_name.starts_with("aeron_async_")
+        || wrapper.type_name.starts_with("aeron_archive_async_")
+    {
         let new_method = wrapper
             .methods
             .iter()
@@ -1249,7 +1309,11 @@ pub fn generate_rust_code(
                 .type_name
                 .replace("_async_", "_")
                 .replace("_add_", "_");
-            let main = wrappers.get(main_type).unwrap();
+            let main = get_possible_wrappers(main_type)
+                .iter()
+                .filter_map(|f| wrappers.get(f))
+                .next()
+                .expect(&format!("failed to find main type {}", main_type));
 
             let poll_method = main
                 .methods
@@ -1290,7 +1354,7 @@ pub fn generate_rust_code(
                 .enumerate()
                 .filter_map(|(idx, arg)| {
                     if idx == 0 {
-                        Some(quote! { ctx })
+                        Some(quote! { ctx_field })
                     } else {
                         let arg_name = arg.as_ident();
                         let arg_name = ReturnType::new(arg.clone(), wrappers.clone())
@@ -1328,7 +1392,7 @@ pub fn generate_rust_code(
                 .enumerate()
                 .filter_map(|(idx, arg)| {
                     if idx == 0 {
-                        Some(quote! { ctx })
+                        Some(quote! { ctx_field })
                     } else {
                         let arg_name = arg.as_ident();
                         let arg_name = ReturnType::new(arg.clone(), wrappers.clone())
@@ -1416,10 +1480,10 @@ pub fn generate_rust_code(
                 #[inline]
                 pub fn new #where_clause_main (#(#new_args),*) -> Result<Self, AeronCError> {
                     let resource = ManagedCResource::new(
-                        move |ctx| unsafe {
+                        move |ctx_field| unsafe {
                             #poll_method_name(#(#init_args),*)
                         },
-                        move |_ctx| {
+                        move |_ctx_field| {
                             // TODO is there any cleanup to do
                             0
                         },
@@ -1442,10 +1506,10 @@ pub fn generate_rust_code(
                 #[inline]
                 pub fn new #where_clause_async (#(#async_new_args),*) -> Result<Self, AeronCError> {
                     let resource_async = ManagedCResource::new(
-                        move |ctx| unsafe {
+                        move |ctx_field| unsafe {
                             #new_method_name(#(#async_init_args),*)
                         },
-                        move |_ctx| {
+                        move |_ctx_field| {
                             // TODO is there any cleanup to do
                             0
                         },
@@ -1527,7 +1591,8 @@ pub fn generate_rust_code(
         })
         .collect();
 
-    let fields = wrapper.generate_fields(&wrappers);
+    let mut debug_fields = vec![];
+    let fields = wrapper.generate_fields(&wrappers, &mut debug_fields);
 
     let default_impl = if wrapper.has_default_method()
         && !constructor
@@ -1553,9 +1618,18 @@ pub fn generate_rust_code(
         #warning_code
 
         #(#class_docs)*
-        #[derive(Debug, Clone)]
+        #[derive(Clone)]
         pub struct #class_name {
             inner: std::rc::Rc<ManagedCResource<#type_name>>,
+        }
+
+        impl core::fmt::Debug for  #class_name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.debug_struct(stringify!(#class_name))
+                    .field("inner", &self.inner)
+                    #(#debug_fields)*
+                    .finish()
+            }
         }
 
         impl #class_name {
