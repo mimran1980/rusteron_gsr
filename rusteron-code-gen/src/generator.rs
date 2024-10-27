@@ -45,7 +45,7 @@ pub struct Arg {
 }
 
 impl Arg {
-    fn is_primitive(&self) -> bool {
+    pub fn is_primitive(&self) -> bool {
         static PRIMITIVE_TYPES: &[&str] = &[
             "i64", "u64", "f32", "f64", "i32", "i16", "u32", "u16", "bool", "usize", "isize",
         ];
@@ -57,6 +57,7 @@ impl Arg {
     const C_INT_RETURN_TYPE_STR: &'static str = ":: std :: os :: raw :: c_int";
     const C_CHAR_STR: &'static str = "* const :: std :: os :: raw :: c_char";
     const C_BYTE_ARRAY: &'static str = "* const u8";
+    const C_BYTE_MUT_ARRAY: &'static str = "* mut u8";
     const STAR_MUT: &'static str = "* mut";
     const DOUBLE_STAR_MUT: &'static str = "* mut * mut";
     const C_VOID: &'static str = "* mut :: std :: os :: raw :: c_void";
@@ -66,7 +67,11 @@ impl Arg {
     }
 
     pub fn is_byte_array(&self) -> bool {
-        self.c_type == Self::C_BYTE_ARRAY
+        self.c_type == Self::C_BYTE_ARRAY || self.c_type == Self::C_BYTE_MUT_ARRAY
+    }
+
+    pub fn is_mut_byte_array(&self) -> bool {
+        self.c_type == Self::C_BYTE_MUT_ARRAY
     }
 
     pub fn is_c_raw_int(&self) -> bool {
@@ -155,7 +160,11 @@ impl ReturnType {
         } else if let ArgProcessing::ByteArrayWithLength(_) = self.original.processing {
             if self.original.name.len() > 0 {
                 if self.original.is_byte_array() {
-                    return quote! { &[u8] };
+                    if self.original.is_mut_byte_array() {
+                        return quote! { &mut [u8] };
+                    } else {
+                        return quote! { &[u8] };
+                    }
                 } else {
                     return quote! {};
                 }
@@ -199,6 +208,7 @@ impl ReturnType {
         &self,
         result: proc_macro2::TokenStream,
         convert_errors: bool,
+        use_self: bool,
     ) -> proc_macro2::TokenStream {
         if let ArgProcessing::StringWithLength(_) = &self.original.processing {
             if !self.original.is_c_string() {
@@ -211,9 +221,20 @@ impl ReturnType {
             } else {
                 let star_const = &args[0].as_ident();
                 let length = &args[1].as_ident();
-                return quote! {
-                    std::slice::from_raw_parts(#star_const, #length)
+                let me = if use_self {
+                    quote! {self.}
+                } else {
+                    quote! {}
                 };
+                if self.original.is_mut_byte_array() {
+                    return quote! {
+                        unsafe { std::slice::from_raw_parts_mut(#me #star_const, #me #length.try_into().unwrap()) }
+                    };
+                } else {
+                    return quote! {
+                        std::slice::from_raw_parts(#me #star_const, #me #length)
+                    };
+                }
             }
         }
 
@@ -345,12 +366,12 @@ impl ReturnType {
                 let length_name = handler_client.get(1).unwrap().as_ident();
                 if include_field_name {
                     return quote! {
-                    #array_name: #array_name.as_ptr(),
+                    #array_name: #array_name.as_ptr() as *mut _,
                     #length_name: #array_name.len()
                     };
                 } else {
                     return quote! {
-                        #array_name.as_ptr(),
+                        #array_name.as_ptr() as *mut _,
                         #array_name.len()
                     };
                 }
@@ -474,6 +495,8 @@ impl CWrapper {
                     .filter(|t| !t.is_empty())
                     .collect();
 
+                let mut uses_self = false;
+
                 // Filter out argument names for the FFI call
                 let arg_names: Vec<proc_macro2::TokenStream> = method
                     .arguments
@@ -488,6 +511,7 @@ impl CWrapper {
                         if let Some(_matching_wrapper) = wrappers.get(t) {
                             let field_name = arg.as_ident();
                             if ty.ends_with(self.type_name.as_str()) {
+                                uses_self = true;
                                 Some(quote! { self.get_inner() })
                             } else {
                                 Some(quote! { #field_name.get_inner() })
@@ -503,12 +527,18 @@ impl CWrapper {
                     .filter(|t| !t.is_empty())
                     .collect();
 
-                let converter = return_type_helper.handle_c_to_rs_return(quote! { result }, true);
+                let converter = return_type_helper.handle_c_to_rs_return(quote! { result }, true, false);
+
+                let possible_self = if uses_self || return_type.to_string().eq("& str") {
+                    quote! { &self, }
+                } else {
+                    quote! {}
+                };
 
                 quote! {
                     #[inline]
                     #(#method_docs)*
-                    pub fn #fn_name #where_clause(&self, #(#fn_arguments),*) -> #return_type {
+                    pub fn #fn_name #where_clause(#possible_self #(#fn_arguments),*) -> #return_type {
                         unsafe {
                             let result = #ffi_call(#(#arg_names),*);
                             #converter
@@ -537,15 +567,24 @@ impl CWrapper {
                 let field_name = &arg.name;
                 let fn_name = syn::Ident::new(field_name, proc_macro2::Span::call_site());
 
-                let rt = ReturnType::new(
-                    Arg {
-                        processing: ArgProcessing::Default,
-                        ..arg.clone()
-                    },
-                    cwrappers.clone(),
-                );
-                let return_type = rt.get_new_return_type(false);
-                let converter = rt.handle_c_to_rs_return(quote! { self.#fn_name }, false);
+                let mut rt = ReturnType::new(arg.clone(), cwrappers.clone());
+                let mut return_type = rt.get_new_return_type(false);
+                let handler = if let ArgProcessing::Handler(_) = &arg.processing {
+                    true
+                } else {
+                    false
+                };
+                if return_type.is_empty() || handler {
+                    rt = ReturnType::new(
+                        Arg {
+                            processing: ArgProcessing::Default,
+                            ..arg.clone()
+                        },
+                        cwrappers.clone(),
+                    );
+                    return_type = rt.get_new_return_type(false);
+                }
+                let converter = rt.handle_c_to_rs_return(quote! { self.#fn_name }, false, true);
 
                 quote! {
                     #[inline]
@@ -914,7 +953,13 @@ pub fn generate_handlers(handler: &CHandler, bindings: &CBinding) -> TokenStream
         .map(|line| quote! { #[doc = #line] })
         .collect();
 
-    let closure = handler.args[0].name.clone();
+    let closure = handler
+        .args
+        .iter()
+        .find(|a| a.is_c_void())
+        .unwrap()
+        .name
+        .clone();
     let closure_name = format_ident!("{}", closure);
     let closure_type_name = format_ident!("{}Callback", snake_to_pascal_case(&handler.type_name));
     let closure_return_type = handler.return_type.as_type();
@@ -955,7 +1000,7 @@ pub fn generate_handlers(handler: &CHandler, bindings: &CBinding) -> TokenStream
             let arg_name = arg.as_ident();
             if name != &closure {
                 let return_type = ReturnType::new(arg.clone(), bindings.wrappers.clone());
-                Some(return_type.handle_c_to_rs_return(quote! {#arg_name}, false))
+                Some(return_type.handle_c_to_rs_return(quote! {#arg_name}, false, false))
             } else {
                 None
             }
@@ -1069,6 +1114,7 @@ pub fn generate_handlers(handler: &CHandler, bindings: &CBinding) -> TokenStream
         })
         .filter(|t| !t.is_empty())
         .collect();
+
     quote! {
         #(#doc_comments)*
         pub trait #closure_type_name {
@@ -1411,9 +1457,11 @@ pub fn generate_rust_code(
             );
         }
 
-        code.push_str("
-                pub type aeron_client_registering_resource_t = aeron_client_registering_resource_stct;
-");
+        code.push_str(
+            "
+                type aeron_client_registering_resource_t = aeron_client_registering_resource_stct;
+",
+        );
 
         TokenStream::from_str(code.as_str()).unwrap()
     };
@@ -1463,6 +1511,7 @@ pub fn generate_rust_code(
             #(#fields)*
             #(#methods)*
 
+            #[inline]
             pub fn get_inner(&self) -> *mut #type_name {
                 self.inner.get()
             }
