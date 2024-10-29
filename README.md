@@ -1,8 +1,9 @@
 # Rusteron
 
+[![Crates.io](https://img.shields.io/crates/v/aeron-rs)](https://crates.io/crates/rusteron-client)
 [![github-ci](https://github.com/mimran1980/rusteron/actions/workflows/ci.yml/badge.svg)](https://github.com/amoskvin/rusteron/actions/workflows/ci.yml)
-[![docs.rs](https://docs.rs/rusteron/badge.svg)](https://docs.rs/rusteron-client/)
-[![github docs](https://custom-icon-badges.demolab.com/badge/docs-blue.svg?logo=log&logoSource=feather)](https://mimran1980.github.io/rusteron)
+[![docsrs](https://docs.rs/rusteron-client/badge.svg)](https://docs.rs/rusteron-client/)
+[![github docs](https://custom-icon-badges.demolab.com/badge/githubdocs-blue.svg?logo=log&logoSource=feather)](https://mimran1980.github.io/rusteron)
 
 **rusteron** is a Rust client wrapper for the Aeron C API, designed to help Rust developers interact with Aeron, a high-performance messaging system. This library is built as an extension to the Aeron C bindings, making it easier to leverage Aeron's low-latency communication capabilities in Rust applications.
 
@@ -30,13 +31,21 @@ Community feedback and contributions are welcome to improve its functionality an
 
 The library is divided into several modules, each focusing on specific parts of Aeron's functionality:
 
-- **rusteron-code-gen**: This module is responsible for generating the Rust wrapper from the raw C bindings. It helps maintain a clean and repeatable way to bridge between the two languages.
+- **[rusteron-code-gen](https://github.com/mimran1980/rusteron/tree/main/rusteron-code-gen)**: This module is
+  responsible for generating the Rust wrapper from the raw C bindings. It helps maintain a clean and repeatable way to
+  bridge between the two languages.
 
-- **rusteron-client**: Provides core client functionalities for interacting with the Aeron protocol, such as establishing connections, subscribing, and publishing. It uses the Aeron C bindings from aeron-client module.
+- **[rusteron-client](https://github.com/mimran1980/rusteron/tree/main/rusteron-client)**: Provides core client
+  functionalities for interacting with the Aeron protocol, such as establishing connections, subscribing, and
+  publishing. It uses the Aeron C bindings from aeron-client module.
 
-- **rusterion-archive**: Extends the Aeron client to include archiving features, such as recording streams and handling replay capabilities. It uses the Aeron C bindings from aeron-archive module.
+- **[rusteron-archive](https://github.com/mimran1980/rusteron/tree/main/rusteron-archive)**: Extends the Aeron client to
+  include archiving features, such as recording streams and handling replay capabilities. It uses the Aeron C bindings
+  from aeron-archive module.
 
-- **rusteron-media-driver**: Implements the Aeron Media Driver, a core component for managing messaging between producers and consumers. It uses the Aeron C bindings from aeron-driver module.
+- **[rusteron-media-driver](https://github.com/mimran1980/rusteron/tree/main/rusteron-media-driver)**: Implements the
+  Aeron Media Driver, a core component for managing messaging between producers and consumers. It uses the Aeron C
+  bindings from aeron-driver module.
 
 ## Installation
 
@@ -46,10 +55,20 @@ Add the following line to your `Cargo.toml` to include the specific **rusteron**
 - **rusteron-archive**: For Aeron client with archive capabilities.
 - **rusteron-media-driver**: For the Aeron media driver.
 
+For detailed instructions on how to build **rusteron-archive**, please refer to the [HOW_TO_BUILD.md](./HOW_TO_BUILD.md) file.
+
+dynamic lib
 ```toml
 [dependencies]
 rusteron-client = "0.1"
 ```
+
+static lib
+```toml
+[dependencies]
+rusteron-client = { version = "0.1", features= ["static"] }
+```
+
 
 Replace `rusteron-client` with `rusteron-archive` or `rusteron-media-driver` as per your requirement.
 
@@ -73,7 +92,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let ctx = AeronContext::new()?;
     ctx.set_dir(media_driver_ctx.get_dir())?;
-    let aeron = Aeron::new(ctx)?;
+    let aeron = Aeron::new(&ctx)?;
     aeron.start()?;
 
     let subscription = aeron
@@ -128,7 +147,7 @@ Special thanks to the authors of the original [`libaeron-sys`](https://github.co
 ## Links
 
 - [Documentation on docs.rs](https://docs.rs/rusteron-client/)
-- [API Reference](https://mimran1980.github.io/rusteron)
+- [API Reference on github](https://mimran1980.github.io/rusteron)
 - [GitHub Repository](https://github.com/mimran1980/rusteron)
 
 ---

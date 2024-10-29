@@ -123,9 +123,16 @@ The `AeronCError` struct encapsulates the error code and provides methods to ret
 
 Add the following to your `Cargo.toml` file to include **rusteron-client**:
 
+dynamic lib
 ```toml
 [dependencies]
 rusteron-client = "0.1"
+```
+
+static lib
+```toml
+[dependencies]
+rusteron-client = { version = "0.1", features= ["static"] }
 ```
 
 Ensure you have also set up the necessary Aeron C libraries required by **rusteron-client**.
@@ -148,7 +155,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let ctx = AeronContext::new()?;
     ctx.set_dir(media_driver_ctx.get_dir())?;
-    let aeron = Aeron::new(ctx)?;
+    let aeron = Aeron::new(&ctx)?;
     aeron.start()?;
     
     // Set up the publication
@@ -224,6 +231,11 @@ Since **rusteron-client** relies on Aeron C bindings, it involves `unsafe` Rust 
 
 Failing to uphold these safety measures can lead to crashes or undefined behaviour.
 
+
+## Building This Project Instructions
+
+For detailed instructions on how to build **rusteron**, please refer to the [HOW_TO_BUILD.md](../HOW_TO_BUILD.md) file.
+
 ## Contributing
 
 Contributions are welcome! Please feel free to open issues, submit pull requests, or suggest new features. We're particularly interested in:
@@ -241,6 +253,7 @@ This project is dual-licensed under either the [MIT License](https://opensource.
 ## Links
 
 - [Documentation on docs.rs](https://docs.rs/rusteron-client/)
+- [API Reference on github](https://mimran1980.github.io/rusteron/rusteron_client)
 - [GitHub Repository](https://github.com/mimran1980/rusteron)
 
 Feel free to reach out with any questions or suggestions via GitHub Issues!

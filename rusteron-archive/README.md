@@ -17,9 +17,16 @@ The code in **rusteron-archive** is generated as a Rust wrapper around the Aeron
 
 To use **rusteron-archive**, add it to your `Cargo.toml`:
 
+dynamic lib
 ```toml
 [dependencies]
 rusteron-archive = "0.1"
+```
+
+static lib
+```toml
+[dependencies]
+rusteron-archive = { version = "0.1", features= ["static"] }
 ```
 
 Ensure that you have also set up the necessary Aeron C libraries required by **rusteron-archive**.
@@ -33,6 +40,11 @@ Ensure that you have also set up the necessary Aeron C libraries required by **r
 
 Since **rusteron-archive** relies on Aeron C bindings, it uses `unsafe` Rust code. Users must ensure that resources are managed properly to avoid crashes or undefined behaviour.
 
+
+## Building This Project Instructions
+
+For detailed instructions on how to build **rusteron**, please refer to the [HOW_TO_BUILD.md](../HOW_TO_BUILD.md) file.
+
 ## Contributing
 
 Contributions are welcome! Please see our [contributing guidelines](https://github.com/mimran1980/rusteron/blob/main/CONTRIBUTING.md) for more information on how to get involved.
@@ -43,6 +55,8 @@ This project is dual-licensed under either the [MIT License](https://opensource.
 
 ## Links
 
+- [Documentation on docs.rs](https://docs.rs/rusteron-archive/)
+- [API Reference on github](https://mimran1980.github.io/rusteron/rusteron_archive)
 - [GitHub Repository](https://github.com/mimran1980/rusteron)
 
 Feel free to reach out with any questions or suggestions via GitHub Issues!

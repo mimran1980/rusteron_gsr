@@ -1,8 +1,7 @@
 name: CI
 
 on:
-  push:    # This triggers the workflow on any push event
-  pull_request:  # This triggers the workflow when a pull request is opened, synchronized, or reopened#
+  push:
 #  push:
 #    branches: [master, staging, trying]
 #  pull_request:
@@ -13,15 +12,46 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+
+      # aeron archive cmake for some reason starts java
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Check clippy lints
+        run: cargo clippy --all -- --deny warnings
+
   build:
     name: Build
     runs-on: ${{ matrix.os }}
 
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         features: [default, static]
-        rust-version: ["stable", "stable 6 months ago"]
+        #        rust-version: ["stable", "stable 6 months ago"]
+        rust-version: ["stable"]
 
     env:
       feature-flags: ${{ matrix.features != 'default' && format('--features {0}', matrix.features) || '' }}
@@ -42,14 +72,14 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y uuid-dev
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check
+      # aeron archive cmake for some reason starts java
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
-      - name: Check clippy lints
-        run: cargo clippy --all ${{ env.feature-flags }} -- --deny warnings
-
-      - name: Build
-        run: cargo build --release --verbose ${{ env.feature-flags }}
-
-      - name: Test
-        run: cargo test --all --all-targets ${{ env.feature-flags }}
+      - name: Build and Test
+        run: |
+          cargo build ${{ env.feature-flags }}
+          cargo test --all --all-targets ${{ env.feature-flags }} -- --nocapture

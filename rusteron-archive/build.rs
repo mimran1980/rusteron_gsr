@@ -5,6 +5,7 @@ use rusteron_code_gen::{append_to_file, format_with_rustfmt};
 use std::path::{Path, PathBuf};
 use std::{env, fs};
 
+#[derive(Eq, PartialEq)]
 pub enum LinkType {
     Dynamic,
     Static,
@@ -28,6 +29,12 @@ impl LinkType {
 
     fn target_name(&self) -> &'static str {
         match self {
+            LinkType::Dynamic => "aeron_archive_c_client",
+            LinkType::Static => "aeron_archive_c_client_static",
+        }
+    }
+    fn target_name_base(&self) -> &'static str {
+        match self {
             LinkType::Dynamic => "aeron",
             LinkType::Static => "aeron_static",
         }
@@ -43,7 +50,7 @@ pub fn main() {
     }
 
     let aeron_path = canonicalize(Path::new("./aeron")).unwrap();
-    let header_path = aeron_path.join("aeron-archive/src/main/c/client");
+    let header_path = aeron_path.join("aeron-archive/src/main/c");
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
 
     let link_type = LinkType::detect();
@@ -52,6 +59,17 @@ pub fn main() {
         link_type.link_lib(),
         link_type.target_name()
     );
+    println!(
+        "cargo:rustc-link-lib={}{}",
+        link_type.link_lib(),
+        link_type.target_name_base()
+    );
+
+    if cfg!(target_os = "linux") {
+        println!("cargo:rustc-link-arg=-Wl,--allow-multiple-definition");
+    } else if cfg!(target_os = "windows") {
+        println!("cargo:rustc-link-arg=/FORCE:MULTIPLE");
+    }
 
     if let LinkType::Static = link_type {
         // On Windows, there are some extra libraries needed for static link
@@ -66,11 +84,15 @@ pub fn main() {
     }
 
     let cmake_output = Config::new(&aeron_path)
+        .define("CMAKE_C_FLAGS", "-fcommon")
         .define("BUILD_AERON_DRIVER", "OFF")
         .define("BUILD_AERON_ARCHIVE_API", "ON")
+        // needed for mac os
+        .define("CMAKE_OSX_DEPLOYMENT_TARGET", "14.0")
         .define("AERON_TESTS", "OFF")
         .define("AERON_BUILD_SAMPLES", "OFF")
         .define("AERON_BUILD_DOCUMENTATION", "OFF")
+        .define("BUILD_SHARED_LIBS", "ON")
         .build_target(link_type.target_name())
         .build();
 
@@ -105,7 +127,7 @@ pub fn main() {
     println!("cargo:include={}", header_path.display());
     let bindings = bindgen::Builder::default()
         .clang_arg(format!("-I{}", header_path.display()))
-        // We need to include some of the headers from `rusteron`, so update the include path here
+        // We need to include some of the headers from `aeron c client`, so update the include path here
         .clang_arg(format!(
             "-I{}",
             aeron_path.join("aeron-client/src/main/c").display()
@@ -151,6 +173,4 @@ pub fn main() {
         &format_with_rustfmt(&stream.to_string()).unwrap(),
     )
     .unwrap();
-
-    // panic!("{}", aeron.to_str().unwrap());
 }

@@ -16,9 +16,16 @@ It is recommended to run the media driver using the Aeron Java or C version for 
 
 To use **rusteron-media-driver**, add it to your `Cargo.toml`:
 
+dynamic lib
 ```toml
 [dependencies]
 rusteron-media-driver = "0.1"
+```
+
+static lib
+```toml
+[dependencies]
+rusteron-media-driver = { version = "0.1", features= ["static"] }
 ```
 
 Ensure that you have also set up the necessary Aeron C libraries required by **rusteron-media-driver**.
@@ -86,6 +93,10 @@ Since **rusteron-media-driver** relies on Aeron C bindings, it involves the use 
 
 Improper use of the media driver can lead to crashes or other undefined behaviours.
 
+## Building This Project Instructions
+
+For detailed instructions on how to build **rusteron**, please refer to the [HOW_TO_BUILD.md](../HOW_TO_BUILD.md) file.
+
 ## Contributing
 
 Contributions are more than welcome! Please see our [contributing guidelines](https://github.com/mimran1980/rusteron/blob/main/CONTRIBUTING.md) for more information on how to get involved.
@@ -96,6 +107,8 @@ This project is dual-licensed under either the [MIT License](https://opensource.
 
 ## Links
 
+- [Documentation on docs.rs](https://docs.rs/rusteron-media-driver/)
+- [API Reference on github](https://mimran1980.github.io/rusteron/rusteron_media_driver)
 - [GitHub Repository](https://github.com/mimran1980/rusteron)
 
 Feel free to reach out with any questions or suggestions via GitHub Issues!

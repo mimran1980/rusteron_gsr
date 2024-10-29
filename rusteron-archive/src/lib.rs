@@ -3,6 +3,7 @@
 #![allow(non_snake_case)]
 #![allow(clippy::all)]
 #![allow(unused_unsafe)]
+#![allow(unused_variables)]
 #![doc = include_str!("../README.md")]
 //! # Features
 //!
@@ -18,6 +19,8 @@ include!(concat!(env!("OUT_DIR"), "/aeron_custom.rs"));
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use std::error;
 
     #[test]
     fn version_check() {
@@ -28,5 +31,19 @@ mod tests {
         let aeron_version = format!("{}.{}.{}", major, minor, patch);
         let cargo_version = "1.47.0";
         assert_eq!(aeron_version, cargo_version);
+    }
+
+    #[test]
+    pub fn test_failed_connect() -> Result<(), Box<dyn error::Error>> {
+        let ctx = AeronArchiveContext::new()?;
+        std::env::set_var("AERON_DRIVER_TIMEOUT", "1");
+        let connect = AeronArchiveAsyncConnect::new(&ctx);
+        std::env::remove_var("AERON_DRIVER_TIMEOUT");
+
+        assert_eq!(
+            Some(AeronErrorType::NullOrNotConnected.into()),
+            connect.err()
+        );
+        Ok(())
     }
 }

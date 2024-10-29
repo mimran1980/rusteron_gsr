@@ -136,7 +136,11 @@ impl ReturnType {
         }
     }
 
-    pub fn get_new_return_type(&self, convert_errors: bool) -> proc_macro2::TokenStream {
+    pub fn get_new_return_type(
+        &self,
+        convert_errors: bool,
+        use_ref_for_cwrapper: bool,
+    ) -> proc_macro2::TokenStream {
         if let ArgProcessing::Handler(_) = self.original.processing {
             if self.original.name.len() > 0 {
                 if !self.original.is_mut_pointer() {
@@ -177,7 +181,11 @@ impl ReturnType {
             if let Some(wrapper) = self.wrappers.get(type_name) {
                 let new_type = syn::parse_str::<syn::Type>(&wrapper.class_name)
                     .expect("Invalid class name in wrapper");
-                return quote! { #new_type };
+                if use_ref_for_cwrapper {
+                    return quote! { &#new_type };
+                } else {
+                    return quote! { #new_type };
+                }
             }
         }
         if let Some(wrapper) = self.wrappers.get(&self.original.c_type) {
@@ -438,7 +446,7 @@ impl CWrapper {
                     syn::Ident::new(&method.struct_method_name, proc_macro2::Span::call_site());
                 let return_type_helper =
                     ReturnType::new(method.return_type.clone(), wrappers.clone());
-                let return_type = return_type_helper.get_new_return_type(true);
+                let return_type = return_type_helper.get_new_return_type(true, false);
                 let ffi_call = syn::Ident::new(&method.fn_name, proc_macro2::Span::call_site());
 
                 // Filter out arguments that are `*mut` of the struct's type
@@ -473,17 +481,17 @@ impl CWrapper {
                             } else {
                                 let arg_name = arg.as_ident();
                                 let arg_type = ReturnType::new(arg.clone(), wrappers.clone())
-                                    .get_new_return_type(false);
+                                    .get_new_return_type(false, true);
                                 if arg_type.is_empty() {
                                     None
                                 } else {
-                                    Some(quote! { #arg_name: &#arg_type })
+                                    Some(quote! { #arg_name: #arg_type })
                                 }
                             }
                         } else {
                             let arg_name = arg.as_ident();
                             let arg_type = ReturnType::new(arg.clone(), wrappers.clone())
-                                .get_new_return_type(false);
+                                .get_new_return_type(false, true);
                             if arg_type.is_empty() {
                                 None
                             } else {
@@ -639,7 +647,7 @@ impl CWrapper {
                 let fn_name = syn::Ident::new(field_name, proc_macro2::Span::call_site());
 
                 let mut rt = ReturnType::new(arg.clone(), cwrappers.clone());
-                let mut return_type = rt.get_new_return_type(false);
+                let mut return_type = rt.get_new_return_type(false, false);
                 let handler = if let ArgProcessing::Handler(_) = &arg.processing {
                     true
                 } else {
@@ -653,7 +661,7 @@ impl CWrapper {
                         },
                         cwrappers.clone(),
                     );
-                    return_type = rt.get_new_return_type(false);
+                    return_type = rt.get_new_return_type(false, false);
                 }
                 let converter = rt.handle_c_to_rs_return(quote! { self.#fn_name }, false, true);
 
@@ -728,84 +736,20 @@ impl CWrapper {
                         })
                         .filter(|t| !t.is_empty())
                         .collect();
-                    let lets: Vec<proc_macro2::TokenStream> = method
-                        .arguments
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(idx, arg)| {
-                            if idx == 0 {
-                                None
-                            } else {
-                                let arg_name = arg.as_ident();
-                                let rtype = arg.as_type();
-
-                                // check if I need to make copy of object for reference counting
-                                let fields = if arg.is_single_mut_pointer() && wrappers.contains_key(arg.c_type.split_whitespace().last().unwrap()) {
-                                    let arg_copy = format_ident!("{}_copy", arg.name);
-                                    quote! {
-                                        let #arg_copy = #arg_name.clone();
-                                    }
-                                } else {
-                                    quote! {}
-                                };
-
-
-                                let return_type = ReturnType::new(arg.clone(), wrappers.clone());
-
-                                if let ArgProcessing::Handler(args) = &return_type.original.processing {
-                                    let arg1 = args[0].as_ident();
-                                    let arg2 = args[1].as_ident();
-                                    let value = return_type
-                                        .handle_rs_to_c_return(quote! { #arg_name }, false);
-
-                                    if value.is_empty() {
-                                        return None;
-                                    }
-
-                                    return Some(quote! { #fields let (#arg1, #arg2)= (#value); });
-                                }
-
-                                let value = return_type
-                                    .handle_rs_to_c_return(quote! { #arg_name }, false);
-                                Some(quote! { #fields let #arg_name: #rtype = #value; })
-                            }
-                        })
-                        .filter(|t| !t.is_empty())
-                        .collect();
-
-                    let drop_copies: Vec<proc_macro2::TokenStream> = method
-                        .arguments
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(idx, arg)| {
-                            if idx == 0 {
-                                None
-                            } else {
-                                // check if I need to make copy of object for reference counting
-                                if arg.is_single_mut_pointer() && wrappers.contains_key(arg.c_type.split_whitespace().last().unwrap()) {
-                                    let arg_copy = format_ident!("{}_copy", arg.name);
-                                    return Some(quote! {
-                                        drop(#arg_copy)
-                                        });
-                                } else {
-                                    return None;
-                                };
-                            }
-                        })
-                        .filter(|t| !t.is_empty())
-                        .collect_vec();
+                    let lets: Vec<proc_macro2::TokenStream> = Self::lets_for_copying_arguments(wrappers, &method.arguments, true);
+                    let drop_copies: Vec<proc_macro2::TokenStream> = Self::drop_copies(wrappers, &method.arguments);
 
                     let new_args: Vec<proc_macro2::TokenStream> = method
                         .arguments
                         .iter()
                         .enumerate()
-                        .filter_map(|(idx, arg)| {
-                            if idx == 0 {
+                        .filter_map(|(_idx, arg)| {
+                            if arg.is_double_mut_pointer() {
                                 None
                             } else {
                                 let arg_name = arg.as_ident();
                                 let arg_type = ReturnType::new(arg.clone(), wrappers.clone())
-                                    .get_new_return_type(false);
+                                    .get_new_return_type(false, true);
                                 if arg_type.clone().into_token_stream().is_empty() {
                                     None
                                 } else {
@@ -907,7 +851,7 @@ impl CWrapper {
                     .filter_map(|arg| {
                         let arg_name = arg.as_ident();
                         let arg_type = ReturnType::new(arg.clone(), wrappers.clone())
-                            .get_new_return_type(false);
+                            .get_new_return_type(false, true);
                         if arg_type.is_empty() {
                             None
                         } else {
@@ -943,9 +887,24 @@ impl CWrapper {
                     quote! { <#(#generic_types),*> }
                 };
 
+                let cloned_fields = self
+                    .fields
+                    .iter()
+                    .filter(|a| a.processing == ArgProcessing::Default)
+                    .cloned()
+                    .collect_vec();
+                let lets: Vec<proc_macro2::TokenStream> =
+                    Self::lets_for_copying_arguments(wrappers, &cloned_fields, false);
+                let drop_copies: Vec<proc_macro2::TokenStream> =
+                    Self::drop_copies(wrappers, &self.fields);
+
                 vec![quote! {
                     #[inline]
                     pub fn new #where_clause(#(#new_args),*) -> Result<Self, AeronCError> {
+                        #(#lets)*
+                        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {
+                            #(#drop_copies);*
+                        })));
                         let r_constructor = ManagedCResource::new(
                             move |ctx_field| {
                                 let inst = #type_name { #(#init_args),* };
@@ -953,7 +912,12 @@ impl CWrapper {
                                 unsafe { *ctx_field = inner_ptr };
                                 0
                             },
-                            move |_ctx_field| { 0 },
+                            move |_ctx_field| {
+                                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                                       drop_closure();
+                                }
+                                0
+                            },
                             true
                         )?;
 
@@ -968,6 +932,98 @@ impl CWrapper {
         } else {
             constructors
         }
+    }
+
+    fn drop_copies(wrappers: &HashMap<String, CWrapper>, arguments: &Vec<Arg>) -> Vec<TokenStream> {
+        arguments
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, arg)| {
+                if idx == 0 {
+                    None
+                } else {
+                    // check if I need to make copy of object for reference counting
+                    if arg.is_single_mut_pointer()
+                        && wrappers.contains_key(arg.c_type.split_whitespace().last().unwrap())
+                    {
+                        let arg_copy = format_ident!("{}_copy", arg.name);
+                        return Some(quote! {
+                        drop(#arg_copy)
+                        });
+                    } else {
+                        return None;
+                    };
+                }
+            })
+            .filter(|t| !t.is_empty())
+            .collect_vec()
+    }
+
+    fn lets_for_copying_arguments(
+        wrappers: &HashMap<String, CWrapper>,
+        arguments: &Vec<Arg>,
+        include_let_statements: bool,
+    ) -> Vec<TokenStream> {
+        arguments
+            .iter()
+            .enumerate()
+            .filter_map(|(_idx, arg)| {
+                if arg.is_double_mut_pointer() {
+                    None
+                } else {
+                    let arg_name = arg.as_ident();
+                    let rtype = arg.as_type();
+
+                    // check if I need to make copy of object for reference counting
+                    let fields = if arg.is_single_mut_pointer()
+                        && wrappers.contains_key(arg.c_type.split_whitespace().last().unwrap())
+                    {
+                        let arg_copy = format_ident!("{}_copy", arg.name);
+                        quote! {
+                            let #arg_copy = #arg_name.clone();
+                        }
+                    } else {
+                        quote! {}
+                    };
+
+                    let return_type = ReturnType::new(arg.clone(), wrappers.clone());
+
+                    if let ArgProcessing::StringWithLength(_args)
+                    | ArgProcessing::ByteArrayWithLength(_args) =
+                        &return_type.original.processing
+                    {
+                        return None;
+                    }
+                    if let ArgProcessing::Handler(args) = &return_type.original.processing {
+                        let arg1 = args[0].as_ident();
+                        let arg2 = args[1].as_ident();
+                        let value = return_type.handle_rs_to_c_return(quote! { #arg_name }, false);
+
+                        if value.is_empty() {
+                            return None;
+                        }
+
+                        if include_let_statements {
+                            return Some(quote! { #fields let (#arg1, #arg2)= (#value); });
+                        } else {
+                            return Some(fields);
+                        }
+                    }
+
+                    let value = return_type.handle_rs_to_c_return(quote! { #arg_name }, false);
+                    if value.is_empty() {
+                        None
+                    } else {
+                        if include_let_statements {
+                            Some(quote! { #fields let #arg_name: #rtype = #value; })
+                        } else {
+                            return Some(fields);
+                        }
+                    }
+                }
+            })
+            .filter(|t| !t.is_empty())
+            .collect()
     }
 
     fn find_close_method(&self, method: &Method) -> Option<&Method> {
@@ -1128,7 +1184,7 @@ pub fn generate_handlers(handler: &CHandler, bindings: &CBinding) -> TokenStream
             }
 
             let return_type = ReturnType::new(arg.clone(), bindings.wrappers.clone());
-            let type_name = return_type.get_new_return_type(false);
+            let type_name = return_type.get_new_return_type(false, false);
             let field_name = format_ident!("{}", name);
             if type_name.is_empty() {
                 None
@@ -1151,7 +1207,7 @@ pub fn generate_handlers(handler: &CHandler, bindings: &CBinding) -> TokenStream
             }
 
             let return_type = ReturnType::new(arg.clone(), bindings.wrappers.clone());
-            let type_name = return_type.get_new_return_type(false);
+            let type_name = return_type.get_new_return_type(false, false);
             let field_name = format_ident!("_{}", name);
             if type_name.is_empty() {
                 None
@@ -1174,7 +1230,7 @@ pub fn generate_handlers(handler: &CHandler, bindings: &CBinding) -> TokenStream
             }
 
             let return_type = ReturnType::new(arg.clone(), bindings.wrappers.clone());
-            let type_name = return_type.get_new_return_type(false);
+            let type_name = return_type.get_new_return_type(false, false);
             if arg.is_c_string() {
                 return Some(quote! { String });
             } else if let ArgProcessing::ByteArrayWithLength(_) = arg.processing {
@@ -1214,8 +1270,8 @@ pub fn generate_handlers(handler: &CHandler, bindings: &CBinding) -> TokenStream
             }
 
             let field_name = format_ident!("{}", name);
-            let return_type =
-                ReturnType::new(arg.clone(), bindings.wrappers.clone()).get_new_return_type(false);
+            let return_type = ReturnType::new(arg.clone(), bindings.wrappers.clone())
+                .get_new_return_type(false, false);
             if return_type.is_empty() {
                 None
             } else {
@@ -1375,7 +1431,7 @@ pub fn generate_rust_code(
                     } else {
                         let arg_name = arg.as_ident();
                         let arg_type = ReturnType::new(arg.clone(), wrappers.clone())
-                            .get_new_return_type(false);
+                            .get_new_return_type(false, true);
                         if arg_type.clone().into_token_stream().is_empty() {
                             None
                         } else {
@@ -1441,7 +1497,7 @@ pub fn generate_rust_code(
                     } else {
                         let arg_name = arg.as_ident();
                         let arg_type = ReturnType::new(arg.clone(), wrappers.clone())
-                            .get_new_return_type(false);
+                            .get_new_return_type(false, true);
                         if arg_type.clone().into_token_stream().is_empty() {
                             None
                         } else {
@@ -1464,7 +1520,7 @@ pub fn generate_rust_code(
                     } else {
                         let arg_name = arg.as_ident();
                         let arg_type = ReturnType::new(arg.clone(), wrappers.clone())
-                            .get_new_return_type(false);
+                            .get_new_return_type(false, false);
                         if arg_type.clone().into_token_stream().is_empty() {
                             None
                         } else {
@@ -1498,7 +1554,7 @@ pub fn generate_rust_code(
             impl #client_type {
                 #[inline]
                 pub fn #client_type_method_name #where_clause_async(&self, #(#async_new_args_for_client),*) -> Result<#async_class_name, AeronCError> {
-                    #async_class_name::new(self.clone(), #(#async_new_args_name_only),*)
+                    #async_class_name::new(self, #(#async_new_args_name_only),*)
                 }
             }
 
@@ -1521,7 +1577,7 @@ pub fn generate_rust_code(
                 }
 
                 pub fn poll(&self) -> Option<#main_class_name> {
-                    if let Ok(publication) = #main_class_name::new(self.clone()) {
+                    if let Ok(publication) = #main_class_name::new(self) {
                         Some(publication)
                     } else {
                         None
@@ -1568,6 +1624,7 @@ pub fn generate_rust_code(
         #![allow(non_camel_case_types)]
         #![allow(non_snake_case)]
         #![allow(clippy::all)]
+        #![allow(unused_variables)]
         #![allow(unused_unsafe)]
 ",
             );
