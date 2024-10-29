@@ -32,4 +32,4 @@ docs:
 
 # run unit tests
 test:
-  cargo test --all-targets --all-features
+  cargo test --all-targets --all-features -- --nocapture
