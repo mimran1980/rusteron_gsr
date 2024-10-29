@@ -20,6 +20,11 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Checkout submodules
         run: git submodule update --init --recursive
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
       - name: Clean docs folder
         run: cargo clean --doc
       - name: Build docs
