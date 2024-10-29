@@ -143,7 +143,15 @@ mod tests {
             });
         let closure = Handler::leak_with_fragment_assembler(closure)?;
 
+        // Start the timer
+        let start_time = Instant::now();
+
         loop {
+            // Check if we've hit the 30-second timeout
+            if start_time.elapsed() > Duration::from_secs(30) {
+                println!("Failed: exceeded 30-second timeout");
+                return Err(Box::new(std::io::Error::new(std::io::ErrorKind::TimedOut, "Timeout exceeded")));
+            }
             let c = count.load(Ordering::SeqCst);
             if c > 100 {
                 break;
@@ -251,7 +259,15 @@ mod tests {
             });
         let closure = Handler::leak_with_fragment_assembler(closure)?;
 
+    // Start the timer
+    let start_time = Instant::now();
+
         loop {
+            // Check if we've hit the 30-second timeout
+            if start_time.elapsed() > Duration::from_secs(30) {
+                println!("Failed: exceeded 30-second timeout");
+                return Err(Box::new(std::io::Error::new(std::io::ErrorKind::TimedOut, "Timeout exceeded")));
+            }
             let c = count.load(Ordering::SeqCst);
             if c > 100 {
                 break;
