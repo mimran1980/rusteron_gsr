@@ -116,8 +116,6 @@ mod tests {
                         publisher.offer(large_msg, Handlers::no_reserved_value_supplier_handler());
                     if result < large_msg.len() as i64 {
                         eprintln!("ERROR: failed to send message");
-                    } else {
-                        println!("send message [result={}]", result);
                     }
                 }
                 println!("stopping publisher thread");
@@ -130,12 +128,6 @@ mod tests {
 
         let closure =
             AeronFragmentHandlerClosure::from(move |msg: Vec<u8>, header: AeronHeader| {
-                println!(
-                    "received a message from aeron {:?}, count: {}, msg length:{}",
-                    header.position(),
-                    count_copy.fetch_add(1, Ordering::SeqCst),
-                    msg.len()
-                );
                 if msg.len() != string_len {
                     stop2.store(true, Ordering::SeqCst);
                     eprintln!(
@@ -232,7 +224,6 @@ mod tests {
                     } else {
                         buffer.data().write_all(&msg).unwrap();
                         buffer.commit().unwrap();
-                        println!("send message [result={}]", result);
                     }
                 }
                 println!("stopping publisher thread");
@@ -245,12 +236,6 @@ mod tests {
 
         let closure =
             AeronFragmentHandlerClosure::from(move |msg: Vec<u8>, header: AeronHeader| {
-                println!(
-                    "received a message from aeron {:?}, count: {}, msg length:{}",
-                    header.position(),
-                    count_copy.fetch_add(1, Ordering::SeqCst),
-                    msg.len()
-                );
                 if msg.len() != string_len {
                     stop2.store(true, Ordering::SeqCst);
                     eprintln!(
@@ -268,7 +253,6 @@ mod tests {
 
         loop {
             let c = count.load(Ordering::SeqCst);
-            println!("count {c:?}");
             if c > 100 {
                 break;
             }
