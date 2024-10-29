@@ -1,6 +1,6 @@
 [package]
 name = "rusteron-archive"
-version = "0.1.12"
+version = "0.1.13"
 edition = "2021"
 authors = ["Mo Imran <mimran1980@gmail.com>"]
 license = "MIT OR Apache-2.0"
@@ -11,6 +11,8 @@ categories = ["network-programming"]
 documentation = "https://mimran1980.github.io/rusteron/rusteron_archive/index.html"
 description = "Extends the Aeron client to include archiving features, such as recording streams and handling replay capabilities. It uses the Aeron C bindings from aeron-archive module."
 readme = "README.md"
+
+exclude = [".gradle", "aeron/.gradle", "target/", "aeron/target/"]
 
 [build-dependencies]
 bindgen = {  workspace = true }

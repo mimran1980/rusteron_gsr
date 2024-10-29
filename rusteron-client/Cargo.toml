@@ -1,6 +1,6 @@
 [package]
 name = "rusteron-client"
-version = "0.1.12"
+version = "0.1.13"
 edition = "2021"
 authors = ["Mo Imran <mimran1980@gmail.com>"]
 license = "MIT OR Apache-2.0"
@@ -11,6 +11,7 @@ categories = ["network-programming"]
 documentation = "https://mimran1980.github.io/rusteron/rusteron_client/index.html"
 description = "Provides core client functionalities for interacting with the Aeron protocol, such as establishing connections, subscribing, and publishing. It uses the Aeron C bindings from aeron-client module."
 readme = "README.md"
+exclude = [".gradle", "aeron/.gradle", "target/", "aeron/target/"]
 
 [build-dependencies]
 bindgen = {  workspace = true }
