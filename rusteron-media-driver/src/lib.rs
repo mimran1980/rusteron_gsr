@@ -23,6 +23,7 @@ use std::time::Duration;
 include!(concat!(env!("OUT_DIR"), "/aeron.rs"));
 include!(concat!(env!("OUT_DIR"), "/aeron_custom.rs"));
 
+unsafe impl Sync for AeronDriverContext {}
 unsafe impl Send for AeronDriverContext {}
 
 impl AeronDriver {
@@ -32,7 +33,6 @@ impl AeronDriver {
     ) -> (Arc<AtomicBool>, JoinHandle<Result<(), AeronCError>>) {
         let stop = Arc::new(AtomicBool::new(false));
         let stop_copy = stop.clone();
-        let aeron_context = aeron_context.clone();
         // Register signal handler for SIGINT (Ctrl+C)
         if register_sigint {
             let stop_copy2 = stop.clone();
@@ -45,6 +45,7 @@ impl AeronDriver {
         let started = Arc::new(AtomicBool::new(false));
         let started2 = started.clone();
 
+        println!("Starting media driver [dir={}]", aeron_context.get_dir());
         let handle = std::thread::spawn(move || {
             let aeron_driver = AeronDriver::new(&aeron_context)?;
             aeron_driver.start(true)?;
@@ -68,9 +69,14 @@ impl AeronDriver {
             Ok::<_, AeronCError>(())
         });
 
-        while !started.load(Ordering::SeqCst) {
+        while !started.load(Ordering::SeqCst) && !handle.is_finished() {
             sleep(Duration::from_millis(100));
         }
+
+        if handle.is_finished() {
+            panic!("failed to start media driver {:?}", handle.join())
+        }
+        println!("started media driver");
 
         (stop_copy, handle)
     }

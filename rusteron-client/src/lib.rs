@@ -115,7 +115,20 @@ mod tests {
                     let result =
                         publisher.offer(large_msg, Handlers::no_reserved_value_supplier_handler());
                     if result < large_msg.len() as i64 {
-                        eprintln!("ERROR: failed to send message");
+                        let error = AeronCError::from_code(result as i32);
+                        match error.kind() {
+                            AeronErrorType::PublicationBackPressured
+                            | AeronErrorType::PublicationAdminAction => {
+                                // ignore
+                            }
+                            _ => {
+                                eprintln!(
+                                    "ERROR: failed to send message {:?}",
+                                    AeronCError::from_code(result as i32)
+                                );
+                            }
+                        }
+                        sleep(Duration::from_millis(500));
                     }
                 }
                 println!("stopping publisher thread");
@@ -128,6 +141,7 @@ mod tests {
 
         let closure =
             AeronFragmentHandlerClosure::from(move |msg: Vec<u8>, header: AeronHeader| {
+                count_copy.fetch_add(1, Ordering::SeqCst);
                 if msg.len() != string_len {
                     stop2.store(true, Ordering::SeqCst);
                     eprintln!(
@@ -150,7 +164,10 @@ mod tests {
             // Check if we've hit the 30-second timeout
             if start_time.elapsed() > Duration::from_secs(30) {
                 println!("Failed: exceeded 30-second timeout");
-                return Err(Box::new(std::io::Error::new(std::io::ErrorKind::TimedOut, "Timeout exceeded")));
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "Timeout exceeded",
+                )));
             }
             let c = count.load(Ordering::SeqCst);
             if c > 100 {
@@ -244,6 +261,7 @@ mod tests {
 
         let closure =
             AeronFragmentHandlerClosure::from(move |msg: Vec<u8>, header: AeronHeader| {
+                count_copy.fetch_add(1, Ordering::SeqCst);
                 if msg.len() != string_len {
                     stop2.store(true, Ordering::SeqCst);
                     eprintln!(
@@ -259,14 +277,17 @@ mod tests {
             });
         let closure = Handler::leak_with_fragment_assembler(closure)?;
 
-    // Start the timer
-    let start_time = Instant::now();
+        // Start the timer
+        let start_time = Instant::now();
 
         loop {
             // Check if we've hit the 30-second timeout
             if start_time.elapsed() > Duration::from_secs(30) {
                 println!("Failed: exceeded 30-second timeout");
-                return Err(Box::new(std::io::Error::new(std::io::ErrorKind::TimedOut, "Timeout exceeded")));
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "Timeout exceeded",
+                )));
             }
             let c = count.load(Ordering::SeqCst);
             if c > 100 {
