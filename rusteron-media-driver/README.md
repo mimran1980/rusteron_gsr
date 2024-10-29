@@ -47,7 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     aeron_context.set_dir("target/test")?;
 
     // Create Aeron driver
-    let aeron_driver = AeronDriver::new(aeron_context.clone())?;
+    let aeron_driver = AeronDriver::new(&aeron_context)?;
     aeron_driver.start(false)?;
     println!("Aeron Media Driver started");
     

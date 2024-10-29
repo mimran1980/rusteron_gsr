@@ -41,6 +41,9 @@ jobs:
       - name: Check clippy lints
         run: cargo clippy --all -- --deny warnings
 
+      - name: Check docs
+        run: cargo test --docs
+
   build:
     name: Build
     runs-on: ${{ matrix.os }}
