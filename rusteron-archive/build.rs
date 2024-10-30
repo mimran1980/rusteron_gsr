@@ -188,7 +188,7 @@ fn delete_build_files() {
     eprintln!("aeron_path={}", aeron_path.display());
 
     if aeron_path.exists() && aeron_path.is_dir() {
-        panic!("Found 'aeron' directory at {:?}", aeron_path);
+        eprintln!("Found 'aeron' directory at {:?}", aeron_path);
 
         let output = Command::new("git")
             .arg("clean")
@@ -203,7 +203,7 @@ fn delete_build_files() {
                 output.status, output.stderr
             );
         } else {
-            println!("git clean -fdx ran successfully in {:?}", aeron_path);
+            eprintln!("git clean -fdx ran successfully in {:?}", aeron_path);
         }
     } else {
         panic!("No 'aeron' directory found in {:?}", manifest_dir);
