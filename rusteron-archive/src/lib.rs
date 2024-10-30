@@ -46,4 +46,18 @@ mod tests {
         );
         Ok(())
     }
+
+    // #[test]
+    // pub fn test_aeron_archive() -> Result<(), Box<dyn error::Error>> {
+    //     let ctx = AeronArchiveContext::new()?;
+    //     std::env::set_var("AERON_DRIVER_TIMEOUT", "1");
+    //     let connect = AeronArchiveAsyncConnect::new(&ctx);
+    //     std::env::remove_var("AERON_DRIVER_TIMEOUT");
+    //
+    //     assert_eq!(
+    //         Some(AeronErrorType::NullOrNotConnected.into()),
+    //         connect.err()
+    //     );
+    //     Ok(())
+    // }
 }

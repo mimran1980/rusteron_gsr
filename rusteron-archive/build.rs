@@ -3,6 +3,7 @@ use dunce::canonicalize;
 use proc_macro2::TokenStream;
 use rusteron_code_gen::{append_to_file, format_with_rustfmt};
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::{env, fs};
 
 #[derive(Eq, PartialEq)]
@@ -173,4 +174,33 @@ pub fn main() {
         &format_with_rustfmt(&stream.to_string()).unwrap(),
     )
     .unwrap();
+
+    delete_build_files();
+}
+
+fn delete_build_files() {
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("Failed to get CARGO_MANIFEST_DIR");
+    let aeron_path = Path::new(&manifest_dir).join("aeron");
+
+    if aeron_path.exists() && aeron_path.is_dir() {
+        println!("Found 'aeron' directory at {:?}", aeron_path);
+
+        let output = Command::new("git")
+            .arg("clean")
+            .arg("-fdx")
+            .current_dir(&aeron_path)
+            .output()
+            .expect("Failed to execute git clean");
+
+        if !output.status.success() {
+            panic!(
+                "git clean failed with status {} and output: {:?}",
+                output.status, output.stderr
+            );
+        } else {
+            println!("git clean -fdx ran successfully in {:?}", aeron_path);
+        }
+    } else {
+        panic!("No 'aeron' directory found in {:?}", manifest_dir);
+    }
 }

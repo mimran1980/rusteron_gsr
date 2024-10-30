@@ -23,7 +23,21 @@ release:
   cargo build --all-targets --release
 
 run-aeron-archive:
-    java -cp ./rusteron-archive/aeron/aeron-all/build/libs/aeron-all-*.jar -Daeron.archive.control.channel=aeron:udp?endpoint=localhost:8010 -Daeron.archive.replication.channel=aeron:udp?endpoint=localhost:0 -Daeron.archive.control.response.channel=aeron:udp?endpoint=localhost:0 io.aeron.archive.ArchivingMediaDriver
+    AERON_DIR=target/aeron/shm;ARCHIVE_DIR=target/aeron/archive java -cp ./rusteron-archive/aeron/aeron-all/build/libs/aeron-all-*.jar \
+      -Daeron.term.buffer.sparse.file=false \
+      -Daeron.pre.touch.mapped.memory=true \
+      -Daeron.socket.so_sndbuf=2m \
+      -Daeron.socket.so_rcvbuf=2m \
+      -Daeron.rcv.initial.window.length=2m \
+      -Daeron.threading.mode=DEDICATED \
+      -Daeron.sender.idle.strategy=noop \
+      -Daeron.receiver.idle.strategy=noop \
+      -Daeron.conductor.idle.strategy=spin \
+      -Dagrona.disable.bounds.checks=true \
+      -Daeron.archive.control.channel=aeron:udp?endpoint=localhost:8010 \
+      -Daeron.archive.replication.channel=aeron:udp?endpoint=localhost:0 \
+      -Daeron.archive.control.response.channel=aeron:udp?endpoint=localhost:0 \
+      io.aeron.archive.ArchivingMediaDriver
 
 docs:
   cargo clean --doc
