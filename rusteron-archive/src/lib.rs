@@ -264,9 +264,7 @@ mod tests {
                     "-Daeron.spies.simulate.connection=true",
                     "-Daeron.term.buffer.sparse.file=false",
                     "-Daeron.pre.touch.mapped.memory=true",
-                    "-Daeron.socket.so_sndbuf=2m",
-                    "-Daeron.socket.so_rcvbuf=2m",
-                    "-Daeron.rcv.initial.window.length=2m",
+
                     "-Daeron.threading.mode=DEDICATED",
                     "-Daeron.sender.idle.strategy=noop",
                     "-Daeron.receiver.idle.strategy=noop",
