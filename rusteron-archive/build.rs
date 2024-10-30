@@ -3,7 +3,6 @@ use dunce::canonicalize;
 use proc_macro2::TokenStream;
 use rusteron_code_gen::{append_to_file, format_with_rustfmt};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::{env, fs};
 
 #[derive(Eq, PartialEq)]
