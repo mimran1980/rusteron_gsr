@@ -1,6 +1,6 @@
 [package]
 name = "rusteron-media-driver"
-version = "0.1.13"
+version = "0.1.14"
 edition = "2021"
 authors = ["Mo Imran <mimran1980@gmail.com>"]
 license = "MIT OR Apache-2.0"
@@ -11,7 +11,18 @@ categories = ["network-programming"]
 documentation = "https://mimran1980.github.io/rusteron/rusteron_media_driver/index.html"
 description = "Implements the Aeron Media Driver, a core component for managing messaging between producers and consumers. It uses the Aeron C bindings from aeron-driver module."
 readme = "README.md"
-exclude = [".gradle", "aeron/.gradle", "target/", "aeron/target/"]
+exclude = [
+    ".gradle",
+    "aeron/.gradle",
+    "aeron/aeron-all/build",
+    "aeron/aeron-annotations/build",
+    "aeron/aeron-archive/build",
+    "aeron/aeron-client/build",
+    "aeron/aeron-cluster/build",
+    "aeron/aeron-driver/build",
+    "aeron/aeron-samples/build",
+    "buildSrc/.gradle",
+    "buildSrc/build"]
 
 [dependencies]
 ctrlc = { workspace = true }
