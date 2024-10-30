@@ -24,7 +24,9 @@ release:
 
 run-aeron-archive:
     cd ./rusteron-client/aeron; ./gradlew :aeron-all:build; cd -
-    AERON_DIR=target/aeron/shm;ARCHIVE_DIR=target/aeron/archive java -cp ./rusteron-client/aeron/aeron-all/build/libs/aeron-all-*.jar \
+    java -cp ./rusteron-client/aeron/aeron-all/build/libs/aeron-all-*.jar \
+      -Daeron.dir=target/aeron/shm \
+      -Darchive.dir=target/aeron/archive \
       -Daeron.term.buffer.sparse.file=false \
       -Daeron.pre.touch.mapped.memory=true \
       -Daeron.socket.so_sndbuf=2m \
