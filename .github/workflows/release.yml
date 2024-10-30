@@ -54,7 +54,6 @@ jobs:
           git config --global user.email "mimran1980@gmail.com"
           git config --global user.name "Mo Imran"
           release_type="${{ github.event.inputs.release_type }}"
-          cargo clean
           cargo release "$release_type" --workspace --execute --no-confirm --verbose
 
       - name: Push new version and tag to GitHub
