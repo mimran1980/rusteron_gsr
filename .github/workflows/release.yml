@@ -44,8 +44,8 @@ jobs:
 
       - name: Build and Test
         run: |
-          CARGO_PUBLISH=1 cargo build --release
-          CARGO_PUBLISH=1 cargo test -- --nocapture
+          cargo build --release
+          cargo test -- --nocapture
 
       - name: Run cargo-release for specified version
         env:
@@ -55,7 +55,7 @@ jobs:
           git config --global user.name "Mo Imran"
           release_type="${{ github.event.inputs.release_type }}"
           cargo clean
-          CARGO_PUBLISH=1 cargo release "$release_type" --workspace --execute --no-confirm --verbose
+          cargo release "$release_type" --workspace --execute --no-confirm --verbose
 
       - name: Push new version and tag to GitHub
         uses: ad-m/github-push-action@v0.8.0
