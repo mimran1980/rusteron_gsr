@@ -15,7 +15,7 @@ pub mod bindings {
 }
 
 use bindings::*;
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{c_char, CStr};
 include!(concat!(env!("OUT_DIR"), "/aeron.rs"));
 include!(concat!(env!("OUT_DIR"), "/aeron_custom.rs"));
 
@@ -69,7 +69,7 @@ impl AeronArchive {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::ffi::CString;
+
     use std::path::Path;
     use std::process::{Child, Command, Stdio};
     use std::thread::sleep;
@@ -218,8 +218,8 @@ mod tests {
 
     struct EmbeddedArchiveMediaDriverProcess {
         child: Child,
-        aeron_dir: String,
-        archive_dir: String,
+        pub aeron_dir: String,
+        pub archive_dir: String,
     }
 
     impl EmbeddedArchiveMediaDriverProcess {
