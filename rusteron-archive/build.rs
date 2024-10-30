@@ -175,7 +175,10 @@ pub fn main() {
     )
     .unwrap();
 
-    delete_build_files();
+    // cargo publish will fail build if it finds any files not committed in aeron
+    if env::var("CARGO_PUBLISHING").is_ok() {
+        delete_build_files();
+    }
 }
 
 fn delete_build_files() {
