@@ -176,7 +176,7 @@ pub fn main() {
     .unwrap();
 
     // cargo publish will fail build if it finds any files not committed in aeron
-    if env::var("CARGO_PUBLISHING").is_ok() {
+    if env::var("CARGO_PUBLISH").is_ok() {
         delete_build_files();
     }
 }
@@ -185,8 +185,10 @@ fn delete_build_files() {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("Failed to get CARGO_MANIFEST_DIR");
     let aeron_path = Path::new(&manifest_dir).join("aeron");
 
+    eprintln!("aeron_path={}", aeron_path.display());
+
     if aeron_path.exists() && aeron_path.is_dir() {
-        println!("Found 'aeron' directory at {:?}", aeron_path);
+        panic!("Found 'aeron' directory at {:?}", aeron_path);
 
         let output = Command::new("git")
             .arg("clean")

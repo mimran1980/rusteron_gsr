@@ -54,8 +54,8 @@ jobs:
           git config --global user.email "mimran1980@gmail.com"
           git config --global user.name "Mo Imran"
           release_type="${{ github.event.inputs.release_type }}"
-          export CARGO_PUBLISHING=true
-          CARGO_PUBLISHING=true cargo release "$release_type" --workspace --execute --no-confirm --verbose
+          export CARGO_PUBLISH=true
+          CARGO_PUBLISH=true cargo release "$release_type" --workspace --execute --no-confirm --verbose
 
       - name: Push new version and tag to GitHub
         uses: ad-m/github-push-action@v0.8.0
