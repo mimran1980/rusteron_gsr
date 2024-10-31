@@ -24,9 +24,13 @@ release:
 
 run-aeron-archive:
     cd ./rusteron-client/aeron; ./gradlew :aeron-all:build; cd -
+    cd ./rusteron-client/aeron; ./gradlew :aeron-agent:jar; cd -
     java -cp ./rusteron-client/aeron/aeron-all/build/libs/aeron-all-*.jar \
+      -javaagent:./rusteron-client/aeron/aeron-agent/build/libs/aeron-agent-1.47.0-SNAPSHOT.jar \
       -Daeron.dir=target/aeron/shm \
-      -Darchive.dir=target/aeron/archive \
+      -Daeron.archive.dir=target/aeron/archive \
+      -Daeron.event.log=all \
+      -Daeron.event.archive.log=all \
       -Daeron.term.buffer.sparse.file=false \
       -Daeron.pre.touch.mapped.memory=true \
       -Daeron.socket.so_sndbuf=2m \
