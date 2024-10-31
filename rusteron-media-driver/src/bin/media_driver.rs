@@ -16,8 +16,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create Aeron context
     let aeron_context = AeronDriverContext::new()?;
 
-    aeron_context.set_threading_mode(aeron_threading_mode_enum::AERON_THREADING_MODE_DEDICATED)?;
-
     // Create Aeron driver
     let aeron_driver = AeronDriver::new(&aeron_context)?;
     aeron_driver.start(true)?;

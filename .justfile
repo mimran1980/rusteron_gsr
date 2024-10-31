@@ -97,7 +97,7 @@ bechmark-java-ipc-throughput:
       io.aeron.samples.EmbeddedExclusiveIpcThroughput
 
 bechmark-rust-ipc-throughput:
-    AERON_THREADING_MODE=SHARED \
+    AERON_THREADING_MODE=DEDICATED \
     AERON_CONDUCTOR_IDLE_STRATEGY=spin \
     AERON_SENDER_IDLE_STRATEGY=noop \
     AERON_RECEIVER_IDLE_STRATEGY=noop \
