@@ -65,7 +65,15 @@ pub fn main() {
         }
     }
 
-    let cmake_output = Config::new(&aeron_path)
+    let mut config = Config::new(&aeron_path);
+    if std::env::var("PROFILE").unwrap() == "release" {
+        config.profile("Release");
+        config.define("CMAKE_CXX_FLAGS_RELEASE", "-O3 -DNDEBUG -march=native");
+        config.define("CMAKE_C_FLAGS_RELEASE", "-O3 -DNDEBUG -march=native");
+    } else {
+        config.profile("Debug");
+    }
+    let cmake_output = config
         .define("BUILD_AERON_DRIVER", "ON")
         .define("BUILD_AERON_ARCHIVE_API", "OFF")
         .define("AERON_TESTS", "OFF")

@@ -236,6 +236,10 @@ Failing to uphold these safety measures can lead to crashes or undefined behavio
 
 For detailed instructions on how to build **rusteron**, please refer to the [HOW_TO_BUILD.md](../HOW_TO_BUILD.md) file.
 
+## Benchmarks
+
+You can view the benchmarks for this project by visiting [BENCHMARKS.md](../BENCHMARKS.md).
+
 ## Contributing
 
 Contributions are welcome! Please feel free to open issues, submit pull requests, or suggest new features. We're particularly interested in:

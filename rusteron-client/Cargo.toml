@@ -12,6 +12,10 @@ documentation = "https://mimran1980.github.io/rusteron/rusteron_client/index.htm
 description = "Provides core client functionalities for interacting with the Aeron protocol, such as establishing connections, subscribing, and publishing. It uses the Aeron C bindings from aeron-client module."
 readme = "README.md"
 
+[dependencies]
+ctrlc = { workspace = true }
+num-format = {  workspace = true }
+
 [build-dependencies]
 bindgen = {  workspace = true }
 cmake = {  workspace = true }
@@ -22,7 +26,6 @@ proc-macro2 = {  workspace = true }
 quote = {  workspace = true }
 itertools = {  workspace = true }
 rusteron-code-gen = {path = "../rusteron-code-gen", version = "0"}
-ctrlc = { workspace = true }
 
 [dev-dependencies]
 rusteron-media-driver = {path = "../rusteron-media-driver"}

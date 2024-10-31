@@ -69,7 +69,6 @@ static lib
 rusteron-client = { version = "0.1", features= ["static"] }
 ```
 
-
 Replace `rusteron-client` with `rusteron-archive` or `rusteron-media-driver` as per your requirement.
 
 ## Usage Example
@@ -125,6 +124,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 ```
+
+## Benchmarks
+
+You can view the benchmarks for this project by visiting [BENCHMARKS.md](./BENCHMARKS.md).
 
 ## Contributing
 

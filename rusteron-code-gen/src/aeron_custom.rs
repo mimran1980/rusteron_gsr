@@ -1,7 +1,11 @@
 // code here is included in all modules and extends generated classes
 
+unsafe impl Send for AeronSubscription {}
+unsafe impl Sync for AeronSubscription {}
 unsafe impl Send for AeronPublication {}
 unsafe impl Sync for AeronPublication {}
+unsafe impl Send for AeronExclusivePublication {}
+unsafe impl Sync for AeronExclusivePublication {}
 unsafe impl Send for AeronCounter {}
 unsafe impl Sync for AeronCounter {}
 

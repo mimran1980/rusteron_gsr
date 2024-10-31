@@ -17,6 +17,7 @@ syn = { version = "2.0", features = ["full"] }
 proc-macro2 = "1.0"
 quote = "1.0"
 itertools = "0.13"
+num-format = "0.4"
 
 [release]
 publish = true
@@ -26,3 +27,11 @@ auto_publish = true
 push = true
 tag = true
 dependency_version = "update"
+
+
+[profile.release]
+#opt-level = 3
+debug = true
+debug-assertions = false
+overflow-checks = false
+lto = "thin"

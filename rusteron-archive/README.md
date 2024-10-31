@@ -45,6 +45,10 @@ Since **rusteron-archive** relies on Aeron C bindings, it uses `unsafe` Rust cod
 
 For detailed instructions on how to build **rusteron**, please refer to the [HOW_TO_BUILD.md](../HOW_TO_BUILD.md) file.
 
+## Benchmarks
+
+You can view the benchmarks for this project by visiting [BENCHMARKS.md](../BENCHMARKS.md).
+
 ## Contributing
 
 Contributions are welcome! Please see our [contributing guidelines](https://github.com/mimran1980/rusteron/blob/main/CONTRIBUTING.md) for more information on how to get involved.

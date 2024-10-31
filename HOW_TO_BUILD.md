@@ -51,7 +51,7 @@ Once Rust and Java are installed, you can build the project using Cargo:
 cargo build --release
 ```
 
-If you are using a `.justfile`, you can also run build commands conveniently with predefined tasks:
+If you are using a `just`, you can also run build commands conveniently with predefined tasks:
 
 ```bash
 just build   # Builds the project

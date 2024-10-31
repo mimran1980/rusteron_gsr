@@ -1,6 +1,7 @@
 use crate::AeronErrorType::Unknown;
 use std::backtrace::Backtrace;
 use std::fmt::{Debug, Formatter};
+use std::ops::{Deref, DerefMut};
 use std::{any, fmt, ptr};
 
 /// A custom struct for managing C resources with automatic cleanup.
@@ -294,5 +295,19 @@ impl<T> Handler<T> {
                 let _ = Box::from_raw(self.raw_ptr as *mut Box<T>);
             }
         }
+    }
+}
+
+impl<T> Deref for Handler<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.raw_ptr as &T }
+    }
+}
+
+impl<T> DerefMut for Handler<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut *self.raw_ptr as &mut T }
     }
 }
