@@ -1,11 +1,13 @@
 name: Docs
 on:
-  push:
-    branches: [main] # Or your preferred branch to trigger builds
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
 permissions:
-  contents: write     # Write access for contents
-  pages: write        # Write access for GitHub Pages
-  id-token: write     # Write access for id-token to authenticate deployment
+  contents: write
+  pages: write
+  id-token: write
 concurrency:
   group: deploy
   cancel-in-progress: false
