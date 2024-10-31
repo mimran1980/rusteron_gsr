@@ -1,5 +1,4 @@
-init:
-    cargo update
+list:
     just --list
 
 # check formatting and clippy

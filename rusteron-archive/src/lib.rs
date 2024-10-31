@@ -77,6 +77,7 @@ impl AeronArchive {
 mod tests {
     use super::*;
 
+    use serial_test::serial;
     use std::cell::Cell;
     use std::path::Path;
     use std::process::{Child, Command, Stdio};
@@ -96,6 +97,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     pub fn test_failed_connect() -> Result<(), Box<dyn error::Error>> {
         let ctx = AeronArchiveContext::new()?;
         std::env::set_var("AERON_DRIVER_TIMEOUT", "1");
@@ -110,6 +112,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     pub fn test_aeron_archive() -> Result<(), Box<dyn error::Error>> {
         let id = Aeron::nano_clock();
         let aeron_dir = format!("target/aeron/{}/shm", id);

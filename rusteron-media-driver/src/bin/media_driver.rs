@@ -1,4 +1,3 @@
-use rusteron_media_driver::bindings::aeron_threading_mode_enum;
 use rusteron_media_driver::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;

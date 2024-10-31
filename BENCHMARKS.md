@@ -44,8 +44,8 @@ Duration 1002ms - 29,374,684 messages - 939,989,888 payload bytes
 Duration 1001ms - 27,872,288 messages - 891,913,216 payload bytes
 ```
 
-### Rust IPC Throughput Results
-The results obtained by running the Rust port of the Java benchmark using Rusteron on the same M1 MacBook are as follows:
+### Rust IPC Throughput Results with Rust Media Driver
+The results obtained by running the Rust port of the Java benchmark using Rusteron with the Rust media driver on the same M1 MacBook are as follows:
 
 ```
 Throughput: 36,859,281 msgs/sec, 1,179,496,981 bytes/sec
@@ -75,14 +75,43 @@ Throughput: 37,447,615 msgs/sec, 1,198,323,687 bytes/sec
 Throughput: 37,126,740 msgs/sec, 1,188,055,668 bytes/sec
 ```
 
+### Rust IPC Throughput Results with Java Media Driver
+The results obtained by running the Rust port of the Java benchmark using Rusteron connected to the Java media driver are as follows:
+
+```
+Throughput: 34,371,321 msgs/sec, 1,099,882,267 bytes/sec
+Throughput: 36,009,246 msgs/sec, 1,152,295,888 bytes/sec
+Throughput: 34,798,099 msgs/sec, 1,113,539,166 bytes/sec
+Throughput: 35,104,141 msgs/sec, 1,123,332,511 bytes/sec
+Throughput: 34,219,767 msgs/sec, 1,095,032,558 bytes/sec
+Throughput: 33,570,332 msgs/sec, 1,074,250,618 bytes/sec
+Throughput: 34,357,081 msgs/sec, 1,099,426,587 bytes/sec
+Throughput: 35,308,391 msgs/sec, 1,129,868,511 bytes/sec
+Throughput: 34,503,901 msgs/sec, 1,104,124,848 bytes/sec
+Throughput: 34,056,613 msgs/sec, 1,089,811,617 bytes/sec
+Throughput: 36,392,474 msgs/sec, 1,164,559,166 bytes/sec
+Throughput: 35,717,277 msgs/sec, 1,142,952,865 bytes/sec
+Throughput: 35,266,763 msgs/sec, 1,128,536,429 bytes/sec
+Throughput: 35,042,202 msgs/sec, 1,121,350,469 bytes/sec
+Throughput: 35,904,945 msgs/sec, 1,148,958,241 bytes/sec
+Throughput: 34,771,485 msgs/sec, 1,112,687,523 bytes/sec
+Throughput: 33,368,872 msgs/sec, 1,067,803,916 bytes/sec
+Throughput: 33,951,504 msgs/sec, 1,086,448,141 bytes/sec
+Throughput: 34,073,490 msgs/sec, 1,090,351,673 bytes/sec
+Throughput: 34,825,446 msgs/sec, 1,114,414,268 bytes/sec
+Throughput: 34,024,351 msgs/sec, 1,088,779,219 bytes/sec
+```
+
 ## Summary
 From the results above, we observe that the Rust implementation consistently achieves higher throughput compared to the Java version:
 - **Java**: Average throughput of approximately 28 million messages per second.
-- **Rust**: Average throughput of approximately 36-38 million messages per second.
+- **Rust with Rust Media Driver**: Average throughput of approximately 36-38 million messages per second.
+- **Rust with Java Media Driver**: Average throughput of approximately 33-36 million messages per second.
 
-The Rust implementation shows a noticeable improvement in throughput, with an approximate **30% improvement** over the Java version. This is higher than expected, as Java low latency applications are usually around 10-20% slower compared to implementations in C++ or Rust. This could indicate that there may be a flaw in the benchmark, and the results should be interpreted with caution. Such an improvement is expected when comparing Java low latency implementations with those written in languages like C++ or Rust, which allow more control over system-level resources and typically have lower runtime overhead.
+The Rust implementation shows a noticeable improvement in throughput, with an approximate **30% improvement** over the Java version when using the Rust media driver. This is higher than expected, as Java low latency applications are usually around 10-20% slower compared to implementations in C++ or Rust. This could indicate that there may be a flaw in the benchmark, and the results should be interpreted with caution.
 
-The Rust implementation shows a noticeable improvement in throughput, thanks to its system-level control and efficient use of resources.
+The Rust implementation using the Java media driver also demonstrates a significant improvement, although it is somewhat lower than when using the Rust media driver.
 
 ## Next Steps
 If you have suggestions for further optimizations or would like to contribute to the Rust port (`rusteron`), feel free to open an issue or a pull request on GitHub. We're always looking for ways to push the boundaries of performance!
+
