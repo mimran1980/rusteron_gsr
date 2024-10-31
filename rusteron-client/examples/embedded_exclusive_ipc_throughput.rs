@@ -11,6 +11,7 @@ const MESSAGE_LENGTH: usize = 32;
 const CHANNEL: &str = "aeron:ipc";
 const STREAM_ID: i32 = 1001;
 
+/// this code is based on Aeron samples EmbeddedExclusiveIpcThroughput
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let running = Arc::new(AtomicBool::new(true));
 
@@ -19,7 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         running_ctrl_c.store(false, Ordering::SeqCst);
     })
     .expect("Error setting Ctrl-C handler");
-    // Create and start threads for publisher and subscriber with reporting
+
     let running_publisher = Arc::clone(&running);
     let running_subscriber = Arc::clone(&running);
 
@@ -59,7 +60,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok::<_, AeronCError>(())
     });
 
-    // Wait for all threads to finish
     publisher_thread
         .join()
         .expect("Publisher thread failed")
@@ -72,7 +72,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-// Define the Publisher struct and run logic
 struct Publisher {
     running: Arc<AtomicBool>,
     publication: AeronExclusivePublication,
@@ -112,7 +111,6 @@ impl Publisher {
     }
 }
 
-// Define the ImageRateSubscriber struct that also performs reporting
 struct ImageRateSubscriber {
     running: Arc<AtomicBool>,
     subscription: AeronSubscription,
