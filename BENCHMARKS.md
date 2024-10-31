@@ -104,9 +104,9 @@ Throughput: 34,024,351 msgs/sec, 1,088,779,219 bytes/sec
 
 ## Summary
 From the results above, we observe that the Rust implementation consistently achieves higher throughput compared to the Java version:
-- **Java**: Average throughput of approximately 28 million messages per second.
-- **Rust with Rust Media Driver**: Average throughput of approximately 36-38 million messages per second.
-- **Rust with Java Media Driver**: Average throughput of approximately 33-36 million messages per second.
+- **Java**: Average throughput of approximately 28 million messages per second (msg size 32 bytes).
+- **Rust with Rust Media Driver**: Average throughput of approximately 36-38 million messages per second (msg size 32 bytes).
+- **Rust with Java Media Driver**: Average throughput of approximately 33-36 million messages per second (msg size 32 bytes).
 
 The Rust implementation shows a noticeable improvement in throughput, with an approximate **30% improvement** over the Java version when using the Rust media driver. This is higher than expected, as Java low latency applications are usually around 10-20% slower compared to implementations in C++ or Rust. This could indicate that there may be a flaw in the benchmark, and the results should be interpreted with caution.
 
