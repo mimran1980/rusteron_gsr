@@ -176,9 +176,9 @@ impl AeronFragmentHandlerCallback for PingRoundTripHandler {
                 .try_into()
                 .expect("Slice with incorrect length"),
         );
-        // println!("ping received {} {:?}", time, buffer);
+        // // println!("ping received {} {:?}", time, buffer);
         let rtt = Aeron::nano_clock() - time;
-        // println!("RTT: {}", rtt);
+        // // println!("RTT: {}", rtt);
         debug_assert!(rtt >= 0);
         self.histogram.record(rtt as u64).unwrap();
     }
@@ -193,8 +193,7 @@ fn record_rtt(
 ) {
     let now = Aeron::nano_clock();
     buffer[0..8].copy_from_slice(&now.to_le_bytes());
-    // println!("time is {} {:?}", i, buffer);
-    while pong_publication.offer(&buffer, Handlers::no_reserved_value_supplier_handler()) <= 0 {}
+    while pong_publication.offer(&buffer, Handlers::no_reserved_value_supplier_handler()) < 0 {}
 
     while ping_subscription
         .poll(Some(handler), FRAGMENT_COUNT_LIMIT)
