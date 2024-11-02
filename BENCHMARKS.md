@@ -18,7 +18,7 @@ This benchmark compares the throughput performance of the Aeron `EmbeddedExclusi
 Execute the Java benchmark using the following `just` command:
 
 ```sh
-just benchmark-java-ipc-throughput
+just benchmark-ipc-throughput-java
 ```
 
 ### Rust IPC Throughput Benchmark
@@ -26,7 +26,7 @@ To run the Rust benchmark, first start the Aeron Media Driver for Rust, then exe
 
 ```sh
 just run-aeron-media-driver-rust
-just benchmark-rust-ipc-throughput
+just benchmark-ipc-throughput-rust
 ```
 
 ## Benchmark Results

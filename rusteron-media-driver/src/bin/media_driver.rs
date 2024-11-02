@@ -27,7 +27,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Poll for work until Ctrl+C is pressed
     while running.load(Ordering::Acquire) {
-        aeron_driver.main_do_work()?;
+        aeron_driver.main_idle_strategy(aeron_driver.main_do_work()?);
     }
     println!("Received signal to stop the media driver.");
     println!("Aeron media driver stopped successfully.");
