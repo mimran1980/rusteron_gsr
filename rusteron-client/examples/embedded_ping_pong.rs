@@ -27,23 +27,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let hist = run_ping(running, pong_thread)?;
     println!("message length {} bytes\n", MESSAGE_LENGTH);
-    println!("Histogram of RTT latencies in micros:");
+    println!("Histogram of RTT latencies:");
     println!("# of samples: {}", hist.len());
-    println!("min: {}", hist.min() as f64 / 1000.0);
+    println!("min: {:?}", Duration::from_nanos(hist.min()));
     println!(
-        "50th percentile: {}",
-        hist.value_at_quantile(0.50) as f64 / 1000.0
+        "50th percentile: {:?}",
+        Duration::from_nanos(hist.value_at_quantile(0.50))
     );
     println!(
-        "99th percentile: {}",
-        hist.value_at_quantile(0.99) as f64 / 1000.0
+        "99th percentile: {:?}",
+        Duration::from_nanos(hist.value_at_quantile(0.99))
     );
     println!(
-        "99.9th percentile: {}",
-        hist.value_at_quantile(0.999) as f64 / 1000.0
+        "99.9th percentile: {:?}",
+        Duration::from_nanos(hist.value_at_quantile(0.999))
     );
-    println!("max: {}", hist.max() as f64 / 1000.0);
-    println!("avg: {}", hist.mean() / 1000.0);
+    println!(
+        "99.99th percentile: {:?}",
+        Duration::from_nanos(hist.value_at_quantile(0.9999))
+    );
+    println!("max: {:?}", Duration::from_nanos(hist.max()));
+    println!("avg: {:?}", Duration::from_nanos(hist.mean() as u64));
 
     Ok(())
 }
