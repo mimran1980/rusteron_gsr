@@ -4,7 +4,7 @@ use std::sync::{
     Arc,
 };
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const MESSAGE_LENGTH: usize = 32;
 const CHANNEL: &str = "aeron:ipc";
@@ -113,7 +113,7 @@ struct ImageRateSubscriber {
     subscription: AeronSubscription,
     poll_handler: Handler<MsgCount>,
     message_length: usize,
-    start_time: i64,
+    start_time: Instant,
 }
 
 struct MsgCount {
@@ -138,7 +138,7 @@ impl ImageRateSubscriber {
             subscription,
             poll_handler,
             message_length,
-            start_time: 0,
+            start_time: Instant::now(),
         }
     }
 
@@ -148,9 +148,8 @@ impl ImageRateSubscriber {
                 .poll(Some(&self.poll_handler), MESSAGE_LENGTH)
                 .unwrap();
 
-            let now = Aeron::nano_clock();
-            if now >= self.start_time {
-                let elapsed = 1f64;
+            if self.start_time.elapsed() >= Duration::from_secs(1) {
+                let elapsed = self.start_time.elapsed().as_secs_f64();
                 let rate = self.poll_handler.message_count as f64 / elapsed;
                 let throughput = rate * self.message_length as f64;
 
@@ -161,7 +160,7 @@ impl ImageRateSubscriber {
                     (throughput.round() as u64).to_formatted_string(&Locale::en)
                 );
 
-                self.start_time = Aeron::nano_clock() + Duration::from_secs(1).as_nanos() as i64;
+                self.start_time = Instant::now();
                 self.poll_handler.message_count = 0;
             }
         }
