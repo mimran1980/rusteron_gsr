@@ -16,6 +16,8 @@ fix:
 # clean project
 clean:
   cargo clean
+  cd ./rusteron-client/aeron; ./gradlew :aeron-all:clean; cd -
+  cd ./rusteron-client/aeron; ./gradlew :aeron-agent:clean; cd -
 
 # build project
 build:
@@ -61,7 +63,7 @@ run-aeron-media-driver-rust:
     AERON_DIR=target/aeron \
     cargo run --release --package rusteron-media-driver --bin media_driver
 
-bechmark-java-ipc-throughput:
+benchmark-java-ipc-throughput:
     cd ./rusteron-client/aeron; ./gradlew :aeron-samples:jar; cd -
     java -cp ./rusteron-client/aeron/aeron-all/build/libs/aeron-all-1.47.0-SNAPSHOT.jar:./rusteron-client/aeron/aeron-samples/build/libs/aeron-samples-1.47.0-SNAPSHOT.jar \
       -Daeron.dir=target/aeron \
@@ -69,12 +71,12 @@ bechmark-java-ipc-throughput:
       -Daeron.sample.messageLength=32 \
       io.aeron.samples.EmbeddedExclusiveIpcThroughput
 
-bechmark-rust-ipc-throughput:
+benchmark-rust-ipc-throughput:
     AERON_DIR=target/aeron \
     cargo run --release --package rusteron-client --example embedded_exclusive_ipc_throughput
 
 
-bechmark-java-embedded-ping-pong:
+benchmark-java-embedded-ping-pong:
     cd ./rusteron-client/aeron; ./gradlew :aeron-samples:jar; cd -
     java -cp ./rusteron-client/aeron/aeron-all/build/libs/aeron-all-1.47.0-SNAPSHOT.jar:./rusteron-client/aeron/aeron-samples/build/libs/aeron-samples-1.47.0-SNAPSHOT.jar \
       -Daeron.dir=target/aeron \
@@ -84,17 +86,17 @@ bechmark-java-embedded-ping-pong:
       -Daeron.sample.pong.channel=aeron:udp?endpoint=localhost:20124 \
       io.aeron.samples.EmbeddedPingPong
 
-bechmark-rust-embedded-ping-pong:
+benchmark-rust-embedded-ping-pong:
     AERON_DIR=target/aeron \
     cargo run --release --package rusteron-client --example embedded_ping_pong
 
-bechmark-rust-embedded-ping-pong-profiler:
+benchmark-rust-embedded-ping-pong-profiler:
     cargo build --features static --release --package rusteron-client --example embedded_ping_pong
     codesign -s - -vvv --entitlements instruments.plist ./target/release/examples/embedded_ping_pong
     AERON_DIR=target/aeron \
     ./target/release/examples/embedded_ping_pong
 
-bechmarks:
+bench:
     cargo bench
 
 docs:

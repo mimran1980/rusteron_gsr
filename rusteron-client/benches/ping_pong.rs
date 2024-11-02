@@ -19,6 +19,8 @@ fn criterion_benchmark(c: &mut Criterion) {
         .unwrap();
     ctx.set_dir_delete_on_start(true).unwrap();
     ctx.set_dir_delete_on_shutdown(true).unwrap();
+    ctx.set_print_configuration(true).unwrap();
+
     let dir = ctx.get_dir().to_string().leak();
     let dir2 = ctx.get_dir().to_string().leak();
     let (stop, _handle) = AeronDriver::launch_embedded(ctx.clone(), false);
