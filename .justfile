@@ -125,21 +125,21 @@ benchmark-rust-ipc-throughput:
     cargo run --release --package rusteron-client --example embedded_exclusive_ipc_throughput
 
 benchmark-rust-ipc-throughput-profiler:
-    sudo     AERON_DIR_DELETE_ON_START=true \
-        AERON_DIR_DELETE_ON_SHUTDOWN=true \
-        AERON_PRINT_CONFIGURATION=true \
-        AERON_THREADING_MODE=DEDICATED \
-        AERON_CONDUCTOR_IDLE_STRATEGY=spin \
-        AERON_SENDER_IDLE_STRATEGY=noop \
-        AERON_RECEIVER_IDLE_STRATEGY=noop \
-        AERON_DIR=target/aeron \
-        AERON_TERM_BUFFER_SPARSE_FILE=false \
-        AERON_SOCKET_SO_SNDBUF=2097152 \
-        AERON_SOCKET_SO_RCVBUF=2097152 \
-        AERON_RCV_INITIAL_WINDOW_LENGTH=2097152 \
-        LD_LIBRARY_PATH=target/release/build/rusteron-client-*/out/build/lib \
-     perf record -g ./target/release/examples/embedded_exclusive_ipc_throughput
-     sudo perf report
+    sudo AERON_DIR_DELETE_ON_START=true \
+    AERON_DIR_DELETE_ON_SHUTDOWN=true \
+    AERON_PRINT_CONFIGURATION=true \
+    AERON_THREADING_MODE=DEDICATED \
+    AERON_CONDUCTOR_IDLE_STRATEGY=spin \
+    AERON_SENDER_IDLE_STRATEGY=noop \
+    AERON_RECEIVER_IDLE_STRATEGY=noop \
+    AERON_DIR=target/aeron \
+    AERON_TERM_BUFFER_SPARSE_FILE=false \
+    AERON_SOCKET_SO_SNDBUF=2097152 \
+    AERON_SOCKET_SO_RCVBUF=2097152 \
+    AERON_RCV_INITIAL_WINDOW_LENGTH=2097152 \
+    LD_LIBRARY_PATH=target/release/build/rusteron-client-*/out/build/lib \
+    perf record -g ./target/release/examples/embedded_exclusive_ipc_throughput
+    sudo perf report
 
 benchmark-java-embedded-ping-pong:
     cd ./rusteron-client/aeron; ./gradlew :aeron-samples:jar; cd -
