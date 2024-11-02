@@ -181,7 +181,7 @@ From the results above, we observe that the Rust implementation consistently ach
 
 The Rust implementation shows a noticeable improvement in throughput, with an approximate **30% improvement** over the Java version when using the Rust media driver. This is higher than expected, as Java low latency applications are usually around 10-20% slower compared to implementations in C++ or Rust. This could indicate that there may be a flaw in the benchmark, and the results should be interpreted with caution.
 
-Thπe Ping Pong benchmark results demonstrate that the Java implementation achieves better round-trip time (RTT) latency compared to the Rust implementation with the Rust media driver, primarily due to the default settings used by the Rust/C media driver. The Rust media driver defaults to low latency settings that appear to have a negative impact on performance for this particular benchmark, especially on macOS. However, when using the Java media driver, the Rust implementation performs comparably to Java.
+The ping pong benchmark results are comparable to those of Java. However, further investigation is required to determine why the C/rust media driver has a negative impact on performance on m1 macbook. Nevertheless, can conclude that the rusteron-client is not slower with udp ping pong.
 
 ## Next Steps
 If you have suggestions for further optimizations or would like to contribute to the Rust port (`rusteron`), feel free to open an issue or a pull request on GitHub. We're always looking for ways to push the boundaries of performance!
