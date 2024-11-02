@@ -1,7 +1,3 @@
-Here’s the complete README with the full results included, as well as the updated conclusion based on your observations with AMD Ryzen:
-
----
-
 # Benchmarks: Aeron Java vs. Rusteron Rust IPC Throughput
 
 **Warning**: Writing good benchmarks is challenging, and results can be influenced by various factors. Until these benchmarks are verified across different environments, take these results with a pinch of salt.
