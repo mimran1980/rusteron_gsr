@@ -148,7 +148,9 @@ impl ImageRateSubscriber {
                 .poll(Some(&self.poll_handler), MESSAGE_LENGTH)
                 .unwrap();
 
-            if self.start_time.elapsed() >= Duration::from_secs(1) {
+            if self.poll_handler.message_count % 100_000 == 0
+                && self.start_time.elapsed() >= Duration::from_secs(1)
+            {
                 let elapsed = self.start_time.elapsed().as_secs_f64();
                 let rate = self.poll_handler.message_count as f64 / elapsed;
                 let throughput = rate * self.message_length as f64;
