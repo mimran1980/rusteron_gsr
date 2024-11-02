@@ -44,10 +44,13 @@ run-aeron-archive-driver:
       -Daeron.receiver.idle.strategy=noop \
       -Daeron.conductor.idle.strategy=spin \
       -Dagrona.disable.bounds.checks=true \
+      -Daeron.dir.delete.on.start=true \
+      -Daeron.dir.delete.on.shutdown=true \
+      -Daeron.print.configuration=true \
       -Daeron.archive.control.channel=aeron:udp?endpoint=localhost:8010 \
       -Daeron.archive.replication.channel=aeron:udp?endpoint=localhost:0 \
       -Daeron.archive.control.response.channel=aeron:udp?endpoint=localhost:0 \
-      io.aeron.archive.ArchivingMediaDriver
+      io.aeron.archive.ArchivingMediaDriver=true
 
 run-aeron-media-driver-java:
     cd ./rusteron-client/aeron; ./gradlew :aeron-all:build; cd -
@@ -64,9 +67,15 @@ run-aeron-media-driver-java:
       -Daeron.receiver.idle.strategy=noop \
       -Daeron.conductor.idle.strategy=spin \
       -Dagrona.disable.bounds.checks=true \
+      -Daeron.dir.delete.on.start=true \
+      -Daeron.dir.delete.on.shutdown=true \
+      -Daeron.print.configuration=true \
       io.aeron.driver.MediaDriver
 
 run-aeron-media-driver-rust:
+    AERON_DIR_DELETE_ON_START=true \
+    AERON_DIR_DELETE_ON_SHUTDOWN=true \
+    AERON_PRINT_CONFIGURATION=true \
     AERON_THREADING_MODE=DEDICATED \
     AERON_CONDUCTOR_IDLE_STRATEGY=spin \
     AERON_SENDER_IDLE_STRATEGY=noop \
@@ -93,11 +102,17 @@ benchmark-java-ipc-throughput:
       -Daeron.receiver.idle.strategy=noop \
       -Daeron.conductor.idle.strategy=spin \
       -Dagrona.disable.bounds.checks=true \
+      -Daeron.dir.delete.on.start=true \
+      -Daeron.dir.delete.on.shutdown=true \
+      -Daeron.print.configuration=true \
       -Daeron.sample.messageLength=32 \
       -Daeron.sample.idleStrategy=org.agrona.concurrent.NoOpIdleStrategy \
       io.aeron.samples.EmbeddedExclusiveIpcThroughput
 
 benchmark-rust-ipc-throughput:
+    AERON_DIR_DELETE_ON_START=true \
+    AERON_DIR_DELETE_ON_SHUTDOWN=true \
+    AERON_PRINT_CONFIGURATION=true \
     AERON_THREADING_MODE=DEDICATED \
     AERON_CONDUCTOR_IDLE_STRATEGY=spin \
     AERON_SENDER_IDLE_STRATEGY=noop \
@@ -125,6 +140,9 @@ benchmark-java-embedded-ping-pong:
       -Daeron.receiver.idle.strategy=noop \
       -Daeron.conductor.idle.strategy=spin \
       -Dagrona.disable.bounds.checks=true \
+      -Daeron.dir.delete.on.start=true \
+      -Daeron.dir.delete.on.shutdown=true \
+      -Daeron.print.configuration=true \
       -Daeron.sample.messageLength=32 \
       -Daeron.sample.idleStrategy=org.agrona.concurrent.NoOpIdleStrategy \
       -Daeron.sample.exclusive.publications=false \
@@ -133,6 +151,9 @@ benchmark-java-embedded-ping-pong:
       io.aeron.samples.EmbeddedPingPong
 
 benchmark-rust-embedded-ping-pong:
+    AERON_DIR_DELETE_ON_START=true \
+    AERON_DIR_DELETE_ON_SHUTDOWN=true \
+    AERON_PRINT_CONFIGURATION=true \
     AERON_THREADING_MODE=DEDICATED \
     AERON_CONDUCTOR_IDLE_STRATEGY=spin \
     AERON_SENDER_IDLE_STRATEGY=noop \
