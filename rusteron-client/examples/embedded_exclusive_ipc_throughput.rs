@@ -25,36 +25,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let running_publisher = Arc::clone(&running);
     let running_subscriber = Arc::clone(&running);
 
-    let publisher_thread = thread::spawn(move || {
-        let ctx = AeronContext::new()?;
-        let dir = std::env::var("AERON_DIR").expect("AERON_DIR must be set");
-        ctx.set_dir(&dir)?;
-        let aeron = Aeron::new(&ctx)?;
-        aeron.start()?;
-        let publication = aeron
-            .async_add_exclusive_publication(CHANNEL, STREAM_ID)?
-            .poll_blocking(Duration::from_secs(5))?;
+    let ctx = AeronContext::new()?;
+    let dir = std::env::var("AERON_DIR").expect("AERON_DIR must be set");
+    ctx.set_dir(&dir)?;
+    let aeron = Aeron::new(&ctx)?;
+    aeron.start()?;
 
+    let publication = aeron
+        .async_add_exclusive_publication(CHANNEL, STREAM_ID)?
+        .poll_blocking(Duration::from_secs(5))?;
+
+    let publisher_thread = thread::spawn(move || {
         Publisher::new(running_publisher, publication).run();
         Ok::<_, AeronCError>(())
     });
 
+    let subscription = aeron
+        .async_add_subscription(
+            CHANNEL,
+            STREAM_ID,
+            Handlers::no_available_image_handler(),
+            Handlers::no_unavailable_image_handler(),
+        )?
+        .poll_blocking(Duration::from_secs(5))?;
+
     let subscriber_thread = thread::spawn(move || {
-        let ctx = AeronContext::new()?;
-        let dir = std::env::var("AERON_DIR").expect("AERON_DIR must be set");
-        ctx.set_dir(&dir)?;
-        let aeron = Aeron::new(&ctx)?;
-        aeron.start()?;
-
-        let subscription = aeron
-            .async_add_subscription(
-                CHANNEL,
-                STREAM_ID,
-                Handlers::no_available_image_handler(),
-                Handlers::no_unavailable_image_handler(),
-            )?
-            .poll_blocking(Duration::from_secs(5))?;
-
         let mut image_rate_subscriber =
             ImageRateSubscriber::new(running_subscriber, subscription, MESSAGE_LENGTH);
         image_rate_subscriber.run();
