@@ -193,7 +193,7 @@ The benchmark results indicate that Rust’s performance varies significantly ac
 
 - **Apple M1**: The Rust implementation with the Rust Media Driver consistently outperforms Java, achieving around **30% higher throughput** in the Exclusive IPC benchmark, with Rust reaching 36-38 million messages per second compared to Java’s 28 million messages per second.
 
-- **AMD Ryzen 5 (x86)**: Java performs better in the Exclusive IPC benchmark on x86, reaching **45-55 million messages per second**, while Rust's throughput is unexpectedly lower. Interestingly, this performance discrepancy does not extend to the Ping Pong benchmark, where Rust achieves faster round-trip times than Java, even on x86. This suggests that architectural nuances or specific optimizations in the Rust Media Driver may impact performance differently across benchmarks on x86.
+- **AMD Ryzen 5 (x86)**: Java performs better in the Exclusive IPC benchmark on x86, reaching **45-55 million messages per second**, while Rust's throughput is unexpectedly lower. Interestingly, this performance discrepancy does not extend to the Ping Pong benchmark, where Rust achieves faster round-trip times than Java, even on x86.
 
 From these results, we can conclude that at least the `rusteron-client` is not slower than the Java implementation.
 
