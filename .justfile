@@ -30,8 +30,8 @@ run-aeron-archive-driver:
     cd ./rusteron-client/aeron; ./gradlew :aeron-agent:jar; cd -
     java -cp ./rusteron-client/aeron/aeron-all/build/libs/aeron-all-*.jar \
       -javaagent:./rusteron-client/aeron/aeron-agent/build/libs/aeron-agent-1.47.0-SNAPSHOT.jar \
-      -Daeron.dir=/dev/shm/aeron \
-      -Daeron.archive.dir=/dev/shm/aeron/archive \
+      -Daeron.dir=target/aeron \
+      -Daeron.archive.dir=target/aeron/archive \
       -Daeron.event.log=all \
       -Daeron.event.archive.log=all \
       -Daeron.term.buffer.sparse.file=false \
@@ -55,8 +55,7 @@ run-aeron-archive-driver:
 run-aeron-media-driver-java:
     cd ./rusteron-client/aeron; ./gradlew :aeron-all:build; cd -
     java -cp ./rusteron-client/aeron/aeron-all/build/libs/aeron-all-*.jar \
-      -javaagent:./rusteron-client/aeron/aeron-agent/build/libs/aeron-agent-1.47.0-SNAPSHOT.jar \
-      -Daeron.dir=/dev/shm/aeron \
+      -Daeron.dir=target/aeron \
       -Daeron.term.buffer.sparse.file=false \
       -Daeron.pre.touch.mapped.memory=true \
       -Daeron.socket.so_sndbuf=2m \
@@ -80,7 +79,7 @@ run-aeron-media-driver-rust:
     AERON_CONDUCTOR_IDLE_STRATEGY=spin \
     AERON_SENDER_IDLE_STRATEGY=noop \
     AERON_RECEIVER_IDLE_STRATEGY=noop \
-    AERON_DIR=/dev/shm/aeron \
+    AERON_DIR=target/aeron \
     AERON_TERM_BUFFER_SPARSE_FILE=false \
     AERON_SOCKET_SO_SNDBUF=2097152 \
     AERON_SOCKET_SO_RCVBUF=2097152 \
@@ -91,7 +90,7 @@ benchmark-java-ipc-throughput:
     cd ./rusteron-client/aeron; ./gradlew :aeron-all:build; cd -
     cd ./rusteron-client/aeron; ./gradlew :aeron-samples:jar; cd -
     java -cp ./rusteron-client/aeron/aeron-all/build/libs/aeron-all-1.47.0-SNAPSHOT.jar:./rusteron-client/aeron/aeron-samples/build/libs/aeron-samples-1.47.0-SNAPSHOT.jar \
-      -Daeron.dir=/dev/shm/aeron \
+      -Daeron.dir=target/aeron \
       -Daeron.term.buffer.sparse.file=false \
       -Daeron.pre.touch.mapped.memory=true \
       -Daeron.socket.so_sndbuf=2m \
@@ -113,23 +112,23 @@ benchmark-rust-ipc-throughput:
     AERON_DIR_DELETE_ON_START=true \
     AERON_DIR_DELETE_ON_SHUTDOWN=true \
     AERON_PRINT_CONFIGURATION=true \
-    AERON_THREADING_MODE=DEDICATED \
+    AERON_THREADING_MODE=SHARED \
     AERON_CONDUCTOR_IDLE_STRATEGY=spin \
     AERON_SENDER_IDLE_STRATEGY=noop \
     AERON_RECEIVER_IDLE_STRATEGY=noop \
-    AERON_DIR=/dev/shm/aeron \
+    AERON_DIR=target/aeron \
     AERON_TERM_BUFFER_SPARSE_FILE=false \
     AERON_SOCKET_SO_SNDBUF=2097152 \
     AERON_SOCKET_SO_RCVBUF=2097152 \
     AERON_RCV_INITIAL_WINDOW_LENGTH=2097152 \
-    AERON_DIR=/dev/shm/aeron \
+    AERON_DIR=target/aeron \
     cargo run --release --package rusteron-client --example embedded_exclusive_ipc_throughput
 
 
 benchmark-java-embedded-ping-pong:
     cd ./rusteron-client/aeron; ./gradlew :aeron-samples:jar; cd -
     java -cp ./rusteron-client/aeron/aeron-all/build/libs/aeron-all-1.47.0-SNAPSHOT.jar:./rusteron-client/aeron/aeron-samples/build/libs/aeron-samples-1.47.0-SNAPSHOT.jar \
-      -Daeron.dir=/dev/shm/aeron \
+      -Daeron.dir=target/aeron \
       -Daeron.term.buffer.sparse.file=false \
       -Daeron.pre.touch.mapped.memory=true \
       -Daeron.socket.so_sndbuf=2m \
@@ -158,7 +157,7 @@ benchmark-rust-embedded-ping-pong:
     AERON_CONDUCTOR_IDLE_STRATEGY=spin \
     AERON_SENDER_IDLE_STRATEGY=noop \
     AERON_RECEIVER_IDLE_STRATEGY=noop \
-    AERON_DIR=/dev/shm/aeron \
+    AERON_DIR=target/aeron \
     AERON_TERM_BUFFER_SPARSE_FILE=false \
     AERON_SOCKET_SO_SNDBUF=2097152 \
     AERON_SOCKET_SO_RCVBUF=2097152 \
@@ -168,7 +167,7 @@ benchmark-rust-embedded-ping-pong:
 benchmark-rust-embedded-ping-pong-profiler:
     cargo build --features static --release --package rusteron-client --example embedded_ping_pong
     codesign -s - -vvv --entitlements instruments.plist ./target/release/examples/embedded_ping_pong
-    AERON_DIR=/dev/shm/aeron \
+    AERON_DIR=target/aeron \
     ./target/release/examples/embedded_ping_pong
 
 bench:
