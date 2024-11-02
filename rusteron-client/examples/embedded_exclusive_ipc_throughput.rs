@@ -6,6 +6,7 @@ use std::sync::{
 use std::thread;
 use std::time::{Duration, Instant};
 
+const BURST_LENGTH: usize = 1_000_000;
 const MESSAGE_LENGTH: usize = 32;
 const CHANNEL: &str = "aeron:ipc";
 const STREAM_ID: i32 = 1001;
@@ -148,7 +149,7 @@ impl ImageRateSubscriber {
                 .poll(Some(&self.poll_handler), MESSAGE_LENGTH)
                 .unwrap();
 
-            if self.poll_handler.message_count % 100_000 == 0
+            if self.poll_handler.message_count % BURST_LENGTH == 0
                 && self.start_time.elapsed() >= Duration::from_secs(1)
             {
                 let elapsed = self.start_time.elapsed().as_secs_f64();
