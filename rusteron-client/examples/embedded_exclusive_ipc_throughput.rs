@@ -6,7 +6,6 @@ use std::sync::{
 use std::thread;
 use std::time::{Duration, Instant};
 
-const BURST_LENGTH: usize = 1_000_000;
 const MESSAGE_LENGTH: usize = 32;
 const CHANNEL: &str = "aeron:ipc";
 const STREAM_ID: i32 = 1001;
@@ -91,19 +90,17 @@ impl Publisher {
         let buffer = vec![1u8; MESSAGE_LENGTH];
 
         while self.running.load(Ordering::Acquire) {
-            for _ in 0..BURST_LENGTH {
-                while self
-                    .publication
-                    .offer(&buffer, Handlers::no_reserved_value_supplier_handler())
-                    < 0
-                {
-                    back_pressure_count += 1;
-                    if !self.running.load(Ordering::Acquire) {
-                        return;
-                    }
+            while self
+                .publication
+                .offer(&buffer, Handlers::no_reserved_value_supplier_handler())
+                < 0
+            {
+                back_pressure_count += 1;
+                if !self.running.load(Ordering::Acquire) {
+                    return;
                 }
-                total_message_count += 1;
             }
+            total_message_count += 1;
         }
 
         let back_pressure_ratio = back_pressure_count as f64 / total_message_count as f64;
