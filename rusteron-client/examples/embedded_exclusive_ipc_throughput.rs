@@ -14,6 +14,8 @@ const STREAM_ID: i32 = 1001;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let running = Arc::new(AtomicBool::new(true));
 
+    println!("message length {}, channel {}", MESSAGE_LENGTH, CHANNEL);
+
     let running_ctrl_c = Arc::clone(&running);
     ctrlc::set_handler(move || {
         running_ctrl_c.store(false, Ordering::SeqCst);
@@ -97,6 +99,9 @@ impl Publisher {
             {
                 back_pressure_count += 1;
                 if !self.running.load(Ordering::Acquire) {
+                    let back_pressure_ratio =
+                        back_pressure_count as f64 / total_message_count as f64;
+                    println!("Publisher back pressure ratio: {:.6}", back_pressure_ratio);
                     return;
                 }
             }
