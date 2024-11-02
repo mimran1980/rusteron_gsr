@@ -11,6 +11,8 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 - **CMake**: required to build the c bindings
 ```shell
 sudo apt install cmake -y
+sudo apt install linux-tools-$(uname -r)
+sudo apt-get install -y uuid-dev
 # or
 sudo snap install cmake --classic
 ```

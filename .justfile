@@ -84,7 +84,7 @@ run-aeron-media-driver-rust:
     AERON_SOCKET_SO_SNDBUF=2097152 \
     AERON_SOCKET_SO_RCVBUF=2097152 \
     AERON_RCV_INITIAL_WINDOW_LENGTH=2097152 \
-    cargo run --release --package rusteron-media-driver --bin media_driver
+    cargo run --features static  --release --package rusteron-media-driver --bin media_driver
 
 benchmark-java-ipc-throughput:
     cd ./rusteron-client/aeron; ./gradlew :aeron-all:build; cd -
@@ -122,7 +122,7 @@ benchmark-rust-ipc-throughput:
     AERON_SOCKET_SO_RCVBUF=2097152 \
     AERON_RCV_INITIAL_WINDOW_LENGTH=2097152 \
     AERON_DIR=target/aeron \
-    cargo run --release --package rusteron-client --example embedded_exclusive_ipc_throughput
+    cargo run --features static  --release --package rusteron-client --example embedded_exclusive_ipc_throughput
 
 
 benchmark-java-embedded-ping-pong:
@@ -162,7 +162,7 @@ benchmark-rust-embedded-ping-pong:
     AERON_SOCKET_SO_SNDBUF=2097152 \
     AERON_SOCKET_SO_RCVBUF=2097152 \
     AERON_RCV_INITIAL_WINDOW_LENGTH=2097152 \
-    cargo run --release --package rusteron-client --example embedded_ping_pong
+    cargo run --features static  --release --package rusteron-client --example embedded_ping_pong
 
 benchmark-rust-embedded-ping-pong-profiler:
     cargo build --features static --release --package rusteron-client --example embedded_ping_pong
