@@ -57,6 +57,13 @@ mod tests {
     #[serial]
     pub fn simple_large_send() -> Result<(), Box<dyn error::Error>> {
         let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
+        media_driver_ctx.set_dir_delete_on_shutdown(true)?;
+        media_driver_ctx.set_dir_delete_on_start(true)?;
+        media_driver_ctx.set_dir(&format!(
+            "{}{}",
+            media_driver_ctx.get_dir(),
+            Aeron::epoch_clock()
+        ))?;
         let (stop, driver_handle) =
             rusteron_media_driver::AeronDriver::launch_embedded(media_driver_ctx.clone(), false);
 
@@ -189,6 +196,13 @@ mod tests {
     #[serial]
     pub fn try_claim() -> Result<(), Box<dyn error::Error>> {
         let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
+        media_driver_ctx.set_dir_delete_on_shutdown(true)?;
+        media_driver_ctx.set_dir_delete_on_start(true)?;
+        media_driver_ctx.set_dir(&format!(
+            "{}{}",
+            media_driver_ctx.get_dir(),
+            Aeron::epoch_clock()
+        ))?;
         let (stop, driver_handle) =
             rusteron_media_driver::AeronDriver::launch_embedded(media_driver_ctx.clone(), false);
 
@@ -309,6 +323,13 @@ mod tests {
     #[serial]
     pub fn counters() -> Result<(), Box<dyn error::Error>> {
         let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
+        media_driver_ctx.set_dir_delete_on_shutdown(true)?;
+        media_driver_ctx.set_dir_delete_on_start(true)?;
+        media_driver_ctx.set_dir(&format!(
+            "{}{}",
+            media_driver_ctx.get_dir(),
+            Aeron::epoch_clock()
+        ))?;
         let (stop, driver_handle) =
             rusteron_media_driver::AeronDriver::launch_embedded(media_driver_ctx.clone(), false);
 

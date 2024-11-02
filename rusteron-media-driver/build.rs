@@ -1,3 +1,4 @@
+use bindgen::EnumVariation;
 use cmake::Config;
 use dunce::canonicalize;
 use proc_macro2::TokenStream;
@@ -128,7 +129,10 @@ pub fn main() {
         .allowlist_function("aeron_.*")
         .allowlist_type("aeron_.*")
         .allowlist_var("AERON_.*")
-        .constified_enum_module("aeron_.*_enum")
+        .rustified_enum("aeron_.*_enum")
+        .default_enum_style(EnumVariation::Rust {
+            non_exhaustive: false,
+        })
         // Some padding structures use arrays > 120 elements,
         // so we can't derive Debug implementations
         .derive_debug(true)

@@ -152,7 +152,7 @@ fn read_i64(buffer: &[u8]) -> i64 {
 fn record_rtt(
     pong_publication: &AeronPublication,
     ping_subscription: &AeronSubscription,
-    buffer: &mut Vec<u8>,
+    buffer: &mut [u8],
     handler: &mut Handler<PingRoundTripHandler>,
 ) {
     let now = Aeron::nano_clock();
@@ -166,7 +166,7 @@ fn record_rtt(
     {}
 }
 
-fn write_i64(buffer: &mut Vec<u8>, now: &i64) {
+fn write_i64(buffer: &mut [u8], now: &i64) {
     buffer[0..8].copy_from_slice(&now.to_le_bytes());
 }
 

@@ -195,7 +195,7 @@ fn read_i64(buffer: &[u8]) -> i64 {
 fn record_rtt(
     pong_publication: &AeronPublication,
     ping_subscription: &AeronSubscription,
-    buffer: &mut Vec<u8>,
+    buffer: &mut [u8],
     handler: &mut Handler<PingRoundTripHandler>,
 ) {
     let now = Aeron::nano_clock();

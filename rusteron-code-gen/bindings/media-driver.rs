@@ -6,6 +6,8 @@ pub const AERON_CLIENT_ERROR_CLIENT_TIMEOUT: i32 = -1001;
 pub const AERON_CLIENT_ERROR_CONDUCTOR_SERVICE_TIMEOUT: i32 = -1002;
 pub const AERON_CLIENT_ERROR_BUFFER_FULL: i32 = -1003;
 pub const AERON_CLIENT_MAX_LOCAL_ADDRESS_STR_LEN: u32 = 64;
+pub const AERON_RESPONSE_ADDRESS_TYPE_IPV4: u32 = 1;
+pub const AERON_RESPONSE_ADDRESS_TYPE_IPV6: u32 = 2;
 pub const AERON_DIR_ENV_VAR: &[u8; 10] = b"AERON_DIR\0";
 pub const AERON_DRIVER_TIMEOUT_ENV_VAR: &[u8; 21] = b"AERON_DRIVER_TIMEOUT\0";
 pub const AERON_CLIENT_RESOURCE_LINGER_DURATION_ENV_VAR: &[u8; 38] =
@@ -34,6 +36,7 @@ pub const AERON_COMPILER_LLVM: u32 = 1;
 pub const AERON_CPU_ARM: u32 = 1;
 pub const AERON_CACHE_LINE_LENGTH: u32 = 64;
 pub const AERON_MAX_PATH: u32 = 384;
+pub const AERON_IPC_CHANNEL: &[u8; 10] = b"aeron:ipc\0";
 pub const AERON_UDP_CHANNEL_RELIABLE_KEY: &[u8; 9] = b"reliable\0";
 pub const AERON_UDP_CHANNEL_TTL_KEY: &[u8; 4] = b"ttl\0";
 pub const AERON_UDP_CHANNEL_ENDPOINT_KEY: &[u8; 9] = b"endpoint\0";
@@ -178,7 +181,6 @@ pub const AERON_RECEIVER_GROUP_CONSIDERATION_ENV_VAR: &[u8; 35] =
     b"AERON_RECEIVER_GROUP_CONSIDERATION\0";
 pub const AERON_REJOIN_STREAM_ENV_VAR: &[u8; 20] = b"AERON_REJOIN_STREAM\0";
 pub const AERON_DRIVER_CONNECT_ENV_VAR: &[u8; 21] = b"AERON_DRIVER_CONNECT\0";
-pub const AERON_IPC_CHANNEL: &[u8; 10] = b"aeron:ipc\0";
 pub const AERON_SPY_PREFIX: &[u8; 11] = b"aeron-spy:\0";
 pub const AERON_UDP_CHANNEL_TRANSPORT_BINDINGS_MEDIA_ENV_VAR: &[u8; 43] =
     b"AERON_UDP_CHANNEL_TRANSPORT_BINDINGS_MEDIA\0";
@@ -238,6 +240,8 @@ pub const AERON_RES_HEADER_TYPE_NAME_TO_IP4_MD: u32 = 1;
 pub const AERON_RES_HEADER_TYPE_NAME_TO_IP6_MD: u32 = 2;
 pub const AERON_FRAME_MAX_MESSAGE_LENGTH: u32 = 16777216;
 pub const AERON_OPT_HDR_ALIGNMENT: u32 = 4;
+pub const AERON_ERROR_MAX_TEXT_LENGTH: u32 = 1023;
+pub const AERON_ERROR_HAS_GROUP_TAG_FLAG: u32 = 8;
 pub const AERON_LOGBUFFER_PARTITION_COUNT: u32 = 3;
 pub const AERON_LOGBUFFER_TERM_MIN_LENGTH: u32 = 65536;
 pub const AERON_LOGBUFFER_TERM_MAX_LENGTH: u32 = 1073741824;
@@ -304,7 +308,8 @@ pub const AERON_COMMAND_ADD_RCV_DESTINATION: u32 = 12;
 pub const AERON_COMMAND_REMOVE_RCV_DESTINATION: u32 = 13;
 pub const AERON_COMMAND_TERMINATE_DRIVER: u32 = 14;
 pub const AERON_COMMAND_ADD_STATIC_COUNTER: u32 = 15;
-pub const AERON_COMMAND_REMOVE_DESTINATION_BY_ID: u32 = 16;
+pub const AERON_COMMAND_REJECT_IMAGE: u32 = 16;
+pub const AERON_COMMAND_REMOVE_DESTINATION_BY_ID: u32 = 17;
 pub const AERON_RESPONSE_ON_ERROR: u32 = 3841;
 pub const AERON_RESPONSE_ON_AVAILABLE_IMAGE: u32 = 3842;
 pub const AERON_RESPONSE_ON_PUBLICATION_READY: u32 = 3843;
@@ -316,6 +321,7 @@ pub const AERON_RESPONSE_ON_COUNTER_READY: u32 = 3848;
 pub const AERON_RESPONSE_ON_UNAVAILABLE_COUNTER: u32 = 3849;
 pub const AERON_RESPONSE_ON_CLIENT_TIMEOUT: u32 = 3850;
 pub const AERON_RESPONSE_ON_STATIC_COUNTER: u32 = 3851;
+pub const AERON_RESPONSE_ON_PUBLICATION_ERROR: u32 = 3852;
 pub const AERON_ERROR_CODE_UNKNOWN_CODE_VALUE: i32 = -1;
 pub const AERON_ERROR_CODE_UNUSED: u32 = 0;
 pub const AERON_ERROR_CODE_INVALID_CHANNEL: u32 = 1;
@@ -404,7 +410,7 @@ pub type __int64_t = ::std::os::raw::c_longlong;
 pub type __darwin_socklen_t = __uint32_t;
 pub type __darwin_time_t = ::std::os::raw::c_long;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct __darwin_pthread_handler_rec {
     pub __routine: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
     pub __arg: *mut ::std::os::raw::c_void,
@@ -424,7 +430,7 @@ const _: () = {
         [::std::mem::offset_of!(__darwin_pthread_handler_rec, __next) - 16usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct _opaque_pthread_attr_t {
     pub __sig: ::std::os::raw::c_long,
     pub __opaque: [::std::os::raw::c_char; 56usize],
@@ -440,7 +446,7 @@ const _: () = {
         [::std::mem::offset_of!(_opaque_pthread_attr_t, __opaque) - 8usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct _opaque_pthread_cond_t {
     pub __sig: ::std::os::raw::c_long,
     pub __opaque: [::std::os::raw::c_char; 40usize],
@@ -456,7 +462,7 @@ const _: () = {
         [::std::mem::offset_of!(_opaque_pthread_cond_t, __opaque) - 8usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct _opaque_pthread_mutex_t {
     pub __sig: ::std::os::raw::c_long,
     pub __opaque: [::std::os::raw::c_char; 56usize],
@@ -472,7 +478,7 @@ const _: () = {
         [::std::mem::offset_of!(_opaque_pthread_mutex_t, __opaque) - 8usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct _opaque_pthread_t {
     pub __sig: ::std::os::raw::c_long,
     pub __cleanup_stack: *mut __darwin_pthread_handler_rec,
@@ -495,13 +501,13 @@ pub type __darwin_pthread_mutex_t = _opaque_pthread_mutex_t;
 pub type __darwin_pthread_t = *mut _opaque_pthread_t;
 pub type pthread_attr_t = __darwin_pthread_attr_t;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_context_stct {
     _unused: [u8; 0],
 }
 pub type aeron_context_t = aeron_context_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_stct {
     _unused: [u8; 0],
 }
@@ -509,25 +515,25 @@ pub type aeron_t = aeron_stct;
 #[doc = " Structure used to hold information for a try_claim function call."]
 pub type aeron_buffer_claim_t = aeron_buffer_claim_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_publication_stct {
     _unused: [u8; 0],
 }
 pub type aeron_publication_t = aeron_publication_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_exclusive_publication_stct {
     _unused: [u8; 0],
 }
 pub type aeron_exclusive_publication_t = aeron_exclusive_publication_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_header_stct {
     _unused: [u8; 0],
 }
 pub type aeron_header_t = aeron_header_stct;
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_header_values_frame_stct {
     pub frame_length: i32,
     pub version: i8,
@@ -566,7 +572,7 @@ const _: () = {
 };
 pub type aeron_header_values_frame_t = aeron_header_values_frame_stct;
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_header_values_stct {
     pub frame: aeron_header_values_frame_t,
     pub initial_term_id: i32,
@@ -586,33 +592,86 @@ const _: () = {
         [::std::mem::offset_of!(aeron_header_values_stct, position_bits_to_shift) - 36usize];
 };
 pub type aeron_header_values_t = aeron_header_values_stct;
+#[repr(C, packed(4))]
+#[derive(Debug, Copy, Clone)]
+pub struct aeron_publication_error_values_stct {
+    pub registration_id: i64,
+    pub destination_registration_id: i64,
+    pub session_id: i32,
+    pub stream_id: i32,
+    pub receiver_id: i64,
+    pub group_tag: i64,
+    pub address_type: i16,
+    pub source_port: u16,
+    pub source_address: [u8; 16usize],
+    pub error_code: i32,
+    pub error_message_length: i32,
+    pub error_message: [u8; 1usize],
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of aeron_publication_error_values_stct"]
+        [::std::mem::size_of::<aeron_publication_error_values_stct>() - 72usize];
+    ["Alignment of aeron_publication_error_values_stct"]
+        [::std::mem::align_of::<aeron_publication_error_values_stct>() - 4usize];
+    ["Offset of field: aeron_publication_error_values_stct::registration_id"]
+        [::std::mem::offset_of!(aeron_publication_error_values_stct, registration_id) - 0usize];
+    ["Offset of field: aeron_publication_error_values_stct::destination_registration_id"][::std::mem::offset_of!(
+        aeron_publication_error_values_stct,
+        destination_registration_id
+    )
+        - 8usize];
+    ["Offset of field: aeron_publication_error_values_stct::session_id"]
+        [::std::mem::offset_of!(aeron_publication_error_values_stct, session_id) - 16usize];
+    ["Offset of field: aeron_publication_error_values_stct::stream_id"]
+        [::std::mem::offset_of!(aeron_publication_error_values_stct, stream_id) - 20usize];
+    ["Offset of field: aeron_publication_error_values_stct::receiver_id"]
+        [::std::mem::offset_of!(aeron_publication_error_values_stct, receiver_id) - 24usize];
+    ["Offset of field: aeron_publication_error_values_stct::group_tag"]
+        [::std::mem::offset_of!(aeron_publication_error_values_stct, group_tag) - 32usize];
+    ["Offset of field: aeron_publication_error_values_stct::address_type"]
+        [::std::mem::offset_of!(aeron_publication_error_values_stct, address_type) - 40usize];
+    ["Offset of field: aeron_publication_error_values_stct::source_port"]
+        [::std::mem::offset_of!(aeron_publication_error_values_stct, source_port) - 42usize];
+    ["Offset of field: aeron_publication_error_values_stct::source_address"]
+        [::std::mem::offset_of!(aeron_publication_error_values_stct, source_address) - 44usize];
+    ["Offset of field: aeron_publication_error_values_stct::error_code"]
+        [::std::mem::offset_of!(aeron_publication_error_values_stct, error_code) - 60usize];
+    ["Offset of field: aeron_publication_error_values_stct::error_message_length"][::std::mem::offset_of!(
+        aeron_publication_error_values_stct,
+        error_message_length
+    ) - 64usize];
+    ["Offset of field: aeron_publication_error_values_stct::error_message"]
+        [::std::mem::offset_of!(aeron_publication_error_values_stct, error_message) - 68usize];
+};
+pub type aeron_publication_error_values_t = aeron_publication_error_values_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_subscription_stct {
     _unused: [u8; 0],
 }
 pub type aeron_subscription_t = aeron_subscription_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_image_stct {
     _unused: [u8; 0],
 }
 pub type aeron_image_t = aeron_image_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_counter_stct {
     _unused: [u8; 0],
 }
 pub type aeron_counter_t = aeron_counter_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_log_buffer_stct {
     _unused: [u8; 0],
 }
 pub type aeron_log_buffer_t = aeron_log_buffer_stct;
 pub type aeron_counters_reader_t = aeron_counters_reader_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_client_registering_resource_stct {
     _unused: [u8; 0],
 }
@@ -623,26 +682,26 @@ pub type aeron_async_add_counter_t = aeron_client_registering_resource_stct;
 pub type aeron_async_destination_t = aeron_client_registering_resource_stct;
 pub type aeron_async_destination_by_id_t = aeron_client_registering_resource_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_image_fragment_assembler_stct {
     _unused: [u8; 0],
 }
 pub type aeron_image_fragment_assembler_t = aeron_image_fragment_assembler_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_image_controlled_fragment_assembler_stct {
     _unused: [u8; 0],
 }
 pub type aeron_image_controlled_fragment_assembler_t =
     aeron_image_controlled_fragment_assembler_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_fragment_assembler_stct {
     _unused: [u8; 0],
 }
 pub type aeron_fragment_assembler_t = aeron_fragment_assembler_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_controlled_fragment_assembler_stct {
     _unused: [u8; 0],
 }
@@ -720,6 +779,24 @@ pub type aeron_error_handler_t = ::std::option::Option<
         message: *const ::std::os::raw::c_char,
     ),
 >;
+#[doc = " The error frame handler to be called when the driver notifies the client about an error frame being received.\n The data passed to this callback will only be valid for the lifetime of the callback. The user should use\n <code>aeron_publication_error_values_copy</code> if they require the data to live longer than that."]
+pub type aeron_publication_error_frame_handler_t = ::std::option::Option<
+    unsafe extern "C" fn(
+        clientd: *mut ::std::os::raw::c_void,
+        error_frame: *mut aeron_publication_error_values_t,
+    ),
+>;
+extern "C" {
+    #[doc = " Copy an existing aeron_publication_error_values_t to the supplied pointer. The caller is responsible for freeing the\n allocated memory using aeron_publication_error_values_delete when the copy is not longer required.\n\n @param dst to copy the values to.\n @param src to copy the values from.\n @return 0 if this is successful, -1 otherwise. Will set aeron_errcode() and aeron_errmsg() on failure."]
+    pub fn aeron_publication_error_values_copy(
+        dst: *mut *mut aeron_publication_error_values_t,
+        src: *mut aeron_publication_error_values_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    #[doc = " Delete a instance of aeron_publication_error_values_t that was created when making a copy\n (aeron_publication_error_values_copy). This should not be use on the pointer received via the aeron_frame_handler_t.\n @param to_delete to be deleted."]
+    pub fn aeron_publication_error_values_delete(to_delete: *mut aeron_publication_error_values_t);
+}
 #[doc = " Generalised notification callback."]
 pub type aeron_notification_t =
     ::std::option::Option<unsafe extern "C" fn(clientd: *mut ::std::os::raw::c_void)>;
@@ -735,6 +812,23 @@ extern "C" {
 }
 extern "C" {
     pub fn aeron_context_get_error_handler_clientd(
+        context: *mut aeron_context_t,
+    ) -> *mut ::std::os::raw::c_void;
+}
+extern "C" {
+    pub fn aeron_context_set_publication_error_frame_handler(
+        context: *mut aeron_context_t,
+        handler: aeron_publication_error_frame_handler_t,
+        clientd: *mut ::std::os::raw::c_void,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn aeron_context_get_publication_error_frame_handler(
+        context: *mut aeron_context_t,
+    ) -> aeron_publication_error_frame_handler_t;
+}
+extern "C" {
+    pub fn aeron_context_get_publication_error_frame_handler_clientd(
         context: *mut aeron_context_t,
     ) -> *mut ::std::os::raw::c_void;
 }
@@ -1076,7 +1170,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_on_available_counter_pair_stct {
     pub handler: aeron_on_available_counter_t,
     pub clientd: *mut ::std::os::raw::c_void,
@@ -1094,7 +1188,7 @@ const _: () = {
 };
 pub type aeron_on_available_counter_pair_t = aeron_on_available_counter_pair_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_on_unavailable_counter_pair_stct {
     pub handler: aeron_on_unavailable_counter_t,
     pub clientd: *mut ::std::os::raw::c_void,
@@ -1112,7 +1206,7 @@ const _: () = {
 };
 pub type aeron_on_unavailable_counter_pair_t = aeron_on_unavailable_counter_pair_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_on_close_client_pair_stct {
     pub handler: aeron_on_close_client_t,
     pub clientd: *mut ::std::os::raw::c_void,
@@ -1172,7 +1266,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_counter_value_descriptor_stct {
     pub counter_value: i64,
     pub registration_id: i64,
@@ -1199,7 +1293,7 @@ const _: () = {
 };
 pub type aeron_counter_value_descriptor_t = aeron_counter_value_descriptor_stct;
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_counter_metadata_descriptor_stct {
     pub state: i32,
     pub type_id: i32,
@@ -1232,7 +1326,7 @@ const _: () = {
 };
 pub type aeron_counter_metadata_descriptor_t = aeron_counter_metadata_descriptor_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_counters_reader_buffers_stct {
     pub values: *mut u8,
     pub metadata: *mut u8,
@@ -1343,6 +1437,14 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
+    #[doc = " Get a pointer to the key of a counter's metadata\n\n @param counters_reader that contains the counter\n @param counter_id to find\n @param key_p out pointer set to location of metadata key\n @return -1 on failure, 0 on success."]
+    pub fn aeron_counters_reader_metadata_key(
+        counters_reader: *mut aeron_counters_reader_t,
+        counter_id: i32,
+        key_p: *mut *mut u8,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
     #[doc = " Get the label for a counter.\n\n @param counters_reader that contains the counter\n @param counter_id to find\n @param buffer to store the counter in.\n @param buffer_length length of the output buffer\n @return -1 on failure, number of characters copied to buffer on success."]
     pub fn aeron_counters_reader_counter_label(
         counters_reader: *mut aeron_counters_reader_t,
@@ -1368,7 +1470,7 @@ pub type aeron_reserved_value_supplier_t = ::std::option::Option<
     ) -> i64,
 >;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_iovec_stct {
     pub iov_base: *mut u8,
     pub iov_len: usize,
@@ -1385,7 +1487,7 @@ const _: () = {
 pub type aeron_iovec_t = aeron_iovec_stct;
 #[doc = " Structure used to hold information for a try_claim function call."]
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_buffer_claim_stct {
     pub frame_header: *mut u8,
     pub data: *mut u8,
@@ -1417,7 +1519,7 @@ extern "C" {
 }
 #[doc = " Configuration for a publication that does not change during it's lifetime."]
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_publication_constants_stct {
     #[doc = " Media address for delivery to the channel.\n\n This returns a pointer only valid for the lifetime of the publication."]
     pub channel: *const ::std::os::raw::c_char,
@@ -1746,19 +1848,18 @@ pub type aeron_fragment_handler_t = ::std::option::Option<
         header: *mut aeron_header_t,
     ),
 >;
-#[doc = " Abort the current polling operation and do not advance the position for this fragment."]
-pub const aeron_controlled_fragment_handler_action_en_AERON_ACTION_ABORT:
-    aeron_controlled_fragment_handler_action_en = 1;
-#[doc = " Break from the current polling operation and commit the position as of the end of the current fragment\n being handled."]
-pub const aeron_controlled_fragment_handler_action_en_AERON_ACTION_BREAK:
-    aeron_controlled_fragment_handler_action_en = 2;
-#[doc = " Continue processing but commit the position as of the end of the current fragment so that\n flow control is applied to this point."]
-pub const aeron_controlled_fragment_handler_action_en_AERON_ACTION_COMMIT:
-    aeron_controlled_fragment_handler_action_en = 3;
-#[doc = " Continue processing until fragment limit or no fragments with position commit at end of poll as in\n aeron_fragment_handler_t."]
-pub const aeron_controlled_fragment_handler_action_en_AERON_ACTION_CONTINUE:
-    aeron_controlled_fragment_handler_action_en = 4;
-pub type aeron_controlled_fragment_handler_action_en = ::std::os::raw::c_uint;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_controlled_fragment_handler_action_en {
+    #[doc = " Abort the current polling operation and do not advance the position for this fragment."]
+    AERON_ACTION_ABORT = 1,
+    #[doc = " Break from the current polling operation and commit the position as of the end of the current fragment\n being handled."]
+    AERON_ACTION_BREAK = 2,
+    #[doc = " Continue processing but commit the position as of the end of the current fragment so that\n flow control is applied to this point."]
+    AERON_ACTION_COMMIT = 3,
+    #[doc = " Continue processing until fragment limit or no fragments with position commit at end of poll as in\n aeron_fragment_handler_t."]
+    AERON_ACTION_CONTINUE = 4,
+}
 pub use self::aeron_controlled_fragment_handler_action_en as aeron_controlled_fragment_handler_action_t;
 #[doc = " Callback for handling fragments of data being read from a log.\n\n Handler for reading data that is coming from a log buffer. The frame will either contain a whole message\n or a fragment of a message to be reassembled. Messages are fragmented if greater than the frame for MTU in length.\n\n @param clientd passed to the controlled poll function.\n @param buffer containing the data.\n @param length of the data in bytes.\n @param header representing the meta data for the data.\n @return The action to be taken with regard to the stream position after the callback."]
 pub type aeron_controlled_fragment_handler_t = ::std::option::Option<
@@ -1803,7 +1904,7 @@ extern "C" {
     pub fn aeron_header_context(header: *mut aeron_header_t) -> *mut ::std::os::raw::c_void;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_subscription_constants_stct {
     #[doc = " Media address for delivery to the channel.\n\n This returns a pointer only valid for the lifetime of the subscription."]
     pub channel: *const ::std::os::raw::c_char,
@@ -1989,7 +2090,7 @@ extern "C" {
 }
 #[doc = " Configuration for an image that does not change during it's lifetime."]
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_image_constants_stct {
     #[doc = " The subscription to which this image belongs."]
     pub subscription: *mut aeron_subscription_t,
@@ -2132,6 +2233,13 @@ extern "C" {
     pub fn aeron_image_is_closed(image: *mut aeron_image_t) -> bool;
 }
 extern "C" {
+    #[doc = " Force the driver to disconnect this image from the remote publication.\n\n @param image to be rejected.\n @param reason an error message to be forwarded back to the publication."]
+    pub fn aeron_image_reject(
+        image: *mut aeron_image_t,
+        reason: *const ::std::os::raw::c_char,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
     #[doc = " Create an image fragment assembler for use with a single image.\n\n @param assembler to be set when created successfully.\n @param delegate to call on completed.\n @param delegate_clientd to pass to delegate handler.\n @return 0 for success and -1 for error."]
     pub fn aeron_image_fragment_assembler_create(
         assembler: *mut *mut aeron_image_fragment_assembler_t,
@@ -2229,7 +2337,7 @@ extern "C" {
 }
 #[doc = " Configuration for a counter that does not change during it's lifetime."]
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_counter_constants_stct {
     #[doc = " Return the registration id used to register this counter with the media driver."]
     pub registration_id: i64,
@@ -2389,13 +2497,13 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_cnc_stct {
     _unused: [u8; 0],
 }
 pub type aeron_cnc_t = aeron_cnc_stct;
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_cnc_constants_stct {
     pub cnc_version: i32,
     pub to_driver_buffer_length: i32,
@@ -2509,7 +2617,7 @@ extern "C" {
     pub fn aeron_cnc_close(aeron_cnc: *mut aeron_cnc_t);
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct timespec {
     pub tv_sec: __darwin_time_t,
     pub tv_nsec: ::std::os::raw::c_long,
@@ -2525,7 +2633,7 @@ extern "C" {
     pub fn aeron_randomised_int32() -> i32;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_clock_cache_stct {
     pub pre_pad: [u8; 56usize],
     pub cached_epoch_time: i64,
@@ -2610,7 +2718,7 @@ pub type aeron_thread_t = pthread_t;
 pub type aeron_thread_attr_t = pthread_attr_t;
 pub type aeron_cond_t = pthread_cond_t;
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_error_log_entry_stct {
     pub length: i32,
     pub observation_count: i32,
@@ -2634,7 +2742,7 @@ const _: () = {
 };
 pub type aeron_error_log_entry_t = aeron_error_log_entry_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_distinct_observation_stct {
     pub description: *const ::std::os::raw::c_char,
     pub error_code: ::std::os::raw::c_int,
@@ -2658,7 +2766,7 @@ const _: () = {
 };
 pub type aeron_distinct_observation_t = aeron_distinct_observation_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_distinct_error_log_observation_list_stct {
     pub num_observations: u64,
     pub observations: *mut aeron_distinct_observation_t,
@@ -2682,7 +2790,7 @@ const _: () = {
 pub type aeron_distinct_error_log_observation_list_t =
     aeron_distinct_error_log_observation_list_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_distinct_error_log_stct {
     pub buffer: *mut u8,
     pub observation_list: *mut aeron_distinct_error_log_observation_list_t,
@@ -2769,7 +2877,7 @@ extern "C" {
 }
 pub type aeron_fptr_t = ::std::option::Option<unsafe extern "C" fn()>;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_uri_param_stct {
     pub key: *const ::std::os::raw::c_char,
     pub value: *const ::std::os::raw::c_char,
@@ -2785,7 +2893,7 @@ const _: () = {
 };
 pub type aeron_uri_param_t = aeron_uri_param_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_uri_params_stct {
     pub length: usize,
     pub array: *mut aeron_uri_param_t,
@@ -2802,7 +2910,7 @@ const _: () = {
 };
 pub type aeron_uri_params_t = aeron_uri_params_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_udp_channel_params_stct {
     pub endpoint: *const ::std::os::raw::c_char,
     pub bind_interface: *const ::std::os::raw::c_char,
@@ -2838,7 +2946,7 @@ const _: () = {
 };
 pub type aeron_udp_channel_params_t = aeron_udp_channel_params_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_ipc_channel_params_stct {
     pub channel_tag: *const ::std::os::raw::c_char,
     pub entity_tag: *const ::std::os::raw::c_char,
@@ -2858,13 +2966,14 @@ const _: () = {
         [::std::mem::offset_of!(aeron_ipc_channel_params_stct, additional_params) - 16usize];
 };
 pub type aeron_ipc_channel_params_t = aeron_ipc_channel_params_stct;
-pub mod aeron_uri_type_enum {
-    pub type Type = ::std::os::raw::c_uint;
-    pub const AERON_URI_UDP: Type = 0;
-    pub const AERON_URI_IPC: Type = 1;
-    pub const AERON_URI_UNKNOWN: Type = 2;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_uri_type_enum {
+    AERON_URI_UDP = 0,
+    AERON_URI_IPC = 1,
+    AERON_URI_UNKNOWN = 2,
 }
-pub use self::aeron_uri_type_enum::Type as aeron_uri_type_t;
+pub use self::aeron_uri_type_enum as aeron_uri_type_t;
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct aeron_uri_stct {
@@ -2901,10 +3010,13 @@ const _: () = {
         [::std::mem::offset_of!(aeron_uri_stct, params) - 392usize];
 };
 pub type aeron_uri_t = aeron_uri_stct;
-pub const aeron_uri_ats_status_en_AERON_URI_ATS_STATUS_DEFAULT: aeron_uri_ats_status_en = 0;
-pub const aeron_uri_ats_status_en_AERON_URI_ATS_STATUS_ENABLED: aeron_uri_ats_status_en = 1;
-pub const aeron_uri_ats_status_en_AERON_URI_ATS_STATUS_DISABLED: aeron_uri_ats_status_en = 2;
-pub type aeron_uri_ats_status_en = ::std::os::raw::c_uint;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_uri_ats_status_en {
+    AERON_URI_ATS_STATUS_DEFAULT = 0,
+    AERON_URI_ATS_STATUS_ENABLED = 1,
+    AERON_URI_ATS_STATUS_DISABLED = 2,
+}
 pub use self::aeron_uri_ats_status_en as aeron_uri_ats_status_t;
 pub type aeron_uri_parse_callback_t = ::std::option::Option<
     unsafe extern "C" fn(
@@ -3010,7 +3122,7 @@ extern "C" {
     pub fn aeron_uri_parse_tag(tag_str: *const ::std::os::raw::c_char) -> i64;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_managed_resource_stct {
     pub registration_id: i64,
     pub time_of_last_state_change_ns: i64,
@@ -3040,7 +3152,7 @@ const _: () = {
 };
 pub type aeron_driver_managed_resource_t = aeron_driver_managed_resource_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_position_stct {
     pub counter_id: i32,
     pub value_addr: *mut i64,
@@ -3056,15 +3168,16 @@ const _: () = {
 };
 pub type aeron_position_t = aeron_position_stct;
 pub type aeron_atomic_counter_t = aeron_position_stct;
-pub mod aeron_subscription_tether_state_enum {
-    pub type Type = ::std::os::raw::c_uint;
-    pub const AERON_SUBSCRIPTION_TETHER_ACTIVE: Type = 0;
-    pub const AERON_SUBSCRIPTION_TETHER_LINGER: Type = 1;
-    pub const AERON_SUBSCRIPTION_TETHER_RESTING: Type = 2;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_subscription_tether_state_enum {
+    AERON_SUBSCRIPTION_TETHER_ACTIVE = 0,
+    AERON_SUBSCRIPTION_TETHER_LINGER = 1,
+    AERON_SUBSCRIPTION_TETHER_RESTING = 2,
 }
-pub use self::aeron_subscription_tether_state_enum::Type as aeron_subscription_tether_state_t;
+pub use self::aeron_subscription_tether_state_enum as aeron_subscription_tether_state_t;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_tetherable_position_stct {
     pub is_tether: bool,
     pub state: aeron_subscription_tether_state_t,
@@ -3114,7 +3227,7 @@ extern "C" {
     );
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_subscribable_stct {
     pub correlation_id: i64,
     pub length: usize,
@@ -3171,7 +3284,7 @@ extern "C" {
     ) -> bool;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_command_base_stct {
     pub func: ::std::option::Option<
         unsafe extern "C" fn(
@@ -3197,14 +3310,14 @@ pub type aeron_feedback_delay_generator_func_t = ::std::option::Option<
     unsafe extern "C" fn(state: *mut aeron_feedback_delay_generator_state_t, retry: bool) -> i64,
 >;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_feedback_delay_generator_state_stct {
     pub static_delay: aeron_feedback_delay_generator_state_stct_static_delay_stct,
     pub optimal_delay: aeron_feedback_delay_generator_state_stct_optimal_delay_stct,
     pub delay_generator: aeron_feedback_delay_generator_func_t,
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_feedback_delay_generator_state_stct_static_delay_stct {
     pub delay_ns: i64,
     pub retry_ns: i64,
@@ -3229,7 +3342,7 @@ const _: () = {
         - 8usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_feedback_delay_generator_state_stct_optimal_delay_stct {
     pub rand_max: f64,
     pub base_x: f64,
@@ -3339,14 +3452,15 @@ extern "C" {
         context: *mut aeron_driver_context_t,
     ) -> bool;
 }
-pub mod aeron_threading_mode_enum {
-    pub type Type = ::std::os::raw::c_uint;
-    pub const AERON_THREADING_MODE_DEDICATED: Type = 0;
-    pub const AERON_THREADING_MODE_SHARED_NETWORK: Type = 1;
-    pub const AERON_THREADING_MODE_SHARED: Type = 2;
-    pub const AERON_THREADING_MODE_INVOKER: Type = 3;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_threading_mode_enum {
+    AERON_THREADING_MODE_DEDICATED = 0,
+    AERON_THREADING_MODE_SHARED_NETWORK = 1,
+    AERON_THREADING_MODE_SHARED = 2,
+    AERON_THREADING_MODE_INVOKER = 3,
 }
-pub use self::aeron_threading_mode_enum::Type as aeron_threading_mode_t;
+pub use self::aeron_threading_mode_enum as aeron_threading_mode_t;
 extern "C" {
     pub fn aeron_driver_context_set_threading_mode(
         context: *mut aeron_driver_context_t,
@@ -4113,13 +4227,14 @@ extern "C" {
         context: *mut aeron_driver_context_t,
     ) -> u64;
 }
-pub mod aeron_inferable_boolean_enum {
-    pub type Type = ::std::os::raw::c_uint;
-    pub const AERON_FORCE_FALSE: Type = 0;
-    pub const AERON_FORCE_TRUE: Type = 1;
-    pub const AERON_INFER: Type = 2;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_inferable_boolean_enum {
+    AERON_FORCE_FALSE = 0,
+    AERON_FORCE_TRUE = 1,
+    AERON_INFER = 2,
 }
-pub use self::aeron_inferable_boolean_enum::Type as aeron_inferable_boolean_t;
+pub use self::aeron_inferable_boolean_enum as aeron_inferable_boolean_t;
 extern "C" {
     pub fn aeron_driver_context_set_receiver_group_consideration(
         context: *mut aeron_driver_context_t,
@@ -4552,7 +4667,7 @@ extern "C" {
     );
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_uri_publication_params_stct {
     pub has_position: bool,
     pub is_sparse: bool,
@@ -4642,7 +4757,7 @@ const _: () = {
 };
 pub type aeron_driver_uri_publication_params_t = aeron_driver_uri_publication_params_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_uri_subscription_params_stct {
     pub is_reliable: bool,
     pub is_sparse: bool,
@@ -4728,7 +4843,7 @@ pub type in_addr_t = __uint32_t;
 pub type sa_family_t = __uint8_t;
 pub type socklen_t = __darwin_socklen_t;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct iovec {
     pub iov_base: *mut ::std::os::raw::c_void,
     pub iov_len: usize,
@@ -4741,7 +4856,7 @@ const _: () = {
     ["Offset of field: iovec::iov_len"][::std::mem::offset_of!(iovec, iov_len) - 8usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct sockaddr {
     pub sa_len: __uint8_t,
     pub sa_family: sa_family_t,
@@ -4756,7 +4871,7 @@ const _: () = {
     ["Offset of field: sockaddr::sa_data"][::std::mem::offset_of!(sockaddr, sa_data) - 2usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct sockaddr_storage {
     pub ss_len: __uint8_t,
     pub ss_family: sa_family_t,
@@ -4780,7 +4895,7 @@ const _: () = {
         [::std::mem::offset_of!(sockaddr_storage, __ss_pad2) - 16usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct msghdr {
     pub msg_name: *mut ::std::os::raw::c_void,
     pub msg_namelen: socklen_t,
@@ -4804,7 +4919,7 @@ const _: () = {
     ["Offset of field: msghdr::msg_flags"][::std::mem::offset_of!(msghdr, msg_flags) - 44usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct in_addr {
     pub s_addr: in_addr_t,
 }
@@ -4845,7 +4960,7 @@ const _: () = {
     ["Offset of field: in6_addr::__u6_addr"][::std::mem::offset_of!(in6_addr, __u6_addr) - 0usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct addrinfo {
     pub ai_flags: ::std::os::raw::c_int,
     pub ai_family: ::std::os::raw::c_int,
@@ -4874,7 +4989,7 @@ const _: () = {
     ["Offset of field: addrinfo::ai_next"][::std::mem::offset_of!(addrinfo, ai_next) - 40usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct ifaddrs {
     pub ifa_next: *mut ifaddrs,
     pub ifa_name: *mut ::std::os::raw::c_char,
@@ -4899,7 +5014,7 @@ const _: () = {
     ["Offset of field: ifaddrs::ifa_data"][::std::mem::offset_of!(ifaddrs, ifa_data) - 48usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct pollfd {
     pub fd: ::std::os::raw::c_int,
     pub events: ::std::os::raw::c_short,
@@ -4997,16 +5112,16 @@ extern "C" {
         timeout: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
-pub const aeron_udp_channel_transport_affinity_en_AERON_UDP_CHANNEL_TRANSPORT_AFFINITY_SENDER:
-    aeron_udp_channel_transport_affinity_en = 0;
-pub const aeron_udp_channel_transport_affinity_en_AERON_UDP_CHANNEL_TRANSPORT_AFFINITY_RECEIVER:
-    aeron_udp_channel_transport_affinity_en = 1;
-pub const aeron_udp_channel_transport_affinity_en_AERON_UDP_CHANNEL_TRANSPORT_AFFINITY_CONDUCTOR:
-    aeron_udp_channel_transport_affinity_en = 2;
-pub type aeron_udp_channel_transport_affinity_en = ::std::os::raw::c_uint;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_udp_channel_transport_affinity_en {
+    AERON_UDP_CHANNEL_TRANSPORT_AFFINITY_SENDER = 0,
+    AERON_UDP_CHANNEL_TRANSPORT_AFFINITY_RECEIVER = 1,
+    AERON_UDP_CHANNEL_TRANSPORT_AFFINITY_CONDUCTOR = 2,
+}
 pub use self::aeron_udp_channel_transport_affinity_en as aeron_udp_channel_transport_affinity_t;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct mmsghdr {
     _unused: [u8; 0],
 }
@@ -5117,7 +5232,7 @@ pub type aeron_udp_transport_poller_poll_func_t = ::std::option::Option<
     ) -> ::std::os::raw::c_int,
 >;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_udp_channel_transport_bindings_stct {
     pub init_func: aeron_udp_channel_transport_init_func_t,
     pub reconnect_func: aeron_udp_channel_transport_reconnect_func_t,
@@ -5134,7 +5249,7 @@ pub struct aeron_udp_channel_transport_bindings_stct {
     pub meta_info: aeron_udp_channel_transport_bindings_stct_meta_info_fields,
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_udp_channel_transport_bindings_stct_meta_info_fields {
     pub name: *const ::std::os::raw::c_char,
     pub type_: *const ::std::os::raw::c_char,
@@ -5230,9 +5345,12 @@ extern "C" {
 }
 pub type aeron_udp_channel_outgoing_interceptor_t = aeron_udp_channel_outgoing_interceptor_stct;
 pub type aeron_udp_channel_incoming_interceptor_t = aeron_udp_channel_incoming_interceptor_stct;
-pub const aeron_udp_channel_interceptor_notification_type_en_AERON_UDP_CHANNEL_INTERCEPTOR_ADD_NOTIFICATION : aeron_udp_channel_interceptor_notification_type_en = 0 ;
-pub const aeron_udp_channel_interceptor_notification_type_en_AERON_UDP_CHANNEL_INTERCEPTOR_REMOVE_NOTIFICATION : aeron_udp_channel_interceptor_notification_type_en = 1 ;
-pub type aeron_udp_channel_interceptor_notification_type_en = ::std::os::raw::c_uint;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_udp_channel_interceptor_notification_type_en {
+    AERON_UDP_CHANNEL_INTERCEPTOR_ADD_NOTIFICATION = 0,
+    AERON_UDP_CHANNEL_INTERCEPTOR_REMOVE_NOTIFICATION = 1,
+}
 pub use self::aeron_udp_channel_interceptor_notification_type_en as aeron_udp_channel_interceptor_notification_type_t;
 pub type aeron_udp_channel_interceptor_outgoing_send_func_t = ::std::option::Option<
     unsafe extern "C" fn(
@@ -5295,7 +5413,7 @@ pub type aeron_udp_channel_interceptor_image_notification_func_t = ::std::option
     ) -> ::std::os::raw::c_int,
 >;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_udp_channel_interceptor_bindings_stct {
     pub outgoing_init_func: aeron_udp_channel_interceptor_init_func_t,
     pub incoming_init_func: aeron_udp_channel_interceptor_init_func_t,
@@ -5316,7 +5434,7 @@ pub struct aeron_udp_channel_interceptor_bindings_stct {
     pub meta_info: aeron_udp_channel_interceptor_bindings_stct_interceptor_meta_info_fields,
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_udp_channel_interceptor_bindings_stct_interceptor_meta_info_fields {
     pub name: *const ::std::os::raw::c_char,
     pub type_: *const ::std::os::raw::c_char,
@@ -5383,7 +5501,7 @@ const _: () = {
         [::std::mem::offset_of!(aeron_udp_channel_interceptor_bindings_stct, meta_info) - 96usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_udp_channel_outgoing_interceptor_stct {
     pub interceptor_state: *mut ::std::os::raw::c_void,
     pub outgoing_send_func: aeron_udp_channel_interceptor_outgoing_send_func_t,
@@ -5421,7 +5539,7 @@ const _: () = {
     ) - 48usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_udp_channel_incoming_interceptor_stct {
     pub interceptor_state: *mut ::std::os::raw::c_void,
     pub incoming_func: aeron_udp_channel_interceptor_incoming_func_t,
@@ -5458,7 +5576,7 @@ const _: () = {
     ) - 48usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_udp_channel_data_paths_stct {
     pub outgoing_interceptors: *mut aeron_udp_channel_outgoing_interceptor_t,
     pub incoming_interceptors: *mut aeron_udp_channel_incoming_interceptor_t,
@@ -5481,7 +5599,7 @@ const _: () = {
         [::std::mem::offset_of!(aeron_udp_channel_data_paths_stct, recv_func) - 24usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_udp_channel_transport_recv_func_holder_stct {
     pub func: aeron_udp_transport_recv_func_t,
 }
@@ -5531,7 +5649,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_frame_header_stct {
     pub frame_length: i32,
     pub version: i8,
@@ -5554,7 +5672,7 @@ const _: () = {
 };
 pub type aeron_frame_header_t = aeron_frame_header_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_setup_header_stct {
     pub frame_header: aeron_frame_header_t,
     pub term_offset: i32,
@@ -5592,7 +5710,7 @@ const _: () = {
 };
 pub type aeron_setup_header_t = aeron_setup_header_stct;
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_data_header_stct {
     pub frame_header: aeron_frame_header_t,
     pub term_offset: i32,
@@ -5621,7 +5739,7 @@ const _: () = {
 };
 pub type aeron_data_header_t = aeron_data_header_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_nak_header_stct {
     pub frame_header: aeron_frame_header_t,
     pub session_id: i32,
@@ -5650,7 +5768,7 @@ const _: () = {
 };
 pub type aeron_nak_header_t = aeron_nak_header_stct;
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_status_message_header_stct {
     pub frame_header: aeron_frame_header_t,
     pub session_id: i32,
@@ -5685,7 +5803,38 @@ const _: () = {
 };
 pub type aeron_status_message_header_t = aeron_status_message_header_stct;
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
+pub struct aeron_error_stct {
+    pub frame_header: aeron_frame_header_t,
+    pub session_id: i32,
+    pub stream_id: i32,
+    pub receiver_id: i64,
+    pub group_tag: i64,
+    pub error_code: i32,
+    pub error_length: i32,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of aeron_error_stct"][::std::mem::size_of::<aeron_error_stct>() - 40usize];
+    ["Alignment of aeron_error_stct"][::std::mem::align_of::<aeron_error_stct>() - 4usize];
+    ["Offset of field: aeron_error_stct::frame_header"]
+        [::std::mem::offset_of!(aeron_error_stct, frame_header) - 0usize];
+    ["Offset of field: aeron_error_stct::session_id"]
+        [::std::mem::offset_of!(aeron_error_stct, session_id) - 8usize];
+    ["Offset of field: aeron_error_stct::stream_id"]
+        [::std::mem::offset_of!(aeron_error_stct, stream_id) - 12usize];
+    ["Offset of field: aeron_error_stct::receiver_id"]
+        [::std::mem::offset_of!(aeron_error_stct, receiver_id) - 16usize];
+    ["Offset of field: aeron_error_stct::group_tag"]
+        [::std::mem::offset_of!(aeron_error_stct, group_tag) - 24usize];
+    ["Offset of field: aeron_error_stct::error_code"]
+        [::std::mem::offset_of!(aeron_error_stct, error_code) - 32usize];
+    ["Offset of field: aeron_error_stct::error_length"]
+        [::std::mem::offset_of!(aeron_error_stct, error_length) - 36usize];
+};
+pub type aeron_error_t = aeron_error_stct;
+#[repr(C, packed(4))]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_status_message_optional_header_stct {
     pub group_tag: i64,
 }
@@ -5700,7 +5849,7 @@ const _: () = {
 };
 pub type aeron_status_message_optional_header_t = aeron_status_message_optional_header_stct;
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_rttm_header_stct {
     pub frame_header: aeron_frame_header_t,
     pub session_id: i32,
@@ -5729,7 +5878,7 @@ const _: () = {
 };
 pub type aeron_rttm_header_t = aeron_rttm_header_stct;
 #[repr(C, packed)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_resolution_header_stct {
     pub res_type: i8,
     pub res_flags: u8,
@@ -5753,7 +5902,7 @@ const _: () = {
 };
 pub type aeron_resolution_header_t = aeron_resolution_header_stct;
 #[repr(C, packed)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_resolution_header_ipv4_stct {
     pub resolution_header: aeron_resolution_header_t,
     pub addr: [u8; 4usize],
@@ -5774,7 +5923,7 @@ const _: () = {
 };
 pub type aeron_resolution_header_ipv4_t = aeron_resolution_header_ipv4_stct;
 #[repr(C, packed)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_resolution_header_ipv6_stct {
     pub resolution_header: aeron_resolution_header_t,
     pub addr: [u8; 16usize],
@@ -5795,7 +5944,7 @@ const _: () = {
 };
 pub type aeron_resolution_header_ipv6_t = aeron_resolution_header_ipv6_stct;
 #[repr(C, packed)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_option_header_stct {
     pub option_length: u16,
     pub type_: u16,
@@ -5813,7 +5962,7 @@ const _: () = {
 };
 pub type aeron_option_header_t = aeron_option_header_stct;
 #[repr(C, packed)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_response_setup_header_stct {
     pub frame_header: aeron_frame_header_t,
     pub session_id: i32,
@@ -5857,7 +6006,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_logbuffer_metadata_stct {
     pub term_tail_counters: [i64; 3usize],
     pub active_term_count: i32,
@@ -5919,7 +6068,7 @@ extern "C" {
     pub fn aeron_logbuffer_check_page_size(page_size: u64) -> ::std::os::raw::c_int;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_mapped_file_stct {
     pub addr: *mut ::std::os::raw::c_void,
     pub length: usize,
@@ -5936,7 +6085,7 @@ const _: () = {
 };
 pub type aeron_mapped_file_t = aeron_mapped_file_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_mapped_buffer_stct {
     pub addr: *mut u8,
     pub length: usize,
@@ -5993,7 +6142,7 @@ extern "C" {
     pub fn aeron_usable_fs_space_disabled(path: *const ::std::os::raw::c_char) -> u64;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_mapped_raw_log_stct {
     pub term_buffers: [aeron_mapped_buffer_t; 3usize],
     pub log_meta_data: aeron_mapped_buffer_t,
@@ -6100,16 +6249,19 @@ extern "C" {
         buffer_len: usize,
     ) -> ::std::os::raw::c_int;
 }
-pub const aeron_queue_offer_result_stct_AERON_OFFER_SUCCESS: aeron_queue_offer_result_stct = 0;
-pub const aeron_queue_offer_result_stct_AERON_OFFER_ERROR: aeron_queue_offer_result_stct = -2;
-pub const aeron_queue_offer_result_stct_AERON_OFFER_FULL: aeron_queue_offer_result_stct = -1;
-pub type aeron_queue_offer_result_stct = ::std::os::raw::c_int;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_queue_offer_result_stct {
+    AERON_OFFER_SUCCESS = 0,
+    AERON_OFFER_ERROR = -2,
+    AERON_OFFER_FULL = -1,
+}
 pub use self::aeron_queue_offer_result_stct as aeron_queue_offer_result_t;
 pub type aeron_queue_drain_func_t = ::std::option::Option<
     unsafe extern "C" fn(clientd: *mut ::std::os::raw::c_void, item: *mut ::std::os::raw::c_void),
 >;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_spsc_concurrent_array_queue_stct {
     pub padding: [i8; 56usize],
     pub producer: aeron_spsc_concurrent_array_queue_stct__bindgen_ty_1,
@@ -6119,7 +6271,7 @@ pub struct aeron_spsc_concurrent_array_queue_stct {
     pub buffer: *mut *mut ::std::os::raw::c_void,
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_spsc_concurrent_array_queue_stct__bindgen_ty_1 {
     pub tail: u64,
     pub head_cache: u64,
@@ -6146,7 +6298,7 @@ const _: () = {
     ) - 16usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_spsc_concurrent_array_queue_stct__bindgen_ty_2 {
     pub head: u64,
     pub padding: [i8; 56usize],
@@ -6198,7 +6350,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_mpsc_concurrent_array_queue_stct {
     pub padding: [i8; 56usize],
     pub producer: aeron_mpsc_concurrent_array_queue_stct__bindgen_ty_1,
@@ -6208,7 +6360,7 @@ pub struct aeron_mpsc_concurrent_array_queue_stct {
     pub buffer: *mut *mut ::std::os::raw::c_void,
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_mpsc_concurrent_array_queue_stct__bindgen_ty_1 {
     pub tail: u64,
     pub head_cache: u64,
@@ -6241,7 +6393,7 @@ const _: () = {
     ) - 24usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_mpsc_concurrent_array_queue_stct__bindgen_ty_2 {
     pub head: u64,
     pub padding: [i8; 56usize],
@@ -6293,7 +6445,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_rb_descriptor_stct {
     pub begin_pad: [u8; 128usize],
     pub tail_position: i64,
@@ -6338,7 +6490,7 @@ const _: () = {
 };
 pub type aeron_rb_descriptor_t = aeron_rb_descriptor_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_rb_record_descriptor_stct {
     pub length: i32,
     pub msg_type_id: i32,
@@ -6355,10 +6507,13 @@ const _: () = {
         [::std::mem::offset_of!(aeron_rb_record_descriptor_stct, msg_type_id) - 4usize];
 };
 pub type aeron_rb_record_descriptor_t = aeron_rb_record_descriptor_stct;
-pub const aeron_rb_write_result_stct_AERON_RB_SUCCESS: aeron_rb_write_result_stct = 0;
-pub const aeron_rb_write_result_stct_AERON_RB_ERROR: aeron_rb_write_result_stct = -2;
-pub const aeron_rb_write_result_stct_AERON_RB_FULL: aeron_rb_write_result_stct = -1;
-pub type aeron_rb_write_result_stct = ::std::os::raw::c_int;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_rb_write_result_stct {
+    AERON_RB_SUCCESS = 0,
+    AERON_RB_ERROR = -2,
+    AERON_RB_FULL = -1,
+}
 pub use self::aeron_rb_write_result_stct as aeron_rb_write_result_t;
 pub type aeron_rb_handler_t = ::std::option::Option<
     unsafe extern "C" fn(
@@ -6368,11 +6523,14 @@ pub type aeron_rb_handler_t = ::std::option::Option<
         arg4: *mut ::std::os::raw::c_void,
     ),
 >;
-pub const aeron_rb_read_action_stct_AERON_RB_ABORT: aeron_rb_read_action_stct = 0;
-pub const aeron_rb_read_action_stct_AERON_RB_BREAK: aeron_rb_read_action_stct = 1;
-pub const aeron_rb_read_action_stct_AERON_RB_COMMIT: aeron_rb_read_action_stct = 2;
-pub const aeron_rb_read_action_stct_AERON_RB_CONTINUE: aeron_rb_read_action_stct = 3;
-pub type aeron_rb_read_action_stct = ::std::os::raw::c_uint;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_rb_read_action_stct {
+    AERON_RB_ABORT = 0,
+    AERON_RB_BREAK = 1,
+    AERON_RB_COMMIT = 2,
+    AERON_RB_CONTINUE = 3,
+}
 pub use self::aeron_rb_read_action_stct as aeron_rb_read_action_t;
 pub type aeron_rb_controlled_handler_t = ::std::option::Option<
     unsafe extern "C" fn(
@@ -6383,7 +6541,7 @@ pub type aeron_rb_controlled_handler_t = ::std::option::Option<
     ) -> aeron_rb_read_action_t,
 >;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_mpsc_rb_stct {
     pub buffer: *mut u8,
     pub descriptor: *mut aeron_rb_descriptor_t,
@@ -6467,7 +6625,7 @@ extern "C" {
     pub fn aeron_mpsc_rb_unblock(ring_buffer: *mut aeron_mpsc_rb_t) -> bool;
 }
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_broadcast_descriptor_stct {
     pub tail_intent_counter: i64,
     pub tail_counter: i64,
@@ -6491,7 +6649,7 @@ const _: () = {
 };
 pub type aeron_broadcast_descriptor_t = aeron_broadcast_descriptor_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_broadcast_record_descriptor_stct {
     pub length: i32,
     pub msg_type_id: i32,
@@ -6540,6 +6698,15 @@ pub type aeron_flow_control_strategy_on_setup_func_t = ::std::option::Option<
         snd_pos: i64,
     ) -> i64,
 >;
+pub type aeron_flow_control_strategy_on_error_func_t = ::std::option::Option<
+    unsafe extern "C" fn(
+        state: *mut ::std::os::raw::c_void,
+        error: *const u8,
+        length: usize,
+        recv_addr: *mut sockaddr_storage,
+        now_ns: i64,
+    ),
+>;
 pub type aeron_flow_control_strategy_on_trigger_send_setup_func_t = ::std::option::Option<
     unsafe extern "C" fn(
         state: *mut ::std::os::raw::c_void,
@@ -6565,11 +6732,12 @@ pub type aeron_flow_control_strategy_has_required_receivers_func_t = ::std::opti
     unsafe extern "C" fn(strategy: *mut aeron_flow_control_strategy_t) -> bool,
 >;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_flow_control_strategy_stct {
     pub on_status_message: aeron_flow_control_strategy_on_sm_func_t,
     pub on_idle: aeron_flow_control_strategy_on_idle_func_t,
     pub on_setup: aeron_flow_control_strategy_on_setup_func_t,
+    pub on_error: aeron_flow_control_strategy_on_error_func_t,
     pub fini: aeron_flow_control_strategy_fini_func_t,
     pub has_required_receivers: aeron_flow_control_strategy_has_required_receivers_func_t,
     pub on_trigger_send_setup: aeron_flow_control_strategy_on_trigger_send_setup_func_t,
@@ -6579,7 +6747,7 @@ pub struct aeron_flow_control_strategy_stct {
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
     ["Size of aeron_flow_control_strategy_stct"]
-        [::std::mem::size_of::<aeron_flow_control_strategy_stct>() - 64usize];
+        [::std::mem::size_of::<aeron_flow_control_strategy_stct>() - 72usize];
     ["Alignment of aeron_flow_control_strategy_stct"]
         [::std::mem::align_of::<aeron_flow_control_strategy_stct>() - 8usize];
     ["Offset of field: aeron_flow_control_strategy_stct::on_status_message"]
@@ -6588,20 +6756,22 @@ const _: () = {
         [::std::mem::offset_of!(aeron_flow_control_strategy_stct, on_idle) - 8usize];
     ["Offset of field: aeron_flow_control_strategy_stct::on_setup"]
         [::std::mem::offset_of!(aeron_flow_control_strategy_stct, on_setup) - 16usize];
+    ["Offset of field: aeron_flow_control_strategy_stct::on_error"]
+        [::std::mem::offset_of!(aeron_flow_control_strategy_stct, on_error) - 24usize];
     ["Offset of field: aeron_flow_control_strategy_stct::fini"]
-        [::std::mem::offset_of!(aeron_flow_control_strategy_stct, fini) - 24usize];
+        [::std::mem::offset_of!(aeron_flow_control_strategy_stct, fini) - 32usize];
     ["Offset of field: aeron_flow_control_strategy_stct::has_required_receivers"][::std::mem::offset_of!(
         aeron_flow_control_strategy_stct,
         has_required_receivers
-    ) - 32usize];
+    ) - 40usize];
     ["Offset of field: aeron_flow_control_strategy_stct::on_trigger_send_setup"]
-        [::std::mem::offset_of!(aeron_flow_control_strategy_stct, on_trigger_send_setup) - 40usize];
+        [::std::mem::offset_of!(aeron_flow_control_strategy_stct, on_trigger_send_setup) - 48usize];
     ["Offset of field: aeron_flow_control_strategy_stct::max_retransmission_length"][::std::mem::offset_of!(
         aeron_flow_control_strategy_stct,
         max_retransmission_length
-    ) - 48usize];
+    ) - 56usize];
     ["Offset of field: aeron_flow_control_strategy_stct::state"]
-        [::std::mem::offset_of!(aeron_flow_control_strategy_stct, state) - 56usize];
+        [::std::mem::offset_of!(aeron_flow_control_strategy_stct, state) - 64usize];
 };
 extern "C" {
     pub fn aeron_flow_control_strategy_has_required_receivers_default(
@@ -6609,7 +6779,7 @@ extern "C" {
     ) -> bool;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_flow_control_tagged_options_stct {
     pub strategy_name_length: usize,
     pub strategy_name: *const ::std::os::raw::c_char,
@@ -6618,7 +6788,7 @@ pub struct aeron_flow_control_tagged_options_stct {
     pub group_min_size: aeron_flow_control_tagged_options_stct__bindgen_ty_3,
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_flow_control_tagged_options_stct__bindgen_ty_1 {
     pub is_present: bool,
     pub value: i64,
@@ -6640,7 +6810,7 @@ const _: () = {
     ) - 8usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_flow_control_tagged_options_stct__bindgen_ty_2 {
     pub is_present: bool,
     pub value: u64,
@@ -6662,7 +6832,7 @@ const _: () = {
     ) - 8usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_flow_control_tagged_options_stct__bindgen_ty_3 {
     pub is_present: bool,
     pub value: i32,
@@ -6781,7 +6951,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_flow_control_strategy_supplier_func_table_entry_stct {
     pub name: *const ::std::os::raw::c_char,
     pub supplier_func: aeron_flow_control_strategy_supplier_func_t,
@@ -6854,7 +7024,7 @@ pub type aeron_congestion_control_strategy_fini_func_t = ::std::option::Option<
     ) -> ::std::os::raw::c_int,
 >;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_congestion_control_strategy_stct {
     pub should_measure_rtt: aeron_congestion_control_strategy_should_measure_rtt_func_t,
     pub on_rttm_sent: aeron_congestion_control_strategy_on_rttm_sent_func_t,
@@ -6952,7 +7122,7 @@ pub type aeron_agent_do_work_func_t = ::std::option::Option<
 pub type aeron_agent_on_close_func_t =
     ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_idle_strategy_stct {
     pub idle: aeron_idle_strategy_func_t,
     pub init: aeron_idle_strategy_init_func_t,
@@ -7016,7 +7186,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_agent_runner_stct {
     pub role_name: *const ::std::os::raw::c_char,
     pub agent_state: *mut ::std::os::raw::c_void,
@@ -7095,7 +7265,7 @@ extern "C" {
     pub fn aeron_agent_close(runner: *mut aeron_agent_runner_t) -> ::std::os::raw::c_int;
 }
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_stream_position_counter_key_layout_stct {
     pub registration_id: i64,
     pub session_id: i32,
@@ -7130,7 +7300,7 @@ const _: () = {
 };
 pub type aeron_stream_position_counter_key_layout_t = aeron_stream_position_counter_key_layout_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_channel_endpoint_status_key_layout_stct {
     pub channel_length: i32,
     pub channel: [::std::os::raw::c_char; 108usize],
@@ -7150,7 +7320,7 @@ const _: () = {
 };
 pub type aeron_channel_endpoint_status_key_layout_t = aeron_channel_endpoint_status_key_layout_stct;
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_heartbeat_timestamp_key_layout_stct {
     pub registration_id: i64,
 }
@@ -7167,7 +7337,7 @@ const _: () = {
 };
 pub type aeron_heartbeat_timestamp_key_layout_t = aeron_heartbeat_timestamp_key_layout_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_local_sockaddr_key_layout_stct {
     pub channel_status_id: i32,
     pub local_sockaddr_len: i32,
@@ -7188,7 +7358,7 @@ const _: () = {
 };
 pub type aeron_local_sockaddr_key_layout_t = aeron_local_sockaddr_key_layout_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_counters_manager_stct {
     pub values: *mut u8,
     pub metadata: *mut u8,
@@ -7232,7 +7402,7 @@ const _: () = {
         [::std::mem::offset_of!(aeron_counters_manager_stct, free_to_reuse_timeout_ms) - 72usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_counters_reader_stct {
     pub values: *mut u8,
     pub metadata: *mut u8,
@@ -7346,84 +7516,54 @@ extern "C" {
         clientd: *mut ::std::os::raw::c_void,
     );
 }
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_BYTES_SENT:
-    aeron_system_counter_enum_stct = 0;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_BYTES_RECEIVED:
-    aeron_system_counter_enum_stct = 1;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_RECEIVER_PROXY_FAILS:
-    aeron_system_counter_enum_stct = 2;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_SENDER_PROXY_FAILS:
-    aeron_system_counter_enum_stct = 3;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_CONDUCTOR_PROXY_FAILS:
-    aeron_system_counter_enum_stct = 4;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_NAK_MESSAGES_SENT:
-    aeron_system_counter_enum_stct = 5;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_NAK_MESSAGES_RECEIVED:
-    aeron_system_counter_enum_stct = 6;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_STATUS_MESSAGES_SENT:
-    aeron_system_counter_enum_stct = 7;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_STATUS_MESSAGES_RECEIVED:
-    aeron_system_counter_enum_stct = 8;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_HEARTBEATS_SENT:
-    aeron_system_counter_enum_stct = 9;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_HEARTBEATS_RECEIVED:
-    aeron_system_counter_enum_stct = 10;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_RETRANSMITS_SENT:
-    aeron_system_counter_enum_stct = 11;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_FLOW_CONTROL_UNDER_RUNS:
-    aeron_system_counter_enum_stct = 12;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_FLOW_CONTROL_OVER_RUNS:
-    aeron_system_counter_enum_stct = 13;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_INVALID_PACKETS:
-    aeron_system_counter_enum_stct = 14;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_ERRORS:
-    aeron_system_counter_enum_stct = 15;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_SHORT_SENDS:
-    aeron_system_counter_enum_stct = 16;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_FREE_FAILS:
-    aeron_system_counter_enum_stct = 17;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_SENDER_FLOW_CONTROL_LIMITS:
-    aeron_system_counter_enum_stct = 18;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_UNBLOCKED_PUBLICATIONS:
-    aeron_system_counter_enum_stct = 19;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_UNBLOCKED_COMMANDS:
-    aeron_system_counter_enum_stct = 20;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_POSSIBLE_TTL_ASYMMETRY:
-    aeron_system_counter_enum_stct = 21;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_CONTROLLABLE_IDLE_STRATEGY:
-    aeron_system_counter_enum_stct = 22;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_LOSS_GAP_FILLS:
-    aeron_system_counter_enum_stct = 23;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_CLIENT_TIMEOUTS:
-    aeron_system_counter_enum_stct = 24;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_RESOLUTION_CHANGES:
-    aeron_system_counter_enum_stct = 25;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_CONDUCTOR_MAX_CYCLE_TIME:
-    aeron_system_counter_enum_stct = 26;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_CONDUCTOR_CYCLE_TIME_THRESHOLD_EXCEEDED : aeron_system_counter_enum_stct = 27 ;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_SENDER_MAX_CYCLE_TIME:
-    aeron_system_counter_enum_stct = 28;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_SENDER_CYCLE_TIME_THRESHOLD_EXCEEDED : aeron_system_counter_enum_stct = 29 ;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_RECEIVER_MAX_CYCLE_TIME:
-    aeron_system_counter_enum_stct = 30;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_RECEIVER_CYCLE_TIME_THRESHOLD_EXCEEDED : aeron_system_counter_enum_stct = 31 ;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_NAME_RESOLVER_MAX_TIME:
-    aeron_system_counter_enum_stct = 32;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_NAME_RESOLVER_TIME_THRESHOLD_EXCEEDED : aeron_system_counter_enum_stct = 33 ;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_AERON_VERSION:
-    aeron_system_counter_enum_stct = 34;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_BYTES_CURRENTLY_MAPPED:
-    aeron_system_counter_enum_stct = 35;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_RETRANSMITTED_BYTES:
-    aeron_system_counter_enum_stct = 36;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_RETRANSMIT_OVERFLOW:
-    aeron_system_counter_enum_stct = 37;
-pub const aeron_system_counter_enum_stct_AERON_SYSTEM_COUNTER_DUMMY_LAST:
-    aeron_system_counter_enum_stct = 38;
-pub type aeron_system_counter_enum_stct = ::std::os::raw::c_uint;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_system_counter_enum_stct {
+    AERON_SYSTEM_COUNTER_BYTES_SENT = 0,
+    AERON_SYSTEM_COUNTER_BYTES_RECEIVED = 1,
+    AERON_SYSTEM_COUNTER_RECEIVER_PROXY_FAILS = 2,
+    AERON_SYSTEM_COUNTER_SENDER_PROXY_FAILS = 3,
+    AERON_SYSTEM_COUNTER_CONDUCTOR_PROXY_FAILS = 4,
+    AERON_SYSTEM_COUNTER_NAK_MESSAGES_SENT = 5,
+    AERON_SYSTEM_COUNTER_NAK_MESSAGES_RECEIVED = 6,
+    AERON_SYSTEM_COUNTER_STATUS_MESSAGES_SENT = 7,
+    AERON_SYSTEM_COUNTER_STATUS_MESSAGES_RECEIVED = 8,
+    AERON_SYSTEM_COUNTER_HEARTBEATS_SENT = 9,
+    AERON_SYSTEM_COUNTER_HEARTBEATS_RECEIVED = 10,
+    AERON_SYSTEM_COUNTER_RETRANSMITS_SENT = 11,
+    AERON_SYSTEM_COUNTER_FLOW_CONTROL_UNDER_RUNS = 12,
+    AERON_SYSTEM_COUNTER_FLOW_CONTROL_OVER_RUNS = 13,
+    AERON_SYSTEM_COUNTER_INVALID_PACKETS = 14,
+    AERON_SYSTEM_COUNTER_ERRORS = 15,
+    AERON_SYSTEM_COUNTER_SHORT_SENDS = 16,
+    AERON_SYSTEM_COUNTER_FREE_FAILS = 17,
+    AERON_SYSTEM_COUNTER_SENDER_FLOW_CONTROL_LIMITS = 18,
+    AERON_SYSTEM_COUNTER_UNBLOCKED_PUBLICATIONS = 19,
+    AERON_SYSTEM_COUNTER_UNBLOCKED_COMMANDS = 20,
+    AERON_SYSTEM_COUNTER_POSSIBLE_TTL_ASYMMETRY = 21,
+    AERON_SYSTEM_COUNTER_CONTROLLABLE_IDLE_STRATEGY = 22,
+    AERON_SYSTEM_COUNTER_LOSS_GAP_FILLS = 23,
+    AERON_SYSTEM_COUNTER_CLIENT_TIMEOUTS = 24,
+    AERON_SYSTEM_COUNTER_RESOLUTION_CHANGES = 25,
+    AERON_SYSTEM_COUNTER_CONDUCTOR_MAX_CYCLE_TIME = 26,
+    AERON_SYSTEM_COUNTER_CONDUCTOR_CYCLE_TIME_THRESHOLD_EXCEEDED = 27,
+    AERON_SYSTEM_COUNTER_SENDER_MAX_CYCLE_TIME = 28,
+    AERON_SYSTEM_COUNTER_SENDER_CYCLE_TIME_THRESHOLD_EXCEEDED = 29,
+    AERON_SYSTEM_COUNTER_RECEIVER_MAX_CYCLE_TIME = 30,
+    AERON_SYSTEM_COUNTER_RECEIVER_CYCLE_TIME_THRESHOLD_EXCEEDED = 31,
+    AERON_SYSTEM_COUNTER_NAME_RESOLVER_MAX_TIME = 32,
+    AERON_SYSTEM_COUNTER_NAME_RESOLVER_TIME_THRESHOLD_EXCEEDED = 33,
+    AERON_SYSTEM_COUNTER_AERON_VERSION = 34,
+    AERON_SYSTEM_COUNTER_BYTES_CURRENTLY_MAPPED = 35,
+    AERON_SYSTEM_COUNTER_RETRANSMITTED_BYTES = 36,
+    AERON_SYSTEM_COUNTER_RETRANSMIT_OVERFLOW = 37,
+    AERON_SYSTEM_COUNTER_ERROR_FRAMES_RECEIVED = 38,
+    AERON_SYSTEM_COUNTER_ERROR_FRAMES_SENT = 39,
+    AERON_SYSTEM_COUNTER_DUMMY_LAST = 40,
+}
 pub use self::aeron_system_counter_enum_stct as aeron_system_counter_enum_t;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_system_counter_stct {
     pub label: *const ::std::os::raw::c_char,
     pub id: i32,
@@ -7441,7 +7581,7 @@ const _: () = {
 };
 pub type aeron_system_counter_t = aeron_system_counter_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_system_counters_stct {
     pub counter_ids: *mut i32,
     pub manager: *mut aeron_counters_manager_t,
@@ -7468,7 +7608,7 @@ extern "C" {
     pub fn aeron_system_counters_close(counters: *mut aeron_system_counters_t);
 }
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_cnc_metadata_stct {
     pub cnc_version: i32,
     pub to_driver_buffer_length: i32,
@@ -7505,13 +7645,16 @@ const _: () = {
         [::std::mem::offset_of!(aeron_cnc_metadata_stct, pid) - 40usize];
 };
 pub type aeron_cnc_metadata_t = aeron_cnc_metadata_stct;
-pub const aeron_cnc_load_result_stct_AERON_CNC_LOAD_FAILED: aeron_cnc_load_result_stct = -1;
-pub const aeron_cnc_load_result_stct_AERON_CNC_LOAD_SUCCESS: aeron_cnc_load_result_stct = 0;
-pub const aeron_cnc_load_result_stct_AERON_CNC_LOAD_AWAIT_FILE: aeron_cnc_load_result_stct = 1;
-pub const aeron_cnc_load_result_stct_AERON_CNC_LOAD_AWAIT_MMAP: aeron_cnc_load_result_stct = 2;
-pub const aeron_cnc_load_result_stct_AERON_CNC_LOAD_AWAIT_VERSION: aeron_cnc_load_result_stct = 3;
-pub const aeron_cnc_load_result_stct_AERON_CNC_LOAD_AWAIT_CNC_DATA: aeron_cnc_load_result_stct = 4;
-pub type aeron_cnc_load_result_stct = ::std::os::raw::c_int;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_cnc_load_result_stct {
+    AERON_CNC_LOAD_FAILED = -1,
+    AERON_CNC_LOAD_SUCCESS = 0,
+    AERON_CNC_LOAD_AWAIT_FILE = 1,
+    AERON_CNC_LOAD_AWAIT_MMAP = 2,
+    AERON_CNC_LOAD_AWAIT_VERSION = 3,
+    AERON_CNC_LOAD_AWAIT_CNC_DATA = 4,
+}
 pub use self::aeron_cnc_load_result_stct as aeron_cnc_load_result_t;
 extern "C" {
     pub fn aeron_cnc_version_volatile(metadata: *mut aeron_cnc_metadata_t) -> i32;
@@ -7535,7 +7678,7 @@ pub type aeron_duty_cycle_tracker_update_func_t =
 pub type aeron_duty_cycle_tracker_measure_and_update_func_t =
     ::std::option::Option<unsafe extern "C" fn(state: *mut ::std::os::raw::c_void, now_ns: i64)>;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_duty_cycle_tracker_stct {
     pub update: aeron_duty_cycle_tracker_update_func_t,
     pub measure_and_update: aeron_duty_cycle_tracker_measure_and_update_func_t,
@@ -7555,7 +7698,7 @@ const _: () = {
         [::std::mem::offset_of!(aeron_duty_cycle_tracker_stct, state) - 16usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_duty_cycle_stall_tracker_stct {
     pub tracker: aeron_duty_cycle_tracker_stct,
     pub lhs_padding: [::std::os::raw::c_char; 56usize],
@@ -7593,7 +7736,7 @@ const _: () = {
 };
 pub type aeron_duty_cycle_stall_tracker_t = aeron_duty_cycle_stall_tracker_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_per_thread_error_stct {
     pub errcode: ::std::os::raw::c_int,
     pub offset: usize,
@@ -7642,7 +7785,7 @@ extern "C" {
     pub fn aeron_err_clear();
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_int64_counter_map_stct {
     pub entries: *mut i64,
     pub load_factor: f32,
@@ -7689,7 +7832,7 @@ pub type aeron_port_manager_free_managed_port_func_t = ::std::option::Option<
     unsafe extern "C" fn(state: *mut ::std::os::raw::c_void, bind_addr: *mut sockaddr_storage),
 >;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_port_manager_stct {
     pub get_managed_port: aeron_port_manager_get_managed_port_func_t,
     pub free_managed_port: aeron_port_manager_free_managed_port_func_t,
@@ -7708,7 +7851,7 @@ const _: () = {
         [::std::mem::offset_of!(aeron_port_manager_stct, state) - 16usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_wildcard_port_manager_stct {
     pub port_manager: aeron_port_manager_t,
     pub port_table: aeron_int64_counter_map_t,
@@ -7781,7 +7924,7 @@ pub type aeron_driver_conductor_proxy_t = aeron_driver_conductor_proxy_stct;
 pub type aeron_driver_sender_proxy_t = aeron_driver_sender_proxy_stct;
 pub type aeron_driver_receiver_proxy_t = aeron_driver_receiver_proxy_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_dl_loaded_libs_state_stct {
     _unused: [u8; 0],
 }
@@ -7796,7 +7939,7 @@ pub type aeron_driver_conductor_to_client_interceptor_func_t = ::std::option::Op
     ),
 >;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_context_bindings_clientd_entry_stct {
     pub name: *const ::std::os::raw::c_char,
     pub clientd: *mut ::std::os::raw::c_void,
@@ -7873,7 +8016,7 @@ pub type aeron_driver_name_resolver_on_host_name_t = ::std::option::Option<
     unsafe extern "C" fn(duration_ns: i64, host_name: *const ::std::os::raw::c_char),
 >;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_context_stct {
     pub aeron_dir: *mut ::std::os::raw::c_char,
     pub threading_mode: aeron_threading_mode_t,
@@ -8027,7 +8170,7 @@ pub struct aeron_driver_context_stct {
     pub os_buffer_lengths: aeron_driver_context_stct__bindgen_ty_4,
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_context_stct__bindgen_ty_1 {
     pub is_present: bool,
     pub value: i64,
@@ -8044,7 +8187,7 @@ const _: () = {
         [::std::mem::offset_of!(aeron_driver_context_stct__bindgen_ty_1, value) - 8usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_context_stct__bindgen_ty_2 {
     pub group_min_size: i32,
     pub receiver_timeout_ns: u64,
@@ -8066,7 +8209,7 @@ const _: () = {
         [::std::mem::offset_of!(aeron_driver_context_stct__bindgen_ty_2, group_tag) - 16usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_context_stct__bindgen_ty_3 {
     pub to_driver_interceptor: aeron_driver_conductor_to_driver_interceptor_func_t,
     pub to_client_interceptor: aeron_driver_conductor_to_client_interceptor_func_t,
@@ -8161,7 +8304,7 @@ const _: () = {
         [::std::mem::offset_of!(aeron_driver_context_stct__bindgen_ty_3, resend) - 144usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_context_stct__bindgen_ty_4 {
     pub default_so_sndbuf: usize,
     pub max_so_sndbuf: usize,
@@ -8672,7 +8815,7 @@ extern "C" {
     ) -> *mut aeron_driver_context_bindings_clientd_entry_t;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_broadcast_transmitter_stct {
     pub buffer: *mut u8,
     pub descriptor: *mut aeron_broadcast_descriptor_t,
@@ -8711,13 +8854,13 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_linked_queue_node_stct {
     _unused: [u8; 0],
 }
 pub type aeron_linked_queue_node_t = aeron_linked_queue_node_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_linked_queue_stct {
     pub head: *mut aeron_linked_queue_node_t,
     pub tail: *mut aeron_linked_queue_node_t,
@@ -8772,7 +8915,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_blocking_linked_queue_stct {
     pub queue: aeron_linked_queue_t,
     pub mutex: aeron_mutex_t,
@@ -8844,7 +8987,7 @@ extern "C" {
     pub fn aeron_blocking_linked_queue_unblock(queue: *mut aeron_blocking_linked_queue_t);
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_executor_task_stct {
     _unused: [u8; 0],
 }
@@ -8856,7 +8999,7 @@ pub type aeron_executor_on_execution_complete_func_t = ::std::option::Option<
     ) -> ::std::os::raw::c_int,
 >;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_executor_stct {
     pub async_: bool,
     pub on_execution_complete: aeron_executor_on_execution_complete_func_t,
@@ -8927,7 +9070,7 @@ extern "C" {
     pub fn aeron_executor_task_do_complete(task: *mut aeron_executor_task_t);
 }
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_correlated_command_stct {
     pub client_id: i64,
     pub correlation_id: i64,
@@ -8945,7 +9088,7 @@ const _: () = {
 };
 pub type aeron_correlated_command_t = aeron_correlated_command_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_publication_command_stct {
     pub correlated: aeron_correlated_command_t,
     pub stream_id: i32,
@@ -8966,7 +9109,7 @@ const _: () = {
 };
 pub type aeron_publication_command_t = aeron_publication_command_stct;
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_publication_buffers_ready_stct {
     pub correlation_id: i64,
     pub registration_id: i64,
@@ -9005,7 +9148,7 @@ const _: () = {
 };
 pub type aeron_publication_buffers_ready_t = aeron_publication_buffers_ready_stct;
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_subscription_command_stct {
     pub correlated: aeron_correlated_command_t,
     pub registration_correlation_id: i64,
@@ -9031,7 +9174,7 @@ const _: () = {
 };
 pub type aeron_subscription_command_t = aeron_subscription_command_stct;
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_subscription_ready_stct {
     pub correlation_id: i64,
     pub channel_status_indicator_id: i32,
@@ -9051,7 +9194,7 @@ const _: () = {
 };
 pub type aeron_subscription_ready_t = aeron_subscription_ready_stct;
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_image_buffers_ready_stct {
     pub correlation_id: i64,
     pub session_id: i32,
@@ -9080,7 +9223,7 @@ const _: () = {
 };
 pub type aeron_image_buffers_ready_t = aeron_image_buffers_ready_stct;
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_operation_succeeded_stct {
     pub correlation_id: i64,
 }
@@ -9095,7 +9238,7 @@ const _: () = {
 };
 pub type aeron_operation_succeeded_t = aeron_operation_succeeded_stct;
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_error_response_stct {
     pub offending_command_correlation_id: i64,
     pub error_code: i32,
@@ -9118,7 +9261,7 @@ const _: () = {
 };
 pub type aeron_error_response_t = aeron_error_response_stct;
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_remove_command_stct {
     pub correlated: aeron_correlated_command_t,
     pub registration_id: i64,
@@ -9136,7 +9279,7 @@ const _: () = {
 };
 pub type aeron_remove_command_t = aeron_remove_command_stct;
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_image_message_stct {
     pub correlation_id: i64,
     pub subscription_registration_id: i64,
@@ -9160,7 +9303,7 @@ const _: () = {
 };
 pub type aeron_image_message_t = aeron_image_message_stct;
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_destination_command_stct {
     pub correlated: aeron_correlated_command_t,
     pub registration_id: i64,
@@ -9181,7 +9324,7 @@ const _: () = {
 };
 pub type aeron_destination_command_t = aeron_destination_command_stct;
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_destination_by_id_command_stct {
     pub correlated: aeron_correlated_command_t,
     pub resource_registration_id: i64,
@@ -9208,7 +9351,7 @@ const _: () = {
 };
 pub type aeron_destination_by_id_command_t = aeron_destination_by_id_command_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_counter_command_stct {
     pub correlated: aeron_correlated_command_t,
     pub type_id: i32,
@@ -9226,7 +9369,7 @@ const _: () = {
 };
 pub type aeron_counter_command_t = aeron_counter_command_stct;
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_counter_update_stct {
     pub correlation_id: i64,
     pub counter_id: i32,
@@ -9244,7 +9387,7 @@ const _: () = {
 };
 pub type aeron_counter_update_t = aeron_counter_update_stct;
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_static_counter_command_stct {
     pub correlated: aeron_correlated_command_t,
     pub registration_id: i64,
@@ -9265,7 +9408,7 @@ const _: () = {
 };
 pub type aeron_static_counter_command_t = aeron_static_counter_command_stct;
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_static_counter_response_stct {
     pub correlation_id: i64,
     pub counter_id: i32,
@@ -9283,7 +9426,7 @@ const _: () = {
 };
 pub type aeron_static_counter_response_t = aeron_static_counter_response_stct;
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_client_timeout_stct {
     pub client_id: i64,
 }
@@ -9298,7 +9441,7 @@ const _: () = {
 };
 pub type aeron_client_timeout_t = aeron_client_timeout_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_terminate_driver_command_stct {
     pub correlated: aeron_correlated_command_t,
     pub token_length: i32,
@@ -9315,16 +9458,94 @@ const _: () = {
         [::std::mem::offset_of!(aeron_terminate_driver_command_stct, token_length) - 16usize];
 };
 pub type aeron_terminate_driver_command_t = aeron_terminate_driver_command_stct;
-pub mod aeron_ipc_publication_state_enum {
-    pub type Type = ::std::os::raw::c_uint;
-    pub const AERON_IPC_PUBLICATION_STATE_ACTIVE: Type = 0;
-    pub const AERON_IPC_PUBLICATION_STATE_DRAINING: Type = 1;
-    pub const AERON_IPC_PUBLICATION_STATE_LINGER: Type = 2;
-    pub const AERON_IPC_PUBLICATION_STATE_DONE: Type = 3;
+#[repr(C, packed(4))]
+#[derive(Debug, Copy, Clone)]
+pub struct aeron_reject_image_command_stct {
+    pub correlated: aeron_correlated_command_t,
+    pub image_correlation_id: i64,
+    pub position: i64,
+    pub reason_length: i32,
+    pub reason_text: [u8; 1usize],
 }
-pub use self::aeron_ipc_publication_state_enum::Type as aeron_ipc_publication_state_t;
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of aeron_reject_image_command_stct"]
+        [::std::mem::size_of::<aeron_reject_image_command_stct>() - 40usize];
+    ["Alignment of aeron_reject_image_command_stct"]
+        [::std::mem::align_of::<aeron_reject_image_command_stct>() - 4usize];
+    ["Offset of field: aeron_reject_image_command_stct::correlated"]
+        [::std::mem::offset_of!(aeron_reject_image_command_stct, correlated) - 0usize];
+    ["Offset of field: aeron_reject_image_command_stct::image_correlation_id"]
+        [::std::mem::offset_of!(aeron_reject_image_command_stct, image_correlation_id) - 16usize];
+    ["Offset of field: aeron_reject_image_command_stct::position"]
+        [::std::mem::offset_of!(aeron_reject_image_command_stct, position) - 24usize];
+    ["Offset of field: aeron_reject_image_command_stct::reason_length"]
+        [::std::mem::offset_of!(aeron_reject_image_command_stct, reason_length) - 32usize];
+    ["Offset of field: aeron_reject_image_command_stct::reason_text"]
+        [::std::mem::offset_of!(aeron_reject_image_command_stct, reason_text) - 36usize];
+};
+pub type aeron_reject_image_command_t = aeron_reject_image_command_stct;
+#[repr(C, packed(4))]
+#[derive(Debug, Copy, Clone)]
+pub struct aeron_publication_error_stct {
+    pub registration_id: i64,
+    pub destination_registration_id: i64,
+    pub session_id: i32,
+    pub stream_id: i32,
+    pub receiver_id: i64,
+    pub group_tag: i64,
+    pub address_type: i16,
+    pub source_port: u16,
+    pub source_address: [u8; 16usize],
+    pub error_code: i32,
+    pub error_message_length: i32,
+    pub error_message: [u8; 1usize],
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of aeron_publication_error_stct"]
+        [::std::mem::size_of::<aeron_publication_error_stct>() - 72usize];
+    ["Alignment of aeron_publication_error_stct"]
+        [::std::mem::align_of::<aeron_publication_error_stct>() - 4usize];
+    ["Offset of field: aeron_publication_error_stct::registration_id"]
+        [::std::mem::offset_of!(aeron_publication_error_stct, registration_id) - 0usize];
+    ["Offset of field: aeron_publication_error_stct::destination_registration_id"][::std::mem::offset_of!(
+        aeron_publication_error_stct,
+        destination_registration_id
+    ) - 8usize];
+    ["Offset of field: aeron_publication_error_stct::session_id"]
+        [::std::mem::offset_of!(aeron_publication_error_stct, session_id) - 16usize];
+    ["Offset of field: aeron_publication_error_stct::stream_id"]
+        [::std::mem::offset_of!(aeron_publication_error_stct, stream_id) - 20usize];
+    ["Offset of field: aeron_publication_error_stct::receiver_id"]
+        [::std::mem::offset_of!(aeron_publication_error_stct, receiver_id) - 24usize];
+    ["Offset of field: aeron_publication_error_stct::group_tag"]
+        [::std::mem::offset_of!(aeron_publication_error_stct, group_tag) - 32usize];
+    ["Offset of field: aeron_publication_error_stct::address_type"]
+        [::std::mem::offset_of!(aeron_publication_error_stct, address_type) - 40usize];
+    ["Offset of field: aeron_publication_error_stct::source_port"]
+        [::std::mem::offset_of!(aeron_publication_error_stct, source_port) - 42usize];
+    ["Offset of field: aeron_publication_error_stct::source_address"]
+        [::std::mem::offset_of!(aeron_publication_error_stct, source_address) - 44usize];
+    ["Offset of field: aeron_publication_error_stct::error_code"]
+        [::std::mem::offset_of!(aeron_publication_error_stct, error_code) - 60usize];
+    ["Offset of field: aeron_publication_error_stct::error_message_length"]
+        [::std::mem::offset_of!(aeron_publication_error_stct, error_message_length) - 64usize];
+    ["Offset of field: aeron_publication_error_stct::error_message"]
+        [::std::mem::offset_of!(aeron_publication_error_stct, error_message) - 68usize];
+};
+pub type aeron_publication_error_t = aeron_publication_error_stct;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_ipc_publication_state_enum {
+    AERON_IPC_PUBLICATION_STATE_ACTIVE = 0,
+    AERON_IPC_PUBLICATION_STATE_DRAINING = 1,
+    AERON_IPC_PUBLICATION_STATE_LINGER = 2,
+    AERON_IPC_PUBLICATION_STATE_DONE = 3,
+}
+pub use self::aeron_ipc_publication_state_enum as aeron_ipc_publication_state_t;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_ipc_publication_stct {
     pub mapped_raw_log: aeron_mapped_raw_log_t,
     pub log_meta_data: *mut aeron_logbuffer_metadata_t,
@@ -9355,7 +9576,7 @@ pub struct aeron_ipc_publication_stct {
     pub mapped_bytes_counter: *mut i64,
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_ipc_publication_stct_aeron_ipc_publication_conductor_fields_stct {
     pub has_reached_end_of_life: bool,
     pub state: aeron_ipc_publication_state_t,
@@ -9390,7 +9611,7 @@ const _: () = {
     ["Offset of field: aeron_ipc_publication_stct_aeron_ipc_publication_conductor_fields_stct::time_of_last_consumer_position_change_ns"] [:: std :: mem :: offset_of ! (aeron_ipc_publication_stct_aeron_ipc_publication_conductor_fields_stct , time_of_last_consumer_position_change_ns) - 152usize] ;
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_ipc_publication_stct__bindgen_ty_1 {
     pub untethered_subscription_state_change: aeron_untethered_subscription_state_change_func_t,
 }
@@ -9556,7 +9777,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_str_to_ptr_hash_map_key_stct {
     pub str_: *const ::std::os::raw::c_char,
     pub hash_code: u64,
@@ -9577,7 +9798,7 @@ const _: () = {
 };
 pub type aeron_str_to_ptr_hash_map_key_t = aeron_str_to_ptr_hash_map_key_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_str_to_ptr_hash_map_stct {
     pub keys: *mut aeron_str_to_ptr_hash_map_key_t,
     pub values: *mut *mut ::std::os::raw::c_void,
@@ -9615,7 +9836,7 @@ pub type aeron_str_to_ptr_hash_map_for_each_func_t = ::std::option::Option<
     ),
 >;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_int64_to_ptr_hash_map_stct {
     pub keys: *mut i64,
     pub values: *mut *mut ::std::os::raw::c_void,
@@ -9817,15 +10038,16 @@ extern "C" {
         result: *mut bool,
     ) -> ::std::os::raw::c_int;
 }
-pub mod aeron_retransmit_action_state_enum {
-    pub type Type = ::std::os::raw::c_uint;
-    pub const AERON_RETRANSMIT_ACTION_STATE_DELAYED: Type = 0;
-    pub const AERON_RETRANSMIT_ACTION_STATE_LINGERING: Type = 1;
-    pub const AERON_RETRANSMIT_ACTION_STATE_INACTIVE: Type = 2;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_retransmit_action_state_enum {
+    AERON_RETRANSMIT_ACTION_STATE_DELAYED = 0,
+    AERON_RETRANSMIT_ACTION_STATE_LINGERING = 1,
+    AERON_RETRANSMIT_ACTION_STATE_INACTIVE = 2,
 }
-pub use self::aeron_retransmit_action_state_enum::Type as aeron_retransmit_action_state_t;
+pub use self::aeron_retransmit_action_state_enum as aeron_retransmit_action_state_t;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_retransmit_action_stct {
     pub expiry_ns: i64,
     pub term_id: i32,
@@ -9860,7 +10082,7 @@ pub type aeron_retransmit_handler_resend_func_t = ::std::option::Option<
     ) -> ::std::os::raw::c_int,
 >;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_retransmit_handler_stct {
     pub retransmit_action_pool: *mut aeron_retransmit_action_t,
     pub delay_timeout_ns: u64,
@@ -9933,17 +10155,18 @@ extern "C" {
         resend_clientd: *mut ::std::os::raw::c_void,
     ) -> ::std::os::raw::c_int;
 }
-pub mod aeron_network_publication_state_enum {
-    pub type Type = ::std::os::raw::c_uint;
-    pub const AERON_NETWORK_PUBLICATION_STATE_ACTIVE: Type = 0;
-    pub const AERON_NETWORK_PUBLICATION_STATE_DRAINING: Type = 1;
-    pub const AERON_NETWORK_PUBLICATION_STATE_LINGER: Type = 2;
-    pub const AERON_NETWORK_PUBLICATION_STATE_DONE: Type = 3;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_network_publication_state_enum {
+    AERON_NETWORK_PUBLICATION_STATE_ACTIVE = 0,
+    AERON_NETWORK_PUBLICATION_STATE_DRAINING = 1,
+    AERON_NETWORK_PUBLICATION_STATE_LINGER = 2,
+    AERON_NETWORK_PUBLICATION_STATE_DONE = 3,
 }
-pub use self::aeron_network_publication_state_enum::Type as aeron_network_publication_state_t;
+pub use self::aeron_network_publication_state_enum as aeron_network_publication_state_t;
 pub type aeron_send_channel_endpoint_t = aeron_send_channel_endpoint_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_network_publication_stct {
     pub conductor_fields:
         aeron_network_publication_stct_aeron_network_publication_conductor_fields_stct,
@@ -10013,7 +10236,7 @@ pub struct aeron_network_publication_stct {
     pub receiver_liveness_tracker: aeron_int64_counter_map_t,
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_network_publication_stct_aeron_network_publication_conductor_fields_stct {
     pub has_reached_end_of_life: bool,
     pub state: aeron_network_publication_state_t,
@@ -10041,7 +10264,7 @@ const _: () = {
     ["Offset of field: aeron_network_publication_stct_aeron_network_publication_conductor_fields_stct::last_snd_pos"] [:: std :: mem :: offset_of ! (aeron_network_publication_stct_aeron_network_publication_conductor_fields_stct , last_snd_pos) - 136usize] ;
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_network_publication_stct__bindgen_ty_1 {
     pub untethered_subscription_state_change: aeron_untethered_subscription_state_change_func_t,
     pub resend: aeron_driver_resend_func_t,
@@ -10309,6 +10532,16 @@ extern "C" {
     );
 }
 extern "C" {
+    pub fn aeron_network_publication_on_error(
+        publication: *mut aeron_network_publication_t,
+        destination_registration_id: i64,
+        buffer: *const u8,
+        length: usize,
+        src_address: *mut sockaddr_storage,
+        pStct: *mut aeron_driver_conductor_proxy_t,
+    );
+}
+extern "C" {
     pub fn aeron_network_publication_on_rttm(
         publication: *mut aeron_network_publication_t,
         buffer: *const u8,
@@ -10336,7 +10569,7 @@ extern "C" {
     );
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_parsed_address_stct {
     pub host: [::std::os::raw::c_char; 384usize],
     pub port: [::std::os::raw::c_char; 8usize],
@@ -10357,7 +10590,7 @@ const _: () = {
 };
 pub type aeron_parsed_address_t = aeron_parsed_address_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_parsed_interface_stct {
     pub host: [::std::os::raw::c_char; 384usize],
     pub port: [::std::os::raw::c_char; 8usize],
@@ -10443,7 +10676,7 @@ pub type aeron_name_resolver_close_func_t = ::std::option::Option<
     unsafe extern "C" fn(resolver: *mut aeron_name_resolver_t) -> ::std::os::raw::c_int,
 >;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_name_resolver_stct {
     pub name: *const ::std::os::raw::c_char,
     pub lookup_func: aeron_name_resolver_lookup_func_t,
@@ -10520,7 +10753,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_name_resolver_async_resolve_stct {
     pub uri_param_name: *const ::std::os::raw::c_char,
     pub is_re_resolution: bool,
@@ -10552,15 +10785,14 @@ extern "C" {
         sockaddr: *mut sockaddr_storage,
     ) -> ::std::os::raw::c_int;
 }
-pub const aeron_udp_channel_control_mode_en_AERON_UDP_CHANNEL_CONTROL_MODE_NONE:
-    aeron_udp_channel_control_mode_en = 0;
-pub const aeron_udp_channel_control_mode_en_AERON_UDP_CHANNEL_CONTROL_MODE_DYNAMIC:
-    aeron_udp_channel_control_mode_en = 1;
-pub const aeron_udp_channel_control_mode_en_AERON_UDP_CHANNEL_CONTROL_MODE_MANUAL:
-    aeron_udp_channel_control_mode_en = 2;
-pub const aeron_udp_channel_control_mode_en_AERON_UDP_CHANNEL_CONTROL_MODE_RESPONSE:
-    aeron_udp_channel_control_mode_en = 3;
-pub type aeron_udp_channel_control_mode_en = ::std::os::raw::c_uint;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_udp_channel_control_mode_en {
+    AERON_UDP_CHANNEL_CONTROL_MODE_NONE = 0,
+    AERON_UDP_CHANNEL_CONTROL_MODE_DYNAMIC = 1,
+    AERON_UDP_CHANNEL_CONTROL_MODE_MANUAL = 2,
+    AERON_UDP_CHANNEL_CONTROL_MODE_RESPONSE = 3,
+}
 pub use self::aeron_udp_channel_control_mode_en as aeron_udp_channel_control_mode;
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -10642,7 +10874,7 @@ const _: () = {
         [::std::mem::offset_of!(aeron_udp_channel_stct, channel_snd_timestamp_offset) - 1824usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_udp_channel_async_parse_stct {
     pub channel: *mut aeron_udp_channel_t,
     pub is_destination: bool,
@@ -10685,7 +10917,7 @@ extern "C" {
     pub fn aeron_udp_channel_delete(channel: *mut aeron_udp_channel_t);
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_udp_channel_transport_params_stct {
     pub socket_rcvbuf: usize,
     pub socket_sndbuf: usize,
@@ -10719,7 +10951,7 @@ const _: () = {
         - 29usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_udp_channel_transport_stct {
     pub fd: aeron_socket_t,
     pub recv_fd: aeron_socket_t,
@@ -10729,12 +10961,14 @@ pub struct aeron_udp_channel_transport_stct {
     pub bindings_clientd: *mut ::std::os::raw::c_void,
     pub destination_clientd: *mut ::std::os::raw::c_void,
     pub interceptor_clientds: [*mut ::std::os::raw::c_void; 2usize],
+    pub error_log: *mut aeron_distinct_error_log_t,
+    pub errors_counter: *mut i64,
     pub timestamp_flags: u32,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
     ["Size of aeron_udp_channel_transport_stct"]
-        [::std::mem::size_of::<aeron_udp_channel_transport_stct>() - 72usize];
+        [::std::mem::size_of::<aeron_udp_channel_transport_stct>() - 88usize];
     ["Alignment of aeron_udp_channel_transport_stct"]
         [::std::mem::align_of::<aeron_udp_channel_transport_stct>() - 8usize];
     ["Offset of field: aeron_udp_channel_transport_stct::fd"]
@@ -10753,8 +10987,12 @@ const _: () = {
         [::std::mem::offset_of!(aeron_udp_channel_transport_stct, destination_clientd) - 40usize];
     ["Offset of field: aeron_udp_channel_transport_stct::interceptor_clientds"]
         [::std::mem::offset_of!(aeron_udp_channel_transport_stct, interceptor_clientds) - 48usize];
+    ["Offset of field: aeron_udp_channel_transport_stct::error_log"]
+        [::std::mem::offset_of!(aeron_udp_channel_transport_stct, error_log) - 64usize];
+    ["Offset of field: aeron_udp_channel_transport_stct::errors_counter"]
+        [::std::mem::offset_of!(aeron_udp_channel_transport_stct, errors_counter) - 72usize];
     ["Offset of field: aeron_udp_channel_transport_stct::timestamp_flags"]
-        [::std::mem::offset_of!(aeron_udp_channel_transport_stct, timestamp_flags) - 64usize];
+        [::std::mem::offset_of!(aeron_udp_channel_transport_stct, timestamp_flags) - 80usize];
 };
 extern "C" {
     pub fn aeron_udp_channel_transport_init(
@@ -10812,7 +11050,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_udp_destination_entry_stct {
     pub padding_before: [u8; 64usize],
     pub time_of_last_activity_ns: i64,
@@ -10855,7 +11093,7 @@ const _: () = {
 };
 pub type aeron_udp_destination_entry_t = aeron_udp_destination_entry_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_udp_destination_tracker_stct {
     pub padding_before: [u8; 64usize],
     pub destinations:
@@ -10869,7 +11107,7 @@ pub struct aeron_udp_destination_tracker_stct {
     pub padding_after: [u8; 64usize],
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_udp_destination_tracker_stct_aeron_udp_destination_tracker_destinations_stct {
     pub array: *mut aeron_udp_destination_entry_t,
     pub length: usize,
@@ -10970,6 +11208,14 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
+    pub fn aeron_udp_destination_tracker_find_registration_id(
+        tracker: *mut aeron_udp_destination_tracker_t,
+        buffer: *const u8,
+        len: usize,
+        addr: *mut sockaddr_storage,
+    ) -> i64;
+}
+extern "C" {
     pub fn aeron_udp_destination_tracker_check_for_re_resolution(
         tracker: *mut aeron_udp_destination_tracker_t,
         endpoint: *mut aeron_send_channel_endpoint_t,
@@ -10986,7 +11232,7 @@ extern "C" {
 }
 pub type aeron_driver_sender_t = aeron_driver_sender_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_sender_proxy_stct {
     pub sender: *mut aeron_driver_sender_t,
     pub threading_mode: aeron_threading_mode_t,
@@ -10995,7 +11241,7 @@ pub struct aeron_driver_sender_proxy_stct {
     pub fail_counter: *mut i64,
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_sender_proxy_stct__bindgen_ty_1 {
     pub on_add_endpoint: aeron_on_endpoint_change_func_t,
     pub on_remove_endpoint: aeron_on_endpoint_change_func_t,
@@ -11066,7 +11312,7 @@ extern "C" {
     );
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_command_destination_stct {
     pub base: aeron_command_base_t,
     pub destination_registration_id: i64,
@@ -11095,7 +11341,7 @@ const _: () = {
 };
 pub type aeron_command_destination_t = aeron_command_destination_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_command_destination_by_id_stct {
     pub base: aeron_command_base_t,
     pub control_address: sockaddr_storage,
@@ -11122,7 +11368,7 @@ const _: () = {
 };
 pub type aeron_command_destination_by_id_t = aeron_command_destination_by_id_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_command_sender_resolution_change_stct {
     pub base: aeron_command_base_t,
     pub endpoint_name: *const ::std::os::raw::c_char,
@@ -11170,14 +11416,15 @@ extern "C" {
         destination_registration_id: i64,
     );
 }
-pub mod aeron_send_channel_endpoint_status_enum {
-    pub type Type = ::std::os::raw::c_uint;
-    pub const AERON_SEND_CHANNEL_ENDPOINT_STATUS_ACTIVE: Type = 0;
-    pub const AERON_SEND_CHANNEL_ENDPOINT_STATUS_CLOSING: Type = 1;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_send_channel_endpoint_status_enum {
+    AERON_SEND_CHANNEL_ENDPOINT_STATUS_ACTIVE = 0,
+    AERON_SEND_CHANNEL_ENDPOINT_STATUS_CLOSING = 1,
 }
-pub use self::aeron_send_channel_endpoint_status_enum::Type as aeron_send_channel_endpoint_status_t;
+pub use self::aeron_send_channel_endpoint_status_enum as aeron_send_channel_endpoint_status_t;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_send_channel_endpoint_stct {
     pub conductor_fields:
         aeron_send_channel_endpoint_stct_aeron_send_channel_endpoint_conductor_fields_stct,
@@ -11199,7 +11446,7 @@ pub struct aeron_send_channel_endpoint_stct {
     pub padding: [u8; 64usize],
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_send_channel_endpoint_stct_aeron_send_channel_endpoint_conductor_fields_stct {
     pub managed_resource: aeron_driver_managed_resource_t,
     pub refcnt: i32,
@@ -11224,7 +11471,7 @@ const _: () = {
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
     ["Size of aeron_send_channel_endpoint_stct"]
-        [::std::mem::size_of::<aeron_send_channel_endpoint_stct>() - 632usize];
+        [::std::mem::size_of::<aeron_send_channel_endpoint_stct>() - 648usize];
     ["Alignment of aeron_send_channel_endpoint_stct"]
         [::std::mem::align_of::<aeron_send_channel_endpoint_stct>() - 8usize];
     ["Offset of field: aeron_send_channel_endpoint_stct::conductor_fields"]
@@ -11234,39 +11481,39 @@ const _: () = {
     ["Offset of field: aeron_send_channel_endpoint_stct::transport"]
         [::std::mem::offset_of!(aeron_send_channel_endpoint_stct, transport) - 88usize];
     ["Offset of field: aeron_send_channel_endpoint_stct::channel_status"]
-        [::std::mem::offset_of!(aeron_send_channel_endpoint_stct, channel_status) - 160usize];
+        [::std::mem::offset_of!(aeron_send_channel_endpoint_stct, channel_status) - 176usize];
     ["Offset of field: aeron_send_channel_endpoint_stct::local_sockaddr_indicator"][::std::mem::offset_of!(
         aeron_send_channel_endpoint_stct,
         local_sockaddr_indicator
-    ) - 176usize];
+    ) - 192usize];
     ["Offset of field: aeron_send_channel_endpoint_stct::tracker_num_destinations"][::std::mem::offset_of!(
         aeron_send_channel_endpoint_stct,
         tracker_num_destinations
-    ) - 192usize];
+    ) - 208usize];
     ["Offset of field: aeron_send_channel_endpoint_stct::destination_tracker"]
-        [::std::mem::offset_of!(aeron_send_channel_endpoint_stct, destination_tracker) - 208usize];
+        [::std::mem::offset_of!(aeron_send_channel_endpoint_stct, destination_tracker) - 224usize];
     ["Offset of field: aeron_send_channel_endpoint_stct::sender_proxy"]
-        [::std::mem::offset_of!(aeron_send_channel_endpoint_stct, sender_proxy) - 216usize];
+        [::std::mem::offset_of!(aeron_send_channel_endpoint_stct, sender_proxy) - 232usize];
     ["Offset of field: aeron_send_channel_endpoint_stct::publication_dispatch_map"][::std::mem::offset_of!(
         aeron_send_channel_endpoint_stct,
         publication_dispatch_map
-    ) - 224usize];
+    ) - 240usize];
     ["Offset of field: aeron_send_channel_endpoint_stct::transport_bindings"]
-        [::std::mem::offset_of!(aeron_send_channel_endpoint_stct, transport_bindings) - 272usize];
+        [::std::mem::offset_of!(aeron_send_channel_endpoint_stct, transport_bindings) - 288usize];
     ["Offset of field: aeron_send_channel_endpoint_stct::data_paths"]
-        [::std::mem::offset_of!(aeron_send_channel_endpoint_stct, data_paths) - 280usize];
+        [::std::mem::offset_of!(aeron_send_channel_endpoint_stct, data_paths) - 296usize];
     ["Offset of field: aeron_send_channel_endpoint_stct::current_data_addr"]
-        [::std::mem::offset_of!(aeron_send_channel_endpoint_stct, current_data_addr) - 288usize];
+        [::std::mem::offset_of!(aeron_send_channel_endpoint_stct, current_data_addr) - 304usize];
     ["Offset of field: aeron_send_channel_endpoint_stct::bind_addr"]
-        [::std::mem::offset_of!(aeron_send_channel_endpoint_stct, bind_addr) - 416usize];
+        [::std::mem::offset_of!(aeron_send_channel_endpoint_stct, bind_addr) - 432usize];
     ["Offset of field: aeron_send_channel_endpoint_stct::port_manager"]
-        [::std::mem::offset_of!(aeron_send_channel_endpoint_stct, port_manager) - 544usize];
+        [::std::mem::offset_of!(aeron_send_channel_endpoint_stct, port_manager) - 560usize];
     ["Offset of field: aeron_send_channel_endpoint_stct::cached_clock"]
-        [::std::mem::offset_of!(aeron_send_channel_endpoint_stct, cached_clock) - 552usize];
+        [::std::mem::offset_of!(aeron_send_channel_endpoint_stct, cached_clock) - 568usize];
     ["Offset of field: aeron_send_channel_endpoint_stct::time_of_last_sm_ns"]
-        [::std::mem::offset_of!(aeron_send_channel_endpoint_stct, time_of_last_sm_ns) - 560usize];
+        [::std::mem::offset_of!(aeron_send_channel_endpoint_stct, time_of_last_sm_ns) - 576usize];
     ["Offset of field: aeron_send_channel_endpoint_stct::padding"]
-        [::std::mem::offset_of!(aeron_send_channel_endpoint_stct, padding) - 568usize];
+        [::std::mem::offset_of!(aeron_send_channel_endpoint_stct, padding) - 584usize];
 };
 extern "C" {
     pub fn aeron_send_channel_endpoint_create(
@@ -11350,6 +11597,15 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
+    pub fn aeron_send_channel_endpoint_on_error(
+        endpoint: *mut aeron_send_channel_endpoint_t,
+        conductor_proxy: *mut aeron_driver_conductor_proxy_t,
+        buffer: *mut u8,
+        length: usize,
+        addr: *mut sockaddr_storage,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
     pub fn aeron_send_channel_endpoint_on_rttm(
         endpoint: *mut aeron_send_channel_endpoint_t,
         buffer: *mut u8,
@@ -11382,7 +11638,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_int64_to_tagged_ptr_entry_stct {
     pub value: *mut ::std::os::raw::c_void,
     pub internal_flags: u32,
@@ -11403,7 +11659,7 @@ const _: () = {
 };
 pub type aeron_int64_to_tagged_ptr_entry_t = aeron_int64_to_tagged_ptr_entry_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_int64_to_tagged_ptr_hash_map_stct {
     pub keys: *mut i64,
     pub entries: *mut aeron_int64_to_tagged_ptr_entry_t,
@@ -11450,17 +11706,19 @@ pub type aeron_int64_to_tagged_ptr_hash_map_predicate_func_t = ::std::option::Op
         value: *mut ::std::os::raw::c_void,
     ) -> bool,
 >;
-pub const aeron_driver_conductor_resource_type_en_AERON_DRIVER_CONDUCTOR_RESOURCE_TYPE_CLIENT:
-    aeron_driver_conductor_resource_type_en = 0;
-pub const aeron_driver_conductor_resource_type_en_AERON_DRIVER_CONDUCTOR_RESOURCE_TYPE_IPC_PUBLICATION : aeron_driver_conductor_resource_type_en = 1 ;
-pub const aeron_driver_conductor_resource_type_en_AERON_DRIVER_CONDUCTOR_RESOURCE_TYPE_NETWORK_PUBLICATION : aeron_driver_conductor_resource_type_en = 2 ;
-pub const aeron_driver_conductor_resource_type_en_AERON_DRIVER_CONDUCTOR_RESOURCE_TYPE_SEND_CHANNEL_ENDPOINT : aeron_driver_conductor_resource_type_en = 3 ;
-pub const aeron_driver_conductor_resource_type_en_AERON_DRIVER_CONDUCTOR_RESOURCE_TYPE_PUBLICATION_IMAGE : aeron_driver_conductor_resource_type_en = 4 ;
-pub const aeron_driver_conductor_resource_type_en_AERON_DRIVER_CONDUCTOR_RESOURCE_TYPE_LINGER_RESOURCE : aeron_driver_conductor_resource_type_en = 5 ;
-pub type aeron_driver_conductor_resource_type_en = ::std::os::raw::c_uint;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_driver_conductor_resource_type_en {
+    AERON_DRIVER_CONDUCTOR_RESOURCE_TYPE_CLIENT = 0,
+    AERON_DRIVER_CONDUCTOR_RESOURCE_TYPE_IPC_PUBLICATION = 1,
+    AERON_DRIVER_CONDUCTOR_RESOURCE_TYPE_NETWORK_PUBLICATION = 2,
+    AERON_DRIVER_CONDUCTOR_RESOURCE_TYPE_SEND_CHANNEL_ENDPOINT = 3,
+    AERON_DRIVER_CONDUCTOR_RESOURCE_TYPE_PUBLICATION_IMAGE = 4,
+    AERON_DRIVER_CONDUCTOR_RESOURCE_TYPE_LINGER_RESOURCE = 5,
+}
 pub use self::aeron_driver_conductor_resource_type_en as aeron_driver_conductor_resource_type_t;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_conductor_proxy_stct {
     pub conductor: *mut aeron_driver_conductor_t,
     pub threading_mode: aeron_threading_mode_t,
@@ -11483,7 +11741,7 @@ const _: () = {
         [::std::mem::offset_of!(aeron_driver_conductor_proxy_stct, fail_counter) - 24usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_command_create_publication_image_stct {
     pub base: aeron_command_base_t,
     pub session_id: i32,
@@ -11548,7 +11806,7 @@ const _: () = {
 };
 pub type aeron_command_create_publication_image_t = aeron_command_create_publication_image_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_command_re_resolve_stct {
     pub base: aeron_command_base_t,
     pub endpoint_name: *const ::std::os::raw::c_char,
@@ -11575,7 +11833,7 @@ const _: () = {
 };
 pub type aeron_command_re_resolve_t = aeron_command_re_resolve_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_command_delete_destination_stct {
     pub base: aeron_command_base_t,
     pub endpoint: *mut ::std::os::raw::c_void,
@@ -11599,7 +11857,7 @@ const _: () = {
 };
 pub type aeron_command_delete_destination_t = aeron_command_delete_destination_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_command_response_connected_stct {
     pub base: aeron_command_base_t,
     pub response_correlation_id: i64,
@@ -11620,7 +11878,7 @@ const _: () = {
 };
 pub type aeron_command_response_connected_t = aeron_command_response_connected_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_command_response_setup_stct {
     pub base: aeron_command_base_t,
     pub response_correlation_id: i64,
@@ -11643,7 +11901,7 @@ const _: () = {
 };
 pub type aeron_command_response_setup_t = aeron_command_response_setup_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_command_release_resource_stct {
     pub base: aeron_command_base_t,
     pub resource_type: aeron_driver_conductor_resource_type_t,
@@ -11660,6 +11918,54 @@ const _: () = {
         [::std::mem::offset_of!(aeron_command_release_resource_stct, resource_type) - 16usize];
 };
 pub type aeron_command_release_resource_t = aeron_command_release_resource_stct;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct aeron_command_publication_error_stct {
+    pub base: aeron_command_base_t,
+    pub registration_id: i64,
+    pub destination_registration_id: i64,
+    pub session_id: i32,
+    pub stream_id: i32,
+    pub receiver_id: i64,
+    pub group_tag: i64,
+    pub src_address: sockaddr_storage,
+    pub error_code: i32,
+    pub error_length: i32,
+    pub error_text: [u8; 1usize],
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of aeron_command_publication_error_stct"]
+        [::std::mem::size_of::<aeron_command_publication_error_stct>() - 200usize];
+    ["Alignment of aeron_command_publication_error_stct"]
+        [::std::mem::align_of::<aeron_command_publication_error_stct>() - 8usize];
+    ["Offset of field: aeron_command_publication_error_stct::base"]
+        [::std::mem::offset_of!(aeron_command_publication_error_stct, base) - 0usize];
+    ["Offset of field: aeron_command_publication_error_stct::registration_id"]
+        [::std::mem::offset_of!(aeron_command_publication_error_stct, registration_id) - 16usize];
+    ["Offset of field: aeron_command_publication_error_stct::destination_registration_id"][::std::mem::offset_of!(
+        aeron_command_publication_error_stct,
+        destination_registration_id
+    )
+        - 24usize];
+    ["Offset of field: aeron_command_publication_error_stct::session_id"]
+        [::std::mem::offset_of!(aeron_command_publication_error_stct, session_id) - 32usize];
+    ["Offset of field: aeron_command_publication_error_stct::stream_id"]
+        [::std::mem::offset_of!(aeron_command_publication_error_stct, stream_id) - 36usize];
+    ["Offset of field: aeron_command_publication_error_stct::receiver_id"]
+        [::std::mem::offset_of!(aeron_command_publication_error_stct, receiver_id) - 40usize];
+    ["Offset of field: aeron_command_publication_error_stct::group_tag"]
+        [::std::mem::offset_of!(aeron_command_publication_error_stct, group_tag) - 48usize];
+    ["Offset of field: aeron_command_publication_error_stct::src_address"]
+        [::std::mem::offset_of!(aeron_command_publication_error_stct, src_address) - 56usize];
+    ["Offset of field: aeron_command_publication_error_stct::error_code"]
+        [::std::mem::offset_of!(aeron_command_publication_error_stct, error_code) - 184usize];
+    ["Offset of field: aeron_command_publication_error_stct::error_length"]
+        [::std::mem::offset_of!(aeron_command_publication_error_stct, error_length) - 188usize];
+    ["Offset of field: aeron_command_publication_error_stct::error_text"]
+        [::std::mem::offset_of!(aeron_command_publication_error_stct, error_text) - 192usize];
+};
+pub type aeron_command_publication_error_t = aeron_command_publication_error_stct;
 extern "C" {
     pub fn aeron_driver_conductor_proxy_on_create_publication_image_cmd(
         conductor_proxy: *mut aeron_driver_conductor_proxy_t,
@@ -11734,8 +12040,23 @@ extern "C" {
         resource_type: aeron_driver_conductor_resource_type_t,
     );
 }
+extern "C" {
+    pub fn aeron_driver_conductor_proxy_on_publication_error(
+        conductor_proxy: *mut aeron_driver_conductor_proxy_t,
+        registration_id: i64,
+        destination_registration_id: i64,
+        session_id: i32,
+        stream_id: i32,
+        receiver_id: i64,
+        group_tag: i64,
+        src_address: *mut sockaddr_storage,
+        error_code: i32,
+        error_length: i32,
+        error_text: *const u8,
+    );
+}
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_receive_destination_stct {
     pub conductor_fields:
         aeron_receive_destination_stct_aeron_receive_destination_conductor_fields_stct,
@@ -11751,7 +12072,7 @@ pub struct aeron_receive_destination_stct {
     pub padding: [u8; 64usize],
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_receive_destination_stct_aeron_receive_destination_conductor_fields_stct {
     pub udp_channel: *mut aeron_udp_channel_t,
 }
@@ -11767,7 +12088,7 @@ const _: () = {
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
     ["Size of aeron_receive_destination_stct"]
-        [::std::mem::size_of::<aeron_receive_destination_stct>() - 456usize];
+        [::std::mem::size_of::<aeron_receive_destination_stct>() - 472usize];
     ["Alignment of aeron_receive_destination_stct"]
         [::std::mem::align_of::<aeron_receive_destination_stct>() - 8usize];
     ["Offset of field: aeron_receive_destination_stct::conductor_fields"]
@@ -11775,27 +12096,27 @@ const _: () = {
     ["Offset of field: aeron_receive_destination_stct::transport"]
         [::std::mem::offset_of!(aeron_receive_destination_stct, transport) - 8usize];
     ["Offset of field: aeron_receive_destination_stct::data_paths"]
-        [::std::mem::offset_of!(aeron_receive_destination_stct, data_paths) - 80usize];
+        [::std::mem::offset_of!(aeron_receive_destination_stct, data_paths) - 96usize];
     ["Offset of field: aeron_receive_destination_stct::port_manager"]
-        [::std::mem::offset_of!(aeron_receive_destination_stct, port_manager) - 88usize];
+        [::std::mem::offset_of!(aeron_receive_destination_stct, port_manager) - 104usize];
     ["Offset of field: aeron_receive_destination_stct::local_sockaddr_indicator"][::std::mem::offset_of!(
         aeron_receive_destination_stct,
         local_sockaddr_indicator
-    ) - 96usize];
+    ) - 112usize];
     ["Offset of field: aeron_receive_destination_stct::current_control_addr"]
-        [::std::mem::offset_of!(aeron_receive_destination_stct, current_control_addr) - 112usize];
+        [::std::mem::offset_of!(aeron_receive_destination_stct, current_control_addr) - 128usize];
     ["Offset of field: aeron_receive_destination_stct::bind_addr"]
-        [::std::mem::offset_of!(aeron_receive_destination_stct, bind_addr) - 240usize];
+        [::std::mem::offset_of!(aeron_receive_destination_stct, bind_addr) - 256usize];
     ["Offset of field: aeron_receive_destination_stct::so_rcvbuf"]
-        [::std::mem::offset_of!(aeron_receive_destination_stct, so_rcvbuf) - 368usize];
+        [::std::mem::offset_of!(aeron_receive_destination_stct, so_rcvbuf) - 384usize];
     ["Offset of field: aeron_receive_destination_stct::has_control_addr"]
-        [::std::mem::offset_of!(aeron_receive_destination_stct, has_control_addr) - 376usize];
+        [::std::mem::offset_of!(aeron_receive_destination_stct, has_control_addr) - 392usize];
     ["Offset of field: aeron_receive_destination_stct::time_of_last_activity_ns"][::std::mem::offset_of!(
         aeron_receive_destination_stct,
         time_of_last_activity_ns
-    ) - 384usize];
+    ) - 400usize];
     ["Offset of field: aeron_receive_destination_stct::padding"]
-        [::std::mem::offset_of!(aeron_receive_destination_stct, padding) - 392usize];
+        [::std::mem::offset_of!(aeron_receive_destination_stct, padding) - 408usize];
 };
 pub type aeron_receive_destination_t = aeron_receive_destination_stct;
 extern "C" {
@@ -11818,7 +12139,7 @@ extern "C" {
 pub type aeron_receive_channel_endpoint_t = aeron_receive_channel_endpoint_stct;
 pub type aeron_driver_receiver_t = aeron_driver_receiver_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_data_packet_dispatcher_stct {
     pub ignored_sessions_map: aeron_int64_to_ptr_hash_map_t,
     pub session_by_stream_id_map: aeron_int64_to_ptr_hash_map_t,
@@ -11828,7 +12149,7 @@ pub struct aeron_data_packet_dispatcher_stct {
     pub stream_session_limit: i32,
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_data_packet_dispatcher_stct_aeron_data_packet_dispatcher_tokens_stct {
     pub subscribed: ::std::os::raw::c_int,
 }
@@ -11880,7 +12201,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_data_packet_dispatcher_stream_interest_stct {
     pub is_all_sessions: bool,
     pub subscribed_sessions: aeron_int64_to_ptr_hash_map_t,
@@ -12014,15 +12335,16 @@ extern "C" {
         stream_id: i32,
     );
 }
-pub mod aeron_receive_channel_endpoint_status_enum {
-    pub type Type = ::std::os::raw::c_uint;
-    pub const AERON_RECEIVE_CHANNEL_ENDPOINT_STATUS_ACTIVE: Type = 0;
-    pub const AERON_RECEIVE_CHANNEL_ENDPOINT_STATUS_CLOSING: Type = 1;
-    pub const AERON_RECEIVE_CHANNEL_ENDPOINT_STATUS_CLOSED: Type = 2;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_receive_channel_endpoint_status_enum {
+    AERON_RECEIVE_CHANNEL_ENDPOINT_STATUS_ACTIVE = 0,
+    AERON_RECEIVE_CHANNEL_ENDPOINT_STATUS_CLOSING = 1,
+    AERON_RECEIVE_CHANNEL_ENDPOINT_STATUS_CLOSED = 2,
 }
-pub use self::aeron_receive_channel_endpoint_status_enum::Type as aeron_receive_channel_endpoint_status_t;
+pub use self::aeron_receive_channel_endpoint_status_enum as aeron_receive_channel_endpoint_status_t;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_receive_destination_entry_stct {
     pub destination: *mut aeron_receive_destination_t,
 }
@@ -12037,7 +12359,7 @@ const _: () = {
 };
 pub type aeron_receive_destination_entry_t = aeron_receive_destination_entry_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_receive_channel_endpoint_stct {
     pub conductor_fields:
         aeron_receive_channel_endpoint_stct_aeron_receive_channel_endpoint_conductor_fields_stct,
@@ -12056,9 +12378,10 @@ pub struct aeron_receive_channel_endpoint_stct {
     pub group_tag: aeron_receive_channel_endpoint_stct__bindgen_ty_1,
     pub short_sends_counter: *mut i64,
     pub possible_ttl_asymmetry_counter: *mut i64,
+    pub errors_frames_sent_counter: *mut i64,
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_receive_channel_endpoint_stct_aeron_receive_channel_endpoint_conductor_fields_stct
 {
     pub managed_resource: aeron_driver_managed_resource_t,
@@ -12076,7 +12399,7 @@ const _: () = {
     ["Offset of field: aeron_receive_channel_endpoint_stct_aeron_receive_channel_endpoint_conductor_fields_stct::image_ref_count"] [:: std :: mem :: offset_of ! (aeron_receive_channel_endpoint_stct_aeron_receive_channel_endpoint_conductor_fields_stct , image_ref_count) - 56usize] ;
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_receive_channel_endpoint_stct_destination_stct {
     pub length: usize,
     pub capacity: usize,
@@ -12102,7 +12425,7 @@ const _: () = {
     ) - 16usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_receive_channel_endpoint_stct__bindgen_ty_1 {
     pub is_present: bool,
     pub value: i64,
@@ -12123,7 +12446,7 @@ const _: () = {
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
     ["Size of aeron_receive_channel_endpoint_stct"]
-        [::std::mem::size_of::<aeron_receive_channel_endpoint_stct>() - 456usize];
+        [::std::mem::size_of::<aeron_receive_channel_endpoint_stct>() - 464usize];
     ["Alignment of aeron_receive_channel_endpoint_stct"]
         [::std::mem::align_of::<aeron_receive_channel_endpoint_stct>() - 8usize];
     ["Offset of field: aeron_receive_channel_endpoint_stct::conductor_fields"]
@@ -12175,6 +12498,11 @@ const _: () = {
         possible_ttl_asymmetry_counter
     )
         - 448usize];
+    ["Offset of field: aeron_receive_channel_endpoint_stct::errors_frames_sent_counter"][::std::mem::offset_of!(
+        aeron_receive_channel_endpoint_stct,
+        errors_frames_sent_counter
+    )
+        - 456usize];
 };
 extern "C" {
     pub fn aeron_receive_channel_endpoint_create(
@@ -12257,6 +12585,17 @@ extern "C" {
         stream_id: i32,
         session_id: i32,
         response_session_id: i32,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn aeron_receiver_channel_endpoint_send_error_frame(
+        channel_endpoint: *mut aeron_receive_channel_endpoint_t,
+        destination: *mut aeron_receive_destination_t,
+        control_addr: *mut sockaddr_storage,
+        session_id: i32,
+        stream_id: i32,
+        error_code: i32,
+        invalidation_reason: *const ::std::os::raw::c_char,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
@@ -12463,7 +12802,7 @@ pub type aeron_term_gap_scanner_on_gap_detected_func_t = ::std::option::Option<
     ),
 >;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_loss_detector_gap_stct {
     pub term_id: i32,
     pub term_offset: i32,
@@ -12484,7 +12823,7 @@ const _: () = {
 };
 pub type aeron_loss_detector_gap_t = aeron_loss_detector_gap_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_loss_detector_stct {
     pub on_gap_detected: aeron_term_gap_scanner_on_gap_detected_func_t,
     pub feedback_delay_state: *mut aeron_feedback_delay_generator_state_t,
@@ -12550,7 +12889,7 @@ extern "C" {
     ) -> i64;
 }
 #[repr(C, packed(4))]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_loss_reporter_entry_stct {
     pub observation_count: i64,
     pub total_bytes_lost: i64,
@@ -12584,7 +12923,7 @@ const _: () = {
 };
 pub type aeron_loss_reporter_entry_t = aeron_loss_reporter_entry_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_loss_reporter_stct {
     pub buffer: *mut u8,
     pub next_record_offset: usize,
@@ -12648,16 +12987,17 @@ extern "C" {
         clientd: *mut ::std::os::raw::c_void,
     ) -> usize;
 }
-pub mod aeron_publication_image_state_enum {
-    pub type Type = ::std::os::raw::c_uint;
-    pub const AERON_PUBLICATION_IMAGE_STATE_ACTIVE: Type = 0;
-    pub const AERON_PUBLICATION_IMAGE_STATE_DRAINING: Type = 1;
-    pub const AERON_PUBLICATION_IMAGE_STATE_LINGER: Type = 2;
-    pub const AERON_PUBLICATION_IMAGE_STATE_DONE: Type = 3;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_publication_image_state_enum {
+    AERON_PUBLICATION_IMAGE_STATE_ACTIVE = 0,
+    AERON_PUBLICATION_IMAGE_STATE_DRAINING = 1,
+    AERON_PUBLICATION_IMAGE_STATE_LINGER = 2,
+    AERON_PUBLICATION_IMAGE_STATE_DONE = 3,
 }
-pub use self::aeron_publication_image_state_enum::Type as aeron_publication_image_state_t;
+pub use self::aeron_publication_image_state_enum as aeron_publication_image_state_t;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_publication_image_connection_stct {
     pub padding_before: [u8; 64usize],
     pub resolved_control_address_for_implicit_unicast_channels: sockaddr_storage,
@@ -12701,7 +13041,7 @@ const _: () = {
 };
 pub type aeron_publication_image_connection_t = aeron_publication_image_connection_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_publication_image_stct {
     pub padding_before: [u8; 64usize],
     pub conductor_fields:
@@ -12754,6 +13094,7 @@ pub struct aeron_publication_image_stct {
     pub time_of_last_sm_ns: i64,
     pub sm_timeout_ns: i64,
     pub time_of_last_packet_ns: i64,
+    pub invalidation_reason: *const ::std::os::raw::c_char,
     pub response_session_id: i64,
     pub is_end_of_stream: bool,
     pub is_sending_eos_sm: bool,
@@ -12767,7 +13108,7 @@ pub struct aeron_publication_image_stct {
     pub mapped_bytes_counter: *mut i64,
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_publication_image_stct_aeron_publication_image_conductor_fields_stct {
     pub is_reliable: bool,
     pub state: aeron_publication_image_state_t,
@@ -12804,7 +13145,7 @@ const _: () = {
     ["Offset of field: aeron_publication_image_stct_aeron_publication_image_conductor_fields_stct::flags"] [:: std :: mem :: offset_of ! (aeron_publication_image_stct_aeron_publication_image_conductor_fields_stct , flags) - 160usize] ;
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_publication_image_stct_image_connection_entries {
     pub length: usize,
     pub capacity: usize,
@@ -12831,7 +13172,7 @@ const _: () = {
     ) - 16usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_publication_image_stct__bindgen_ty_1 {
     pub untethered_subscription_state_change: aeron_untethered_subscription_state_change_func_t,
 }
@@ -12846,7 +13187,7 @@ const _: () = {
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
     ["Size of aeron_publication_image_stct"]
-        [::std::mem::size_of::<aeron_publication_image_stct>() - 1088usize];
+        [::std::mem::size_of::<aeron_publication_image_stct>() - 1096usize];
     ["Alignment of aeron_publication_image_stct"]
         [::std::mem::align_of::<aeron_publication_image_stct>() - 8usize];
     ["Offset of field: aeron_publication_image_stct::padding_before"]
@@ -12953,40 +13294,42 @@ const _: () = {
         [::std::mem::offset_of!(aeron_publication_image_stct, sm_timeout_ns) - 1000usize];
     ["Offset of field: aeron_publication_image_stct::time_of_last_packet_ns"]
         [::std::mem::offset_of!(aeron_publication_image_stct, time_of_last_packet_ns) - 1008usize];
+    ["Offset of field: aeron_publication_image_stct::invalidation_reason"]
+        [::std::mem::offset_of!(aeron_publication_image_stct, invalidation_reason) - 1016usize];
     ["Offset of field: aeron_publication_image_stct::response_session_id"]
-        [::std::mem::offset_of!(aeron_publication_image_stct, response_session_id) - 1016usize];
+        [::std::mem::offset_of!(aeron_publication_image_stct, response_session_id) - 1024usize];
     ["Offset of field: aeron_publication_image_stct::is_end_of_stream"]
-        [::std::mem::offset_of!(aeron_publication_image_stct, is_end_of_stream) - 1024usize];
+        [::std::mem::offset_of!(aeron_publication_image_stct, is_end_of_stream) - 1032usize];
     ["Offset of field: aeron_publication_image_stct::is_sending_eos_sm"]
-        [::std::mem::offset_of!(aeron_publication_image_stct, is_sending_eos_sm) - 1025usize];
+        [::std::mem::offset_of!(aeron_publication_image_stct, is_sending_eos_sm) - 1033usize];
     ["Offset of field: aeron_publication_image_stct::has_receiver_released"]
-        [::std::mem::offset_of!(aeron_publication_image_stct, has_receiver_released) - 1026usize];
+        [::std::mem::offset_of!(aeron_publication_image_stct, has_receiver_released) - 1034usize];
     ["Offset of field: aeron_publication_image_stct::heartbeats_received_counter"][::std::mem::offset_of!(
         aeron_publication_image_stct,
         heartbeats_received_counter
-    ) - 1032usize];
+    ) - 1040usize];
     ["Offset of field: aeron_publication_image_stct::flow_control_under_runs_counter"][::std::mem::offset_of!(
         aeron_publication_image_stct,
         flow_control_under_runs_counter
     )
-        - 1040usize];
+        - 1048usize];
     ["Offset of field: aeron_publication_image_stct::flow_control_over_runs_counter"][::std::mem::offset_of!(
         aeron_publication_image_stct,
         flow_control_over_runs_counter
     )
-        - 1048usize];
+        - 1056usize];
     ["Offset of field: aeron_publication_image_stct::status_messages_sent_counter"][::std::mem::offset_of!(
         aeron_publication_image_stct,
         status_messages_sent_counter
-    ) - 1056usize];
+    ) - 1064usize];
     ["Offset of field: aeron_publication_image_stct::nak_messages_sent_counter"][::std::mem::offset_of!(
         aeron_publication_image_stct,
         nak_messages_sent_counter
-    ) - 1064usize];
+    ) - 1072usize];
     ["Offset of field: aeron_publication_image_stct::loss_gap_fills_counter"]
-        [::std::mem::offset_of!(aeron_publication_image_stct, loss_gap_fills_counter) - 1072usize];
+        [::std::mem::offset_of!(aeron_publication_image_stct, loss_gap_fills_counter) - 1080usize];
     ["Offset of field: aeron_publication_image_stct::mapped_bytes_counter"]
-        [::std::mem::offset_of!(aeron_publication_image_stct, mapped_bytes_counter) - 1080usize];
+        [::std::mem::offset_of!(aeron_publication_image_stct, mapped_bytes_counter) - 1088usize];
 };
 extern "C" {
     pub fn aeron_publication_image_create(
@@ -13110,12 +13453,19 @@ extern "C" {
     pub fn aeron_publication_image_receiver_release(image: *mut aeron_publication_image_t);
 }
 extern "C" {
+    pub fn aeron_publication_image_invalidate(
+        image: *mut aeron_publication_image_t,
+        reason_length: i32,
+        reason: *const ::std::os::raw::c_char,
+    );
+}
+extern "C" {
     pub fn aeron_publication_image_remove_response_session_id(
         image: *mut aeron_publication_image_t,
     );
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_deque_stct {
     pub data: *mut u8,
     pub element_count: usize,
@@ -13163,7 +13513,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_publication_link_stct {
     pub resource: *mut aeron_driver_managed_resource_t,
     pub registration_id: i64,
@@ -13181,7 +13531,7 @@ const _: () = {
 };
 pub type aeron_publication_link_t = aeron_publication_link_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_counter_link_stct {
     pub counter_id: i32,
     pub registration_id: i64,
@@ -13198,7 +13548,7 @@ const _: () = {
 };
 pub type aeron_counter_link_t = aeron_counter_link_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_client_stct {
     pub reached_end_of_life: bool,
     pub closed_by_command: bool,
@@ -13209,7 +13559,7 @@ pub struct aeron_client_stct {
     pub counter_links: aeron_client_stct_counter_link_stct,
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_client_stct_publication_link_stct {
     pub length: usize,
     pub capacity: usize,
@@ -13229,7 +13579,7 @@ const _: () = {
         [::std::mem::offset_of!(aeron_client_stct_publication_link_stct, array) - 16usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_client_stct_counter_link_stct {
     pub length: usize,
     pub capacity: usize,
@@ -13269,7 +13619,7 @@ const _: () = {
 };
 pub type aeron_client_t = aeron_client_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_subscribable_list_entry_stct {
     pub counter_id: i32,
     pub subscribable: *mut aeron_subscribable_t,
@@ -13287,7 +13637,7 @@ const _: () = {
 };
 pub type aeron_subscribable_list_entry_t = aeron_subscribable_list_entry_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_subscription_link_stct {
     pub channel: [::std::os::raw::c_char; 384usize],
     pub is_tether: bool,
@@ -13307,7 +13657,7 @@ pub struct aeron_subscription_link_stct {
     pub subscribable_list: aeron_subscription_link_stct_subscribable_list_stct,
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_subscription_link_stct_subscribable_list_stct {
     pub length: usize,
     pub capacity: usize,
@@ -13373,7 +13723,7 @@ const _: () = {
 };
 pub type aeron_subscription_link_t = aeron_subscription_link_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_ipc_publication_entry_stct {
     pub publication: *mut aeron_ipc_publication_t,
 }
@@ -13388,7 +13738,7 @@ const _: () = {
 };
 pub type aeron_ipc_publication_entry_t = aeron_ipc_publication_entry_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_network_publication_entry_stct {
     pub publication: *mut aeron_network_publication_t,
 }
@@ -13403,7 +13753,7 @@ const _: () = {
 };
 pub type aeron_network_publication_entry_t = aeron_network_publication_entry_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_send_channel_endpoint_entry_stct {
     pub endpoint: *mut aeron_send_channel_endpoint_t,
 }
@@ -13418,7 +13768,7 @@ const _: () = {
 };
 pub type aeron_send_channel_endpoint_entry_t = aeron_send_channel_endpoint_entry_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_receive_channel_endpoint_entry_stct {
     pub endpoint: *mut aeron_receive_channel_endpoint_t,
 }
@@ -13433,7 +13783,7 @@ const _: () = {
 };
 pub type aeron_receive_channel_endpoint_entry_t = aeron_receive_channel_endpoint_entry_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_publication_image_entry_stct {
     pub image: *mut aeron_publication_image_t,
 }
@@ -13448,7 +13798,7 @@ const _: () = {
 };
 pub type aeron_publication_image_entry_t = aeron_publication_image_entry_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_linger_resource_entry_stct {
     pub has_reached_end_of_life: bool,
     pub buffer: *mut u8,
@@ -13473,7 +13823,7 @@ pub type aeron_linger_resource_entry_t = aeron_linger_resource_entry_stct;
 pub type aeron_end_of_life_resource_free_t =
     ::std::option::Option<unsafe extern "C" fn(resource: *mut ::std::os::raw::c_void) -> bool>;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_end_of_life_resource_stct {
     pub resource: *mut ::std::os::raw::c_void,
     pub free_func: aeron_end_of_life_resource_free_t,
@@ -13491,7 +13841,7 @@ const _: () = {
 };
 pub type aeron_end_of_life_resource_t = aeron_end_of_life_resource_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_conductor_stct {
     pub context: *mut aeron_driver_context_t,
     pub to_driver_commands: aeron_mpsc_rb_t,
@@ -13531,7 +13881,7 @@ pub struct aeron_driver_conductor_stct {
     pub padding: [u8; 64usize],
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_conductor_stct_client_stct {
     pub length: usize,
     pub capacity: usize,
@@ -13582,7 +13932,7 @@ const _: () = {
         [::std::mem::offset_of!(aeron_driver_conductor_stct_client_stct, free_func) - 48usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_conductor_stct_ipc_subscriptions_stct {
     pub length: usize,
     pub capacity: usize,
@@ -13608,7 +13958,7 @@ const _: () = {
     ) - 16usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_conductor_stct_ipc_publication_stct {
     pub length: usize,
     pub capacity: usize,
@@ -13670,7 +14020,7 @@ const _: () = {
     ) - 48usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_conductor_stct_network_subscriptions_stct {
     pub length: usize,
     pub capacity: usize,
@@ -13697,7 +14047,7 @@ const _: () = {
     ) - 16usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_conductor_stct_spy_subscriptions_stct {
     pub length: usize,
     pub capacity: usize,
@@ -13723,7 +14073,7 @@ const _: () = {
     ) - 16usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_conductor_stct_network_publication_stct {
     pub length: usize,
     pub capacity: usize,
@@ -13791,7 +14141,7 @@ const _: () = {
         - 48usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_conductor_stct_send_channel_endpoint_stct {
     pub array: *mut aeron_send_channel_endpoint_entry_t,
     pub length: usize,
@@ -13860,7 +14210,7 @@ const _: () = {
         - 48usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_conductor_stct_receive_channel_endpoint_stct {
     pub length: usize,
     pub capacity: usize,
@@ -13933,7 +14283,7 @@ const _: () = {
         - 48usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_conductor_stct_publication_image_stct {
     pub length: usize,
     pub capacity: usize,
@@ -14000,7 +14350,7 @@ const _: () = {
     ) - 48usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_conductor_stct_aeron_driver_conductor_lingering_resources_stct {
     pub length: usize,
     pub capacity: usize,
@@ -14591,6 +14941,12 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
+    pub fn aeron_driver_conductor_on_invalidate_image(
+        conductor: *mut aeron_driver_conductor_t,
+        command: *mut aeron_reject_image_command_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
     pub fn aeron_driver_conductor_on_create_publication_image(
         clientd: *mut ::std::os::raw::c_void,
         item: *mut ::std::os::raw::c_void,
@@ -14627,6 +14983,12 @@ extern "C" {
     );
 }
 extern "C" {
+    pub fn aeron_driver_conductor_on_publication_error(
+        clientd: *mut ::std::os::raw::c_void,
+        item: *mut ::std::os::raw::c_void,
+    );
+}
+extern "C" {
     pub fn aeron_driver_conductor_on_release_resource(
         clientd: *mut ::std::os::raw::c_void,
         item: *mut ::std::os::raw::c_void,
@@ -14645,7 +15007,7 @@ extern "C" {
     ) -> *mut aeron_receive_channel_endpoint_t;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_udp_channel_transport_entry_stct {
     pub transport: *mut aeron_udp_channel_transport_t,
 }
@@ -14660,14 +15022,14 @@ const _: () = {
 };
 pub type aeron_udp_channel_transport_entry_t = aeron_udp_channel_transport_entry_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_udp_transport_poller_stct {
     pub transports: aeron_udp_transport_poller_stct_aeron_udp_channel_transports_stct,
     pub fd: ::std::os::raw::c_int,
     pub bindings_clientd: *mut ::std::os::raw::c_void,
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_udp_transport_poller_stct_aeron_udp_channel_transports_stct {
     pub array: *mut aeron_udp_channel_transport_entry_t,
     pub length: usize,
@@ -14752,7 +15114,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_sender_network_publication_entry_stct {
     pub publication: *mut aeron_network_publication_t,
 }
@@ -14771,7 +15133,7 @@ const _: () = {
 pub type aeron_driver_sender_network_publication_entry_t =
     aeron_driver_sender_network_publication_entry_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_sender_stct {
     pub sender_proxy: aeron_driver_sender_proxy_t,
     pub poller: aeron_udp_transport_poller_t,
@@ -14784,6 +15146,7 @@ pub struct aeron_driver_sender_stct {
     pub invalid_frames_counter: *mut i64,
     pub status_messages_received_counter: *mut i64,
     pub nak_messages_received_counter: *mut i64,
+    pub error_messages_received_counter: *mut i64,
     pub resolution_changes_counter: *mut i64,
     pub short_sends_counter: *mut i64,
     pub context: *mut aeron_driver_context_t,
@@ -14799,7 +15162,7 @@ pub struct aeron_driver_sender_stct {
     pub padding: [u8; 64usize],
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_sender_stct_aeron_driver_sender_network_publications_stct {
     pub array: *mut aeron_driver_sender_network_publication_entry_t,
     pub length: usize,
@@ -14820,7 +15183,7 @@ const _: () = {
     ["Offset of field: aeron_driver_sender_stct_aeron_driver_sender_network_publications_stct::capacity"] [:: std :: mem :: offset_of ! (aeron_driver_sender_stct_aeron_driver_sender_network_publications_stct , capacity) - 16usize] ;
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_sender_stct_aeron_driver_sender_buffers_stct {
     pub vector_capacity: usize,
     pub buffers: [*mut u8; 16usize],
@@ -14855,7 +15218,7 @@ const _: () = {
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
     ["Size of aeron_driver_sender_stct"]
-        [::std::mem::size_of::<aeron_driver_sender_stct>() - 2784usize];
+        [::std::mem::size_of::<aeron_driver_sender_stct>() - 2792usize];
     ["Alignment of aeron_driver_sender_stct"]
         [::std::mem::align_of::<aeron_driver_sender_stct>() - 8usize];
     ["Offset of field: aeron_driver_sender_stct::sender_proxy"]
@@ -14882,34 +15245,38 @@ const _: () = {
         aeron_driver_sender_stct,
         nak_messages_received_counter
     ) - 2616usize];
+    ["Offset of field: aeron_driver_sender_stct::error_messages_received_counter"][::std::mem::offset_of!(
+        aeron_driver_sender_stct,
+        error_messages_received_counter
+    ) - 2624usize];
     ["Offset of field: aeron_driver_sender_stct::resolution_changes_counter"]
-        [::std::mem::offset_of!(aeron_driver_sender_stct, resolution_changes_counter) - 2624usize];
+        [::std::mem::offset_of!(aeron_driver_sender_stct, resolution_changes_counter) - 2632usize];
     ["Offset of field: aeron_driver_sender_stct::short_sends_counter"]
-        [::std::mem::offset_of!(aeron_driver_sender_stct, short_sends_counter) - 2632usize];
+        [::std::mem::offset_of!(aeron_driver_sender_stct, short_sends_counter) - 2640usize];
     ["Offset of field: aeron_driver_sender_stct::context"]
-        [::std::mem::offset_of!(aeron_driver_sender_stct, context) - 2640usize];
+        [::std::mem::offset_of!(aeron_driver_sender_stct, context) - 2648usize];
     ["Offset of field: aeron_driver_sender_stct::poller_poll_func"]
-        [::std::mem::offset_of!(aeron_driver_sender_stct, poller_poll_func) - 2648usize];
+        [::std::mem::offset_of!(aeron_driver_sender_stct, poller_poll_func) - 2656usize];
     ["Offset of field: aeron_driver_sender_stct::recvmmsg_func"]
-        [::std::mem::offset_of!(aeron_driver_sender_stct, recvmmsg_func) - 2656usize];
+        [::std::mem::offset_of!(aeron_driver_sender_stct, recvmmsg_func) - 2664usize];
     ["Offset of field: aeron_driver_sender_stct::error_log"]
-        [::std::mem::offset_of!(aeron_driver_sender_stct, error_log) - 2664usize];
+        [::std::mem::offset_of!(aeron_driver_sender_stct, error_log) - 2672usize];
     ["Offset of field: aeron_driver_sender_stct::status_message_read_timeout_ns"][::std::mem::offset_of!(
         aeron_driver_sender_stct,
         status_message_read_timeout_ns
-    ) - 2672usize];
+    ) - 2680usize];
     ["Offset of field: aeron_driver_sender_stct::control_poll_timeout_ns"]
-        [::std::mem::offset_of!(aeron_driver_sender_stct, control_poll_timeout_ns) - 2680usize];
+        [::std::mem::offset_of!(aeron_driver_sender_stct, control_poll_timeout_ns) - 2688usize];
     ["Offset of field: aeron_driver_sender_stct::re_resolution_deadline_ns"]
-        [::std::mem::offset_of!(aeron_driver_sender_stct, re_resolution_deadline_ns) - 2688usize];
+        [::std::mem::offset_of!(aeron_driver_sender_stct, re_resolution_deadline_ns) - 2696usize];
     ["Offset of field: aeron_driver_sender_stct::round_robin_index"]
-        [::std::mem::offset_of!(aeron_driver_sender_stct, round_robin_index) - 2696usize];
+        [::std::mem::offset_of!(aeron_driver_sender_stct, round_robin_index) - 2704usize];
     ["Offset of field: aeron_driver_sender_stct::duty_cycle_counter"]
-        [::std::mem::offset_of!(aeron_driver_sender_stct, duty_cycle_counter) - 2704usize];
+        [::std::mem::offset_of!(aeron_driver_sender_stct, duty_cycle_counter) - 2712usize];
     ["Offset of field: aeron_driver_sender_stct::duty_cycle_ratio"]
-        [::std::mem::offset_of!(aeron_driver_sender_stct, duty_cycle_ratio) - 2712usize];
+        [::std::mem::offset_of!(aeron_driver_sender_stct, duty_cycle_ratio) - 2720usize];
     ["Offset of field: aeron_driver_sender_stct::padding"]
-        [::std::mem::offset_of!(aeron_driver_sender_stct, padding) - 2720usize];
+        [::std::mem::offset_of!(aeron_driver_sender_stct, padding) - 2728usize];
 };
 extern "C" {
     pub fn aeron_driver_sender_init(
@@ -14982,7 +15349,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_receiver_proxy_stct {
     pub receiver: *mut aeron_driver_receiver_t,
     pub threading_mode: aeron_threading_mode_t,
@@ -14991,7 +15358,7 @@ pub struct aeron_driver_receiver_proxy_stct {
     pub fail_counter: *mut i64,
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_receiver_proxy_stct__bindgen_ty_1 {
     pub on_add_endpoint: aeron_on_endpoint_change_func_t,
     pub on_remove_endpoint: aeron_on_endpoint_change_func_t,
@@ -15043,7 +15410,7 @@ extern "C" {
     );
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_command_subscription_stct {
     pub base: aeron_command_base_t,
     pub endpoint: *mut ::std::os::raw::c_void,
@@ -15105,7 +15472,7 @@ extern "C" {
     );
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_command_add_rcv_destination_stct {
     pub base: aeron_command_base_t,
     pub endpoint: *mut ::std::os::raw::c_void,
@@ -15133,7 +15500,7 @@ extern "C" {
     );
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_command_remove_rcv_destination_stct {
     pub base: aeron_command_base_t,
     pub endpoint: *mut ::std::os::raw::c_void,
@@ -15161,7 +15528,7 @@ extern "C" {
     );
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_command_publication_image_stct {
     pub base: aeron_command_base_t,
     pub image: *mut ::std::os::raw::c_void,
@@ -15179,7 +15546,7 @@ const _: () = {
 };
 pub type aeron_command_publication_image_t = aeron_command_publication_image_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_command_on_remove_matching_state_stct {
     pub base: aeron_command_base_t,
     pub endpoint: *mut ::std::os::raw::c_void,
@@ -15205,37 +15572,8 @@ const _: () = {
         [::std::mem::offset_of!(aeron_command_on_remove_matching_state_stct, state) - 32usize];
 };
 pub type aeron_command_on_remove_matching_state_t = aeron_command_on_remove_matching_state_stct;
-extern "C" {
-    pub fn aeron_driver_receiver_proxy_on_add_publication_image(
-        receiver_proxy: *mut aeron_driver_receiver_proxy_t,
-        endpoint: *mut aeron_receive_channel_endpoint_t,
-        image: *mut aeron_publication_image_t,
-    );
-}
-extern "C" {
-    pub fn aeron_driver_receiver_proxy_on_remove_publication_image(
-        receiver_proxy: *mut aeron_driver_receiver_proxy_t,
-        image: *mut aeron_publication_image_t,
-    );
-}
-extern "C" {
-    pub fn aeron_driver_receiver_proxy_on_remove_cool_down(
-        receiver_proxy: *mut aeron_driver_receiver_proxy_t,
-        endpoint: *mut aeron_receive_channel_endpoint_t,
-        session_id: i32,
-        stream_id: i32,
-    );
-}
-extern "C" {
-    pub fn aeron_driver_receiver_proxy_on_remove_init_in_progress(
-        receiver_proxy: *mut aeron_driver_receiver_proxy_t,
-        endpoint: *mut aeron_receive_channel_endpoint_t,
-        session_id: i32,
-        stream_id: i32,
-    );
-}
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_command_receiver_resolution_change_stct {
     pub base: aeron_command_base_t,
     pub endpoint_name: *const ::std::os::raw::c_char,
@@ -15265,6 +15603,78 @@ const _: () = {
         [::std::mem::offset_of!(aeron_command_receiver_resolution_change_stct, new_addr) - 40usize];
 };
 pub type aeron_command_receiver_resolution_change_t = aeron_command_receiver_resolution_change_stct;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct aeron_command_receiver_invalidate_image_stct {
+    pub base: aeron_command_base_t,
+    pub image_correlation_id: i64,
+    pub position: i64,
+    pub reason_length: i32,
+    pub reason_text: [u8; 1usize],
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of aeron_command_receiver_invalidate_image_stct"]
+        [::std::mem::size_of::<aeron_command_receiver_invalidate_image_stct>() - 40usize];
+    ["Alignment of aeron_command_receiver_invalidate_image_stct"]
+        [::std::mem::align_of::<aeron_command_receiver_invalidate_image_stct>() - 8usize];
+    ["Offset of field: aeron_command_receiver_invalidate_image_stct::base"]
+        [::std::mem::offset_of!(aeron_command_receiver_invalidate_image_stct, base) - 0usize];
+    ["Offset of field: aeron_command_receiver_invalidate_image_stct::image_correlation_id"][::std::mem::offset_of!(
+        aeron_command_receiver_invalidate_image_stct,
+        image_correlation_id
+    )
+        - 16usize];
+    ["Offset of field: aeron_command_receiver_invalidate_image_stct::position"]
+        [::std::mem::offset_of!(aeron_command_receiver_invalidate_image_stct, position) - 24usize];
+    ["Offset of field: aeron_command_receiver_invalidate_image_stct::reason_length"][::std::mem::offset_of!(
+        aeron_command_receiver_invalidate_image_stct,
+        reason_length
+    ) - 32usize];
+    ["Offset of field: aeron_command_receiver_invalidate_image_stct::reason_text"][::std::mem::offset_of!(
+        aeron_command_receiver_invalidate_image_stct,
+        reason_text
+    ) - 36usize];
+};
+pub type aeron_command_receiver_invalidate_image_t = aeron_command_receiver_invalidate_image_stct;
+extern "C" {
+    pub fn aeron_driver_receiver_proxy_on_add_publication_image(
+        receiver_proxy: *mut aeron_driver_receiver_proxy_t,
+        endpoint: *mut aeron_receive_channel_endpoint_t,
+        image: *mut aeron_publication_image_t,
+    );
+}
+extern "C" {
+    pub fn aeron_driver_receiver_proxy_on_remove_publication_image(
+        receiver_proxy: *mut aeron_driver_receiver_proxy_t,
+        image: *mut aeron_publication_image_t,
+    );
+}
+extern "C" {
+    pub fn aeron_driver_receiver_proxy_on_remove_cool_down(
+        receiver_proxy: *mut aeron_driver_receiver_proxy_t,
+        endpoint: *mut aeron_receive_channel_endpoint_t,
+        session_id: i32,
+        stream_id: i32,
+    );
+}
+extern "C" {
+    pub fn aeron_driver_receiver_proxy_on_remove_init_in_progress(
+        receiver_proxy: *mut aeron_driver_receiver_proxy_t,
+        endpoint: *mut aeron_receive_channel_endpoint_t,
+        session_id: i32,
+        stream_id: i32,
+    );
+}
+extern "C" {
+    pub fn aeron_driver_receiver_proxy_on_invalidate_image(
+        receiver_proxy: *mut aeron_driver_receiver_proxy_t,
+        image_correlation_id: i64,
+        position: i64,
+        reason_length: i32,
+        reason: *const ::std::os::raw::c_char,
+    );
+}
 extern "C" {
     pub fn aeron_driver_receiver_proxy_on_resolution_change(
         receiver_proxy: *mut aeron_driver_receiver_proxy_t,
@@ -15275,7 +15685,7 @@ extern "C" {
     );
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_receiver_image_entry_stct {
     pub image: *mut aeron_publication_image_t,
 }
@@ -15290,7 +15700,7 @@ const _: () = {
 };
 pub type aeron_driver_receiver_image_entry_t = aeron_driver_receiver_image_entry_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_receiver_pending_setup_entry_stct {
     pub is_periodic: bool,
     pub session_id: i32,
@@ -15335,7 +15745,7 @@ const _: () = {
 pub type aeron_driver_receiver_pending_setup_entry_t =
     aeron_driver_receiver_pending_setup_entry_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_receiver_stct {
     pub receiver_proxy: aeron_driver_receiver_proxy_t,
     pub poller: aeron_udp_transport_poller_t,
@@ -15354,7 +15764,7 @@ pub struct aeron_driver_receiver_stct {
     pub resolution_changes_counter: *mut i64,
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_receiver_stct_aeron_driver_receiver_buffers_stct {
     pub vector_capacity: usize,
     pub buffers: [*mut u8; 16usize],
@@ -15387,7 +15797,7 @@ const _: () = {
         - 392usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_receiver_stct_aeron_driver_receiver_images_stct {
     pub array: *mut aeron_driver_receiver_image_entry_t,
     pub length: usize,
@@ -15418,7 +15828,7 @@ const _: () = {
         - 16usize];
 };
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_receiver_stct_aeron_driver_receiver_pending_setups_stct {
     pub array: *mut aeron_driver_receiver_pending_setup_entry_t,
     pub length: usize,
@@ -15573,6 +15983,12 @@ extern "C" {
     );
 }
 extern "C" {
+    pub fn aeron_driver_receiver_on_invalidate_image(
+        clientd: *mut ::std::os::raw::c_void,
+        item: *mut ::std::os::raw::c_void,
+    );
+}
+extern "C" {
     pub fn aeron_driver_receiver_add_pending_setup(
         receiver: *mut aeron_driver_receiver_t,
         endpoint: *mut aeron_receive_channel_endpoint_t,
@@ -15583,7 +15999,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct aeron_driver_stct {
     pub context: *mut aeron_driver_context_t,
     pub conductor: aeron_driver_conductor_t,
@@ -15593,7 +16009,7 @@ pub struct aeron_driver_stct {
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of aeron_driver_stct"][::std::mem::size_of::<aeron_driver_stct>() - 7120usize];
+    ["Size of aeron_driver_stct"][::std::mem::size_of::<aeron_driver_stct>() - 7128usize];
     ["Alignment of aeron_driver_stct"][::std::mem::align_of::<aeron_driver_stct>() - 8usize];
     ["Offset of field: aeron_driver_stct::context"]
         [::std::mem::offset_of!(aeron_driver_stct, context) - 0usize];
@@ -15602,9 +16018,9 @@ const _: () = {
     ["Offset of field: aeron_driver_stct::sender"]
         [::std::mem::offset_of!(aeron_driver_stct, sender) - 1416usize];
     ["Offset of field: aeron_driver_stct::receiver"]
-        [::std::mem::offset_of!(aeron_driver_stct, receiver) - 4200usize];
+        [::std::mem::offset_of!(aeron_driver_stct, receiver) - 4208usize];
     ["Offset of field: aeron_driver_stct::runners"]
-        [::std::mem::offset_of!(aeron_driver_stct, runners) - 6880usize];
+        [::std::mem::offset_of!(aeron_driver_stct, runners) - 6888usize];
 };
 extern "C" {
     pub fn aeron_is_driver_active_with_cnc(

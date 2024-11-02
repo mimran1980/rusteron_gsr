@@ -168,7 +168,7 @@ mod tests {
         let recording_id = archive.start_recording(
             channel,
             stream_id,
-            aeron_archive_source_location_en_AERON_ARCHIVE_SOURCE_LOCATION_LOCAL,
+            aeron_archive_source_location_t::AERON_ARCHIVE_SOURCE_LOCATION_LOCAL,
             true,
         )?;
         println!("recording id {}", recording_id);

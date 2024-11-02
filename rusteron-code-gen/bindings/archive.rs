@@ -33,6 +33,13 @@ pub const AERON_PUBLICATION_MAX_POSITION_EXCEEDED: i32 = -5;
 pub const AERON_PUBLICATION_ERROR: i32 = -6;
 pub const AERON_MAX_PATH: u32 = 384;
 pub const AERON_NULL_POSITION: i32 = -1;
+pub const AERON_COMPILER_GCC: u32 = 1;
+pub const AERON_COMPILER_LLVM: u32 = 1;
+pub const AERON_CPU_ARM: u32 = 1;
+pub const AERON_CACHE_LINE_LENGTH: u32 = 64;
+pub const AERON_BROADCAST_PADDING_MSG_TYPE_ID: i32 = -1;
+pub const AERON_BROADCAST_SCRATCH_BUFFER_LENGTH: u32 = 4096;
+pub const AERON_RB_PADDING_MSG_TYPE_ID: i32 = -1;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct aeron_context_stct {
@@ -1386,19 +1393,18 @@ pub type aeron_fragment_handler_t = ::std::option::Option<
         header: *mut aeron_header_t,
     ),
 >;
-#[doc = " Abort the current polling operation and do not advance the position for this fragment."]
-pub const aeron_controlled_fragment_handler_action_en_AERON_ACTION_ABORT:
-    aeron_controlled_fragment_handler_action_en = 1;
-#[doc = " Break from the current polling operation and commit the position as of the end of the current fragment\n being handled."]
-pub const aeron_controlled_fragment_handler_action_en_AERON_ACTION_BREAK:
-    aeron_controlled_fragment_handler_action_en = 2;
-#[doc = " Continue processing but commit the position as of the end of the current fragment so that\n flow control is applied to this point."]
-pub const aeron_controlled_fragment_handler_action_en_AERON_ACTION_COMMIT:
-    aeron_controlled_fragment_handler_action_en = 3;
-#[doc = " Continue processing until fragment limit or no fragments with position commit at end of poll as in\n aeron_fragment_handler_t."]
-pub const aeron_controlled_fragment_handler_action_en_AERON_ACTION_CONTINUE:
-    aeron_controlled_fragment_handler_action_en = 4;
-pub type aeron_controlled_fragment_handler_action_en = ::std::os::raw::c_uint;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_controlled_fragment_handler_action_en {
+    #[doc = " Abort the current polling operation and do not advance the position for this fragment."]
+    AERON_ACTION_ABORT = 1,
+    #[doc = " Break from the current polling operation and commit the position as of the end of the current fragment\n being handled."]
+    AERON_ACTION_BREAK = 2,
+    #[doc = " Continue processing but commit the position as of the end of the current fragment so that\n flow control is applied to this point."]
+    AERON_ACTION_COMMIT = 3,
+    #[doc = " Continue processing until fragment limit or no fragments with position commit at end of poll as in\n aeron_fragment_handler_t."]
+    AERON_ACTION_CONTINUE = 4,
+}
 pub use self::aeron_controlled_fragment_handler_action_en as aeron_controlled_fragment_handler_action_t;
 #[doc = " Callback for handling fragments of data being read from a log.\n\n Handler for reading data that is coming from a log buffer. The frame will either contain a whole message\n or a fragment of a message to be reassembled. Messages are fragmented if greater than the frame for MTU in length.\n\n @param clientd passed to the controlled poll function.\n @param buffer containing the data.\n @param length of the data in bytes.\n @param header representing the meta data for the data.\n @return The action to be taken with regard to the stream position after the callback."]
 pub type aeron_controlled_fragment_handler_t = ::std::option::Option<
@@ -2540,22 +2546,19 @@ pub type aeron_archive_recording_subscription_descriptor_consumer_func_t = ::std
         clientd: *mut ::std::os::raw::c_void,
     ),
 >;
-pub const aeron_archive_client_recording_signal_en_AERON_ARCHIVE_CLIENT_RECORDING_SIGNAL_START:
-    aeron_archive_client_recording_signal_en = 0;
-pub const aeron_archive_client_recording_signal_en_AERON_ARCHIVE_CLIENT_RECORDING_SIGNAL_STOP:
-    aeron_archive_client_recording_signal_en = 1;
-pub const aeron_archive_client_recording_signal_en_AERON_ARCHIVE_CLIENT_RECORDING_SIGNAL_EXTEND:
-    aeron_archive_client_recording_signal_en = 2;
-pub const aeron_archive_client_recording_signal_en_AERON_ARCHIVE_CLIENT_RECORDING_SIGNAL_REPLICATE : aeron_archive_client_recording_signal_en = 3 ;
-pub const aeron_archive_client_recording_signal_en_AERON_ARCHIVE_CLIENT_RECORDING_SIGNAL_MERGE:
-    aeron_archive_client_recording_signal_en = 4;
-pub const aeron_archive_client_recording_signal_en_AERON_ARCHIVE_CLIENT_RECORDING_SIGNAL_SYNC:
-    aeron_archive_client_recording_signal_en = 5;
-pub const aeron_archive_client_recording_signal_en_AERON_ARCHIVE_CLIENT_RECORDING_SIGNAL_DELETE:
-    aeron_archive_client_recording_signal_en = 6;
-pub const aeron_archive_client_recording_signal_en_AERON_ARCHIVE_CLIENT_RECORDING_SIGNAL_REPLICATE_END : aeron_archive_client_recording_signal_en = 7 ;
-pub const aeron_archive_client_recording_signal_en_AERON_ARCHIVE_CLIENT_RECORDING_SIGNAL_NULL_VALUE : aeron_archive_client_recording_signal_en = - 2147483648 ;
-pub type aeron_archive_client_recording_signal_en = ::std::os::raw::c_int;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_archive_client_recording_signal_en {
+    AERON_ARCHIVE_CLIENT_RECORDING_SIGNAL_START = 0,
+    AERON_ARCHIVE_CLIENT_RECORDING_SIGNAL_STOP = 1,
+    AERON_ARCHIVE_CLIENT_RECORDING_SIGNAL_EXTEND = 2,
+    AERON_ARCHIVE_CLIENT_RECORDING_SIGNAL_REPLICATE = 3,
+    AERON_ARCHIVE_CLIENT_RECORDING_SIGNAL_MERGE = 4,
+    AERON_ARCHIVE_CLIENT_RECORDING_SIGNAL_SYNC = 5,
+    AERON_ARCHIVE_CLIENT_RECORDING_SIGNAL_DELETE = 6,
+    AERON_ARCHIVE_CLIENT_RECORDING_SIGNAL_REPLICATE_END = 7,
+    AERON_ARCHIVE_CLIENT_RECORDING_SIGNAL_NULL_VALUE = -2147483648,
+}
 pub use self::aeron_archive_client_recording_signal_en as aeron_archive_client_recording_signal_t;
 #[doc = " Struct containing the details of a recording signal."]
 #[repr(C)]
@@ -2600,11 +2603,12 @@ pub type aeron_archive_recording_signal_consumer_func_t = ::std::option::Option<
         clientd: *mut ::std::os::raw::c_void,
     ),
 >;
-pub const aeron_archive_source_location_en_AERON_ARCHIVE_SOURCE_LOCATION_LOCAL:
-    aeron_archive_source_location_en = 0;
-pub const aeron_archive_source_location_en_AERON_ARCHIVE_SOURCE_LOCATION_REMOTE:
-    aeron_archive_source_location_en = 1;
-pub type aeron_archive_source_location_en = ::std::os::raw::c_uint;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_archive_source_location_en {
+    AERON_ARCHIVE_SOURCE_LOCATION_LOCAL = 0,
+    AERON_ARCHIVE_SOURCE_LOCATION_REMOTE = 1,
+}
 pub use self::aeron_archive_source_location_en as aeron_archive_source_location_t;
 extern "C" {
     #[doc = " Create an aeron_archive_context_t struct.\n\n @param ctx context to create and initialize"]
@@ -3065,7 +3069,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
-    #[doc = " Replicate a recording from a source Archive to a destination.\n This can be considered a backup for a primary Archive.\n The source recording will be replayed via the provided replay channel and use the original stream id.\n The behaviour of the replication will be governed by the values specified in the aeron_archive_replication_params_t.\n <p>\n For a source recording that is still active, the replay can merge with the live stream and then follow it directly and no longer require the replay from the source.\n This would require a multicast live destination.\n <p>\n Errors will be reported asynchronously and can be checked for with aeron_archive_check_for_error_response and aeron_archive_poll_for_error_response.\n\n @param replication_id_p out param set to the replication id that can be used to stop the replication\n @param aeron_archive the archive client\n @param src_recording_id the recording id that must exist at the source Archive\n @param src_control_channel remote control channel for the source archive on which to instruct the replay\n @param src_control_stream_id remote control stream id for the source archive on which to instruct the replay\n @param params optional parameters to configure the behaviour of the replication\n @return 0 for success, -1 for failure"]
+    #[doc = " Replicate a recording from a source Archive to a destination.\n This can be considered a backup for a primary Archive.\n The source recording will be replayed via the provided replay channel and use the original stream id.\n The behavior of the replication will be governed by the values specified in the aeron_archive_replication_params_t.\n <p>\n For a source recording that is still active, the replay can merge with the live stream and then follow it directly and no longer require the replay from the source.\n This would require a multicast live destination.\n <p>\n Errors will be reported asynchronously and can be checked for with aeron_archive_check_for_error_response and aeron_archive_poll_for_error_response.\n\n @param replication_id_p out param set to the replication id that can be used to stop the replication\n @param aeron_archive the archive client\n @param src_recording_id the recording id that must exist at the source Archive\n @param src_control_channel remote control channel for the source archive on which to instruct the replay\n @param src_control_stream_id remote control stream id for the source archive on which to instruct the replay\n @param params optional parameters to configure the behavior of the replication\n @return 0 for success, -1 for failure"]
     pub fn aeron_archive_replicate(
         replication_id_p: *mut i64,
         aeron_archive: *mut aeron_archive_t,
@@ -3246,4 +3250,428 @@ extern "C" {
     pub fn aeron_archive_replay_merge_is_live_added(
         replay_merge: *mut aeron_archive_replay_merge_t,
     ) -> bool;
+}
+extern "C" {
+    pub fn aeron_randomised_int32() -> i32;
+}
+#[repr(C, packed(4))]
+#[derive(Debug, Copy, Clone)]
+pub struct aeron_broadcast_descriptor_stct {
+    pub tail_intent_counter: i64,
+    pub tail_counter: i64,
+    pub latest_counter: i64,
+    pub pad: [u8; 104usize],
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of aeron_broadcast_descriptor_stct"]
+        [::std::mem::size_of::<aeron_broadcast_descriptor_stct>() - 128usize];
+    ["Alignment of aeron_broadcast_descriptor_stct"]
+        [::std::mem::align_of::<aeron_broadcast_descriptor_stct>() - 4usize];
+    ["Offset of field: aeron_broadcast_descriptor_stct::tail_intent_counter"]
+        [::std::mem::offset_of!(aeron_broadcast_descriptor_stct, tail_intent_counter) - 0usize];
+    ["Offset of field: aeron_broadcast_descriptor_stct::tail_counter"]
+        [::std::mem::offset_of!(aeron_broadcast_descriptor_stct, tail_counter) - 8usize];
+    ["Offset of field: aeron_broadcast_descriptor_stct::latest_counter"]
+        [::std::mem::offset_of!(aeron_broadcast_descriptor_stct, latest_counter) - 16usize];
+    ["Offset of field: aeron_broadcast_descriptor_stct::pad"]
+        [::std::mem::offset_of!(aeron_broadcast_descriptor_stct, pad) - 24usize];
+};
+pub type aeron_broadcast_descriptor_t = aeron_broadcast_descriptor_stct;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct aeron_broadcast_record_descriptor_stct {
+    pub length: i32,
+    pub msg_type_id: i32,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of aeron_broadcast_record_descriptor_stct"]
+        [::std::mem::size_of::<aeron_broadcast_record_descriptor_stct>() - 8usize];
+    ["Alignment of aeron_broadcast_record_descriptor_stct"]
+        [::std::mem::align_of::<aeron_broadcast_record_descriptor_stct>() - 4usize];
+    ["Offset of field: aeron_broadcast_record_descriptor_stct::length"]
+        [::std::mem::offset_of!(aeron_broadcast_record_descriptor_stct, length) - 0usize];
+    ["Offset of field: aeron_broadcast_record_descriptor_stct::msg_type_id"]
+        [::std::mem::offset_of!(aeron_broadcast_record_descriptor_stct, msg_type_id) - 4usize];
+};
+pub type aeron_broadcast_record_descriptor_t = aeron_broadcast_record_descriptor_stct;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct aeron_broadcast_receiver_stct {
+    pub scratch_buffer: [u8; 4096usize],
+    pub buffer: *mut u8,
+    pub descriptor: *mut aeron_broadcast_descriptor_t,
+    pub capacity: usize,
+    pub mask: usize,
+    pub record_offset: usize,
+    pub cursor: i64,
+    pub next_record: i64,
+    pub lapped_count: ::std::os::raw::c_long,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of aeron_broadcast_receiver_stct"]
+        [::std::mem::size_of::<aeron_broadcast_receiver_stct>() - 4160usize];
+    ["Alignment of aeron_broadcast_receiver_stct"]
+        [::std::mem::align_of::<aeron_broadcast_receiver_stct>() - 8usize];
+    ["Offset of field: aeron_broadcast_receiver_stct::scratch_buffer"]
+        [::std::mem::offset_of!(aeron_broadcast_receiver_stct, scratch_buffer) - 0usize];
+    ["Offset of field: aeron_broadcast_receiver_stct::buffer"]
+        [::std::mem::offset_of!(aeron_broadcast_receiver_stct, buffer) - 4096usize];
+    ["Offset of field: aeron_broadcast_receiver_stct::descriptor"]
+        [::std::mem::offset_of!(aeron_broadcast_receiver_stct, descriptor) - 4104usize];
+    ["Offset of field: aeron_broadcast_receiver_stct::capacity"]
+        [::std::mem::offset_of!(aeron_broadcast_receiver_stct, capacity) - 4112usize];
+    ["Offset of field: aeron_broadcast_receiver_stct::mask"]
+        [::std::mem::offset_of!(aeron_broadcast_receiver_stct, mask) - 4120usize];
+    ["Offset of field: aeron_broadcast_receiver_stct::record_offset"]
+        [::std::mem::offset_of!(aeron_broadcast_receiver_stct, record_offset) - 4128usize];
+    ["Offset of field: aeron_broadcast_receiver_stct::cursor"]
+        [::std::mem::offset_of!(aeron_broadcast_receiver_stct, cursor) - 4136usize];
+    ["Offset of field: aeron_broadcast_receiver_stct::next_record"]
+        [::std::mem::offset_of!(aeron_broadcast_receiver_stct, next_record) - 4144usize];
+    ["Offset of field: aeron_broadcast_receiver_stct::lapped_count"]
+        [::std::mem::offset_of!(aeron_broadcast_receiver_stct, lapped_count) - 4152usize];
+};
+pub type aeron_broadcast_receiver_t = aeron_broadcast_receiver_stct;
+pub type aeron_broadcast_receiver_handler_t = ::std::option::Option<
+    unsafe extern "C" fn(
+        type_id: i32,
+        buffer: *mut u8,
+        length: usize,
+        clientd: *mut ::std::os::raw::c_void,
+    ),
+>;
+extern "C" {
+    pub fn aeron_broadcast_receiver_init(
+        receiver: *mut aeron_broadcast_receiver_t,
+        buffer: *mut ::std::os::raw::c_void,
+        length: usize,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn aeron_broadcast_receiver_receive(
+        receiver: *mut aeron_broadcast_receiver_t,
+        handler: aeron_broadcast_receiver_handler_t,
+        clientd: *mut ::std::os::raw::c_void,
+    ) -> ::std::os::raw::c_int;
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct aeron_broadcast_transmitter_stct {
+    pub buffer: *mut u8,
+    pub descriptor: *mut aeron_broadcast_descriptor_t,
+    pub capacity: usize,
+    pub max_message_length: usize,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of aeron_broadcast_transmitter_stct"]
+        [::std::mem::size_of::<aeron_broadcast_transmitter_stct>() - 32usize];
+    ["Alignment of aeron_broadcast_transmitter_stct"]
+        [::std::mem::align_of::<aeron_broadcast_transmitter_stct>() - 8usize];
+    ["Offset of field: aeron_broadcast_transmitter_stct::buffer"]
+        [::std::mem::offset_of!(aeron_broadcast_transmitter_stct, buffer) - 0usize];
+    ["Offset of field: aeron_broadcast_transmitter_stct::descriptor"]
+        [::std::mem::offset_of!(aeron_broadcast_transmitter_stct, descriptor) - 8usize];
+    ["Offset of field: aeron_broadcast_transmitter_stct::capacity"]
+        [::std::mem::offset_of!(aeron_broadcast_transmitter_stct, capacity) - 16usize];
+    ["Offset of field: aeron_broadcast_transmitter_stct::max_message_length"]
+        [::std::mem::offset_of!(aeron_broadcast_transmitter_stct, max_message_length) - 24usize];
+};
+pub type aeron_broadcast_transmitter_t = aeron_broadcast_transmitter_stct;
+extern "C" {
+    pub fn aeron_broadcast_transmitter_init(
+        transmitter: *mut aeron_broadcast_transmitter_t,
+        buffer: *mut ::std::os::raw::c_void,
+        length: usize,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn aeron_broadcast_transmitter_transmit(
+        transmitter: *mut aeron_broadcast_transmitter_t,
+        msg_type_id: i32,
+        msg: *const ::std::os::raw::c_void,
+        length: usize,
+    ) -> ::std::os::raw::c_int;
+}
+#[repr(C, packed(4))]
+#[derive(Debug, Copy, Clone)]
+pub struct aeron_rb_descriptor_stct {
+    pub begin_pad: [u8; 128usize],
+    pub tail_position: i64,
+    pub tail_pad: [u8; 120usize],
+    pub head_cache_position: i64,
+    pub head_cache_pad: [u8; 120usize],
+    pub head_position: i64,
+    pub head_pad: [u8; 120usize],
+    pub correlation_counter: i64,
+    pub correlation_counter_pad: [u8; 120usize],
+    pub consumer_heartbeat: i64,
+    pub consumer_heartbeat_pad: [u8; 120usize],
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of aeron_rb_descriptor_stct"]
+        [::std::mem::size_of::<aeron_rb_descriptor_stct>() - 768usize];
+    ["Alignment of aeron_rb_descriptor_stct"]
+        [::std::mem::align_of::<aeron_rb_descriptor_stct>() - 4usize];
+    ["Offset of field: aeron_rb_descriptor_stct::begin_pad"]
+        [::std::mem::offset_of!(aeron_rb_descriptor_stct, begin_pad) - 0usize];
+    ["Offset of field: aeron_rb_descriptor_stct::tail_position"]
+        [::std::mem::offset_of!(aeron_rb_descriptor_stct, tail_position) - 128usize];
+    ["Offset of field: aeron_rb_descriptor_stct::tail_pad"]
+        [::std::mem::offset_of!(aeron_rb_descriptor_stct, tail_pad) - 136usize];
+    ["Offset of field: aeron_rb_descriptor_stct::head_cache_position"]
+        [::std::mem::offset_of!(aeron_rb_descriptor_stct, head_cache_position) - 256usize];
+    ["Offset of field: aeron_rb_descriptor_stct::head_cache_pad"]
+        [::std::mem::offset_of!(aeron_rb_descriptor_stct, head_cache_pad) - 264usize];
+    ["Offset of field: aeron_rb_descriptor_stct::head_position"]
+        [::std::mem::offset_of!(aeron_rb_descriptor_stct, head_position) - 384usize];
+    ["Offset of field: aeron_rb_descriptor_stct::head_pad"]
+        [::std::mem::offset_of!(aeron_rb_descriptor_stct, head_pad) - 392usize];
+    ["Offset of field: aeron_rb_descriptor_stct::correlation_counter"]
+        [::std::mem::offset_of!(aeron_rb_descriptor_stct, correlation_counter) - 512usize];
+    ["Offset of field: aeron_rb_descriptor_stct::correlation_counter_pad"]
+        [::std::mem::offset_of!(aeron_rb_descriptor_stct, correlation_counter_pad) - 520usize];
+    ["Offset of field: aeron_rb_descriptor_stct::consumer_heartbeat"]
+        [::std::mem::offset_of!(aeron_rb_descriptor_stct, consumer_heartbeat) - 640usize];
+    ["Offset of field: aeron_rb_descriptor_stct::consumer_heartbeat_pad"]
+        [::std::mem::offset_of!(aeron_rb_descriptor_stct, consumer_heartbeat_pad) - 648usize];
+};
+pub type aeron_rb_descriptor_t = aeron_rb_descriptor_stct;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct aeron_rb_record_descriptor_stct {
+    pub length: i32,
+    pub msg_type_id: i32,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of aeron_rb_record_descriptor_stct"]
+        [::std::mem::size_of::<aeron_rb_record_descriptor_stct>() - 8usize];
+    ["Alignment of aeron_rb_record_descriptor_stct"]
+        [::std::mem::align_of::<aeron_rb_record_descriptor_stct>() - 4usize];
+    ["Offset of field: aeron_rb_record_descriptor_stct::length"]
+        [::std::mem::offset_of!(aeron_rb_record_descriptor_stct, length) - 0usize];
+    ["Offset of field: aeron_rb_record_descriptor_stct::msg_type_id"]
+        [::std::mem::offset_of!(aeron_rb_record_descriptor_stct, msg_type_id) - 4usize];
+};
+pub type aeron_rb_record_descriptor_t = aeron_rb_record_descriptor_stct;
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_rb_write_result_stct {
+    AERON_RB_SUCCESS = 0,
+    AERON_RB_ERROR = -2,
+    AERON_RB_FULL = -1,
+}
+pub use self::aeron_rb_write_result_stct as aeron_rb_write_result_t;
+pub type aeron_rb_handler_t = ::std::option::Option<
+    unsafe extern "C" fn(
+        arg1: i32,
+        arg2: *const ::std::os::raw::c_void,
+        arg3: usize,
+        arg4: *mut ::std::os::raw::c_void,
+    ),
+>;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_rb_read_action_stct {
+    AERON_RB_ABORT = 0,
+    AERON_RB_BREAK = 1,
+    AERON_RB_COMMIT = 2,
+    AERON_RB_CONTINUE = 3,
+}
+pub use self::aeron_rb_read_action_stct as aeron_rb_read_action_t;
+pub type aeron_rb_controlled_handler_t = ::std::option::Option<
+    unsafe extern "C" fn(
+        arg1: i32,
+        arg2: *const ::std::os::raw::c_void,
+        arg3: usize,
+        arg4: *mut ::std::os::raw::c_void,
+    ) -> aeron_rb_read_action_t,
+>;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct aeron_mpsc_rb_stct {
+    pub buffer: *mut u8,
+    pub descriptor: *mut aeron_rb_descriptor_t,
+    pub capacity: usize,
+    pub max_message_length: usize,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of aeron_mpsc_rb_stct"][::std::mem::size_of::<aeron_mpsc_rb_stct>() - 32usize];
+    ["Alignment of aeron_mpsc_rb_stct"][::std::mem::align_of::<aeron_mpsc_rb_stct>() - 8usize];
+    ["Offset of field: aeron_mpsc_rb_stct::buffer"]
+        [::std::mem::offset_of!(aeron_mpsc_rb_stct, buffer) - 0usize];
+    ["Offset of field: aeron_mpsc_rb_stct::descriptor"]
+        [::std::mem::offset_of!(aeron_mpsc_rb_stct, descriptor) - 8usize];
+    ["Offset of field: aeron_mpsc_rb_stct::capacity"]
+        [::std::mem::offset_of!(aeron_mpsc_rb_stct, capacity) - 16usize];
+    ["Offset of field: aeron_mpsc_rb_stct::max_message_length"]
+        [::std::mem::offset_of!(aeron_mpsc_rb_stct, max_message_length) - 24usize];
+};
+pub type aeron_mpsc_rb_t = aeron_mpsc_rb_stct;
+extern "C" {
+    pub fn aeron_mpsc_rb_init(
+        ring_buffer: *mut aeron_mpsc_rb_t,
+        buffer: *mut ::std::os::raw::c_void,
+        length: usize,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn aeron_mpsc_rb_write(
+        ring_buffer: *mut aeron_mpsc_rb_t,
+        msg_type_id: i32,
+        msg: *const ::std::os::raw::c_void,
+        length: usize,
+    ) -> aeron_rb_write_result_t;
+}
+extern "C" {
+    pub fn aeron_mpsc_rb_try_claim(
+        ring_buffer: *mut aeron_mpsc_rb_t,
+        msg_type_id: i32,
+        length: usize,
+    ) -> i32;
+}
+extern "C" {
+    pub fn aeron_mpsc_rb_commit(
+        ring_buffer: *mut aeron_mpsc_rb_t,
+        offset: i32,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn aeron_mpsc_rb_abort(
+        ring_buffer: *mut aeron_mpsc_rb_t,
+        offset: i32,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn aeron_mpsc_rb_read(
+        ring_buffer: *mut aeron_mpsc_rb_t,
+        handler: aeron_rb_handler_t,
+        clientd: *mut ::std::os::raw::c_void,
+        message_count_limit: usize,
+    ) -> usize;
+}
+extern "C" {
+    pub fn aeron_mpsc_rb_controlled_read(
+        ring_buffer: *mut aeron_mpsc_rb_t,
+        handler: aeron_rb_controlled_handler_t,
+        clientd: *mut ::std::os::raw::c_void,
+        message_count_limit: usize,
+    ) -> usize;
+}
+extern "C" {
+    pub fn aeron_mpsc_rb_next_correlation_id(ring_buffer: *mut aeron_mpsc_rb_t) -> i64;
+}
+extern "C" {
+    pub fn aeron_mpsc_rb_consumer_heartbeat_time(ring_buffer: *mut aeron_mpsc_rb_t, now_ms: i64);
+}
+extern "C" {
+    pub fn aeron_mpsc_rb_consumer_heartbeat_time_value(ring_buffer: *mut aeron_mpsc_rb_t) -> i64;
+}
+extern "C" {
+    pub fn aeron_mpsc_rb_unblock(ring_buffer: *mut aeron_mpsc_rb_t) -> bool;
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct iovec {
+    pub iov_base: *mut ::std::os::raw::c_void,
+    pub iov_len: usize,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of iovec"][::std::mem::size_of::<iovec>() - 16usize];
+    ["Alignment of iovec"][::std::mem::align_of::<iovec>() - 8usize];
+    ["Offset of field: iovec::iov_base"][::std::mem::offset_of!(iovec, iov_base) - 0usize];
+    ["Offset of field: iovec::iov_len"][::std::mem::offset_of!(iovec, iov_len) - 8usize];
+};
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct aeron_spsc_rb_stct {
+    pub buffer: *mut u8,
+    pub descriptor: *mut aeron_rb_descriptor_t,
+    pub capacity: usize,
+    pub max_message_length: usize,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of aeron_spsc_rb_stct"][::std::mem::size_of::<aeron_spsc_rb_stct>() - 32usize];
+    ["Alignment of aeron_spsc_rb_stct"][::std::mem::align_of::<aeron_spsc_rb_stct>() - 8usize];
+    ["Offset of field: aeron_spsc_rb_stct::buffer"]
+        [::std::mem::offset_of!(aeron_spsc_rb_stct, buffer) - 0usize];
+    ["Offset of field: aeron_spsc_rb_stct::descriptor"]
+        [::std::mem::offset_of!(aeron_spsc_rb_stct, descriptor) - 8usize];
+    ["Offset of field: aeron_spsc_rb_stct::capacity"]
+        [::std::mem::offset_of!(aeron_spsc_rb_stct, capacity) - 16usize];
+    ["Offset of field: aeron_spsc_rb_stct::max_message_length"]
+        [::std::mem::offset_of!(aeron_spsc_rb_stct, max_message_length) - 24usize];
+};
+pub type aeron_spsc_rb_t = aeron_spsc_rb_stct;
+extern "C" {
+    pub fn aeron_spsc_rb_init(
+        ring_buffer: *mut aeron_spsc_rb_t,
+        buffer: *mut ::std::os::raw::c_void,
+        length: usize,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn aeron_spsc_rb_write(
+        ring_buffer: *mut aeron_spsc_rb_t,
+        msg_type_id: i32,
+        msg: *const ::std::os::raw::c_void,
+        length: usize,
+    ) -> aeron_rb_write_result_t;
+}
+extern "C" {
+    pub fn aeron_spsc_rb_writev(
+        ring_buffer: *mut aeron_spsc_rb_t,
+        msg_type_id: i32,
+        iov: *const iovec,
+        iovcnt: ::std::os::raw::c_int,
+    ) -> aeron_rb_write_result_t;
+}
+extern "C" {
+    pub fn aeron_spsc_rb_try_claim(
+        ring_buffer: *mut aeron_spsc_rb_t,
+        msg_type_id: i32,
+        length: usize,
+    ) -> i32;
+}
+extern "C" {
+    pub fn aeron_spsc_rb_commit(
+        ring_buffer: *mut aeron_spsc_rb_t,
+        offset: i32,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn aeron_spsc_rb_abort(
+        ring_buffer: *mut aeron_spsc_rb_t,
+        offset: i32,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn aeron_spsc_rb_read(
+        ring_buffer: *mut aeron_spsc_rb_t,
+        handler: aeron_rb_handler_t,
+        clientd: *mut ::std::os::raw::c_void,
+        message_count_limit: usize,
+    ) -> usize;
+}
+extern "C" {
+    pub fn aeron_spsc_rb_controlled_read(
+        ring_buffer: *mut aeron_spsc_rb_t,
+        handler: aeron_rb_controlled_handler_t,
+        clientd: *mut ::std::os::raw::c_void,
+        message_count_limit: usize,
+    ) -> usize;
+}
+extern "C" {
+    pub fn aeron_spsc_rb_next_correlation_id(ring_buffer: *mut aeron_spsc_rb_t) -> i64;
+}
+extern "C" {
+    pub fn aeron_spsc_rb_consumer_heartbeat_time(ring_buffer: *mut aeron_spsc_rb_t, time_ms: i64);
 }
