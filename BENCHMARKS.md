@@ -1,14 +1,12 @@
 # Benchmarks: Aeron Java vs. Rusteron Rust IPC Throughput
 
-This benchmark document compares the throughput performance of the existing Aeron `EmbeddedExclusiveIpcThroughput` benchmark in Java with the equivalent implementation in Rust using `rusteron_client`. The benchmark used for Java is `EmbeddedExclusiveIpcThroughput`, while the Rust implementation is ported to `rusteron-client/examples/embedded_exclusive_ipc_throughput.rs`.
-
 **Warning**: Writing good benchmarks is always challenging, and many factors can influence the results. Until these benchmarks are verified by multiple people and in different environments, take these results with a pinch of salt.
 
 ## Benchmarks
 
 ### Exclusive IPC Throughput
 
-This section details the exclusive IPC throughput benchmark, comparing Java and Rust implementations.
+This benchmark document compares the throughput performance of the existing Aeron `EmbeddedExclusiveIpcThroughput` benchmark in Java with the equivalent implementation in Rust using `rusteron_client`. The benchmark used for Java is `EmbeddedExclusiveIpcThroughput`, while the Rust implementation is ported to `rusteron-client/examples/embedded_exclusive_ipc_throughput.rs`.
 
 ## Running the Benchmarks
 
