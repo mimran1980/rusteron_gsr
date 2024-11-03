@@ -162,7 +162,7 @@ mod tests {
                 assert_eq!(msg.len(), string_len);
                 assert_eq!(msg.as_slice(), "1".repeat(string_len).as_bytes())
             });
-        let closure = Handler::leak_with_fragment_assembler(closure)?;
+        let (closure, _inner) = Handler::leak_with_fragment_assembler(closure)?;
 
         // Start the timer
         let start_time = Instant::now();
@@ -289,9 +289,8 @@ mod tests {
                 assert_eq!(msg.len(), string_len);
                 assert_eq!(msg.as_slice(), "1".repeat(string_len).as_bytes())
             });
-        let closure = Handler::leak_with_fragment_assembler(closure)?;
+        let (closure, _inner) = Handler::leak_with_fragment_assembler(closure)?;
 
-        // Start the timer
         let start_time = Instant::now();
 
         loop {

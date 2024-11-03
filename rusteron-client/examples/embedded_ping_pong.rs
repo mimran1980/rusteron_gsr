@@ -138,9 +138,11 @@ fn run_ping(
     // Set up the ping thread
     let mut buffer = vec![0u8; MESSAGE_LENGTH];
 
-    let mut handler = Handler::leak(PingRoundTripHandler {
-        histogram: Histogram::new(3)?,
-    });
+    let (mut handler, mut inner_handler) =
+        Handler::leak_with_fragment_assembler(PingRoundTripHandler {
+            histogram: Histogram::new(3)?,
+        })
+        .unwrap();
     sleep(Duration::from_secs(1));
     for _ in 0..WARMUP_NUMBER_OF_MESSAGES {
         record_rtt(
@@ -151,7 +153,7 @@ fn run_ping(
         );
     }
     println!("warmed up");
-    handler.histogram.reset();
+    inner_handler.histogram.reset();
     for _ in 0..NUMBER_OF_MESSAGES {
         record_rtt(
             &pong_publication,
@@ -162,13 +164,10 @@ fn run_ping(
     }
 
     println!("finished sending all pings");
-    // Wait for thread to finish
     running.store(false, Ordering::SeqCst);
     pong_thread.join().expect("Failed to join pong thread");
 
-    // Report histogram results
-
-    let hist = &handler.histogram;
+    let hist = &inner_handler.histogram;
     Ok(hist.clone())
 }
 
@@ -200,7 +199,7 @@ fn record_rtt(
     pong_publication: &AeronPublication,
     ping_subscription: &AeronSubscription,
     buffer: &mut [u8],
-    handler: &mut Handler<PingRoundTripHandler>,
+    handler: &mut Handler<AeronFragmentAssembler>,
 ) {
     let now = Aeron::nano_clock();
     write_i64(buffer, &now);

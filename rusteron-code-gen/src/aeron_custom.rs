@@ -97,19 +97,23 @@ impl AeronControlledFragmentHandlerCallback for AeronControlledFragmentAssembler
 impl<T: AeronFragmentHandlerCallback> Handler<T> {
     pub fn leak_with_fragment_assembler(
         handler: T,
-    ) -> Result<Handler<AeronFragmentAssembler>, AeronCError> {
+    ) -> Result<(Handler<AeronFragmentAssembler>, Handler<T>), AeronCError> {
         let handler = Handler::leak(handler);
-        Ok(Handler::leak(AeronFragmentAssembler::new(Some(&handler))?))
+        Ok((
+            Handler::leak(AeronFragmentAssembler::new(Some(&handler))?),
+            handler,
+        ))
     }
 }
 impl<T: AeronControlledFragmentHandlerCallback> Handler<T> {
     pub fn leak_with_controlled_fragment_assembler(
         handler: T,
-    ) -> Result<Handler<AeronControlledFragmentAssembler>, AeronCError> {
+    ) -> Result<(Handler<AeronControlledFragmentAssembler>, Handler<T>), AeronCError> {
         let handler = Handler::leak(handler);
-        Ok(Handler::leak(AeronControlledFragmentAssembler::new(Some(
-            &handler,
-        ))?))
+        Ok((
+            Handler::leak(AeronControlledFragmentAssembler::new(Some(&handler))?),
+            handler,
+        ))
     }
 }
 

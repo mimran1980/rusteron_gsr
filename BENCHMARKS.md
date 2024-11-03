@@ -187,15 +187,166 @@ Throughput: 13,357,158 msgs/sec, 427,429,064 bytes/sec
 Throughput: 13,535,131 msgs/sec, 433,124,184 bytes/sec
 ```
 
+### Ping Pong Benchmark (ran on m1 UDP)
+
+This section details the Ping Pong benchmark, which is based on the Aeron `EmbeddedPingPong` sample. The benchmark involves a warm-up phase of 100,000 messages followed by the actual benchmark of 10,000,000 messages, with a message size length of 32 bytes. Regular publishers were used, not exclusive publishers. The channels were `aeron:udp?endpoint=localhost:40123` and `aeron:udp?endpoint=localhost:40124`.
+
+#### Rust Ping Pong Results with Rust Media Driver
+The results of the Rust benchmark using the Rust media driver (implemented using C bindings in Rust) are as follows:
+
+```
+PING: pong publisher aeron:udp?endpoint=localhost:20124 1003
+PING: ping subscriber aeron:udp?endpoint=localhost:20123 1002
+PONG: ping publisher aeron:udp?endpoint=localhost:20123 1002
+PONG: pong subscriber aeron:udp?endpoint=localhost:20124 1003
+
+message length 32 bytes
+
+Histogram of RTT latencies in micros:
+# of samples: 10000000
+min: 14.176
+50th percentile: 21.375
+99th percentile: 37.311
+99.9th percentile: 67.263
+max: 409206.783
+avg: 22.447467757600023
+```
+
+#### Rust Ping Pong Results with Java Media Driver
+The results of the Rust benchmark with the Java media driver are as follows:
+
+```
+PING: pong publisher aeron:udp?endpoint=localhost:20124 1003
+PING: ping subscriber aeron:udp?endpoint=localhost:20123 1002
+PONG: ping publisher aeron:udp?endpoint=localhost:20123 1002
+PONG: pong subscriber aeron:udp?endpoint=localhost:20124 1003
+message length 32 bytes
+
+Histogram of RTT latencies in micros:
+# of samples: 10000000
+min: 11.312
+50th percentile: 17.183
+99th percentile: 33.887
+99.9th percentile: 56.511
+max: 13033.471
+avg: 18.700070258000007
+```
+
+Note the defaults for c/rust media driver vs java is different. C media driver defaults with low latency settings which has a negative impact on my mac for ping pong test.
+
+#### Java Ping Pong Results
+The results of the Java Ping Pong benchmark are as follows:
+
+```
+Subscribing Ping at aeron:udp?endpoint=localhost:20123 on stream id 1002
+Publishing Ping at aeron:udp?endpoint=localhost:20123 on stream id 1002
+Publishing Pong at aeron:udp?endpoint=localhost:20124 on stream id 1003
+Subscribing Pong at aeron:udp?endpoint=localhost:20124 on stream id 1003
+Message payload length of 32 bytes
+Using exclusive publications: false
+Waiting for new image from Pong...
+Warming up... 10 iterations of 10,000 messages
+Pinging 10,000,000 messages
+Histogram of RTT latencies in microseconds.
+       Value     Percentile TotalCount 1/(1-Percentile)
+
+      11.391 0.000000000000          1           1.00
+      23.823 0.500000000000    5102003           2.00
+      53.023 0.990625000000    9906601         106.67
+     124.799 0.999023437500    9990239        1024.00
+#[Mean    =       25.972, StdDeviation   =       78.663]
+#[Max     =    66093.055, Total count    =     10000000]
+#[Buckets =           24, SubBuckets     =         2048]
+```
+
+
+### Ping Pong Benchmark (ran on m1 IPC)
+
+This section details the Ping Pong benchmark, which is based on the Aeron `EmbeddedPingPong` sample. The benchmark involves a warm-up phase of 100,000 messages followed by the actual benchmark of 10,000,000 messages, with a message size length of 32 bytes. Regular publishers were used, not exclusive publishers. The channels were `aeron:udp?endpoint=localhost:40123` and `aeron:udp?endpoint=localhost:40124`.
+```shell
+      -Daeron.sample.ping.channel=aeron:ipc \
+      -Daeron.sample.pong.channel=aeron:ipc \
+```
+
+#### Rust Ping Pong Results with Rust Media Driver
+The results of the Rust benchmark using the Rust media driver (implemented using C bindings in Rust) are as follows:
+
+```
+PONG: ping publisher aeron:ipc 1002
+PONG: pong subscriber aeron:ipc 1003
+PING: pong publisher aeron:ipc 1003
+PING: ping subscriber aeron:ipc 1002
+message length 32 bytes
+
+Histogram of RTT latencies:
+# of samples: 10000000
+min: 167ns
+50th percentile: 417ns
+99th percentile: 959ns
+99.9th percentile: 3.293µs
+99.99th percentile: 13.167µs
+max: 5.296127ms
+avg: 525ns
+```
+
+#### Rust Ping Pong Results with Java Media Driver
+The results of the Rust benchmark with the Java media driver are as follows:
+
+```
+PONG: ping publisher aeron:ipc 1002
+PONG: pong subscriber aeron:ipc 1003
+PING: pong publisher aeron:ipc 1003
+PING: ping subscriber aeron:ipc 1002
+message length 32 bytes
+
+Histogram of RTT latencies:
+# of samples: 10000000
+min: 166ns
+50th percentile: 542ns
+99th percentile: 958ns
+99.9th percentile: 3.333µs
+99.99th percentile: 15.215µs
+max: 167.378943ms
+avg: 550ns
+```
+
+Note the defaults for c/rust media driver vs java is different. C media driver defaults with low latency settings which has a negative impact on my mac for ping pong test.
+
+#### Java Ping Pong Results
+The results of the Java Ping Pong benchmark are as follows:
+
+```
+Publishing Ping at aeron:ipc on stream id 1002
+Subscribing Ping at aeron:ipc on stream id 1002
+Subscribing Pong at aeron:ipc on stream id 1003
+Publishing Pong at aeron:ipc on stream id 1003
+Message payload length of 32 bytes
+Using exclusive publications: false
+Waiting for new image from Pong...
+Warming up... 10 iterations of 10,000 messages
+Pinging 10,000,000 messages
+Histogram of RTT latencies in microseconds.
+       Value     Percentile TotalCount 1/(1-Percentile)
+
+       0.041 0.000000000000         19           1.00
+       0.500 0.500000000000    5753448           2.00
+       0.917 0.990625000000    9932624         106.67
+       1.166 0.999023437500    9990285        1024.00
+      16.591 0.999902343750    9999030       10240.00
+#[Mean    =        0.520, StdDeviation   =        6.433]
+#[Max     =    15056.895, Total count    =     10000000]
+#[Buckets =           24, SubBuckets     =         2048]
+```
+
 ### Conclusion
 
 The benchmark results indicate that Rust’s performance varies significantly across different architectures and benchmarks:
 
-- **Apple M1**: The Rust implementation with the Rust Media Driver consistently outperforms Java, achieving around **30% higher throughput** in the Exclusive IPC benchmark, with Rust reaching 36-38 million messages per second compared to Java’s 28 million messages per second.
+- **Apple M1**: The Rust implementation with the Rust Media Driver consistently outperforms Java, achieving around **30% higher throughput** in the Exclusive IPC benchmark, with Rust reaching 36-38 million messages per second compared to Java’s 28 million messages per second. For the ping-pong test, when using ipc or udp it was the same speed in java and rust
 
-- **AMD Ryzen 5 (x86)**: Java performs better in the Exclusive IPC benchmark on x86, reaching **45-55 million messages per second**, while Rust's throughput is unexpectedly lower. Interestingly, this performance discrepancy does not extend to the Ping Pong benchmark, where Rust achieves faster round-trip times than Java, even on x86.
+- **AMD Ryzen 5 (x86)**: Java performs better in the Exclusive IPC benchmark on x86, reaching **45-55 million messages per second**, while Rust's throughput is unexpectedly lower. Interestingly, this performance discrepancy does not extend to the Ping Pong benchmark, where Rust achieves faster round-trip times than Java.
 
-From these results, we can conclude that at least the `rusteron-client` is not slower than the Java implementation.
+From these results, we can conclude that at least the `rusteron-client` is at least as fast as the Java implementation. It can be quicker in certain situations.
 
 ## Next Steps
 For contributions to `rusteron`, suggestions, or optimizations, please open an issue or PR on GitHub. Together, we can continue pushing the boundaries of performance!

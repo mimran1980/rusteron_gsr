@@ -57,7 +57,7 @@ pub fn main() -> Result<(), Box<dyn error::Error>> {
         assert_eq!(msg.as_slice(), "1".repeat(large_string_len).as_bytes())
     });
     // if you don't need fragmentation support use Handler::leak instead
-    let closure = Handler::leak_with_fragment_assembler(closure)?;
+    let (closure, _inner) = Handler::leak_with_fragment_assembler(closure)?;
 
     loop {
         if count.get() > 100 {
