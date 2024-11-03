@@ -1345,6 +1345,7 @@ pub fn generate_rust_code(
     wrappers: &HashMap<String, CWrapper>,
     include_common_code: bool,
     include_clippy: bool,
+    include_aeron_client_registering_resource_t: bool,
 ) -> proc_macro2::TokenStream {
     let class_name = syn::Ident::new(&wrapper.class_name, proc_macro2::Span::call_site());
     let type_name = syn::Ident::new(&wrapper.type_name, proc_macro2::Span::call_site());
@@ -1630,11 +1631,13 @@ pub fn generate_rust_code(
             );
         }
 
-        code.push_str(
-            "
+        if include_aeron_client_registering_resource_t {
+            code.push_str(
+                "
                 type aeron_client_registering_resource_t = aeron_client_registering_resource_stct;
 ",
-        );
+            );
+        }
 
         TokenStream::from_str(code.as_str()).unwrap()
     };

@@ -1,0 +1,45 @@
+[package]
+name = "rusteron-rb"
+version = "0.1.30"
+edition = "2021"
+authors = ["Mo Imran <mimran1980@gmail.com>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/mimran1980/rusteron"
+homepage = "https://github.com/mimran1980/rusteron"
+keywords = ["ring-buffer", "aeron-rb", "aeron-c-bindings"]
+categories = ["network-programming"]
+documentation = "https://mimran1980.github.io/rusteron/rusteron_client/index.html"
+description = "Provides ring buffers that are used in aeron"
+readme = "README.md"
+
+[dependencies]
+ctrlc = { workspace = true }
+num-format = {  workspace = true }
+hdrhistogram = { workspace = true}
+zerocopy = { workspace = true }
+
+[build-dependencies]
+bindgen = {  workspace = true }
+cmake = {  workspace = true }
+dunce = {  workspace = true }
+pkg-config = {  workspace = true }
+syn = {  workspace = true }
+proc-macro2 = {  workspace = true }
+quote = {  workspace = true }
+itertools = {  workspace = true }
+rusteron-code-gen = {path = "../rusteron-code-gen", version = "0"}
+
+[dev-dependencies]
+serial_test = "3.1"
+criterion = {workspace = true}
+
+[features]
+static = []
+
+#[[bench]]
+#name = "ping_pong"
+#harness = false
+
+#[[bench]]
+#name = "ping_pong_ipc"
+#harness = false

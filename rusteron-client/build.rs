@@ -152,7 +152,8 @@ pub fn main() {
     let _ = fs::remove_file(aeron.clone());
     let mut stream = TokenStream::new();
     for (p, w) in bindings.wrappers.values().enumerate() {
-        let code = rusteron_code_gen::generate_rust_code(w, &bindings.wrappers, p == 0, false);
+        let code =
+            rusteron_code_gen::generate_rust_code(w, &bindings.wrappers, p == 0, false, true);
         stream.extend(code);
     }
     for handler in &bindings.handlers {
