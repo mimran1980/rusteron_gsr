@@ -7,20 +7,59 @@ unsafe impl Send for AeronBroadcastReceiver {}
 
 pub const AERON_BROADCAST_BUFFER_TRAILER_LENGTH: usize = size_of::<aeron_broadcast_descriptor_t>();
 
+macro_rules! impl_buffer_methods {
+    ($t:ty) => {
+        impl $t {
+            #[inline]
+            pub fn buffer_mut(&self) -> &mut [u8] {
+                debug_assert!(!self.buffer.is_null());
+                unsafe { std::slice::from_raw_parts_mut(self.buffer, self.capacity) }
+            }
+
+            #[inline]
+            pub fn buffer_at_mut(&self, idx: usize, len: usize) -> &mut [u8] {
+                debug_assert!(idx + len < self.capacity);
+                debug_assert!(!self.buffer.is_null());
+                unsafe { std::slice::from_raw_parts_mut(self.buffer.add(idx), len) }
+            }
+        }
+    };
+}
+
+impl_buffer_methods!(AeronBroadcastTransmitter);
+impl_buffer_methods!(AeronBroadcastReceiver);
+impl_buffer_methods!(AeronSpscRb);
+impl_buffer_methods!(AeronMpscRb);
+
+macro_rules! impl_from_vec_and_new_with_capacity {
+    ($t:ty, $descriptor:ty) => {
+        impl $t {
+            pub fn from_vec(buffer: Vec<u8>, max_msg_size: usize) -> Result<Self, AeronCError> {
+                assert!(!buffer.is_empty());
+                let buffer = buffer.leak();
+                Self::new(
+                    buffer.as_mut_ptr(),
+                    &<$descriptor>::default(),
+                    buffer.len(),
+                    max_msg_size,
+                )
+            }
+
+            pub fn new_with_capacity(
+                capacity: usize,
+                max_msg_size: usize,
+            ) -> Result<Self, AeronCError> {
+                assert!(capacity.is_power_of_two());
+                Self::from_vec(vec![0u8; capacity], max_msg_size)
+            }
+        }
+    };
+}
+
+impl_from_vec_and_new_with_capacity!(AeronSpscRb, AeronRbDescriptor);
+impl_from_vec_and_new_with_capacity!(AeronMpscRb, AeronRbDescriptor);
+
 impl AeronBroadcastTransmitter {
-    #[inline]
-    pub fn buffer_mut(&self) -> &mut [u8] {
-        debug_assert!(!self.buffer.is_null());
-        unsafe { std::slice::from_raw_parts_mut(self.buffer, self.capacity) }
-    }
-
-    #[inline]
-    pub fn buffer_at_mut(&self, idx: usize, len: usize) -> &mut [u8] {
-        debug_assert!(idx + len < self.capacity);
-        debug_assert!(!self.buffer.is_null());
-        unsafe { std::slice::from_raw_parts_mut(self.buffer.add(idx), len) }
-    }
-
     pub fn from_slice(buffer: &mut [u8], max_msg_size: usize) -> Result<Self, AeronCError> {
         assert!(!buffer.is_empty());
         assert!((buffer.len() - AERON_BROADCAST_BUFFER_TRAILER_LENGTH).is_power_of_two());
@@ -44,19 +83,6 @@ impl AeronBroadcastTransmitter {
 }
 
 impl AeronBroadcastReceiver {
-    #[inline]
-    pub fn buffer_mut(&self) -> &mut [u8] {
-        debug_assert!(!self.buffer.is_null());
-        unsafe { std::slice::from_raw_parts_mut(self.buffer, self.capacity) }
-    }
-
-    #[inline]
-    pub fn buffer_at_mut(&self, idx: usize, len: usize) -> &mut [u8] {
-        debug_assert!(idx + len < self.capacity);
-        debug_assert!(!self.buffer.is_null());
-        unsafe { std::slice::from_raw_parts_mut(self.buffer.add(idx), len) }
-    }
-
     pub fn from_slice(buffer: &mut [u8]) -> Result<Self, AeronCError> {
         assert!(!buffer.is_empty());
         let capacity = buffer.len();
@@ -80,35 +106,6 @@ impl AeronBroadcastReceiver {
 }
 
 impl AeronSpscRb {
-    #[inline]
-    pub fn buffer_mut(&self) -> &mut [u8] {
-        debug_assert!(!self.buffer.is_null());
-        unsafe { std::slice::from_raw_parts_mut(self.buffer, self.capacity) }
-    }
-
-    #[inline]
-    pub fn buffer_at_mut(&self, idx: usize, len: usize) -> &mut [u8] {
-        debug_assert!(idx + len < self.capacity);
-        debug_assert!(!self.buffer.is_null());
-        unsafe { std::slice::from_raw_parts_mut(self.buffer.add(idx), len) }
-    }
-
-    pub fn from_vec(buffer: Vec<u8>, max_msg_size: usize) -> Result<Self, AeronCError> {
-        assert!(!buffer.is_empty());
-        let buffer = buffer.leak();
-        Self::new(
-            buffer.as_mut_ptr(),
-            &AeronRbDescriptor::default(),
-            buffer.len(),
-            max_msg_size,
-        )
-    }
-
-    pub fn new_with_capacity(capacity: usize, max_msg_size: usize) -> Result<Self, AeronCError> {
-        assert!(capacity.is_power_of_two());
-        Self::from_vec(vec![0u8; capacity], max_msg_size)
-    }
-
     pub fn read_msgs<T: AeronRingBufferHandlerCallback>(
         &self,
         handler: &Handler<AeronRingBufferHandlerWrapper<T>>,
@@ -127,35 +124,6 @@ impl AeronSpscRb {
 }
 
 impl AeronMpscRb {
-    #[inline]
-    pub fn buffer_mut(&self) -> &mut [u8] {
-        debug_assert!(!self.buffer.is_null());
-        unsafe { std::slice::from_raw_parts_mut(self.buffer, self.capacity) }
-    }
-
-    #[inline]
-    pub fn buffer_at_mut(&self, idx: usize, len: usize) -> &mut [u8] {
-        debug_assert!(idx + len < self.capacity);
-        debug_assert!(!self.buffer.is_null());
-        unsafe { std::slice::from_raw_parts_mut(self.buffer.add(idx), len) }
-    }
-
-    pub fn from_vec(buffer: Vec<u8>, max_msg_size: usize) -> Result<Self, AeronCError> {
-        assert!(!buffer.is_empty());
-        let buffer = buffer.leak();
-        Self::new(
-            buffer.as_mut_ptr(),
-            &AeronRbDescriptor::default(),
-            buffer.len(),
-            max_msg_size,
-        )
-    }
-
-    pub fn new_with_capacity(capacity: usize, max_msg_size: usize) -> Result<Self, AeronCError> {
-        assert!(capacity.is_power_of_two());
-        Self::from_vec(vec![0u8; capacity], max_msg_size)
-    }
-
     pub fn read_msgs<T: AeronRingBufferHandlerCallback>(
         &self,
         handler: &Handler<AeronRingBufferHandlerWrapper<T>>,
