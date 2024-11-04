@@ -56,6 +56,7 @@ Add the following line to your `Cargo.toml` to include the specific **rusteron**
 - **rusteron-client**: For core Aeron client functionalities.
 - **rusteron-archive**: For Aeron client with archive capabilities.
 - **rusteron-media-driver**: For the Aeron media driver.
+- **rusteron-rb**: Ring buffer (single and multi producer) and broadcast transmitter/receiver
 
 For detailed instructions on how to build **rusteron-archive**, please refer to the [HOW_TO_BUILD.md](./HOW_TO_BUILD.md) file.
 
