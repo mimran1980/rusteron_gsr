@@ -20,6 +20,7 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 
 pub const CUSTOM_AERON_CODE: &str = include_str!("./aeron_custom.rs");
+pub const CUSTOM_RB_CODE: &str = include_str!("./rb_custom.rs");
 pub const COMMON_CODE: &str = include_str!("./common.rs");
 
 pub fn append_to_file(file_path: &str, code: &str) -> std::io::Result<()> {
@@ -100,7 +101,7 @@ mod tests {
             .filter(|w| !w.type_name.contains("_t_") && w.type_name != "in_addr")
             .enumerate()
         {
-            let code = crate::generate_rust_code(w, &bindings.wrappers, p == 0, true);
+            let code = crate::generate_rust_code(w, &bindings.wrappers, p == 0, true, true);
             write_to_file(code, false, "md.rs");
         }
 
@@ -139,7 +140,7 @@ mod tests {
 
         let file = write_to_file(TokenStream::new(), true, "client.rs");
         for (p, w) in bindings.wrappers.values().enumerate() {
-            let code = crate::generate_rust_code(w, &bindings.wrappers, p == 0, true);
+            let code = crate::generate_rust_code(w, &bindings.wrappers, p == 0, true, true);
             if code.to_string().contains("ndler : Option < AeronCloseClientHandlerImpl > , clientd :) -> Result < Self , AeronCError > { let resource = Manage") {
                 panic!("{}", format_token_stream(code));
             }
@@ -173,7 +174,7 @@ mod tests {
 
         let file = write_to_file(TokenStream::new(), true, "archive.rs");
         for (p, w) in bindings.wrappers.values().enumerate() {
-            let code = crate::generate_rust_code(w, &bindings.wrappers, p == 0, true);
+            let code = crate::generate_rust_code(w, &bindings.wrappers, p == 0, true, true);
             write_to_file(code, false, "archive.rs");
         }
 

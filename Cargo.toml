@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "rusteron-code-gen",
+    "rusteron-rb",
     "rusteron-archive",
     "rusteron-media-driver",
     "rusteron-client",

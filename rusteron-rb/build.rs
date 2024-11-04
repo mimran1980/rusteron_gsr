@@ -29,8 +29,8 @@ impl LinkType {
 
     fn target_name(&self) -> &'static str {
         match self {
-            LinkType::Dynamic => "aeron_driver",
-            LinkType::Static => "aeron_driver_static",
+            LinkType::Dynamic => "aeron",
+            LinkType::Static => "aeron_static",
         }
     }
 }
@@ -44,7 +44,7 @@ pub fn main() {
     }
 
     let aeron_path = canonicalize(Path::new("./aeron")).unwrap();
-    let header_path = aeron_path.join("aeron-driver/src/main/c");
+    let header_path = aeron_path.join("aeron-client/src/main/c");
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
 
     let link_type = LinkType::detect();
@@ -81,7 +81,7 @@ pub fn main() {
         config.profile("Debug");
     }
     let cmake_output = config
-        .define("BUILD_AERON_DRIVER", "ON")
+        .define("BUILD_AERON_DRIVER", "OFF")
         .define("BUILD_AERON_ARCHIVE_API", "OFF")
         .define("AERON_TESTS", "OFF")
         .define("AERON_BUILD_SAMPLES", "OFF")
@@ -120,11 +120,6 @@ pub fn main() {
     println!("cargo:include={}", header_path.display());
     let bindings = bindgen::Builder::default()
         .clang_arg(format!("-I{}", header_path.display()))
-        // We need to include some of the headers from `aeron c client`, so update the include path here
-        .clang_arg(format!(
-            "-I{}",
-            aeron_path.join("aeron-client/src/main/c").display()
-        ))
         .header("bindings.h")
         .allowlist_function("aeron_.*")
         .allowlist_type("aeron_.*")
@@ -133,11 +128,9 @@ pub fn main() {
         .default_enum_style(EnumVariation::Rust {
             non_exhaustive: false,
         })
-        // Some padding structures use arrays > 120 elements,
-        // so we can't derive Debug implementations
         .derive_debug(true)
         .generate()
-        .expect("Unable to generate aeron_driver bindings");
+        .expect("Unable to generate aeron bindings");
 
     let out = out_path.join("bindings.rs");
     bindings
@@ -145,16 +138,7 @@ pub fn main() {
         .expect("Couldn't write bindings!");
 
     let bindings = rusteron_code_gen::parse_bindings(&out);
-    assert_eq!(
-        "aeron_driver_conductor_t",
-        bindings
-            .wrappers
-            .get("aeron_driver_conductor_t")
-            .unwrap()
-            .type_name
-    );
     let aeron = out_path.join("aeron.rs");
-    let _ = fs::remove_file(aeron.clone());
 
     // include custom aeron code
     let aeron_custom = out_path.join("aeron_custom.rs");
@@ -172,15 +156,11 @@ pub fn main() {
     )
     .unwrap();
 
+    let _ = fs::remove_file(aeron.clone());
     let mut stream = TokenStream::new();
-    for (p, w) in bindings
-        .wrappers
-        .values()
-        .filter(|w| !w.type_name.contains("_t_") && w.type_name != "in_addr")
-        .enumerate()
-    {
+    for (p, w) in bindings.wrappers.values().enumerate() {
         let code =
-            rusteron_code_gen::generate_rust_code(w, &bindings.wrappers, p == 0, false, true);
+            rusteron_code_gen::generate_rust_code(w, &bindings.wrappers, p == 0, false, false);
         stream.extend(code);
     }
     for handler in &bindings.handlers {
@@ -192,4 +172,6 @@ pub fn main() {
         &format_with_rustfmt(&stream.to_string()).unwrap(),
     )
     .unwrap();
+
+    // panic!("{}", aeron.to_str().unwrap());
 }
