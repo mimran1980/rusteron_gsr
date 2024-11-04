@@ -15,9 +15,7 @@ The **rusteron-rb** module acts as a Rust wrapper around the Aeron C ring buffer
 - **MPSC Ring Buffer**: Multi-producer, single-consumer ring buffer implementation using `AeronMpscRb`.
 - **SPSC Ring Buffer**: Single-producer, single-consumer ring buffer implementation using `AeronSpscRb`.
 
-# Examples
-
-Sure thing! Here are three sections with detailed code examples: one for Single Producer, Single Consumer (SPSC) Ring Buffer, one for Multi-Producer, Single Consumer (MPSC) Ring Buffer, and one for the Broadcast Transmitter and Receiver. These examples are based on your unit tests and will help illustrate the usage for different parts of **rusteron-rb**.
+## Usage Example
 
 ### Single Producer, Single Consumer Ring Buffer
 
@@ -157,19 +155,6 @@ rusteron-rb = { version = "0.1", features = ["static"] }
 ```
 
 Ensure you have also set up the necessary Aeron C libraries required by **rusteron-rb**.
-
-## Usage Example
-
-Here is a basic example demonstrating the initialization and usage of `AeronBroadcastReceiver` and `AeronBroadcastTransmitter`:
-
-```rust
-use rusteron_rb::*;
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    
-    Ok(())
-}
-```
 
 ## Safety Considerations
 
