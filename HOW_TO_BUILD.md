@@ -10,9 +10,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 - **Java 17+**: Java 17 or newer is required to build the Aeron archive C bindings. Ensure that Java is properly set up in your system environment.
 - **CMake**: required to build the c bindings
 ```shell
-sudo apt install cmake -y
-sudo apt install linux-tools-$(uname -r)
-sudo apt-get install -y uuid-dev
+sudo apt install linux-tools-$(uname -r) cmake uuid-dev -y
 # or
 sudo snap install cmake --classic
 ```

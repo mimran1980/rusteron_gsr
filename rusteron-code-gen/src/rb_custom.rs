@@ -2,6 +2,8 @@ use std::os::raw::c_void;
 
 unsafe impl Sync for AeronSpscRb {}
 unsafe impl Sync for AeronMpscRb {}
+unsafe impl Send for AeronSpscRb {}
+unsafe impl Send for AeronMpscRb {}
 unsafe impl Send for AeronBroadcastTransmitter {}
 unsafe impl Send for AeronBroadcastReceiver {}
 
@@ -32,11 +34,72 @@ impl_buffer_methods!(AeronSpscRb);
 impl_buffer_methods!(AeronMpscRb);
 
 macro_rules! impl_from_vec_and_new_with_capacity {
-    ($t:ty, $descriptor:ty) => {
+    ($t:ident, $slot:ident, $descriptor:ty) => {
+        pub struct $slot<'a> {
+            pub idx: i32,
+            pub length: usize,
+            commited: bool,
+            rb: &'a $t,
+        }
+
+        impl<'a> $slot<'a> {
+            pub fn commit(mut self) -> Result<i32, AeronCError> {
+                self.commited = true;
+                self.rb.commit(self.idx)
+            }
+            pub fn abort(mut self) -> Result<i32, AeronCError> {
+                self.commited = true;
+                self.rb.abort(self.idx)
+            }
+            pub fn buffer_mut(&self) -> &mut [u8] {
+                self.rb.buffer_at_mut(self.idx as usize, self.length)
+            }
+        }
+
+        impl<'a> std::ops::Deref for $slot<'a> {
+            type Target = [u8];
+
+            fn deref(&self) -> &Self::Target {
+                self.buffer_mut()
+            }
+        }
+
+        impl<'a> std::ops::DerefMut for $slot<'a> {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                self.buffer_mut()
+            }
+        }
+
+        impl<'a> Drop for $slot<'a> {
+            fn drop(&mut self) {
+                if !self.commited {
+                    let _ = self.rb.commit(self.idx);
+                }
+            }
+        }
+
         impl $t {
-            pub fn from_vec(buffer: Vec<u8>, max_msg_size: usize) -> Result<Self, AeronCError> {
+            pub fn try_claim_slice<'a>(
+                &'a self,
+                msg_type_id: i32,
+                length: usize,
+            ) -> Result<$slot<'a>, AeronCError> {
+                let idx = self.try_claim(msg_type_id, length);
+                if idx <= 0 {
+                    Err(AeronCError::from_code(idx))
+                } else {
+                    Ok($slot {
+                        idx,
+                        length,
+                        commited: false,
+                        rb: self,
+                    })
+                }
+            }
+
+            pub fn from_slice(buffer: &mut [u8], max_msg_size: usize) -> Result<Self, AeronCError> {
                 assert!(!buffer.is_empty());
-                let buffer = buffer.leak();
+                assert!(buffer.len().is_power_of_two());
                 Self::new(
                     buffer.as_mut_ptr(),
                     &<$descriptor>::default(),
@@ -50,14 +113,14 @@ macro_rules! impl_from_vec_and_new_with_capacity {
                 max_msg_size: usize,
             ) -> Result<Self, AeronCError> {
                 assert!(capacity.is_power_of_two());
-                Self::from_vec(vec![0u8; capacity], max_msg_size)
+                Self::from_slice(vec![0u8; capacity].leak(), max_msg_size)
             }
         }
     };
 }
 
-impl_from_vec_and_new_with_capacity!(AeronSpscRb, AeronRbDescriptor);
-impl_from_vec_and_new_with_capacity!(AeronMpscRb, AeronRbDescriptor);
+impl_from_vec_and_new_with_capacity!(AeronSpscRb, AeronSpscRbSlot, AeronRbDescriptor);
+impl_from_vec_and_new_with_capacity!(AeronMpscRb, AeronMpscRbSlot, AeronRbDescriptor);
 
 impl AeronBroadcastTransmitter {
     pub fn from_slice(buffer: &mut [u8], max_msg_size: usize) -> Result<Self, AeronCError> {
@@ -142,7 +205,21 @@ impl AeronMpscRb {
 }
 
 pub struct AeronRingBufferHandlerWrapper<T: AeronRingBufferHandlerCallback> {
-    handler: T,
+    pub handler: T,
+}
+
+impl<T: AeronRingBufferHandlerCallback> std::ops::Deref for AeronRingBufferHandlerWrapper<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.handler
+    }
+}
+
+impl<T: AeronRingBufferHandlerCallback> std::ops::DerefMut for AeronRingBufferHandlerWrapper<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.handler
+    }
 }
 
 impl<T: AeronRingBufferHandlerCallback> AeronRingBufferHandlerWrapper<T> {
