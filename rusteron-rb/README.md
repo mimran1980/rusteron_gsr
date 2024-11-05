@@ -38,10 +38,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     // another way to commit the data
     for i in 0..50 {
-        let mut slot = rb.try_claim_slot(i + 1, 4).unwrap();
-        slot[0] = i as u8;
+        let mut slice = rb.try_claim_slice(i + 1, 4).unwrap();
+        slice[0] = i as u8;
         // optional, if you don't call commit/abort will automatically commit
-        slot.commit()?;
+        slice.commit()?;
     }
 
     // Consumer reads data from the ring buffer
