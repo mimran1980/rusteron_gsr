@@ -29,12 +29,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     let rb = AeronSpscRb::new_with_capacity(1024 * 1024, 1024)?;
 
     // Producer writes data to the ring buffer
-    for i in 0..100 {
+    for i in 0..50 {
         let idx = rb.try_claim(i + 1, 4);
         assert!(idx >= 0);
         let slot = rb.buffer_at_mut(idx as usize, 4);
         slot[0] = i as u8;
         rb.commit(idx)?;
+    }
+    // another way to commit the data
+    for i in 0..50 {
+        let mut slot = rb.try_claim_slot(i + 1, 4).unwrap();
+        slot[0] = i as u8;
+        // optional, if you don't call commit/abort will automatically commit
+        slot.commit()?;
     }
 
     // Consumer reads data from the ring buffer
