@@ -38,9 +38,6 @@ run-aeron-archive-driver:
       -Daeron.event.archive.log=all \
       -Daeron.term.buffer.sparse.file=false \
       -Daeron.pre.touch.mapped.memory=true \
-      -Daeron.socket.so_sndbuf=2m \
-      -Daeron.socket.so_rcvbuf=2m \
-      -Daeron.rcv.initial.window.length=2m \
       -Daeron.threading.mode=DEDICATED \
       -Daeron.sender.idle.strategy=noop \
       -Daeron.receiver.idle.strategy=noop \
@@ -61,9 +58,6 @@ run-aeron-media-driver-java:
       -Daeron.dir=target/aeron \
       -Daeron.term.buffer.sparse.file=false \
       -Daeron.pre.touch.mapped.memory=true \
-      -Daeron.socket.so_sndbuf=2m \
-      -Daeron.socket.so_rcvbuf=2m \
-      -Daeron.rcv.initial.window.length=2m \
       -Daeron.threading.mode=DEDICATED \
       -Daeron.sender.idle.strategy=noop \
       -Daeron.receiver.idle.strategy=noop \
@@ -85,9 +79,6 @@ run-aeron-media-driver-rust:
     AERON_RECEIVER_IDLE_STRATEGY=noop \
     AERON_DIR=target/aeron \
     AERON_TERM_BUFFER_SPARSE_FILE=false \
-    AERON_SOCKET_SO_SNDBUF=2097152 \
-    AERON_SOCKET_SO_RCVBUF=2097152 \
-    AERON_RCV_INITIAL_WINDOW_LENGTH=2097152 \
     cargo run --release --package rusteron-media-driver --bin media_driver
 
 benchmark-ipc-throughput-java:
@@ -97,9 +88,6 @@ benchmark-ipc-throughput-java:
       -Daeron.dir=target/aeron \
       -Daeron.term.buffer.sparse.file=false \
       -Daeron.pre.touch.mapped.memory=true \
-      -Daeron.socket.so_sndbuf=2m \
-      -Daeron.socket.so_rcvbuf=2m \
-      -Daeron.rcv.initial.window.length=2m \
       -Daeron.threading.mode=DEDICATED \
       -Daeron.sender.idle.strategy=noop \
       -Daeron.receiver.idle.strategy=noop \
@@ -122,9 +110,6 @@ benchmark-ipc-throughput-rust:
     AERON_RECEIVER_IDLE_STRATEGY=noop \
     AERON_DIR=target/aeron \
     AERON_TERM_BUFFER_SPARSE_FILE=false \
-    AERON_SOCKET_SO_SNDBUF=2097152 \
-    AERON_SOCKET_SO_RCVBUF=2097152 \
-    AERON_RCV_INITIAL_WINDOW_LENGTH=2097152 \
     AERON_DIR=target/aeron \
     cargo run --release --package rusteron-client --example embedded_exclusive_ipc_throughput
 
@@ -138,9 +123,6 @@ benchmark-ipc-throughput-rust-profiler:
     AERON_RECEIVER_IDLE_STRATEGY=noop \
     AERON_DIR=target/aeron \
     AERON_TERM_BUFFER_SPARSE_FILE=false \
-    AERON_SOCKET_SO_SNDBUF=2097152 \
-    AERON_SOCKET_SO_RCVBUF=2097152 \
-    AERON_RCV_INITIAL_WINDOW_LENGTH=2097152 \
     LD_LIBRARY_PATH=target/release/build/rusteron-client-*/out/build/lib \
     perf record -g ./target/release/examples/embedded_exclusive_ipc_throughput
     sudo perf report
@@ -151,9 +133,6 @@ benchmark-embedded-ping-pong-java:
       -Daeron.dir=target/aeron \
       -Daeron.term.buffer.sparse.file=false \
       -Daeron.pre.touch.mapped.memory=true \
-      -Daeron.socket.so_sndbuf=2m \
-      -Daeron.socket.so_rcvbuf=2m \
-      -Daeron.rcv.initial.window.length=2m \
       -Daeron.threading.mode=DEDICATED \
       -Daeron.sender.idle.strategy=noop \
       -Daeron.receiver.idle.strategy=noop \
@@ -179,9 +158,6 @@ benchmark-embedded-ping-pong-rust:
     AERON_RECEIVER_IDLE_STRATEGY=noop \
     AERON_DIR=target/aeron \
     AERON_TERM_BUFFER_SPARSE_FILE=false \
-    AERON_SOCKET_SO_SNDBUF=2097152 \
-    AERON_SOCKET_SO_RCVBUF=2097152 \
-    AERON_RCV_INITIAL_WINDOW_LENGTH=2097152 \
     cargo run --release --package rusteron-client --example embedded_ping_pong
 
 benchmark-embedded-ping-pong-rust-profiler:
