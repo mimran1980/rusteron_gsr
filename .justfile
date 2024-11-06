@@ -203,3 +203,8 @@ docs:
 # run unit tests
 test:
   cargo test --all-targets --all-features -- --nocapture
+
+# creates symbolic link so that taret/aeron goes to /dev/shm/aeron (when benchmarking on linux)
+create-sym-link:
+    rm -rfv target/aeron
+    ls -l target/aeron
