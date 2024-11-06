@@ -6,7 +6,7 @@
 
 Benchmarks were conducted on two systems:
 1. **Apple M1 MacBook Pro**
-2. **AMD Ryzen 5 3400G**
+2. **AMD EPYC 7R32 48-Core Processor**
 
 ### Exclusive IPC Throughput
 
@@ -79,169 +79,75 @@ Throughput: 37,447,615 msgs/sec, 1,198,323,687 bytes/sec
 Throughput: 37,126,740 msgs/sec, 1,188,055,668 bytes/sec
 ```
 
-#### Rust IPC Throughput with Java Media Driver
-Rust benchmark results with the Java media driver:
+### AMD EPYC 7R32 48-Core Processor Results
 
-```
-Throughput: 34,371,321 msgs/sec, 1,099,882,267 bytes/sec
-Throughput: 36,009,246 msgs/sec, 1,152,295,888 bytes/sec
-Throughput: 34,798,099 msgs/sec, 1,113,539,166 bytes/sec
-Throughput: 35,104,141 msgs/sec, 1,123,332,511 bytes/sec
-Throughput: 34,219,767 msgs/sec, 1,095,032,558 bytes/sec
-Throughput: 33,570,332 msgs/sec, 1,074,250,618 bytes/sec
-Throughput: 34,357,081 msgs/sec, 1,099,426,587 bytes/sec
-Throughput: 35,308,391 msgs/sec, 1,129,868,511 bytes/sec
-Throughput: 34,503,901 msgs/sec, 1,104,124,848 bytes/sec
-Throughput: 34,056,613 msgs/sec, 1,089,811,617 bytes/sec
-Throughput: 36,392,474 msgs/sec, 1,164,559,166 bytes/sec
-Throughput: 35,717,277 msgs/sec, 1,142,952,865 bytes/sec
-Throughput: 35,266,763 msgs/sec, 1,128,536,429 bytes/sec
-Throughput: 35,042,202 msgs/sec, 1,121,350,469 bytes/sec
-Throughput: 35,904,945 msgs/sec, 1,148,958,241 bytes/sec
-Throughput: 34,771,485 msgs/sec, 1,112,687,523 bytes/sec
-Throughput: 33,368,872 msgs/sec, 1,067,803,916 bytes/sec
-Throughput: 33,951,504 msgs/sec, 1,086,448,141 bytes/sec
-Throughput: 34,073,490 msgs/sec, 1,090,351,673 bytes/sec
-Throughput: 34,825,446 msgs/sec, 1,114,414,268 bytes/sec
-Throughput: 34,024,351 msgs/sec, 1,088,779,219 bytes/sec
-```
-
-### AMD Ryzen 5 3400G Results
+**Note**: For these benchmarks, the Aeron directory is set to `/dev/shm` to leverage the in-memory filesystem for improved performance.
 
 #### Java IPC Throughput
-Results of the Java benchmark on AMD Ryzen:
+Results of the Java benchmark on the AMD EPYC 7R32 48-Core Processor:
 
 ```
-Duration 1000ms - 45,201,129 messages - 1,446,436,128 payload bytes
-Duration 1007ms - 48,589,355 messages - 1,554,859,360 payload bytes
-Duration 1001ms - 45,913,784 messages - 1,469,241,088 payload bytes
-Duration 1001ms - 53,578,692 messages - 1,714,518,144 payload bytes
-Duration 1001ms - 46,619,398 messages - 1,491,820,736 payload bytes
-Duration 1001ms - 52,841,404 messages - 1,690,924,928 payload bytes
-Duration 1001ms - 54,543,209 messages - 1,745,382,688 payload bytes
-Duration 1001ms - 52,014,035 messages - 1,664,449,120 payload bytes
-Duration 1001ms - 54,524,962 messages - 1,744,798,784 payload bytes
-Duration 1000ms - 55,013,544 messages - 1,760,433,408 payload bytes
-Duration 1001ms - 46,954,229 messages - 1,502,535,328 payload bytes
-Duration 1001ms - 53,598,635 messages - 1,715,156,320 payload bytes
-Duration 1001ms - 53,805,736 messages - 1,721,783,552 payload bytes
-Duration 1000ms - 51,584,296 messages - 1,650,697,472 payload bytes
-Duration 1001ms - 50,213,973 messages - 1,606,847,136 payload bytes
+Duration 1000ms - 11,209,199 messages - 358,694,368 payload bytes
+Duration 1004ms - 11,012,081 messages - 352,386,592 payload bytes
+Duration 1001ms - 10,937,523 messages - 350,000,736 payload bytes
+Duration 1000ms - 11,061,422 messages - 353,965,504 payload bytes
+Duration 1001ms - 11,171,619 messages - 357,491,808 payload bytes
+Duration 1000ms - 11,153,734 messages - 356,919,488 payload bytes
+Duration 1001ms - 11,018,808 messages - 352,601,856 payload bytes
+Duration 1001ms - 10,937,833 messages - 350,010,656 payload bytes
+Duration 1000ms - 10,871,451 messages - 347,886,432 payload bytes
+Duration 1001ms - 11,158,473 messages - 357,071,136 payload bytes
+Duration 1000ms - 11,187,960 messages - 358,014,720 payload bytes
+Duration 1001ms - 10,723,554 messages - 343,153,728 payload bytes
 ```
 
 #### Rust IPC Throughput with Rust Media Driver
-Rust benchmark results using the
-
-Rust media driver on AMD Ryzen:
+Rust benchmark results using the Rust media driver:
 
 ```
-Throughput: 20,830,729 msgs/sec, 666,583,334 bytes/sec
-Throughput: 20,747,710 msgs/sec, 663,926,719 bytes/sec
-Throughput: 20,674,070 msgs/sec, 661,570,231 bytes/sec
-Throughput: 20,801,708 msgs/sec, 665,654,643 bytes/sec
-Throughput: 20,967,671 msgs/sec, 670,965,478 bytes/sec
-Throughput: 20,528,464 msgs/sec, 656,910,838 bytes/sec
-Throughput: 20,792,583 msgs/sec, 665,362,644 bytes/sec
-Throughput: 20,545,616 msgs/sec, 657,459,719 bytes/sec
-Throughput: 20,764,230 msgs/sec, 664,455,355 bytes/sec
-Throughput: 19,499,696 msgs/sec, 623,990,286 bytes/sec
-Throughput: 19,047,098 msgs/sec, 609,507,132 bytes/sec
-Throughput: 20,750,823 msgs/sec, 664,026,327 bytes/sec
-Throughput: 20,615,699 msgs/sec, 659,702,365 bytes/sec
-Throughput: 20,357,534 msgs/sec, 651,441,100 bytes/sec
-Throughput: 20,479,442 msgs/sec, 655,342,154 bytes/sec
-Throughput: 20,613,394 msgs/sec, 659,628,617 bytes/sec
-Throughput: 20,512,627 msgs/sec, 656,404,057 bytes/sec
-Throughput: 20,593,865 msgs/sec, 659,003,673 bytes/sec
-Throughput: 20,926,609 msgs/sec, 669,651,487 bytes/sec
-Throughput: 21,114,344 msgs/sec, 675,659,007 bytes/sec
-Throughput: 21,049,171 msgs/sec, 673,573,463 bytes/sec
-Throughput: 21,118,281 msgs/sec, 675,784,977 bytes/sec
-Throughput: 20,986,121 msgs/sec, 671,555,877 bytes/sec
-Throughput: 20,984,788 msgs/sec, 671,513,206 bytes/sec
-Throughput: 20,868,458 msgs/sec, 667,790,656 bytes/sec
-Throughput: 21,165,076 msgs/sec, 677,282,427 bytes/sec
+Throughput: 38,655,705 msgs/sec, 1,236,982,553 bytes/sec
+Throughput: 39,360,449 msgs/sec, 1,259,534,357 bytes/sec
+Throughput: 38,413,688 msgs/sec, 1,229,238,010 bytes/sec
+Throughput: 38,180,298 msgs/sec, 1,221,769,540 bytes/sec
+Throughput: 38,959,568 msgs/sec, 1,246,706,163 bytes/sec
+Throughput: 39,463,926 msgs/sec, 1,262,845,637 bytes/sec
+Throughput: 38,960,897 msgs/sec, 1,246,748,714 bytes/sec
+Throughput: 38,788,058 msgs/sec, 1,241,217,869 bytes/sec
+Throughput: 37,881,413 msgs/sec, 1,212,205,227 bytes/sec
+Throughput: 38,339,134 msgs/sec, 1,226,852,280 bytes/sec
+Throughput: 39,242,001 msgs/sec, 1,255,744,022 bytes/sec
 ```
 
-#### Rust IPC Throughput with Java Media Driver
-Rust benchmark results with the Java media driver on AMD Ryzen:
+### Ping Pong Benchmark (ran on AMD EPYC 7R32 - UDP)
 
-```
-Throughput: 12,379,596 msgs/sec, 396,147,076 bytes/sec
-Throughput: 14,012,661 msgs/sec, 448,405,157 bytes/sec
-Throughput: 13,729,604 msgs/sec, 439,347,317 bytes/sec
-Throughput: 13,951,234 msgs/sec, 446,439,502 bytes/sec
-Throughput: 14,063,792 msgs/sec, 450,041,336 bytes/sec
-Throughput: 13,661,431 msgs/sec, 437,165,794 bytes/sec
-Throughput: 13,766,710 msgs/sec, 440,534,719 bytes/sec
-Throughput: 13,856,926 msgs/sec, 443,421,621 bytes/sec
-Throughput: 14,000,311 msgs/sec, 448,009,941 bytes/sec
-Throughput: 13,901,505 msgs/sec, 444,848,156 bytes/sec
-Throughput: 14,966,359 msgs/sec, 478,923,500 bytes/sec
-Throughput: 13,701,671 msgs/sec, 438,453,487 bytes/sec
-Throughput: 12,957,905 msgs/sec, 414,652,975 bytes/sec
-Throughput: 12,855,655 msgs/sec, 411,380,950 bytes/sec
-Throughput: 12,839,975 msgs/sec, 410,879,196 bytes/sec
-Throughput: 13,101,653 msgs/sec, 419,252,901 bytes/sec
-Throughput: 13,357,158 msgs/sec, 427,429,064 bytes/sec
-Throughput: 13,535,131 msgs/sec, 433,124,184 bytes/sec
-```
-
-### Ping Pong Benchmark (ran on m1 UDP)
-
-This section details the Ping Pong benchmark, which is based on the Aeron `EmbeddedPingPong` sample. The benchmark involves a warm-up phase of 100,000 messages followed by the actual benchmark of 10,000,000 messages, with a message size length of 32 bytes. Regular publishers were used, not exclusive publishers. The channels were `aeron:udp?endpoint=localhost:40123` and `aeron:udp?endpoint=localhost:40124`.
+This section details the Ping Pong benchmark, which is based on the Aeron `EmbeddedPingPong` sample. The benchmark involves a warm-up phase of 100,000 messages followed by the actual benchmark of 10,000,000 messages, with a message size length of 32 bytes. Regular publishers were used, not exclusive publishers. The channels were `aeron:udp?endpoint=localhost:20123` and `aeron:udp?endpoint=localhost:20124`.
 
 #### Rust Ping Pong Results with Rust Media Driver
-The results of the Rust benchmark using the Rust media driver (implemented using C bindings in Rust) are as follows:
+The results of the Rust benchmark using the Rust media driver are as follows:
 
 ```
 PING: pong publisher aeron:udp?endpoint=localhost:20124 1003
 PING: ping subscriber aeron:udp?endpoint=localhost:20123 1002
-PONG: ping publisher aeron:udp?endpoint=localhost:20123 1002
-PONG: pong subscriber aeron:udp?endpoint=localhost:20124 1003
 
-message length 32 bytes
-
-Histogram of RTT latencies in micros:
+Histogram of RTT latencies:
 # of samples: 10000000
-min: 14.176
-50th percentile: 21.375
-99th percentile: 37.311
-99.9th percentile: 67.263
-max: 409206.783
-avg: 22.447467757600023
+min: 7.824µs
+50th percentile: 9.327µs
+99th percentile: 12.799µs
+99.9th percentile: 18.847µs
+99.99th percentile: 26.175µs
+max: 138.936319ms
+avg: 9.918µs
 ```
-
-#### Rust Ping Pong Results with Java Media Driver
-The results of the Rust benchmark with the Java media driver are as follows:
-
-```
-PING: pong publisher aeron:udp?endpoint=localhost:20124 1003
-PING: ping subscriber aeron:udp?endpoint=localhost:20123 1002
-PONG: ping publisher aeron:udp?endpoint=localhost:20123 1002
-PONG: pong subscriber aeron:udp?endpoint=localhost:20124 1003
-message length 32 bytes
-
-Histogram of RTT latencies in micros:
-# of samples: 10000000
-min: 11.312
-50th percentile: 17.183
-99th percentile: 33.887
-99.9th percentile: 56.511
-max: 13033.471
-avg: 18.700070258000007
-```
-
-Note the defaults for c/rust media driver vs java is different. C media driver defaults with low latency settings which has a negative impact on my mac for ping pong test.
 
 #### Java Ping Pong Results
 The results of the Java Ping Pong benchmark are as follows:
 
 ```
-Subscribing Ping at aeron:udp?endpoint=localhost:20123 on stream id 1002
 Publishing Ping at aeron:udp?endpoint=localhost:20123 on stream id 1002
-Publishing Pong at aeron:udp?endpoint=localhost:20124 on stream id 1003
+Subscribing Ping at aeron:udp?endpoint=localhost:20123 on stream id 1002
 Subscribing Pong at aeron:udp?endpoint=localhost:20124 on stream id 1003
+Publishing Pong at aeron:udp?endpoint=localhost:20124 on stream id 1003
 Message payload length of 32 bytes
 Using exclusive publications: false
 Waiting for new image from Pong...
@@ -250,103 +156,27 @@ Pinging 10,000,000 messages
 Histogram of RTT latencies in microseconds.
        Value     Percentile TotalCount 1/(1-Percentile)
 
-      11.391 0.000000000000          1           1.00
-      23.823 0.500000000000    5102003           2.00
-      53.023 0.990625000000    9906601         106.67
-     124.799 0.999023437500    9990239        1024.00
-#[Mean    =       25.972, StdDeviation   =       78.663]
-#[Max     =    66093.055, Total count    =     10000000]
-#[Buckets =           24, SubBuckets     =         2048]
-```
-
-
-### Ping Pong Benchmark (ran on m1 IPC)
-
-This section details the Ping Pong benchmark, which is based on the Aeron `EmbeddedPingPong` sample. The benchmark involves a warm-up phase of 100,000 messages followed by the actual benchmark of 10,000,000 messages, with a message size length of 32 bytes. Regular publishers were used, not exclusive publishers. The channels were `aeron:udp?endpoint=localhost:40123` and `aeron:udp?endpoint=localhost:40124`.
-```shell
-      -Daeron.sample.ping.channel=aeron:ipc \
-      -Daeron.sample.pong.channel=aeron:ipc \
-```
-
-#### Rust Ping Pong Results with Rust Media Driver
-The results of the Rust benchmark using the Rust media driver (implemented using C bindings in Rust) are as follows:
-
-```
-PONG: ping publisher aeron:ipc 1002
-PONG: pong subscriber aeron:ipc 1003
-PING: pong publisher aeron:ipc 1003
-PING: ping subscriber aeron:ipc 1002
-message length 32 bytes
-
-Histogram of RTT latencies:
-# of samples: 10000000
-min: 167ns
-50th percentile: 417ns
-99th percentile: 959ns
-99.9th percentile: 3.293µs
-99.99th percentile: 13.167µs
-max: 5.296127ms
-avg: 525ns
-```
-
-#### Rust Ping Pong Results with Java Media Driver
-The results of the Rust benchmark with the Java media driver are as follows:
-
-```
-PONG: ping publisher aeron:ipc 1002
-PONG: pong subscriber aeron:ipc 1003
-PING: pong publisher aeron:ipc 1003
-PING: ping subscriber aeron:ipc 1002
-message length 32 bytes
-
-Histogram of RTT latencies:
-# of samples: 10000000
-min: 166ns
-50th percentile: 542ns
-99th percentile: 958ns
-99.9th percentile: 3.333µs
-99.99th percentile: 15.215µs
-max: 167.378943ms
-avg: 550ns
-```
-
-Note the defaults for c/rust media driver vs java is different. C media driver defaults with low latency settings which has a negative impact on my mac for ping pong test.
-
-#### Java Ping Pong Results
-The results of the Java Ping Pong benchmark are as follows:
-
-```
-Publishing Ping at aeron:ipc on stream id 1002
-Subscribing Ping at aeron:ipc on stream id 1002
-Subscribing Pong at aeron:ipc on stream id 1003
-Publishing Pong at aeron:ipc on stream id 1003
-Message payload length of 32 bytes
-Using exclusive publications: false
-Waiting for new image from Pong...
-Warming up... 10 iterations of 10,000 messages
-Pinging 10,000,000 messages
-Histogram of RTT latencies in microseconds.
-       Value     Percentile TotalCount 1/(1-Percentile)
-
-       0.041 0.000000000000         19           1.00
-       0.500 0.500000000000    5753448           2.00
-       0.917 0.990625000000    9932624         106.67
-       1.166 0.999023437500    9990285        1024.00
-      16.591 0.999902343750    9999030       10240.00
-#[Mean    =        0.520, StdDeviation   =        6.433]
-#[Max     =    15056.895, Total count    =     10000000]
+       8.879 0.500000000000    5030832           2.00
+      11.967 0.990625000000    9906648         106.67
+      16.767 0.999023437500    9990356        1024.00
+      24.527 0.999902343750    9999026       10240.00
+#[Mean    =        9.290, StdDeviation   =      225.704]
+#[Max     =   650641.407, Total count    =     10000000]
 #[Buckets =           24, SubBuckets     =         2048]
 ```
 
 ### Conclusion
 
-The benchmark results indicate that Rust’s performance varies significantly across different architectures and benchmarks:
+The benchmark results indicate that Rust's performance on the AMD EPYC 7R32 48-Core Processor significantly outperforms Java in the Exclusive IPC Throughput benchmark:
 
-- **Apple M1**: The Rust implementation with the Rust Media Driver consistently outperforms Java, achieving around **30% higher throughput** in the Exclusive IPC benchmark, with Rust reaching 36-38 million messages per second compared to Java’s 28 million messages per second. For the ping-pong test, when using ipc or udp it was the same speed in java and rust
+- **AMD EPYC 7R32 48-Core Processor**: The Rust implementation with the Rust Media Driver achieves around **38-39 million messages per second**, while the Java implementation reaches approximately **11 million messages per second** in the Exclusive IPC benchmark. This shows that Rust's throughput is about **3.5 times higher** than Java's on this hardware configuration.
 
-- **AMD Ryzen 5 (x86)**: Java performs better in the Exclusive IPC benchmark on x86, reaching **45-55 million messages per second**, while Rust's throughput is unexpectedly lower. Interestingly, this performance discrepancy does not extend to the Ping Pong benchmark, where Rust achieves faster round-trip times than Java.
+- In the Ping Pong benchmark using UDP, Rust also demonstrates comparable latency to Java, with an average RTT latency of **9.918µs** for Rust and **9.290µs** for Java. The minimal difference indicates similar performance between Rust and Java in this test.
 
-From these results, we can conclude that at least the `rusteron-client` is at least as fast as the Java implementation. It can be quicker in certain situations.
+- **Apple M1**: On the Apple M1 MacBook Pro, the Rust implementation with the Rust Media Driver consistently outperforms Java, achieving around **30% higher throughput** in the Exclusive IPC benchmark, with Rust reaching **36-38 million messages per second** compared to Java’s **28 million messages per second**.
+
+From these results, we can conclude that the `rusteron-client` not only matches but can significantly outperform the Java implementation, particularly in the Exclusive IPC Throughput benchmark on high-core-count processors like the AMD EPYC 7R32. Additionally, using `/dev/shm` for the Aeron directory can further enhance performance by utilizing in-memory file systems.
 
 ## Next Steps
+
 For contributions to `rusteron`, suggestions, or optimizations, please open an issue or PR on GitHub. Together, we can continue pushing the boundaries of performance!
