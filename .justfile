@@ -207,4 +207,5 @@ test:
 # creates symbolic link so that taret/aeron goes to /dev/shm/aeron (when benchmarking on linux)
 create-sym-link:
     rm -rfv target/aeron
+    mkdir -p target/aeron
     ls -l target/aeron
