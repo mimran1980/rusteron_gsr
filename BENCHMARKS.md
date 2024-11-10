@@ -81,7 +81,7 @@ Throughput: 37,126,740 msgs/sec, 1,188,055,668 bytes/sec
 
 ### AMD EPYC 7R32 48-Core Processor Results
 
-**Note**: For these benchmarks, the Aeron directory is set to `/dev/shm` to leverage the in-memory filesystem for improved performance.
+**Note**: For these benchmarks, the Aeron directory is set to `/dev/shm`.
 
 #### Java IPC Throughput
 Results of the Java benchmark on the AMD EPYC 7R32 48-Core Processor:

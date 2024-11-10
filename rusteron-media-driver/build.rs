@@ -133,8 +133,6 @@ pub fn main() {
         .default_enum_style(EnumVariation::Rust {
             non_exhaustive: false,
         })
-        // Some padding structures use arrays > 120 elements,
-        // so we can't derive Debug implementations
         .derive_debug(true)
         .generate()
         .expect("Unable to generate aeron_driver bindings");

@@ -173,6 +173,4 @@ pub fn main() {
         &format_with_rustfmt(&stream.to_string()).unwrap(),
     )
     .unwrap();
-
-    // panic!("{}", aeron.to_str().unwrap());
 }

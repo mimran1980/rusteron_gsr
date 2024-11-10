@@ -91,8 +91,6 @@ fn run_pong(running_pong: Arc<AtomicBool>) -> Result<(), Box<dyn std::error::Err
             self.buffer_claim.frame_header_mut().flags = flags;
             self.buffer_claim.data_mut().copy_from_slice(buffer);
             self.buffer_claim.commit().unwrap();
-
-            // while self.publisher.offer(buffer, Handlers::no_reserved_value_supplier_handler()) < 0 {}
         }
     }
 
@@ -135,7 +133,6 @@ fn run_ping(
     println!("PING: pong publisher {} {}", PONG_CHANNEL, PONG_STREAM_ID);
     println!("PING: ping subscriber {} {}", PING_CHANNEL, PING_STREAM_ID);
 
-    // Set up the ping thread
     let mut buffer = vec![0u8; MESSAGE_LENGTH];
 
     let (mut handler, mut inner_handler) =
@@ -178,9 +175,7 @@ pub struct PingRoundTripHandler {
 impl AeronFragmentHandlerCallback for PingRoundTripHandler {
     fn handle_aeron_fragment_handler(&mut self, buffer: &[u8], _header: AeronHeader) {
         let time = read_i64(buffer);
-        // // println!("ping received {} {:?}", time, buffer);
         let rtt = Aeron::nano_clock() - time;
-        // // println!("RTT: {}", rtt);
         debug_assert!(rtt >= 0);
         self.histogram.record(rtt as u64).unwrap();
     }

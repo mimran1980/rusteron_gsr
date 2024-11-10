@@ -56,7 +56,6 @@ fn criterion_benchmark(c: &mut Criterion) {
     println!("PING: pong publisher {} {}", PONG_CHANNEL, PONG_STREAM_ID);
     println!("PING: ping subscriber {} {}", PING_CHANNEL, PING_STREAM_ID);
 
-    // Set up the ping thread
     let mut buffer = vec![0u8; MESSAGE_LENGTH];
 
     let mut handler = Handler::leak(PingRoundTripHandler {});
@@ -113,8 +112,6 @@ fn run_pong(stop: Arc<AtomicBool>, dir: &str) -> Result<(), Box<dyn std::error::
             self.buffer_claim.frame_header_mut().flags = flags;
             self.buffer_claim.data_mut().copy_from_slice(buffer);
             self.buffer_claim.commit().unwrap();
-
-            // while self.publisher.offer(buffer, Handlers::no_reserved_value_supplier_handler()) < 0 {}
         }
     }
 

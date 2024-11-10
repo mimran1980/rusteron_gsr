@@ -169,7 +169,6 @@ mod tests {
         let start_time = Instant::now();
 
         loop {
-            // Check if we've hit the 30-second timeout
             if start_time.elapsed() > Duration::from_secs(30) {
                 println!("Failed: exceeded 30-second timeout");
                 return Err(Box::new(std::io::Error::new(
@@ -295,7 +294,6 @@ mod tests {
         let start_time = Instant::now();
 
         loop {
-            // Check if we've hit the 30-second timeout
             if start_time.elapsed() > Duration::from_secs(30) {
                 println!("Failed: exceeded 30-second timeout");
                 return Err(Box::new(std::io::Error::new(

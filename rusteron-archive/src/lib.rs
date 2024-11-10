@@ -28,7 +28,6 @@ unsafe extern "C" fn default_encoded_credentials(
         data: ptr::null(),
         length: 0,
     });
-    // Convert it into a raw pointer to avoid double-free on drop
     Box::into_raw(empty_credentials)
 }
 
@@ -135,7 +134,6 @@ mod tests {
                 },
             ),
         )))?;
-        archive_context.set_owns_aeron_client(true)?;
         archive_context.set_idle_strategy(Some(&Handler::leak(
             AeronIdleStrategyFuncClosure::from(|work_count| {}),
         )))?;
@@ -163,16 +161,16 @@ mod tests {
         assert!(archive.get_archive_id() > 0);
 
         let channel = "aeron:ipc";
-        // let channel = "aeron:udp?endpoint=localhost:40123";
         let stream_id = 10;
 
-        let recording_id = archive.start_recording(
+        let subscription_id = archive.start_recording(
             channel,
             stream_id,
             aeron_archive_source_location_t::AERON_ARCHIVE_SOURCE_LOCATION_LOCAL,
             true,
         )?;
-        println!("recording id {}", recording_id);
+
+        println!("subscription id {}", subscription_id);
 
         let publication = aeron
             .async_add_exclusive_publication(channel, stream_id)?
@@ -180,7 +178,7 @@ mod tests {
 
         let start = Instant::now();
         while !found_recording_signal.get() && start.elapsed().as_secs() < 5 {
-            sleep(Duration::from_millis(100));
+            sleep(Duration::from_millis(50));
             archive.poll_for_recording_signals()?;
             if let Some(err) = archive.poll_for_error() {
                 panic!("{}", err);
@@ -188,41 +186,44 @@ mod tests {
         }
         assert!(start.elapsed().as_secs() < 5);
 
-        for i in 0..10 {
-            while !publication.is_connected()
-                || publication.offer(
-                    "123456".as_bytes(),
-                    Handlers::no_reserved_value_supplier_handler(),
-                ) <= 0
+        for i in 0..11 {
+            while publication.offer(
+                "123456".as_bytes(),
+                Handlers::no_reserved_value_supplier_handler(),
+            ) <= 0
             {
-                sleep(Duration::from_millis(100));
+                sleep(Duration::from_millis(50));
                 archive.poll_for_recording_signals()?;
                 if let Some(err) = archive.poll_for_error() {
                     panic!("{}", err);
                 }
             }
+            println!("sent message");
         }
         archive.stop_recording_channel_and_stream(channel, stream_id)?;
-        sleep(Duration::from_millis(100));
         drop(publication);
 
         println!("list recordings");
-        let found_recording_id = Cell::new(0);
+        let found_recording_id = Cell::new(-1);
+        let start_pos = Cell::new(-1);
+        let end_pos = Cell::new(-1);
         let handler = Handler::leak(
             crate::AeronArchiveRecordingDescriptorConsumerFuncClosure::from(
                 |d: AeronArchiveRecordingDescriptor| {
                     println!("found recording {:?}", d);
                     found_recording_id.set(d.recording_id);
+                    start_pos.set(d.start_position);
+                    end_pos.set(d.stop_position);
                 },
             ),
         );
         let start = Instant::now();
         while start.elapsed() < Duration::from_secs(5)
-            && found_recording_id.get() == 0
+            && found_recording_id.get() == -1
             && archive.list_recordings_for_uri(0, i32::MAX, channel, stream_id, Some(&handler))?
                 <= 0
         {
-            sleep(Duration::from_millis(100));
+            sleep(Duration::from_millis(50));
             archive.poll_for_recording_signals()?;
             if let Some(err) = archive.poll_for_error() {
                 panic!("{}", err);
@@ -230,37 +231,52 @@ mod tests {
         }
         assert!(start.elapsed() < Duration::from_secs(5));
         println!("start replay");
-        let params = AeronArchiveReplayParams::new(0, i32::MAX, 0, i64::MAX, 0, 0)?;
-        // assert_eq!(recording_id, found_recording_id.get());
+        let params = AeronArchiveReplayParams::new(
+            0,
+            i32::MAX,
+            start_pos.get(),
+            end_pos.get() - start_pos.get(),
+            0,
+            0,
+        )?;
+        let replay_stream_id = 45;
         let replay_session_id =
-            archive.start_replay(found_recording_id.get(), channel, stream_id, &params)?;
+            archive.start_replay(found_recording_id.get(), channel, replay_stream_id, &params)?;
+        let session_id = replay_session_id as i32;
 
-        let channel_replay = format!("{}?session-id={}", channel, replay_session_id);
+        println!("replay session id {}", replay_session_id);
+        println!("session id {}", session_id);
+        let channel_replay = format!("{}?session-id={}", channel, session_id);
+        println!("archive id: {}", archive.get_archive_id());
 
-        archive.poll_for_recording_signals()?;
+        println!("add subscription {}", channel_replay);
+        let subscription = aeron
+            .async_add_subscription(
+                &channel_replay,
+                replay_stream_id,
+                Some(&Handler::leak(AeronAvailableImageLogger)),
+                Some(&Handler::leak(AeronUnavailableImageLogger)),
+            )?
+            .poll_blocking(Duration::from_secs(10))?;
 
-        // println!("add subscription {}", channel_replay);
-        // let subscription = aeron.async_add_subscription(&channel_replay, stream_id, Handlers::no_available_image_handler(), Handlers::no_unavailable_image_handler())?
-        //     .poll_blocking(Duration::from_secs(10))?;
-        //
-        // let poll = Handler::leak(crate::AeronFragmentHandlerClosure::from(|msg, header| {
-        //         panic!("{:?}", msg);
-        // }));
-        //
-        // println!("poll");
-        // let start =  Instant::now();
-        // while start.elapsed() < Duration::from_secs(5)
-        //     && subscription.poll(Some(&poll), 100 )? <= 0 {
-        //     sleep(Duration::from_millis(1000));
-        //     archive.poll_for_recording_signals()?;
-        //     if let Some(err) = archive.poll_for_error() {
-        //         panic!("{}", err);
-        //     }
-        // }
-        // assert!(start.elapsed() < Duration::from_secs(5));
-        // println!("Replay session id: {}", replay_session_id);
+        let count = Cell::new(0);
+        let poll = Handler::leak(crate::AeronFragmentHandlerClosure::from(|msg, header| {
+            assert_eq!(msg, "123456".as_bytes().to_vec());
+            count.set(count.get() + 1);
+        }));
+
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_secs(5) && subscription.poll(Some(&poll), 100)? <= 0
+        {
+            archive.poll_for_recording_signals()?;
+            if let Some(err) = archive.poll_for_error() {
+                panic!("{}", err);
+            }
+        }
+        assert!(start.elapsed() < Duration::from_secs(5));
         println!("aeron {:?}", aeron);
         println!("ctx {:?}", archive_context);
+        assert_eq!(11, count.get());
         Ok(())
     }
 
@@ -294,36 +310,58 @@ mod tests {
             .next()
             .unwrap()
             .path();
-            let jar_path = binding.to_str().unwrap();
+            let mut jar_path = binding.to_str().unwrap();
+            let mut agent_jar = jar_path.replace("aeron-all", "aeron-agent");
 
             assert!(fs::exists(jar_path).unwrap_or_default());
+            if fs::exists(&agent_jar).unwrap_or_default() {
+                agent_jar = format!("-javaagent:{}", agent_jar);
+            } else {
+                agent_jar = " ".to_string();
+            }
+            let separator = if cfg!(target_os = "windows") {
+                ";"
+            } else {
+                ":"
+            };
+
+            let combined_jars = format!(
+                "{}{separator}{}",
+                jar_path,
+                jar_path.replace("aeron-all", "aeron-archive")
+            );
+            jar_path = &combined_jars;
+
+            let args = [
+                agent_jar.as_str(),
+                "-cp",
+                jar_path,
+                &format!("-Daeron.dir={}", aeron_dir),
+                &format!("-Daeron.archive.dir={}", archive_dir),
+                "-Daeron.spies.simulate.connection=true",
+                // "-Daeron.event.log=all", // this will only work if agent is built
+                "-Daeron.event.archive.log=all",
+                // "-Daeron.event.cluster.log=all",
+                // "-Daeron.term.buffer.sparse.file=false",
+                // "-Daeron.pre.touch.mapped.memory=true",
+                // "-Daeron.threading.mode=DEDICATED",
+                // "-Daeron.sender.idle.strategy=noop",
+                // "-Daeron.receiver.idle.strategy=noop",
+                // "-Daeron.conductor.idle.strategy=spin",
+                "-Dagrona.disable.bounds.checks=true",
+                &format!("-Daeron.archive.control.channel={}", control_channel),
+                "-Daeron.archive.replication.channel=aeron:udp?endpoint=localhost:0",
+                "-Daeron.archive.control.response.channel=aeron:udp?endpoint=localhost:0",
+                "io.aeron.archive.ArchivingMediaDriver",
+            ];
+
             println!(
-                "starting archive media driver [jar={}, shm={}, archive={}]",
-                jar_path, aeron_dir, archive_dir
+                "starting archive media driver [\n\tjava {}\n]",
+                args.join(" ")
             );
 
-            // Start the Java process with dynamic arguments
             let child = Command::new("java")
-                .args([
-                    "-cp",
-                    jar_path,
-                    &format!("-Daeron.dir={}", aeron_dir),
-                    &format!("-Daeron.archive.dir={}", archive_dir),
-                    "-Daeron.spies.simulate.connection=true",
-                    "-Daeron.event.log=all", // this will only work if agent is built
-                    "-Daeron.event.archive.log=all",
-                    // "-Daeron.term.buffer.sparse.file=false",
-                    // "-Daeron.pre.touch.mapped.memory=true",
-                    // "-Daeron.threading.mode=DEDICATED",
-                    // "-Daeron.sender.idle.strategy=noop",
-                    // "-Daeron.receiver.idle.strategy=noop",
-                    // "-Daeron.conductor.idle.strategy=spin",
-                    "-Dagrona.disable.bounds.checks=true",
-                    &format!("-Daeron.archive.control.channel={}", control_channel),
-                    "-Daeron.archive.replication.channel=aeron:udp?endpoint=localhost:0",
-                    "-Daeron.archive.control.response.channel=aeron:udp?endpoint=localhost:0",
-                    "io.aeron.archive.ArchivingMediaDriver",
-                ])
+                .args(args)
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .spawn()?;
@@ -331,9 +369,8 @@ mod tests {
             let start = Instant::now();
             while start.elapsed() < Duration::from_secs(30) && fs::read_dir(aeron_dir)?.count() < 2
             {
-                sleep(Duration::from_millis(100));
+                sleep(Duration::from_millis(50));
             }
-            sleep(Duration::from_millis(100));
 
             println!(
                 "started archive media driver [{:?}",

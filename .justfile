@@ -30,8 +30,9 @@ release:
 run-aeron-archive-driver:
     cd ./rusteron-client/aeron; ./gradlew :aeron-all:build; cd -
     cd ./rusteron-client/aeron; ./gradlew :aeron-agent:jar; cd -
-    java -cp ./rusteron-client/aeron/aeron-all/build/libs/aeron-all-*.jar \
+    java \
       -javaagent:./rusteron-client/aeron/aeron-agent/build/libs/aeron-agent-1.47.0-SNAPSHOT.jar \
+      -cp ./rusteron-client/aeron/aeron-all/build/libs/aeron-all-1.47.0-SNAPSHOT.jar:./rusteron-client/aeron/aeron-archive/build/libs/aeron-archive-1.47.0-SNAPSHOT.jar \
       -Daeron.dir=target/aeron \
       -Daeron.archive.dir=target/aeron/archive \
       -Daeron.event.log=all \
@@ -49,7 +50,7 @@ run-aeron-archive-driver:
       -Daeron.archive.control.channel=aeron:udp?endpoint=localhost:8010 \
       -Daeron.archive.replication.channel=aeron:udp?endpoint=localhost:0 \
       -Daeron.archive.control.response.channel=aeron:udp?endpoint=localhost:0 \
-      io.aeron.archive.ArchivingMediaDriver=true
+      io.aeron.archive.ArchivingMediaDriver
 
 # Run the Aeron Media Driver using Java
 run-aeron-media-driver-java:
