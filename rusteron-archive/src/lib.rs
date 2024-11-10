@@ -296,7 +296,7 @@ mod tests {
             fs::create_dir_all(archive_dir)?;
 
             let binding = fs::read_dir(format!(
-                "{}/aeron/aeron-all/build/libs",
+                "../rusteron-client/aeron/aeron-all/build/libs",
                 env!("CARGO_MANIFEST_DIR")
             ))?
             .filter(|f| f.is_ok())
