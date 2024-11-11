@@ -296,7 +296,7 @@ mod tests {
             control_channel: &str,
         ) -> io::Result<Self> {
             let gradle = if cfg!(target_os = "windows") {
-                ".\\gradlew.bat"
+                &format!("{}/aeron/gradlew.bat", env!("CARGO_MANIFEST_DIR"))
             } else {
                 "./gradlew"
             };
