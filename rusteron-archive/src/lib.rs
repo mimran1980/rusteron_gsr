@@ -295,28 +295,23 @@ mod tests {
             archive_dir: &str,
             control_channel: &str,
         ) -> io::Result<Self> {
-            let aeron_dir = format!("{}/aeron", env!("CARGO_MANIFEST_DIR"));
             let gradle = if cfg!(target_os = "windows") {
                 ".\\gradlew.bat"
             } else {
                 "./gradlew"
             };
-            // let gradle = format!("{}/{}", &aeron_dir, gradle);
-
-            for args in [
-                ":aeron-all:build",
-                ":aeron-agent:jar",
-                ":aeron-samples:jar",
-                ":aeron-archive:jar",
-            ] {
-                Command::new(&gradle)
-                    .current_dir(aeron_dir.to_string())
-                    .args([args])
-                    .stdout(Stdio::inherit())
-                    .stderr(Stdio::inherit())
-                    .spawn()?
-                    .wait()?;
-            }
+            Command::new(&gradle)
+                .current_dir(format!("{}/aeron", env!("CARGO_MANIFEST_DIR")))
+                .args([
+                    ":aeron-agent:jar",
+                    ":aeron-samples:jar",
+                    ":aeron-archive:jar",
+                    ":aeron-all:build",
+                ])
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .spawn()?
+                .wait()?;
 
             return Self::start(&aeron_dir, archive_dir, control_channel);
         }
