@@ -31,7 +31,7 @@ rusteron-code-gen = {path = "../rusteron-code-gen", version = "0"}
 
 [dev-dependencies]
 rusteron-media-driver = {path = "../rusteron-media-driver"}
-serial_test = "3.1"
+serial_test = { workspace = true }
 criterion = {workspace = true}
 
 [features]
