@@ -311,7 +311,7 @@ mod tests {
             ] {
                 println!("build {} using gradle", args);
                 Command::new(gradle)
-                    .current_dir(aeron_dir)
+                    .current_dir(aeron_dir.to_string())
                     .args([args])
                     .stdout(Stdio::inherit())
                     .stderr(Stdio::inherit())
