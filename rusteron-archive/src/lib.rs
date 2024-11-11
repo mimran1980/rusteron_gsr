@@ -319,7 +319,7 @@ mod tests {
                     .wait()?;
             }
 
-            return Self::start(aeron_dir, archive_dir, control_channel);
+            return Self::start(&aeron_dir, archive_dir, control_channel);
         }
 
         fn start(aeron_dir: &str, archive_dir: &str, control_channel: &str) -> io::Result<Self> {
