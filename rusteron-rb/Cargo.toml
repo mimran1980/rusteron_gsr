@@ -15,8 +15,6 @@ readme = "README.md"
 [dependencies]
 ctrlc = { workspace = true }
 num-format = {  workspace = true }
-hdrhistogram = { workspace = true}
-zerocopy = { workspace = true }
 
 [build-dependencies]
 bindgen = {  workspace = true }
