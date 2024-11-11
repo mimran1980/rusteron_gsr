@@ -296,12 +296,17 @@ mod tests {
             control_channel: &str,
         ) -> io::Result<Self> {
             let gradle = if cfg!(target_os = "windows") {
-                &format!("{}\\aeron\\gradlew.bat", env!("CARGO_MANIFEST_DIR"))
+                "gradlew.bat"
             } else {
                 "./gradlew"
             };
+            let dir = format!(
+                "{}{}aeron",
+                env!("CARGO_MANIFEST_DIR"),
+                std::path::MAIN_SEPARATOR
+            );
             Command::new(&gradle)
-                .current_dir(format!("{}/aeron", env!("CARGO_MANIFEST_DIR")))
+                .current_dir(dir)
                 .args([
                     ":aeron-agent:jar",
                     ":aeron-samples:jar",
