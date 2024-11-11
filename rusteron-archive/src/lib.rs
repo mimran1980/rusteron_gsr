@@ -310,7 +310,7 @@ mod tests {
                 ":aeron-archive:jar",
             ] {
                 println!("build {} using gradle", args);
-                Command::new(gradle)
+                Command::new(&gradle_file)
                     .current_dir(aeron_dir.to_string())
                     .args([args])
                     .stdout(Stdio::inherit())
