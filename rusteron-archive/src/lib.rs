@@ -301,7 +301,7 @@ mod tests {
             } else {
                 "gradlew"
             };
-            let gradle_file = format!("{}/{}", aeron_dir, gradle);
+            let gradle_file = format!("{}/{}", &aeron_dir, gradle);
 
             for args in [
                 ":aeron-all:build",
