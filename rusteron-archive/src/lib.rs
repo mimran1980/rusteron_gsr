@@ -295,21 +295,14 @@ mod tests {
             archive_dir: &str,
             control_channel: &str,
         ) -> io::Result<Self> {
+            let path = std::path::MAIN_SEPARATOR;
             let gradle = if cfg!(target_os = "windows") {
-                &format!(
-                    "{}{}aeron{}gradlew.bat",
-                    env!("CARGO_MANIFEST_DIR"),
-                    std::path::MAIN_SEPARATOR,
-                    std::path::MAIN_SEPARATOR,
-                )
+                &format!("{}{path}aeron{path}gradlew.bat", env!("CARGO_MANIFEST_DIR"),)
             } else {
                 "./gradlew"
             };
-            let dir = format!(
-                "{}{}aeron",
-                env!("CARGO_MANIFEST_DIR"),
-                std::path::MAIN_SEPARATOR
-            );
+            let dir = format!("{}{path}aeron", env!("CARGO_MANIFEST_DIR"),);
+            println!("running {} in {}", gradle, dir);
             Command::new(&gradle)
                 .current_dir(dir)
                 .args([
