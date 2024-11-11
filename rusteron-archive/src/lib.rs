@@ -295,11 +295,13 @@ mod tests {
             archive_dir: &str,
             control_channel: &str,
         ) -> io::Result<Self> {
+            let aeron_dir = format!("{}/aeron", env!("CARGO_MANIFEST_DIR"));
             let gradle = if cfg!(target_os = "windows") {
                 "gradlew.bat"
             } else {
-                "./gradlew"
+                "gradlew"
             };
+            let gradle_file = format!("{}/{}", aeron_dir, gradle);
 
             for args in [
                 ":aeron-all:build",
@@ -309,7 +311,7 @@ mod tests {
             ] {
                 println!("build {} using gradle", args);
                 Command::new(gradle)
-                    .current_dir(format!("{}/aeron", env!("CARGO_MANIFEST_DIR")))
+                    .current_dir(aeron_dir)
                     .args([args])
                     .stdout(Stdio::inherit())
                     .stderr(Stdio::inherit())
