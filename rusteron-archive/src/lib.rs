@@ -295,36 +295,29 @@ mod tests {
             archive_dir: &str,
             control_channel: &str,
         ) -> io::Result<Self> {
-            match Self::start(aeron_dir, archive_dir, control_channel) {
-                Ok(r) => {
-                    return Ok(r);
-                }
-                Err(_) => {
-                    let gradle = if cfg!(target_os = "windows") {
-                        "./gradlew.bat"
-                    } else {
-                        "./gradlew"
-                    };
+            let gradle = if cfg!(target_os = "windows") {
+                "./gradlew.bat"
+            } else {
+                "./gradlew"
+            };
 
-                    for args in [
-                        ":aeron-all:build",
-                        ":aeron-agent:jar",
-                        "aeron-samples:jar",
-                        "aeron-archive:jar",
-                    ] {
-                        println!("build {} using gradle", args);
-                        Command::new(gradle)
-                            .current_dir(format!("{}/aeron", env!("CARGO_MANIFEST_DIR")))
-                            .args([args])
-                            .stdout(Stdio::inherit())
-                            .stderr(Stdio::inherit())
-                            .spawn()?
-                            .wait()?;
-                    }
-
-                    return Self::start(aeron_dir, archive_dir, control_channel);
-                }
+            for args in [
+                ":aeron-all:build",
+                ":aeron-agent:jar",
+                ":aeron-samples:jar",
+                ":aeron-archive:jar",
+            ] {
+                println!("build {} using gradle", args);
+                Command::new(gradle)
+                    .current_dir(format!("{}/aeron", env!("CARGO_MANIFEST_DIR")))
+                    .args([args])
+                    .stdout(Stdio::inherit())
+                    .stderr(Stdio::inherit())
+                    .spawn()?
+                    .wait()?;
             }
+
+            return Self::start(aeron_dir, archive_dir, control_channel);
         }
 
         fn start(aeron_dir: &str, archive_dir: &str, control_channel: &str) -> io::Result<Self> {
