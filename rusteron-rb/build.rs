@@ -173,7 +173,9 @@ pub fn main() {
     )
     .unwrap();
 
-    copy_binds(out);
+    if std::env::var("CARGO_RELEASE").is_err() {
+        copy_binds(out);
+    }
 }
 
 // helps with easier testing

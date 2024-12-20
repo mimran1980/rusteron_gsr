@@ -2,7 +2,7 @@ use bindgen::EnumVariation;
 use cmake::Config;
 use dunce::canonicalize;
 use proc_macro2::TokenStream;
-use rusteron_code_gen::{append_to_file, format_with_rustfmt};
+use rusteron_code_gen::{append_to_file, format_token_stream, format_with_rustfmt};
 use std::path::{Path, PathBuf};
 use std::{env, fs};
 
@@ -200,7 +200,9 @@ pub fn main() {
     )
     .unwrap();
 
-    copy_binds(out);
+    if std::env::var("CARGO_RELEASE").is_err() {
+        copy_binds(out);
+    }
 }
 
 // helps with easier testing
