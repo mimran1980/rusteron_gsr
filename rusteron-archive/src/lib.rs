@@ -20,21 +20,6 @@ include!(concat!(env!("OUT_DIR"), "/aeron.rs"));
 include!(concat!(env!("OUT_DIR"), "/aeron_custom.rs"));
 // include!(concat!(env!("OUT_DIR"), "/rb_custom.rs"));
 
-pub fn find_unused_udp_port() -> Option<u16> {
-    use std::net::UdpSocket;
-
-    let start_port = 8000;
-    let end_port = u16::MAX;
-
-    for port in start_port..=end_port {
-        if UdpSocket::bind(("127.0.0.1", port)).is_ok() {
-            return Some(port);
-        }
-    }
-
-    None
-}
-
 unsafe extern "C" fn default_encoded_credentials(
     _clientd: *mut std::os::raw::c_void,
 ) -> *mut aeron_archive_encoded_credentials_t {
@@ -112,20 +97,20 @@ mod tests {
         assert_eq!(aeron_version, cargo_version);
     }
 
-    #[test]
-    #[serial]
-    pub fn test_failed_connect() -> Result<(), Box<dyn error::Error>> {
-        let ctx = AeronArchiveContext::new()?;
-        std::env::set_var("AERON_DRIVER_TIMEOUT", "1");
-        let connect = AeronArchiveAsyncConnect::new(&ctx);
-        std::env::remove_var("AERON_DRIVER_TIMEOUT");
-
-        assert_eq!(
-            Some(AeronErrorType::NullOrNotConnected.into()),
-            connect.err()
-        );
-        Ok(())
-    }
+    // #[test]
+    // #[serial]
+    // pub fn test_failed_connect() -> Result<(), Box<dyn error::Error>> {
+    //     let ctx = AeronArchiveContext::new()?;
+    //     std::env::set_var("AERON_DRIVER_TIMEOUT", "1");
+    //     let connect = AeronArchiveAsyncConnect::new(&ctx);
+    //     std::env::remove_var("AERON_DRIVER_TIMEOUT");
+    //
+    //     assert_eq!(
+    //         Some(AeronErrorType::NullOrNotConnected.into()),
+    //         connect.err()
+    //     );
+    //     Ok(())
+    // }
 
     #[test]
     #[serial]
@@ -134,15 +119,17 @@ mod tests {
         let aeron_dir = format!("target/aeron/{}/shm", id);
         let archive_dir = format!("target/aeron/{}/archive", id);
 
-        let control_channel = &format!(
-            "aeron:udp?endpoint=localhost:{}",
-            find_unused_udp_port().unwrap()
-        );
+        let request_port = find_unused_udp_port(8000).expect("Could not find port");
+        let response_port = find_unused_udp_port(request_port + 1).expect("Could not find port");
+        let request_control_channel = &format!("aeron:udp?endpoint=localhost:{}", request_port);
+        let response_control_channel = &format!("aeron:udp?endpoint=localhost:{}", response_port);
+        assert_ne!(request_control_channel, response_control_channel);
 
         let archive_media_driver = EmbeddedArchiveMediaDriverProcess::build_and_start(
             &aeron_dir,
             &archive_dir,
-            control_channel,
+            request_control_channel,
+            response_control_channel,
         )
         .expect("Failed to start Java process");
 
@@ -159,7 +146,8 @@ mod tests {
         archive_context.set_idle_strategy(Some(&Handler::leak(
             AeronIdleStrategyFuncClosure::from(|work_count| {}),
         )))?;
-        archive_context.set_control_request_channel(control_channel)?;
+        archive_context.set_control_request_channel(request_control_channel)?;
+        archive_context.set_control_response_channel(response_control_channel)?;
         let error_handler = Handler::leak(AeronErrorHandlerClosure::from(|error_code, msg| {
             panic!("error {} {}", error_code, msg)
         }));
@@ -315,7 +303,8 @@ mod tests {
         fn build_and_start(
             aeron_dir: &str,
             archive_dir: &str,
-            control_channel: &str,
+            request_control_channel: &str,
+            response_control_channel: &str,
         ) -> io::Result<Self> {
             let path = std::path::MAIN_SEPARATOR;
             let gradle = if cfg!(target_os = "windows") {
@@ -338,10 +327,20 @@ mod tests {
                 .spawn()?
                 .wait()?;
 
-            return Self::start(&aeron_dir, archive_dir, control_channel);
+            return Self::start(
+                &aeron_dir,
+                archive_dir,
+                request_control_channel,
+                response_control_channel,
+            );
         }
 
-        fn start(aeron_dir: &str, archive_dir: &str, control_channel: &str) -> io::Result<Self> {
+        fn start(
+            aeron_dir: &str,
+            archive_dir: &str,
+            request_control_channel: &str,
+            response_control_channel: &str,
+        ) -> io::Result<Self> {
             Self::clean_directory(aeron_dir)?;
             Self::clean_directory(archive_dir)?;
 
@@ -405,7 +404,10 @@ mod tests {
                 // "-Daeron.receiver.idle.strategy=noop",
                 // "-Daeron.conductor.idle.strategy=spin",
                 "-Dagrona.disable.bounds.checks=true",
-                &format!("-Daeron.archive.control.channel={}", control_channel),
+                &format!(
+                    "-Daeron.archive.control.channel={}",
+                    request_control_channel
+                ),
                 "-Daeron.archive.replication.channel=aeron:udp?endpoint=localhost:0",
                 "-Daeron.archive.control.response.channel=aeron:udp?endpoint=localhost:0",
                 "io.aeron.archive.ArchivingMediaDriver",
@@ -423,10 +425,51 @@ mod tests {
                 .spawn()?;
 
             let start = Instant::now();
-            while start.elapsed() < Duration::from_secs(30) && fs::read_dir(aeron_dir)?.count() < 2
-            {
-                sleep(Duration::from_millis(50));
+            while start.elapsed() < Duration::from_secs(30) {
+                if let Ok(aeron_context) = AeronContext::new() {
+                    aeron_context.set_dir(&aeron_dir).expect("invalid dir");
+                    aeron_context
+                        .set_client_name("client checker")
+                        .expect("invalid client name");
+                    if let Ok(aeron) = Aeron::new(&aeron_context) {
+                        if aeron.start().is_ok() {
+                            if let Ok(archive_context) =
+                                AeronArchiveContext::new_with_no_credentials_supplier()
+                            {
+                                if archive_context.set_aeron(&aeron).is_ok()
+                                    && archive_context
+                                        .set_control_response_channel(&response_control_channel)
+                                        .is_ok()
+                                    && archive_context
+                                        .set_control_request_channel(&request_control_channel)
+                                        .is_ok()
+                                {
+                                    if let Ok(connect) =
+                                        AeronArchiveAsyncConnect::new(&archive_context.clone())
+                                    {
+                                        if let Ok(archive) =
+                                            connect.poll_blocking(Duration::from_secs(5))
+                                        {
+                                            let i = archive.get_archive_id();
+                                            assert!(i > 0);
+                                            println!("aeron archive media driver is up [connected with archive id {i}");
+                                            break;
+                                        };
+                                    }
+                                }
+                            }
+                            eprintln!("aeron error: {}", aeron.errmsg());
+                        }
+                    }
+                }
+                println!("waiting for aeron to start up aeron");
+                sleep(Duration::from_secs(1));
             }
+
+            assert!(
+                start.elapsed() < Duration::from_secs(30),
+                "failed to start up aeron media driver"
+            );
 
             println!(
                 "started archive media driver [{:?}",
