@@ -46,9 +46,16 @@ impl AeronArchiveContext {
     /// This method creates a new `AeronArchiveContext` with a no-op credentials supplier.
     /// If you do not set a credentials supplier, it will segfault.
     /// This method ensures that a non-functional credentials supplier is set to avoid the segfault.
-    pub fn new_with_no_credentials_supplier() -> Result<AeronArchiveContext, AeronCError> {
+    pub fn new_with_no_credentials_supplier(
+        aeron: &Aeron,
+        request_control_channel: &str,
+        response_control_channel: &str,
+    ) -> Result<AeronArchiveContext, AeronCError> {
         let context = Self::new()?;
         context.set_no_credentials_supplier()?;
+        context.set_aeron(aeron)?;
+        context.set_control_request_channel(request_control_channel)?;
+        context.set_control_response_channel(response_control_channel)?;
         Ok(context)
     }
 }
@@ -133,7 +140,24 @@ mod tests {
         )
         .expect("Failed to start Java process");
 
-        let archive_context = AeronArchiveContext::new_with_no_credentials_supplier()?;
+        let aeron_context = AeronContext::new()?;
+        aeron_context.set_dir(&aeron_dir)?;
+        aeron_context.set_client_name("test")?;
+        aeron_context.set_publication_error_frame_handler(Some(&Handler::leak(
+            AeronPublicationErrorFrameHandlerLogger,
+        )))?;
+        let error_handler = Handler::leak(AeronErrorHandlerClosure::from(|error_code, msg| {
+            panic!("error {} {}", error_code, msg)
+        }));
+        aeron_context.set_error_handler(Some(&error_handler))?;
+        let aeron = Aeron::new(&aeron_context)?;
+        aeron.start()?;
+
+        let archive_context = AeronArchiveContext::new_with_no_credentials_supplier(
+            &aeron,
+            request_control_channel,
+            response_control_channel,
+        )?;
         let found_recording_signal = Cell::new(false);
         archive_context.set_recording_signal_consumer(Some(&Handler::leak(
             crate::AeronArchiveRecordingSignalConsumerFuncClosure::from(
@@ -146,25 +170,10 @@ mod tests {
         archive_context.set_idle_strategy(Some(&Handler::leak(
             AeronIdleStrategyFuncClosure::from(|work_count| {}),
         )))?;
-        archive_context.set_control_request_channel(request_control_channel)?;
-        archive_context.set_control_response_channel(response_control_channel)?;
-        let error_handler = Handler::leak(AeronErrorHandlerClosure::from(|error_code, msg| {
-            panic!("error {} {}", error_code, msg)
-        }));
         archive_context.set_error_handler(Some(&error_handler))?;
 
-        let aeron_context = AeronContext::new()?;
-        aeron_context.set_dir(&aeron_dir)?;
-        aeron_context.set_client_name("test")?;
-        aeron_context.set_publication_error_frame_handler(Some(&Handler::leak(
-            AeronPublicationErrorFrameHandlerLogger,
-        )))?;
-        aeron_context.set_error_handler(Some(&error_handler))?;
-        let aeron = Aeron::new(&aeron_context)?;
-        aeron.start()?;
         println!("connected to aeron");
 
-        archive_context.set_aeron(&aeron)?;
         let connect = AeronArchiveAsyncConnect::new(&archive_context.clone())?;
         let archive = connect.poll_blocking(Duration::from_secs(5))?;
 
@@ -220,10 +229,12 @@ mod tests {
         let handler = Handler::leak(
             crate::AeronArchiveRecordingDescriptorConsumerFuncClosure::from(
                 |d: AeronArchiveRecordingDescriptor| {
-                    println!("found recording {:?}", d);
-                    found_recording_id.set(d.recording_id);
-                    start_pos.set(d.start_position);
-                    end_pos.set(d.stop_position);
+                    if d.stop_position > 0 {
+                        println!("found recording {:?}", d);
+                        found_recording_id.set(d.recording_id);
+                        start_pos.set(d.start_position);
+                        end_pos.set(d.stop_position);
+                    }
                 },
             ),
         );
@@ -249,6 +260,7 @@ mod tests {
             0,
             0,
         )?;
+        println!("replay params {:?}", params);
         let replay_stream_id = 45;
         let replay_session_id =
             archive.start_replay(found_recording_id.get(), channel, replay_stream_id, &params)?;
@@ -434,28 +446,23 @@ mod tests {
                     if let Ok(aeron) = Aeron::new(&aeron_context) {
                         if aeron.start().is_ok() {
                             if let Ok(archive_context) =
-                                AeronArchiveContext::new_with_no_credentials_supplier()
+                                AeronArchiveContext::new_with_no_credentials_supplier(
+                                    &aeron,
+                                    request_control_channel,
+                                    response_control_channel,
+                                )
                             {
-                                if archive_context.set_aeron(&aeron).is_ok()
-                                    && archive_context
-                                        .set_control_response_channel(&response_control_channel)
-                                        .is_ok()
-                                    && archive_context
-                                        .set_control_request_channel(&request_control_channel)
-                                        .is_ok()
+                                if let Ok(connect) =
+                                    AeronArchiveAsyncConnect::new(&archive_context.clone())
                                 {
-                                    if let Ok(connect) =
-                                        AeronArchiveAsyncConnect::new(&archive_context.clone())
+                                    if let Ok(archive) =
+                                        connect.poll_blocking(Duration::from_secs(5))
                                     {
-                                        if let Ok(archive) =
-                                            connect.poll_blocking(Duration::from_secs(5))
-                                        {
-                                            let i = archive.get_archive_id();
-                                            assert!(i > 0);
-                                            println!("aeron archive media driver is up [connected with archive id {i}");
-                                            break;
-                                        };
-                                    }
+                                        let i = archive.get_archive_id();
+                                        assert!(i > 0);
+                                        println!("aeron archive media driver is up [connected with archive id {i}");
+                                        break;
+                                    };
                                 }
                             }
                             eprintln!("aeron error: {}", aeron.errmsg());
