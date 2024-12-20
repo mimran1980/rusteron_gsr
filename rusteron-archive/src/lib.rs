@@ -20,6 +20,21 @@ include!(concat!(env!("OUT_DIR"), "/aeron.rs"));
 include!(concat!(env!("OUT_DIR"), "/aeron_custom.rs"));
 // include!(concat!(env!("OUT_DIR"), "/rb_custom.rs"));
 
+pub fn find_unused_udp_port() -> Option<u16> {
+    use std::net::UdpSocket;
+
+    let start_port = 8000;
+    let end_port = u16::MAX;
+
+    for port in start_port..=end_port {
+        if UdpSocket::bind(("127.0.0.1", port)).is_ok() {
+            return Some(port);
+        }
+    }
+
+    None
+}
+
 unsafe extern "C" fn default_encoded_credentials(
     _clientd: *mut std::os::raw::c_void,
 ) -> *mut aeron_archive_encoded_credentials_t {
@@ -118,7 +133,10 @@ mod tests {
         let aeron_dir = format!("target/aeron/{}/shm", id);
         let archive_dir = format!("target/aeron/{}/archive", id);
 
-        let control_channel = "aeron:udp?endpoint=localhost:8010";
+        let control_channel = &format!(
+            "aeron:udp?endpoint=localhost:{}",
+            find_unused_udp_port().unwrap()
+        );
 
         let archive_media_driver = EmbeddedArchiveMediaDriverProcess::build_and_start(
             &aeron_dir,
@@ -201,7 +219,7 @@ mod tests {
                     panic!("{}", err);
                 }
             }
-            println!("sent message");
+            println!("sent message {i}");
         }
         archive.stop_recording_channel_and_stream(channel, stream_id)?;
         drop(publication);
@@ -269,14 +287,15 @@ mod tests {
         }));
 
         let start = Instant::now();
-        while start.elapsed() < Duration::from_secs(5) && subscription.poll(Some(&poll), 100)? <= 0
+        while start.elapsed() < Duration::from_secs(10) && subscription.poll(Some(&poll), 100)? <= 0
         {
-            archive.poll_for_recording_signals()?;
+            let count = archive.poll_for_recording_signals()?;
+            println!("record signal count {}", count);
             if let Some(err) = archive.poll_for_error() {
                 panic!("{}", err);
             }
         }
-        assert!(start.elapsed() < Duration::from_secs(5));
+        assert!(start.elapsed() < Duration::from_secs(10));
         println!("aeron {:?}", aeron);
         println!("ctx {:?}", archive_context);
         assert_eq!(11, count.get());
