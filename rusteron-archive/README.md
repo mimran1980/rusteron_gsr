@@ -52,9 +52,31 @@ use std::time::Instant;
 use std::cell::Cell;
 use std::thread::sleep;
 
-let control_channel = "aeron:udp?endpoint=localhost:8010";
+let request_port = find_unused_udp_port(8000).expect("Could not find port");
+let response_port = find_unused_udp_port(request_port + 1).expect("Could not find port");
+let request_control_channel = &format!("aeron:udp?endpoint=localhost:{}", request_port);
+let response_control_channel = &format!("aeron:udp?endpoint=localhost:{}", response_port);
+assert_ne!(request_control_channel, response_control_channel);
 
-let archive_context = AeronArchiveContext::new_with_no_credentials_supplier()?;
+let error_handler = Handler::leak(AeronErrorHandlerClosure::from(|error_code, msg| {
+panic!("error {} {}", error_code, msg)
+}));
+
+let aeron_context = AeronContext::new()?;
+aeron_context.set_client_name("test")?;
+aeron_context.set_publication_error_frame_handler(Some(&Handler::leak(
+AeronPublicationErrorFrameHandlerLogger,
+)))?;
+aeron_context.set_error_handler(Some(&error_handler))?;
+let aeron = Aeron::new(&aeron_context)?;
+aeron.start()?;
+println!("connected to aeron");
+
+let archive_context = AeronArchiveContext::new_with_no_credentials_supplier(
+    &aeron,
+    request_control_channel,
+    response_control_channel,
+)?;
 let found_recording_signal = Cell::new(false);
 archive_context.set_recording_signal_consumer(Some(&Handler::leak(
     AeronArchiveRecordingSignalConsumerFuncClosure::from(
@@ -67,23 +89,9 @@ archive_context.set_recording_signal_consumer(Some(&Handler::leak(
 archive_context.set_idle_strategy(Some(&Handler::leak(
     AeronIdleStrategyFuncClosure::from(|work_count| {}),
 )))?;
-archive_context.set_control_request_channel(control_channel)?;
-let error_handler = Handler::leak(AeronErrorHandlerClosure::from(|error_code, msg| {
-    panic!("error {} {}", error_code, msg)
-}));
 archive_context.set_error_handler(Some(&error_handler))?;
 
-let aeron_context = AeronContext::new()?;
-aeron_context.set_client_name("test")?;
-aeron_context.set_publication_error_frame_handler(Some(&Handler::leak(
-    AeronPublicationErrorFrameHandlerLogger,
-)))?;
-aeron_context.set_error_handler(Some(&error_handler))?;
-let aeron = Aeron::new(&aeron_context)?;
-aeron.start()?;
-println!("connected to aeron");
 
-archive_context.set_aeron(&aeron)?;
 let connect = AeronArchiveAsyncConnect::new(&archive_context.clone())?;
 let archive = connect.poll_blocking(Duration::from_secs(5))?;
 
