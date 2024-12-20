@@ -76,7 +76,6 @@ mod tests {
     use crate::{
         append_to_file, format_token_stream, format_with_rustfmt, ARCHIVE_BINDINGS, CLIENT_BINDINGS,
     };
-    use itertools::Itertools;
     use proc_macro2::TokenStream;
     use std::fs;
 
