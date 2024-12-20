@@ -99,7 +99,7 @@ mod tests {
         let patch = unsafe { crate::aeron_version_patch() };
 
         let aeron_version = format!("{}.{}.{}", major, minor, patch);
-        println!("{}", aeron_version);
+
         let cargo_version = "1.47.0";
         assert_eq!(aeron_version, cargo_version);
     }
@@ -229,8 +229,8 @@ mod tests {
         let handler = Handler::leak(
             crate::AeronArchiveRecordingDescriptorConsumerFuncClosure::from(
                 |d: AeronArchiveRecordingDescriptor| {
-                    if d.stop_position > 0 {
-                        println!("found recording {:?}", d);
+                    println!("found recording {:#?}", d);
+                    if d.stop_position > d.start_position && d.stop_position > 0 {
                         found_recording_id.set(d.recording_id);
                         start_pos.set(d.start_position);
                         end_pos.set(d.stop_position);
@@ -239,12 +239,8 @@ mod tests {
             ),
         );
         let start = Instant::now();
-        while start.elapsed() < Duration::from_secs(5)
-            && found_recording_id.get() == -1
-            && archive.list_recordings_for_uri(0, i32::MAX, channel, stream_id, Some(&handler))?
-                <= 0
-        {
-            sleep(Duration::from_millis(50));
+        while start.elapsed() < Duration::from_secs(5) && found_recording_id.get() == -1 {
+            archive.list_recordings_for_uri(0, i32::MAX, channel, stream_id, Some(&handler))?;
             archive.poll_for_recording_signals()?;
             if let Some(err) = archive.poll_for_error() {
                 panic!("{}", err);
@@ -260,7 +256,7 @@ mod tests {
             0,
             0,
         )?;
-        println!("replay params {:?}", params);
+        println!("replay params {:#?}", params);
         let replay_stream_id = 45;
         let replay_session_id =
             archive.start_replay(found_recording_id.get(), channel, replay_stream_id, &params)?;

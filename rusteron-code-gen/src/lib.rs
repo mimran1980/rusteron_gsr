@@ -74,7 +74,8 @@ mod tests {
     use crate::generator::MEDIA_DRIVER_BINDINGS;
     use crate::parser::parse_bindings;
     use crate::{
-        append_to_file, format_token_stream, format_with_rustfmt, ARCHIVE_BINDINGS, CLIENT_BINDINGS,
+        append_to_file, format_token_stream, format_with_rustfmt, ARCHIVE_BINDINGS,
+        CLIENT_BINDINGS, RB,
     };
     use proc_macro2::TokenStream;
     use std::fs;
@@ -175,7 +176,7 @@ mod tests {
 
         let file = write_to_file(TokenStream::new(), true, "rb.rs");
         for (p, w) in bindings.wrappers.values().enumerate() {
-            let code = crate::generate_rust_code(w, &bindings.wrappers, p == 0, true, true);
+            let code = crate::generate_rust_code(w, &bindings.wrappers, p == 0, true, false);
             if code.to_string().contains("ndler : Option < AeronCloseClientHandlerImpl > , rbd :) -> Result < Self , AeronCError > { let resource = Manage") {
                 panic!("{}", format_token_stream(code));
             }
@@ -189,7 +190,7 @@ mod tests {
         }
 
         let t = trybuild::TestCases::new();
-        append_to_file(&file, CLIENT_BINDINGS).unwrap();
+        append_to_file(&file, RB).unwrap();
         append_to_file(&file, "\npub fn main() {}\n").unwrap();
         t.pass(file)
     }

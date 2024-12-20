@@ -11,6 +11,7 @@ use syn::{parse_str, Type};
 
 pub const COMMON_CODE: &str = include_str!("common.rs");
 pub const CLIENT_BINDINGS: &str = include_str!("../bindings/client.rs");
+pub const RB: &str = include_str!("../bindings/rb.rs");
 pub const ARCHIVE_BINDINGS: &str = include_str!("../bindings/archive.rs");
 pub const MEDIA_DRIVER_BINDINGS: &str = include_str!("../bindings/media-driver.rs");
 

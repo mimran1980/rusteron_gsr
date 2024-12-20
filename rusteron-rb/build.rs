@@ -173,5 +173,21 @@ pub fn main() {
     )
     .unwrap();
 
-    // panic!("{}", aeron.to_str().unwrap());
+    copy_binds(out);
+}
+
+// helps with easier testing
+fn copy_binds(out: PathBuf) {
+    let cargo_base_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let custom_bindings_path = cargo_base_dir.join("../rusteron-code-gen/bindings/rb.rs");
+
+    if custom_bindings_path.exists() {
+        fs::copy(out.clone(), custom_bindings_path.clone())
+            .expect("Failed to override bindings.rs with custom bindings from rb.rs");
+    } else {
+        eprintln!(
+            "Warning: Custom bindings not found at: {}",
+            custom_bindings_path.display()
+        );
+    }
 }
