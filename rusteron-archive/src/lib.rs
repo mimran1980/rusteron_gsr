@@ -107,6 +107,7 @@ mod tests {
         let patch = unsafe { crate::aeron_version_patch() };
 
         let aeron_version = format!("{}.{}.{}", major, minor, patch);
+        println!("{}", aeron_version);
         let cargo_version = "1.47.0";
         assert_eq!(aeron_version, cargo_version);
     }
@@ -290,12 +291,14 @@ mod tests {
         while start.elapsed() < Duration::from_secs(10) && subscription.poll(Some(&poll), 100)? <= 0
         {
             let count = archive.poll_for_recording_signals()?;
-            println!("record signal count {}", count);
             if let Some(err) = archive.poll_for_error() {
                 panic!("{}", err);
             }
         }
-        assert!(start.elapsed() < Duration::from_secs(10));
+        assert!(
+            start.elapsed() < Duration::from_secs(10),
+            "messages not received {count:?}"
+        );
         println!("aeron {:?}", aeron);
         println!("ctx {:?}", archive_context);
         assert_eq!(11, count.get());
@@ -385,6 +388,8 @@ mod tests {
 
             let args = [
                 agent_jar.as_str(),
+                "--add-opens",
+                "java.base/jdk.internal.misc=ALL-UNNAMED",
                 "-cp",
                 jar_path,
                 &format!("-Daeron.dir={}", aeron_dir),

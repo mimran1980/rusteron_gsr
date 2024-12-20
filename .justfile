@@ -31,6 +31,7 @@ run-aeron-archive-driver:
     cd ./rusteron-client/aeron; ./gradlew :aeron-all:build; cd -
     cd ./rusteron-client/aeron; ./gradlew :aeron-agent:jar; cd -
     java \
+      --add-opens java.base/jdk.internal.misc=ALL-UNNAMED \
       -javaagent:./rusteron-client/aeron/aeron-agent/build/libs/aeron-agent-1.47.0-SNAPSHOT.jar \
       -cp ./rusteron-client/aeron/aeron-all/build/libs/aeron-all-1.47.0-SNAPSHOT.jar:./rusteron-client/aeron/aeron-archive/build/libs/aeron-archive-1.47.0-SNAPSHOT.jar \
       -Daeron.dir=target/aeron \
@@ -56,6 +57,7 @@ run-aeron-archive-driver:
 run-aeron-media-driver-java:
     cd ./rusteron-client/aeron; ./gradlew :aeron-all:build; cd -
     java -cp ./rusteron-client/aeron/aeron-all/build/libs/aeron-all-*.jar \
+      --add-opens java.base/jdk.internal.misc=ALL-UNNAMED \
       -Daeron.dir=target/aeron \
       -Daeron.term.buffer.sparse.file=false \
       -Daeron.pre.touch.mapped.memory=true \
@@ -86,6 +88,7 @@ benchmark-ipc-throughput-java:
     cd ./rusteron-client/aeron; ./gradlew :aeron-all:build; cd -
     cd ./rusteron-client/aeron; ./gradlew :aeron-samples:jar; cd -
     java -cp ./rusteron-client/aeron/aeron-all/build/libs/aeron-all-1.47.0-SNAPSHOT.jar:./rusteron-client/aeron/aeron-samples/build/libs/aeron-samples-1.47.0-SNAPSHOT.jar \
+      --add-opens java.base/jdk.internal.misc=ALL-UNNAMED \
       -Daeron.dir=target/aeron \
       -Daeron.term.buffer.sparse.file=false \
       -Daeron.pre.touch.mapped.memory=true \
@@ -131,6 +134,7 @@ benchmark-ipc-throughput-rust-profiler:
 benchmark-embedded-ping-pong-java:
     cd ./rusteron-client/aeron; ./gradlew :aeron-samples:jar; cd -
     java -cp ./rusteron-client/aeron/aeron-all/build/libs/aeron-all-1.47.0-SNAPSHOT.jar:./rusteron-client/aeron/aeron-samples/build/libs/aeron-samples-1.47.0-SNAPSHOT.jar \
+      --add-opens java.base/jdk.internal.misc=ALL-UNNAMED \
       -Daeron.dir=target/aeron \
       -Daeron.term.buffer.sparse.file=false \
       -Daeron.pre.touch.mapped.memory=true \
