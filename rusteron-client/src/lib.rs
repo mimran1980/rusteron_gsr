@@ -85,7 +85,7 @@ mod tests {
         ctx.set_on_available_counter(Some(&Handler::leak(AeronAvailableCounterLogger)))?;
         ctx.set_on_new_exclusive_publication(Some(&Handler::leak(AeronNewPublicationLogger)))?;
 
-        println!("creating client");
+        println!("creating client [simple_large_send test]");
         let aeron = Aeron::new(&ctx)?;
         println!("starting client");
 
@@ -216,7 +216,7 @@ mod tests {
         });
         ctx.set_error_handler(Some(&Handler::leak(error_handler)))?;
 
-        println!("creating client");
+        println!("creating client [try_claim test]");
         let aeron = Aeron::new(&ctx)?;
         println!("starting client");
 
@@ -361,7 +361,7 @@ mod tests {
         println!("starting client");
 
         aeron.start()?;
-        println!("client started");
+        println!("client started [counters test]");
 
         let counter = aeron
             .async_add_counter(123, "test_counter".as_bytes(), "this is a test")?
