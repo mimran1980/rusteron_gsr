@@ -76,6 +76,7 @@ mod tests {
     use crate::{
         append_to_file, format_token_stream, format_with_rustfmt, ARCHIVE_BINDINGS, CLIENT_BINDINGS,
     };
+    use itertools::Itertools;
     use proc_macro2::TokenStream;
     use std::fs;
 
@@ -146,6 +147,41 @@ mod tests {
             }
 
             write_to_file(code, false, "client.rs");
+        }
+
+        for handler in &bindings.handlers {
+            let code = crate::generate_handlers(handler, &bindings);
+            append_to_file(&file, &format_with_rustfmt(&code.to_string()).unwrap()).unwrap();
+        }
+
+        let t = trybuild::TestCases::new();
+        append_to_file(&file, CLIENT_BINDINGS).unwrap();
+        append_to_file(&file, "\npub fn main() {}\n").unwrap();
+        t.pass(file)
+    }
+
+    #[test]
+    #[cfg(not(target_os = "windows"))] // the generated bindings have different sizes
+    fn rb() {
+        let bindings = parse_bindings(&"../rusteron-code-gen/bindings/rb.rs".into());
+        // dbg!(bindings.wrappers.iter().filter(|(_,w)|w.methods.iter().any(|m|m.fn_name.ends_with("_poll")) ).next());
+        // assert_eq!(
+        //     0,
+        //     bindings.methods.len(),
+        //     "expected all methods to have been matched {:#?}",
+        //     bindings.methods
+        // );
+
+        // panic!("{:#?}", bindings.wrappers.values().map(|v| v.class_name.to_string()).collect_vec());
+
+        let file = write_to_file(TokenStream::new(), true, "rb.rs");
+        for (p, w) in bindings.wrappers.values().enumerate() {
+            let code = crate::generate_rust_code(w, &bindings.wrappers, p == 0, true, true);
+            if code.to_string().contains("ndler : Option < AeronCloseClientHandlerImpl > , rbd :) -> Result < Self , AeronCError > { let resource = Manage") {
+                panic!("{}", format_token_stream(code));
+            }
+
+            write_to_file(code, false, "rb.rs");
         }
 
         for handler in &bindings.handlers {

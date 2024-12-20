@@ -793,6 +793,7 @@ impl CWrapper {
                         #(#method_docs)*
                         pub fn #fn_name #where_clause(#(#new_args),*) -> Result<Self, AeronCError> {
                             #(#lets)*
+                            // new by using constructor
                             let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {
                                 #(#drop_copies);*
                             })));
@@ -902,6 +903,7 @@ impl CWrapper {
                     #[inline]
                     pub fn new #where_clause(#(#new_args),*) -> Result<Self, AeronCError> {
                         #(#lets)*
+                        // no constructor in c bindings
                         let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {
                             #(#drop_copies);*
                         })));
