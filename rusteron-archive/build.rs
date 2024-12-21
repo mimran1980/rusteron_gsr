@@ -200,6 +200,7 @@ pub fn main() {
     )
     .unwrap();
 
+    #[cfg(debug_assertions)]
     if std::env::var("CARGO_RELEASE").is_err() {
         copy_binds(out);
     }
