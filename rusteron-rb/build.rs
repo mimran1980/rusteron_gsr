@@ -172,9 +172,7 @@ pub fn main() {
         &format_with_rustfmt(&stream.to_string()).unwrap(),
     )
     .unwrap();
-
-    #[cfg(debug_assertions)]
-    if std::env::var("CARGO_RELEASE").is_err() {
+    if std::env::var("COPY_BINDINGS").is_ok() {
         copy_binds(out);
     }
 }
