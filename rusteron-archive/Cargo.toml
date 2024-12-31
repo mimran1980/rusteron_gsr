@@ -13,7 +13,8 @@ description = "Extends the Aeron client to include archiving features, such as r
 readme = "README.md"
 
 exclude = [
-    "**/.gradle/**",
+    "**/aeron/.gradle/**",
+    "**/aeron/buildSrc/.gradle/**",
     "**/aeron/build/**",
     "**/aeron/aeron-agent/build/**",
     "**/aeron/aeron-all/build/**",

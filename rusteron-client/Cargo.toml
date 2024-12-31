@@ -13,7 +13,8 @@ description = "Provides core client functionalities for interacting with the Aer
 readme = "README.md"
 
 exclude = [
-    "**/.gradle/**",
+    "**/aeron/.gradle/**",
+    "**/aeron/buildSrc/.gradle/**",
     "**/aeron/build/**",
     "**/aeron/aeron-agent/build/**",
     "**/aeron/aeron-all/build/**",

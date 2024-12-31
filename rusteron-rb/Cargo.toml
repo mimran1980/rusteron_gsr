@@ -13,7 +13,8 @@ description = "Provides ring buffer and broadcast functionalities via aeron c bi
 readme = "README.md"
 
 exclude = [
-    "**/.gradle/**",
+    "**/aeron/.gradle/**",
+    "**/aeron/buildSrc/.gradle/**",
     "**/aeron/build/**",
     "**/aeron/aeron-agent/build/**",
     "**/aeron/aeron-all/build/**",

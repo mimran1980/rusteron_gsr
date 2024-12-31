@@ -13,7 +13,8 @@ description = "Implements the Aeron Media Driver, a core component for managing 
 readme = "README.md"
 
 exclude = [
-    "**/.gradle/**",
+    "**/aeron/.gradle/**",
+    "**/aeron/buildSrc/.gradle/**",
     "**/aeron/build/**",
     "**/aeron/aeron-agent/build/**",
     "**/aeron/aeron-all/build/**",
