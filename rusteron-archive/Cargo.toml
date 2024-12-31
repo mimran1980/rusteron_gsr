@@ -14,7 +14,21 @@ readme = "README.md"
 
 exclude = [
     "**/.gradle/**",
-    "**/aeron/**/build/**",
+    "**/aeron/build/**",
+    "**/aeron/aeron-agent/build/**",
+    "**/aeron/aeron-all/build/**",
+    "**/aeron/aeron-annotations/build/**",
+    "**/aeron/aeron-archive/build/**",
+    "**/aeron/aeron-client/build/**",
+    "**/aeron/aeron-cluster/build/**",
+    "**/aeron/aeron-driver/build/**",
+    "**/aeron/aeron-samples/build/**",
+    "**/aeron/aeron-system-tests/build/**",
+    "**/aeron/aeron-test-support/build/**",
+    "**/aeron/buildSrc/build/**",
+    "**/aeron/config/build/**",
+    "**/aeron/cppbuild/build/**",
+    "**/aeron/gradle/build/**",
 ]
 
 [dependencies]
