@@ -16,6 +16,12 @@ exclude = [
     "**/.gradle/**",
     "**/aeron/**/build/**",
 ]
+# when doing a release .git is normally excluded, problem is when building aeron c bindings it invokes gradle
+# and it gets version number from git hence why it has to be included
+include = [
+    "**/aeron/.git/**",   # Explicitly include the .git directory
+]
+
 
 [dependencies]
 regex = { workspace = true}
