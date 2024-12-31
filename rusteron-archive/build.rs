@@ -73,6 +73,7 @@ pub fn main() {
                 ":aeron-archive:jar",
                 ":aeron-all:build",
                 ":aeron-all:assemble",
+                ":aeron-archive:assemble",
             ])
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
