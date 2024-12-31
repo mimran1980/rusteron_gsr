@@ -3,6 +3,7 @@ use cmake::Config;
 use dunce::canonicalize;
 use log::info;
 use proc_macro2::TokenStream;
+use regex::Regex;
 use rusteron_code_gen::{append_to_file, format_with_rustfmt};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -233,7 +234,7 @@ fn run_gradle_build_if_missing(aeron_path: &PathBuf) {
                 ":aeron-agent:jar",
                 ":aeron-samples:jar",
                 ":aeron-archive:jar",
-                ":aeron-all:build",
+                ":aeron-all:jar",
                 ":buildSrc:jar",
             ])
             .stdout(Stdio::inherit())
@@ -254,27 +255,41 @@ fn update_gradle_if_git_is_missing() {
     if !aeron_git_dir.exists() {
         println!("Aeron .git directory not found. Updating build.gradle with a dummy hash.");
 
-        // Read the existing build.gradle
         let gradle_content =
             fs::read_to_string(&aeron_build_gradle).expect("Failed to read aeron/build.gradle");
 
-        // Replace Git-specific logic with a dummy hash
-        let updated_gradle_content = gradle_content.replace(
+        // Replace `gitCommitHash` with a dummy hash as function fails
+        let mut updated_gradle_content = gradle_content.replace(
             r#"def gitCommitHash = io.aeron.build.GithubUtil.currentGitHash("${projectDir}")"#,
             r#"def gitCommitHash = "dummy-hash""#,
         );
 
-        // Write the updated build.gradle
+        // for some reason io.aeron plugins don't work, we don't actually need them so they get removed
+        // ALL of this effort just because crates.io removes .git directory !!!!!
+        let patterns = vec![
+            // Remove dedupJar task block
+            r"(?s)tasks\.register\('dedupJar',\s*io\.aeron\.build\.DeduplicateTask\)\s*\{.*?\}",
+            // Remove shadowJar.finalizedBy dedupJar
+            r"shadowJar\.finalizedBy\s+dedupJar",
+            // Remove asciidoctorGithub task block
+            r"(?s)tasks\.register\('asciidoctorGithub',\s*io\.aeron\.build\.AsciidoctorPreprocessTask\)\s*\{.*?\}",
+            // Remove tutorialPublish task block
+            r"(?s)tasks\.register\('tutorialPublish',\s*io\.aeron\.build\.TutorialPublishTask\)\s*\{.*?\}",
+        ];
+
+        for pattern in patterns {
+            let re = Regex::new(pattern).expect("Invalid regex pattern");
+            updated_gradle_content = re.replace_all(&updated_gradle_content, "").to_string();
+        }
+
         fs::write(&aeron_build_gradle, updated_gradle_content)
             .expect("Failed to write updated aeron/build.gradle");
     }
 
-    // Ensure the build script is rerun if the .git directory changes
     println!("cargo:rerun-if-changed=aeron/.git");
     println!("cargo:rerun-if-changed=aeron/build.gradle");
 }
 
-// helps with easier testing
 fn copy_binds(out: PathBuf) {
     let cargo_base_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let custom_bindings_path = cargo_base_dir.join("../rusteron-code-gen/bindings/archive.rs");
