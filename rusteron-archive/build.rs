@@ -72,6 +72,7 @@ pub fn main() {
                 ":aeron-samples:jar",
                 ":aeron-archive:jar",
                 ":aeron-all:build",
+                ":aeron-all:assemble",
             ])
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
