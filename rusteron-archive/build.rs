@@ -234,9 +234,6 @@ fn run_gradle_build_if_missing(aeron_path: &PathBuf) {
                 ":aeron-samples:jar",
                 ":aeron-archive:jar",
                 ":aeron-all:build",
-                ":aeron-all:assemble",
-                ":aeron-archive:assemble",
-                ":aeron-archive:assemble",
                 ":buildSrc:jar",
             ])
             .stdout(Stdio::inherit())
