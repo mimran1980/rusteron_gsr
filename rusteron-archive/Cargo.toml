@@ -1,6 +1,6 @@
 [package]
 name = "rusteron-archive"
-version = "0.1.41"
+version = "0.1.42"
 edition = "2021"
 authors = ["Mo Imran <mimran1980@gmail.com>"]
 license = "MIT OR Apache-2.0"
@@ -16,12 +16,6 @@ exclude = [
     "**/.gradle/**",
     "**/aeron/**/build/**",
 ]
-# when doing a release .git is normally excluded, problem is when building aeron c bindings it invokes gradle
-# and it gets version number from git hence why it has to be included
-include = [
-    "**/aeron/.git/**",   # Explicitly include the .git directory
-]
-
 
 [dependencies]
 regex = { workspace = true}

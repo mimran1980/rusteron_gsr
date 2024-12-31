@@ -45,41 +45,13 @@ impl LinkType {
 }
 
 pub fn main() {
+    update_gradle_if_git_is_missing();
+
     let aeron_path = canonicalize(Path::new("./aeron")).unwrap();
     let header_path = aeron_path.join("aeron-archive/src/main/c");
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
 
-    // need to build gradle files
-    if !aeron_path
-        .join("aeron-all")
-        .join("build")
-        .join("libs")
-        .exists()
-    {
-        let path = std::path::MAIN_SEPARATOR;
-        let gradle = if cfg!(target_os = "windows") {
-            &format!("{}{path}aeron{path}gradlew.bat", env!("CARGO_MANIFEST_DIR"),)
-        } else {
-            "./gradlew"
-        };
-        let dir = format!("{}{path}aeron", env!("CARGO_MANIFEST_DIR"),);
-        info!("running {} in {}", gradle, dir);
-
-        Command::new(gradle)
-            .current_dir(dir)
-            .args([
-                ":aeron-agent:jar",
-                ":aeron-samples:jar",
-                ":aeron-archive:jar",
-                ":aeron-all:build",
-                ":aeron-all:assemble",
-                ":aeron-archive:assemble",
-            ])
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .spawn().expect("failed to run gradle, which is required to build aeron-archive c lib. Please refer to wiki page regarding build setup")
-            .wait().expect("gradle returned an error");
-    }
+    run_gradle_build_if_missing(&aeron_path);
 
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=bindings.h");
@@ -237,6 +209,69 @@ pub fn main() {
     if std::env::var("COPY_BINDINGS").is_ok() {
         copy_binds(out);
     }
+}
+
+fn run_gradle_build_if_missing(aeron_path: &PathBuf) {
+    if !aeron_path
+        .join("aeron-all")
+        .join("build")
+        .join("libs")
+        .exists()
+    {
+        let path = std::path::MAIN_SEPARATOR;
+        let gradle = if cfg!(target_os = "windows") {
+            &format!("{}{path}aeron{path}gradlew.bat", env!("CARGO_MANIFEST_DIR"),)
+        } else {
+            "./gradlew"
+        };
+        let dir = format!("{}{path}aeron", env!("CARGO_MANIFEST_DIR"),);
+        info!("running {} in {}", gradle, dir);
+
+        Command::new(gradle)
+            .current_dir(dir)
+            .args([
+                ":aeron-agent:jar",
+                ":aeron-samples:jar",
+                ":aeron-archive:jar",
+                ":aeron-all:build",
+                ":aeron-all:assemble",
+                ":aeron-archive:assemble",
+            ])
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .spawn().expect("failed to run gradle, which is required to build aeron-archive c lib. Please refer to wiki page regarding build setup")
+            .wait().expect("gradle returned an error");
+    }
+}
+
+/// crates.io will exclude .git directory when publishing but aeron gradle build will fail as it
+/// uses the .git directory to set version/hash for project
+fn update_gradle_if_git_is_missing() {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let aeron_git_dir = Path::new(manifest_dir).join("aeron/.git");
+    let aeron_build_gradle = Path::new(manifest_dir).join("aeron/build.gradle");
+
+    if !aeron_git_dir.exists() {
+        println!("Aeron .git directory not found. Updating build.gradle with a dummy hash.");
+
+        // Read the existing build.gradle
+        let gradle_content =
+            fs::read_to_string(&aeron_build_gradle).expect("Failed to read aeron/build.gradle");
+
+        // Replace Git-specific logic with a dummy hash
+        let updated_gradle_content = gradle_content.replace(
+            r#"def gitCommitHash = io.aeron.build.GithubUtil.currentGitHash("${projectDir}")"#,
+            r#"def gitCommitHash = "dummy-hash""#,
+        );
+
+        // Write the updated build.gradle
+        fs::write(&aeron_build_gradle, updated_gradle_content)
+            .expect("Failed to write updated aeron/build.gradle");
+    }
+
+    // Ensure the build script is rerun if the .git directory changes
+    println!("cargo:rerun-if-changed=aeron/.git");
+    println!("cargo:rerun-if-changed=aeron/build.gradle");
 }
 
 // helps with easier testing
