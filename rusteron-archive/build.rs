@@ -45,13 +45,6 @@ impl LinkType {
 }
 
 pub fn main() {
-    println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=bindings.h");
-
-    if pkg_config::probe_library("uuid").is_err() {
-        eprintln!("uuid lib not found in path");
-    }
-
     let aeron_path = canonicalize(Path::new("./aeron")).unwrap();
     let header_path = aeron_path.join("aeron-archive/src/main/c");
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
@@ -84,6 +77,13 @@ pub fn main() {
             .stderr(Stdio::inherit())
             .spawn().expect("failed to run gradle, which is required to build aeron-archive c lib. Please refer to wiki page regarding build setup")
             .wait().expect("gradle returned an error");
+    }
+
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=bindings.h");
+
+    if pkg_config::probe_library("uuid").is_err() {
+        eprintln!("uuid lib not found in path");
     }
 
     let link_type = LinkType::detect();
