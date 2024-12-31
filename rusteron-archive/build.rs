@@ -3,7 +3,6 @@ use cmake::Config;
 use dunce::canonicalize;
 use log::info;
 use proc_macro2::TokenStream;
-use regex::Regex;
 use rusteron_code_gen::{append_to_file, format_with_rustfmt};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -210,7 +209,7 @@ pub fn main() {
     }
 }
 
-fn run_gradle_build_if_missing(aeron_path: &PathBuf) {
+fn run_gradle_build_if_missing(aeron_path: &Path) {
     if !aeron_path
         .join("aeron-all")
         .join("build")

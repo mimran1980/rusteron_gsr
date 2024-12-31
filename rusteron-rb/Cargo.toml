@@ -12,6 +12,22 @@ documentation = "https://mimran1980.github.io/rusteron/rusteron_rb/index.html"
 description = "Provides ring buffer and broadcast functionalities via aeron c bindings, allowing efficient, low-latency message passing between different threads or processes. This module implements Single Producer, Single Consumer (SPSC) ring buffers, Multi-Producer, Single Consumer (MPSC) ring buffers, and broadcast channels."
 readme = "README.md"
 
+exclude = [
+    "**/.gradle/**",
+    "**/aeron/build/**",
+    "**/aeron/aeron-agent/build/**",
+    "**/aeron/aeron-all/build/**",
+    "**/aeron/aeron-annotations/build/**",
+    "**/aeron/aeron-archive/build/**",
+    "**/aeron/aeron-client/build/**",
+    "**/aeron/aeron-cluster/build/**",
+    "**/aeron/aeron-driver/build/**",
+    "**/aeron/aeron-samples/build/**",
+    "**/aeron/aeron-system-tests/build/**",
+    "**/aeron/aeron-test-support/build/**",
+    "**/aeron/buildSrc/build/**",
+]
+
 [dependencies]
 ctrlc = { workspace = true }
 num-format = {  workspace = true }

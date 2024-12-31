@@ -26,9 +26,6 @@ exclude = [
     "**/aeron/aeron-system-tests/build/**",
     "**/aeron/aeron-test-support/build/**",
     "**/aeron/buildSrc/build/**",
-    "**/aeron/config/build/**",
-    "**/aeron/cppbuild/build/**",
-    "**/aeron/gradle/build/**",
 ]
 
 [dependencies]
