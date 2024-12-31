@@ -96,7 +96,7 @@ impl<T> Drop for ManagedCResource<T> {
             let _ = self.close(); // Ignore errors during an automatic drop to avoid panics.
 
             if self.cleanup_struct {
-                log::info!("closing rust struct resource: {:?}", self);
+                log::info!("closing rust struct resource: {:?}", resource);
                 unsafe {
                     let _ = Box::from_raw(resource);
                 }

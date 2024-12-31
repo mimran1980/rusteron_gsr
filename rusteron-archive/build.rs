@@ -242,6 +242,7 @@ fn run_gradle_build_if_missing(aeron_path: &PathBuf) {
             .spawn().expect("failed to run gradle, which is required to build aeron-archive c lib. Please refer to wiki page regarding build setup")
             .wait().expect("gradle returned an error");
     }
+    println!("cargo:rerun-if-changed=aeron/aeron-all/build/libs");
 }
 
 /// crates.io will exclude .git directory when publishing but aeron gradle build will fail as it
