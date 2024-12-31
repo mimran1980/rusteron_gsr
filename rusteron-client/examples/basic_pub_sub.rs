@@ -1,3 +1,4 @@
+use log::error;
 use rusteron_client::*;
 use std::cell::Cell;
 use std::error;
@@ -16,13 +17,13 @@ pub fn main() -> Result<(), Box<dyn error::Error>> {
     aeron.start()?;
     println!("client started");
     let publisher = aeron
-        .async_add_publication("aeron:ipc", 123)?
+        .async_add_publication(AERON_IPC_STREAM, 123)?
         .poll_blocking(Duration::from_secs(5))?;
     println!("created publisher");
 
     let subscription = aeron
         .async_add_subscription(
-            "aeron:ipc",
+            AERON_IPC_STREAM,
             123,
             Handlers::no_available_image_handler(),
             Handlers::no_unavailable_image_handler(),
@@ -41,7 +42,7 @@ pub fn main() -> Result<(), Box<dyn error::Error>> {
                 Handlers::no_reserved_value_supplier_handler(),
             ) < 1
             {
-                eprintln!("failed to send message");
+                error!("failed to send message");
             }
         })
     };

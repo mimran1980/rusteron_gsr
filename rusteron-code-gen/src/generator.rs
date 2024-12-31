@@ -832,7 +832,7 @@ impl CWrapper {
                 pub fn new_zeroed() -> Result<Self, AeronCError> {
                     let resource = ManagedCResource::new(
                         move |ctx_field| {
-                            println!("creating zeroed empty resource {}", stringify!(#type_name));
+                            log::info!("creating zeroed empty resource {}", stringify!(#type_name));
                             let inst: #type_name = unsafe { std::mem::zeroed() };
                             let inner_ptr: *mut #type_name = Box::into_raw(Box::new(inst));
                             unsafe { *ctx_field = inner_ptr };
@@ -1293,7 +1293,7 @@ pub fn generate_handlers(handler: &CHandler, bindings: &CBinding) -> TokenStream
         pub struct #logger_type_name;
         impl #closure_type_name for #logger_type_name {
             fn #handle_method_name(&mut self, #(#closure_unused_args),*) -> #closure_return_type {
-                println!("{}", stringify!(#handle_method_name));
+                log::info!("{}", stringify!(#handle_method_name));
                 #logger_return_type
             }
         }
@@ -1406,6 +1406,13 @@ pub fn generate_rust_code(
                 new_method
                     .fn_name
                     .replace(&format!("{}_", client_class.without_name), "")
+            );
+            let client_type_method_name_without_async = format_ident!(
+                "{}",
+                new_method
+                    .fn_name
+                    .replace(&format!("{}_", client_class.without_name), "")
+                    .replace("async_", "")
             );
 
             let init_args: Vec<proc_macro2::TokenStream> = poll_method
@@ -1562,6 +1569,14 @@ pub fn generate_rust_code(
                 }
             }
 
+            impl #client_type {
+                #[inline]
+                pub fn #client_type_method_name_without_async #where_clause_async(&self #(
+            , #async_new_args_for_client)*,  timeout: std::time::Duration) -> Result<#main_class_name, AeronCError> {
+                    #async_class_name::new(self, #(#async_new_args_name_only),*)?.poll_blocking(timeout)
+                }
+            }
+
             impl #async_class_name {
                 #[inline]
                 pub fn new #where_clause_async (#(#async_new_args),*) -> Result<Self, AeronCError> {
@@ -1598,9 +1613,10 @@ pub fn generate_rust_code(
                         if let Some(publication) = self.poll() {
                             return Ok(publication);
                         }
+                        #[cfg(debug_assertions)]
                         std::thread::sleep(std::time::Duration::from_millis(10));
                     }
-                    println!("failed async poll for {:?}", self);
+                    log::error!("failed async poll for {:?}", self);
                     Err(AeronErrorType::TimedOut.into())
                 }
             }
@@ -1704,6 +1720,20 @@ pub fn generate_rust_code(
             pub fn get_inner(&self) -> *mut #type_name {
                 self.inner.get()
             }
+
+
+            // #[inline(always)]
+            // pub fn get_inner_and_disable_drop(&self) -> *mut #type_name {
+            //     unsafe {
+            //         if !*self.inner.borrowed.get() {
+            //             log::info!("{:?} disabling auto-drop as being used in another place, must be manually dropped", self);
+            //             self.inner.disable_drop();
+            //         }
+            //     }
+            //     self.inner.get()
+            // }
+
+
         }
 
         impl std::ops::Deref for #class_name {

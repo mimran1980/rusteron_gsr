@@ -13,6 +13,7 @@
 pub mod bindings {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
+
 use bindings::*;
 include!(concat!(env!("OUT_DIR"), "/aeron.rs"));
 include!(concat!(env!("OUT_DIR"), "/aeron_custom.rs"));
@@ -21,6 +22,7 @@ include!(concat!(env!("OUT_DIR"), "/aeron_custom.rs"));
 #[cfg(test)]
 mod tests {
     use super::*;
+    use log::{error, info};
     use serial_test::serial;
     use std::error;
     use std::io::Write;
@@ -32,6 +34,10 @@ mod tests {
     #[test]
     #[serial]
     fn version_check() -> Result<(), Box<dyn error::Error>> {
+        let _ = env_logger::Builder::new()
+            .is_test(true)
+            .filter_level(log::LevelFilter::Info)
+            .try_init();
         let major = unsafe { crate::aeron_version_major() };
         let minor = unsafe { crate::aeron_version_minor() };
         let patch = unsafe { crate::aeron_version_patch() };
@@ -43,7 +49,7 @@ mod tests {
         let ctx = AeronContext::new()?;
         let mut error_count = 1;
         let error_handler = AeronErrorHandlerClosure::from(|error_code, msg| {
-            eprintln!("ERROR: aeron error {}: {}", error_code, msg);
+            error!("aeron error {}: {}", error_code, msg);
             error_count += 1;
         });
 
@@ -57,6 +63,10 @@ mod tests {
     #[test]
     #[serial]
     pub fn simple_large_send() -> Result<(), Box<dyn error::Error>> {
+        let _ = env_logger::Builder::new()
+            .is_test(true)
+            .filter_level(log::LevelFilter::Info)
+            .try_init();
         let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
         media_driver_ctx.set_dir_delete_on_shutdown(true)?;
         media_driver_ctx.set_dir_delete_on_start(true)?;
@@ -73,7 +83,7 @@ mod tests {
         assert_eq!(media_driver_ctx.get_dir(), ctx.get_dir());
         let mut error_count = 1;
         let error_handler = AeronErrorHandlerClosure::from(|error_code, msg| {
-            eprintln!("ERROR: aeron error {}: {}", error_code, msg);
+            error!("aeron error {}: {}", error_code, msg);
             error_count += 1;
         });
         ctx.set_error_handler(Some(&Handler::leak(error_handler)))?;
@@ -85,31 +95,31 @@ mod tests {
         ctx.set_on_available_counter(Some(&Handler::leak(AeronAvailableCounterLogger)))?;
         ctx.set_on_new_exclusive_publication(Some(&Handler::leak(AeronNewPublicationLogger)))?;
 
-        println!("creating client [simple_large_send test]");
+        info!("creating client [simple_large_send test]");
         let aeron = Aeron::new(&ctx)?;
-        println!("starting client");
+        info!("starting client");
 
         aeron.start()?;
-        println!("client started");
+        info!("client started");
         let publisher = aeron
-            .async_add_publication("aeron:ipc", 123)?
+            .async_add_publication(AERON_IPC_STREAM, 123)?
             .poll_blocking(Duration::from_secs(5))?;
-        println!("created publisher");
+        info!("created publisher");
 
         let subscription = aeron
             .async_add_subscription(
-                "aeron:ipc",
+                AERON_IPC_STREAM,
                 123,
                 Handlers::no_available_image_handler(),
                 Handlers::no_unavailable_image_handler(),
             )?
             .poll_blocking(Duration::from_secs(5))
             .unwrap();
-        println!("created subscription");
+        info!("created subscription");
 
         // pick a large enough size to confirm fragement assembler is working
         let string_len = media_driver_ctx.ipc_mtu_length * 100;
-        println!("string length: {}", string_len);
+        info!("string length: {}", string_len);
 
         let publisher_handler = {
             let stop = stop.clone();
@@ -130,7 +140,7 @@ mod tests {
                                 // ignore
                             }
                             _ => {
-                                eprintln!(
+                                error!(
                                     "ERROR: failed to send message {:?}",
                                     AeronCError::from_code(result as i32)
                                 );
@@ -139,7 +149,7 @@ mod tests {
                         sleep(Duration::from_millis(500));
                     }
                 }
-                println!("stopping publisher thread");
+                info!("stopping publisher thread");
             })
         };
 
@@ -152,7 +162,7 @@ mod tests {
                 count_copy.fetch_add(1, Ordering::SeqCst);
                 if msg.len() != string_len {
                     stop2.store(true, Ordering::SeqCst);
-                    eprintln!(
+                    error!(
                         "ERROR: message was {} was expecting {} [header={:?}]",
                         msg.len(),
                         string_len,
@@ -170,7 +180,7 @@ mod tests {
 
         loop {
             if start_time.elapsed() > Duration::from_secs(30) {
-                println!("Failed: exceeded 30-second timeout");
+                info!("Failed: exceeded 30-second timeout");
                 return Err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::TimedOut,
                     "Timeout exceeded",
@@ -183,7 +193,7 @@ mod tests {
             subscription.poll(Some(&closure), 128)?;
         }
 
-        println!("stopping client");
+        info!("stopping client");
 
         stop.store(true, Ordering::SeqCst);
 
@@ -195,6 +205,10 @@ mod tests {
     #[test]
     #[serial]
     pub fn try_claim() -> Result<(), Box<dyn error::Error>> {
+        let _ = env_logger::Builder::new()
+            .is_test(true)
+            .filter_level(log::LevelFilter::Info)
+            .try_init();
         let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
         media_driver_ctx.set_dir_delete_on_shutdown(true)?;
         media_driver_ctx.set_dir_delete_on_start(true)?;
@@ -211,36 +225,36 @@ mod tests {
         assert_eq!(media_driver_ctx.get_dir(), ctx.get_dir());
         let mut error_count = 1;
         let error_handler = AeronErrorHandlerClosure::from(|error_code, msg| {
-            eprintln!("ERROR: aeron error {}: {}", error_code, msg);
+            error!("aeron error {}: {}", error_code, msg);
             error_count += 1;
         });
         ctx.set_error_handler(Some(&Handler::leak(error_handler)))?;
 
-        println!("creating client [try_claim test]");
+        info!("creating client [try_claim test]");
         let aeron = Aeron::new(&ctx)?;
-        println!("starting client");
+        info!("starting client");
 
         aeron.start()?;
-        println!("client started");
+        info!("client started");
         let publisher = aeron
-            .async_add_publication("aeron:ipc", 123)?
+            .async_add_publication(AERON_IPC_STREAM, 123)?
             .poll_blocking(Duration::from_secs(5))?;
-        println!("created publisher");
+        info!("created publisher");
 
         let subscription = aeron
             .async_add_subscription(
-                "aeron:ipc",
+                AERON_IPC_STREAM,
                 123,
                 Handlers::no_available_image_handler(),
                 Handlers::no_unavailable_image_handler(),
             )?
             .poll_blocking(Duration::from_secs(5))
             .unwrap();
-        println!("created subscription");
+        info!("created subscription");
 
         // pick a large enough size to confirm fragement assembler is working
         let string_len = 156;
-        println!("string length: {}", string_len);
+        info!("string length: {}", string_len);
 
         let publisher_handler = {
             let stop = stop.clone();
@@ -256,7 +270,7 @@ mod tests {
                     let result = publisher.try_claim(string_len, &buffer);
 
                     if result < msg.len() as i64 {
-                        eprintln!(
+                        error!(
                             "ERROR: failed to send message {:?}",
                             AeronCError::from_code(result as i32)
                         );
@@ -265,7 +279,7 @@ mod tests {
                         buffer.commit().unwrap();
                     }
                 }
-                println!("stopping publisher thread");
+                info!("stopping publisher thread");
             })
         };
 
@@ -278,7 +292,7 @@ mod tests {
                 count_copy.fetch_add(1, Ordering::SeqCst);
                 if msg.len() != string_len {
                     stop2.store(true, Ordering::SeqCst);
-                    eprintln!(
+                    error!(
                         "ERROR: message was {} was expecting {} [header={:?}]",
                         msg.len(),
                         string_len,
@@ -295,7 +309,7 @@ mod tests {
 
         loop {
             if start_time.elapsed() > Duration::from_secs(30) {
-                println!("Failed: exceeded 30-second timeout");
+                info!("Failed: exceeded 30-second timeout");
                 return Err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::TimedOut,
                     "Timeout exceeded",
@@ -308,7 +322,7 @@ mod tests {
             subscription.poll(Some(&closure), 128)?;
         }
 
-        println!("stopping client");
+        info!("stopping client");
 
         stop.store(true, Ordering::SeqCst);
 
@@ -320,6 +334,10 @@ mod tests {
     #[test]
     #[serial]
     pub fn counters() -> Result<(), Box<dyn error::Error>> {
+        let _ = env_logger::Builder::new()
+            .is_test(true)
+            .filter_level(log::LevelFilter::Info)
+            .try_init();
         let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
         media_driver_ctx.set_dir_delete_on_shutdown(true)?;
         media_driver_ctx.set_dir_delete_on_start(true)?;
@@ -336,7 +354,7 @@ mod tests {
         assert_eq!(media_driver_ctx.get_dir(), ctx.get_dir());
         let mut error_count = 1;
         let error_handler = AeronErrorHandlerClosure::from(|error_code, msg| {
-            eprintln!("ERROR: aeron error {}: {}", error_code, msg);
+            error!("ERROR: aeron error {}: {}", error_code, msg);
             error_count += 1;
         });
         ctx.set_error_handler(Some(&Handler::leak(error_handler)))?;
@@ -346,7 +364,7 @@ mod tests {
             |counters_reader: AeronCountersReader,
              registration_id: i64,
              counter_id: i32| {
-                println!("on counter {:?} {counters_reader:?}, registration_id={registration_id}, counter_id={counter_id}, value={}", counters_reader.get_counter_label(counter_id, 1000), counters_reader.addr(counter_id));
+                info!("on counter {:?} {counters_reader:?}, registration_id={registration_id}, counter_id={counter_id}, value={}", counters_reader.get_counter_label(counter_id, 1000), counters_reader.addr(counter_id));
                 assert_eq!(counters_reader.counter_registration_id(counter_id).unwrap(), registration_id);
                 if let Ok(label) = counters_reader.get_counter_label(counter_id, 1000) {
                     if label == "test_counter" {
@@ -356,12 +374,12 @@ mod tests {
             }
         ))))?;
 
-        println!("creating client");
+        info!("creating client");
         let aeron = Aeron::new(&ctx)?;
-        println!("starting client");
+        info!("starting client");
 
         aeron.start()?;
-        println!("client started [counters test]");
+        info!("client started [counters test]");
 
         let counter = aeron
             .async_add_counter(123, "test_counter".as_bytes(), "this is a test")?
@@ -377,7 +395,7 @@ mod tests {
                     }
                     counter.addr_atomic().fetch_add(1, Ordering::SeqCst);
                 }
-                println!("stopping publisher thread");
+                info!("stopping publisher thread");
             })
         };
 
@@ -390,12 +408,12 @@ mod tests {
 
         assert!(now.elapsed() < Duration::from_secs(10));
 
-        println!(
+        info!(
             "counter is {}",
             counter.addr_atomic().load(Ordering::SeqCst)
         );
 
-        println!("stopping client");
+        info!("stopping client");
 
         #[cfg(not(target_os = "windows"))] // not sure why windows version doesn't fire event
         assert!(found_counter);
