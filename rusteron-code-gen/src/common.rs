@@ -382,6 +382,8 @@ impl Media {
 pub enum ControlMode {
     Manual,
     Dynamic,
+    /// this is a beta feature useful when dealing with docker containers and networking
+    Response,
 }
 
 impl ControlMode {
@@ -389,6 +391,7 @@ impl ControlMode {
         match self {
             ControlMode::Manual => "manual",
             ControlMode::Dynamic => "dynamic",
+            ControlMode::Response => "response",
         }
     }
 }

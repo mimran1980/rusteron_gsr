@@ -1,9 +1,11 @@
 use bindgen::EnumVariation;
 use cmake::Config;
 use dunce::canonicalize;
+use log::info;
 use proc_macro2::TokenStream;
 use rusteron_code_gen::{append_to_file, format_with_rustfmt};
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 use std::{env, fs};
 
 #[derive(Eq, PartialEq)]
@@ -53,6 +55,36 @@ pub fn main() {
     let aeron_path = canonicalize(Path::new("./aeron")).unwrap();
     let header_path = aeron_path.join("aeron-archive/src/main/c");
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+
+    // need to build gradle files
+    if !aeron_path
+        .join("aeron-all")
+        .join("build")
+        .join("libs")
+        .exists()
+    {
+        let path = std::path::MAIN_SEPARATOR;
+        let gradle = if cfg!(target_os = "windows") {
+            &format!("{}{path}aeron{path}gradlew.bat", env!("CARGO_MANIFEST_DIR"),)
+        } else {
+            "./gradlew"
+        };
+        let dir = format!("{}{path}aeron", env!("CARGO_MANIFEST_DIR"),);
+        info!("running {} in {}", gradle, dir);
+
+        Command::new(gradle)
+            .current_dir(dir)
+            .args([
+                ":aeron-agent:jar",
+                ":aeron-samples:jar",
+                ":aeron-archive:jar",
+                ":aeron-all:build",
+            ])
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .spawn().expect("failed to run gradle, which is required to build aeron-archive c lib. Please refer to wiki page regarding build setup")
+            .wait().expect("gradle returned an error");
+    }
 
     let link_type = LinkType::detect();
     println!(
