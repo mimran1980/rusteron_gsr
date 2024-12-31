@@ -46,8 +46,6 @@ impl LinkType {
 }
 
 pub fn main() {
-    update_gradle_if_git_is_missing();
-
     let aeron_path = canonicalize(Path::new("./aeron")).unwrap();
     let header_path = aeron_path.join("aeron-archive/src/main/c");
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
@@ -243,51 +241,6 @@ fn run_gradle_build_if_missing(aeron_path: &PathBuf) {
             .wait().expect("gradle returned an error");
     }
     println!("cargo:rerun-if-changed=aeron/aeron-all/build/libs");
-}
-
-/// crates.io will exclude .git directory when publishing but aeron gradle build will fail as it
-/// uses the .git directory to set version/hash for project
-fn update_gradle_if_git_is_missing() {
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    let aeron_git_dir = Path::new(manifest_dir).join("aeron/.git");
-    let aeron_build_gradle = Path::new(manifest_dir).join("aeron/build.gradle");
-
-    if !aeron_git_dir.exists() {
-        println!("Aeron .git directory not found. Updating build.gradle with a dummy hash.");
-
-        let gradle_content =
-            fs::read_to_string(&aeron_build_gradle).expect("Failed to read aeron/build.gradle");
-
-        // Replace `gitCommitHash` with a dummy hash as function fails
-        let mut updated_gradle_content = gradle_content.replace(
-            r#"def gitCommitHash = io.aeron.build.GithubUtil.currentGitHash("${projectDir}")"#,
-            r#"def gitCommitHash = "dummy-hash""#,
-        );
-
-        // for some reason io.aeron plugins don't work, we don't actually need them so they get removed
-        // ALL of this effort just because crates.io removes .git directory !!!!!
-        let patterns = vec![
-            // Remove dedupJar task block
-            r"(?s)tasks\.register\('dedupJar',\s*io\.aeron\.build\.DeduplicateTask\)\s*\{.*?\}",
-            // Remove shadowJar.finalizedBy dedupJar
-            r"shadowJar\.finalizedBy\s+dedupJar",
-            // Remove asciidoctorGithub task block
-            r"(?s)tasks\.register\('asciidoctorGithub',\s*io\.aeron\.build\.AsciidoctorPreprocessTask\)\s*\{.*?\}",
-            // Remove tutorialPublish task block
-            r"(?s)tasks\.register\('tutorialPublish',\s*io\.aeron\.build\.TutorialPublishTask\)\s*\{.*?\}",
-        ];
-
-        for pattern in patterns {
-            let re = Regex::new(pattern).expect("Invalid regex pattern");
-            updated_gradle_content = re.replace_all(&updated_gradle_content, "").to_string();
-        }
-
-        fs::write(&aeron_build_gradle, updated_gradle_content)
-            .expect("Failed to write updated aeron/build.gradle");
-    }
-
-    println!("cargo:rerun-if-changed=aeron/.git");
-    println!("cargo:rerun-if-changed=aeron/build.gradle");
 }
 
 fn copy_binds(out: PathBuf) {
