@@ -97,7 +97,17 @@ mod tests {
         let patch = unsafe { crate::aeron_version_patch() };
 
         let aeron_version = format!("{}.{}.{}", major, minor, patch);
-        let cargo_version = "1.47.0";
+        let cargo_version = "1.46.7";
+
+        let aeron_version_txt_path = concat!(env!("CARGO_MANIFEST_DIR"), "/aeron/version.txt");
+        let version_txt_content = std::fs::read_to_string(aeron_version_txt_path)
+            .expect("Failed to read aeron/versions.txt");
+        assert_eq!(
+            version_txt_content.trim(),
+            cargo_version,
+            "aeron/versions.txt content mismatch"
+        );
+
         assert_eq!(aeron_version, cargo_version);
     }
 
@@ -105,7 +115,7 @@ mod tests {
     fn send_message() -> Result<(), AeronCError> {
         let _ = env_logger::Builder::new()
             .is_test(true)
-            .filter_level(log::LevelFilter::Info)
+            .filter_level(log::LevelFilter::Debug)
             .try_init();
         let topic = AERON_IPC_STREAM;
         let stream_id = 32;
