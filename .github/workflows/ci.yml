@@ -43,7 +43,9 @@ jobs:
         run: cargo clippy --all -- --deny warnings
 
       - name: Check docs
-        run: cargo test --doc
+        run: |
+          sudo apt-get update && sudo apt-get install -y uuid-dev
+          cargo test --doc
 
   build:
     name: Build
@@ -53,9 +55,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-#        os: [ubuntu-latest, macos-latest]
+#        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest]
         features: [default, static]
+        # using static as different modules have different versions of aeron which don't seem to play nicely
 #        features: [static]
         #        rust-version: ["stable", "stable 6 months ago"]
         rust-version: ["stable"]
@@ -95,5 +98,5 @@ jobs:
           cd rusteron-rb/aeron/ && pwd && git status && cd -
           
           cargo clean
-          cargo build --verbose ${{ env.feature-flags }}
-          cargo test --verbose --all --all-targets ${{ env.feature-flags }} -- --nocapture
+          cargo build --workspace  --verbose ${{ env.feature-flags }}
+          cargo test --workspace --verbose --all --all-targets ${{ env.feature-flags }} -- --nocapture
