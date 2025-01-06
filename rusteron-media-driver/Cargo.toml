@@ -51,7 +51,7 @@ log = { workspace = true}
 regex = { workspace = true}
 
 [features]
-default=["static"]
+default=[]
 static=[]
 
 [[bin]]
