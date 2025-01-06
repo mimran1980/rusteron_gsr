@@ -29,9 +29,10 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
       - name: Clean docs folder
-        run: cargo clean --doc
-      - name: Build docs
-        run: cargo doc --workspace --no-deps
+        run: |
+          sudo apt-get update && sudo apt-get install -y uuid-dev
+          cargo clean --doc
+          cargo doc --workspace --no-deps
       - name: Add redirect
         run: echo '<meta http-equiv="refresh" content="0;url=rusteron_archive/index.html">' > target/doc/index.html
       - name: Remove lock file
