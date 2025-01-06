@@ -98,5 +98,5 @@ jobs:
             cargo clean
             cargo build --workspace ${{ env.feature-flags }}
             cargo test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
-            cd --π
+            cd --
           done
