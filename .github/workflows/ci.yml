@@ -92,11 +92,11 @@ jobs:
 
       - name: Build and Test
         run: |
-          cd rusteron-archive/aeron/ && pwd && git submodule update --init --recursive --checkout && git reset --hard && git clean -fdx && git status && cd -
-          cd rusteron-client/aeron/ && pwd && git submodule update --init --recursive --checkout && git reset --hard && git clean -fdx && git status && cd -
-          cd rusteron-media-driver/aeron/ && pwd && git submodule update --init --recursive --checkout && git reset --hard && git clean -fdx && git status && cd -
-          cd rusteron-rb/aeron/ && pwd && git status && cd -
-          
-          cargo clean
-          cargo build --workspace  --verbose ${{ env.feature-flags }}
-          cargo test --workspace --verbose --all --all-targets ${{ env.feature-flags }} -- --nocapture
+          for dir in rusteron-code-gen rusteron-code-rb rusteron-code-client rusteron-code-archive; do
+            cd $dir/aeron/ && pwd && git submodule update --init --recursive --checkout && git reset --hard && git clean -fdx && git status && cd -
+            cd $dir
+            cargo clean
+            cargo build --workspace ${{ env.feature-flags }}
+            cargo test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
+            cd --π
+          done
