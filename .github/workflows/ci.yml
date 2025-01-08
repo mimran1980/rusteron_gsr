@@ -92,12 +92,6 @@ jobs:
 
       - name: Build and Test
         run: |
-          # can't use --workspace due to different aeron versions
-          for dir in rusteron-code-gen rusteron-code-rb rusteron-code-client rusteron-code-archive; do
-            cd $dir/aeron/ && pwd && git submodule update --init --recursive --checkout && git reset --hard && git clean -fdx && git status && cd -
-            cd $dir
-            cargo clean
-            cargo build ${{ env.feature-flags }}
-            cargo test --all --all-targets ${{ env.feature-flags }} -- --nocapture
-            cd --
-          done
+          cargo clean
+          cargo build --workspace ${{ env.feature-flags }}
+          cargo test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
