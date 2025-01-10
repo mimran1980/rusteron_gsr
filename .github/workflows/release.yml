@@ -45,13 +45,13 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install cargo-release
-        run: cargo install cargo-release
-
       - name: Build and Test
         run: |
           cargo build --workspace --release
           cargo test --workspace -- --nocapture
+
+      - name: Install cargo-release
+        run: cargo install cargo-release
 
       - name: Run cargo-release for specified version
         env:
