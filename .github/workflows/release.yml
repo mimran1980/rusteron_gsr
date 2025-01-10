@@ -32,7 +32,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "stable"
+          toolchain: stable
           components: clippy, rustfmt
 
       - name: Install dependencies on Ubuntu
@@ -47,7 +47,7 @@ jobs:
 
       - name: Build and Test
         run: |
-          cargo build --workspace --release
+          cargo build --workspace --verbose
           cargo test --workspace -- --nocapture
 
       - name: Install cargo-release
