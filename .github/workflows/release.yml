@@ -45,28 +45,16 @@ jobs:
 
       - name: Build and Test
         run: |
-          sudo apt-get update && sudo apt-get install -y default-jdk curl pkg-config libssl-dev uuid-dev ca-certificates make cmake gcc g++ clang zlib1g-dev libbsd-dev 
-          cargo build --workspace --release
-          cargo test --workspace -- --nocapture
+          cargo build --release
+          cargo test -- --nocapture
 
       - name: Run cargo-release for specified version
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
-          sudo apt-get install -y default-jdk curl pkg-config libssl-dev uuid-dev ca-certificates make cmake gcc g++ clang zlib1g-dev libbsd-dev
           git config --global user.email "mimran1980@gmail.com"
           git config --global user.name "Mo Imran"
           release_type="${{ github.event.inputs.release_type }}"
-          rm -rf rusteron-archive/target
-          rm -rf rusteron-client/target
-          rm -rf rusteron-media-driver/target
-          rm -rf rusteron-rb/target
-          rm -rf rusteron-docker-samples/target
-          rm -rf rusteron-docker-samples/rusteron-dummy-example/target
-          cd rusteron-archive/aeron/ && pwd && git submodule update --init --recursive --checkout && git reset --hard && git clean -fdx && git status && cd -
-          cd rusteron-client/aeron/ && pwd && git submodule update --init --recursive --checkout && git reset --hard && git clean -fdx && git status && cd -
-          cd rusteron-media-driver/aeron/ && pwd && git submodule update --init --recursive --checkout && git reset --hard && git clean -fdx && git status && cd -
-          cd rusteron-rb/aeron/ && pwd && git submodule update --init --recursive --checkout && git reset --hard && git clean -fdx && git status && cd -
           cargo release "$release_type" --workspace --execute --no-confirm --verbose --no-verify
 
       - name: Push new version and tag to GitHub
