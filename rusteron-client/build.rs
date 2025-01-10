@@ -35,6 +35,14 @@ impl LinkType {
     }
 }
 
+// fn get_aeron_version(aeron_path: &Path) -> std::io::Result<String> {
+//     let version_file = aeron_path.join("version.txt");
+//     let mut file = fs::File::open(version_file)?;
+//     let mut version = String::new();
+//     file.read_to_string(&mut version)?;
+//     Ok(version.trim().to_string())
+// }
+
 pub fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=bindings.h");

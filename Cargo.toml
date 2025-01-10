@@ -2,9 +2,9 @@
 members = [
     "rusteron-code-gen",
     "rusteron-rb",
-    "rusteron-archive",
     "rusteron-media-driver",
     "rusteron-client",
+    "rusteron-archive",
 ]
 exclude = ["rusteron-docker-samples/rusteron-dummy-example"]
 resolver = "2"

@@ -1577,7 +1577,7 @@ pub fn generate_rust_code(
                             loop {
                                 if let Ok(poller) = #async_class_name::new(self, #(#async_new_args_name_only),*) {
                                     while start.elapsed() <= timeout  {
-                                      if let Some(result) = poller.poll() {
+                                      if let Some(result) = poller.poll()? {
                                           return Ok(result);
                                       }
                                     #[cfg(debug_assertions)]
@@ -1612,22 +1612,24 @@ pub fn generate_rust_code(
                             })
                         }
 
-                        pub fn poll(&self) -> Option<#main_class_name> {
-                            if let Ok(publication) = #main_class_name::new(self) {
-                                Some(publication)
-                            } else {
-                                None
+                        pub fn poll(&self) -> Result<Option<#main_class_name>, AeronCError> {
+                            match #main_class_name::new(self) {
+                                Ok(publication) => Ok(Some(publication)),
+                                Err(AeronCError {code }) if code == 0 => {
+                                  Ok(None) // try again
+                                }
+                                Err(e) => Err(e)
                             }
                         }
 
                         pub fn poll_blocking(&self, timeout: std::time::Duration) -> Result<#main_class_name, AeronCError> {
-                            if let Some(publication) = self.poll() {
+                            if let Some(publication) = self.poll()? {
                                 return Ok(publication);
                             }
 
                             let time = std::time::Instant::now();
                             while time.elapsed() < timeout {
-                                if let Some(publication) = self.poll() {
+                                if let Some(publication) = self.poll()? {
                                     return Ok(publication);
                                 }
                                 #[cfg(debug_assertions)]

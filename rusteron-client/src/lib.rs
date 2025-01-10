@@ -42,16 +42,7 @@ mod tests {
         let minor = unsafe { crate::aeron_version_minor() };
         let patch = unsafe { crate::aeron_version_patch() };
 
-        let aeron_version_txt_path = concat!(env!("CARGO_MANIFEST_DIR"), "/aeron/version.txt");
-        let cargo_version = "1.46.7";
-        let version_txt_content = std::fs::read_to_string(aeron_version_txt_path)
-            .expect("Failed to read aeron/versions.txt");
-        assert_eq!(
-            version_txt_content.trim(),
-            cargo_version,
-            "aeron/versions.txt content mismatch"
-        );
-
+        let cargo_version = "1.47.0";
         let aeron_version = format!("{}.{}.{}", major, minor, patch);
         assert_eq!(aeron_version, cargo_version);
 

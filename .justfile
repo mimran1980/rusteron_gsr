@@ -4,7 +4,7 @@ list:
 
 # Check formatting, linting, and compile
 check:
-  cargo check
+  cargo check --workspace
   cargo fmt --all -- --check
   cargo clippy --all-targets --all-features --all -- --deny warnings
   cargo clippy -- --deny warnings
@@ -189,12 +189,13 @@ bench:
 # generate rust docs locally
 docs:
   cargo clean --doc
-  cargo test --doc
+  cargo test  --workspace --doc
   cargo doc --workspace --no-deps --open
 
 # run unit tests
 test:
-  cargo test --all-targets --all-features -- --nocapture
+  cargo test --workspace -- --nocapture
+  cargo test  --workspace --all-targets --all-features -- --nocapture
 
 # creates symbolic link so that taret/aeron goes to /dev/shm/aeron (when benchmarking on linux)
 create-sym-link:
