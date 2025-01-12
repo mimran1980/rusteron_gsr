@@ -40,7 +40,7 @@ consolidated_commits = true
 prerelease_commit = false
 allow_dirty = true
 no_confirm = true
-changelog = true
+changelog = false
 verify = false
 
 [profile.release]
