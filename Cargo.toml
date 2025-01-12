@@ -41,8 +41,9 @@ prerelease_commit = false
 allow_dirty = true
 no_confirm = true
 changelog = false
+update_crates_index = true
 verify = false
-
+π
 [profile.release]
 #opt-level = 3
 debug = true
