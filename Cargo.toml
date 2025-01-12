@@ -26,7 +26,6 @@ criterion = "0.5"
 serial_test = "3.2"
 regex = "1.11"
 log = "0.4"
-rusteron-code-gen = { path = "rusteron-code-gen" }
 
 [release]
 update-dependencies = true
@@ -41,7 +40,7 @@ consolidated_commits = true
 prerelease_commit = false
 allow_dirty = true
 no_confirm = true
-changelog = false
+changelog = true
 verify = false
 
 [profile.release]

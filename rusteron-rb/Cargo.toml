@@ -45,7 +45,7 @@ syn = {  workspace = true }
 proc-macro2 = {  workspace = true }
 quote = {  workspace = true }
 itertools = {  workspace = true }
-rusteron-code-gen = { workspace = true }
+rusteron-code-gen = { path = "../rusteron-code-gen" }
 log = { workspace = true}
 regex = { workspace = true}
 
