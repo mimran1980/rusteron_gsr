@@ -47,7 +47,7 @@ The library is divided into several modules, each focusing on specific parts of 
 
 - **[rusteron-media-driver](https://github.com/mimran1980/rusteron/tree/main/rusteron-media-driver)**: Implements the
   Aeron Media Driver, a core component for managing messaging between producers and consumers. It uses the Aeron C
-  bindings from aeron-driver module. _(note built using aeron 1.46.7)_
+  bindings from aeron-driver module.
 
 - **[rusteron-rb](https://github.com/mimran1980/rusteron/tree/main/rusteron-rb)**: Provides ring buffer and broadcast functionalities via aeron c bindings, allowing efficient, low-latency message passing between different threads or processes. This module implements Single Producer, Single Consumer (SPSC) ring buffers, Multi-Producer, Single Consumer (MPSC) ring buffers, and broadcast channels.
 
