@@ -42,11 +42,11 @@ bindgen = {  workspace = true }
 cmake = {  workspace = true }
 dunce = {  workspace = true }
 pkg-config = {  workspace = true }
-syn = {  workspace = true }
+syn = { π workspace = true }
 proc-macro2 = {  workspace = true }
 quote = {  workspace = true }
 itertools = {  workspace = true }
-rusteron-code-gen = { workspace = true }
+rusteron-code-gen = {path = "../rusteron-code-gen", version = "0"}
 log = { workspace = true}
 regex = { workspace = true}
 

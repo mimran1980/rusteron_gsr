@@ -43,7 +43,7 @@ quote = {  workspace = true }
 itertools = {  workspace = true }
 regex = { workspace = true}
 log = { workspace = true}
-rusteron-code-gen = { workspace = true }
+rusteron-code-gen = {path = "../rusteron-code-gen", version = "0"}
 
 [dev-dependencies]
 serial_test = { workspace = true }

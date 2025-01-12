@@ -26,9 +26,10 @@ criterion = "0.5"
 serial_test = "3.2"
 regex = "1.11"
 log = "0.4"
-rusteron-code-gen = {path = "./rusteron-code-gen" }
 
 [release]
+bump = "auto"
+update-dependencies = true
 publish = true
 workspace = true
 consolidate_commits = true
