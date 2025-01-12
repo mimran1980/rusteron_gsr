@@ -10,17 +10,19 @@ WORKDIR /aeron
 #    -DrepoUrl=https://repo1.maven.org/maven2/ \
 #    -Dartifact=io.aeron:aeron-archive:${AERON_VERSION} -DoutputDirectory=/aeron
 
-RUN git clone https://github.com/real-logic/aeron.git . && ./gradlew :aeron-all:jar
+RUN git clone https://github.com/real-logic/aeron.git . && ./gradlew :aeron-all:jar :aeron-agent:jar
 
 FROM eclipse-temurin:21
 
 WORKDIR /aeron
 COPY --from=builder /aeron/aeron-all/build/libs/aeron-all-*.jar /aeron
+COPY --from=builder /aeron/aeron-agent/build/libs/aeron-agent-*.jar /aeron/agent/aeron-agent.jar
 
 EXPOSE 8010 8011 8012
 
 # uses grep&sed to convert AERON_XXX_YYY to -Daeron.xxx.yyy
-CMD ["sh", "-c", "java -cp '/aeron/*' \
+CMD ["sh", "-c", "java -javaagent:/aeron/agent/aeron-agent.jar \
+  -cp '/aeron/*' \
   --add-opens java.base/jdk.internal.misc=ALL-UNNAMED \
   $(env | grep ^AERON_ | awk '{print tolower($0)}' | sed 's/^/-D/g' | sed 's/_/./g') \
   io.aeron.archive.ArchivingMediaDriver"]
