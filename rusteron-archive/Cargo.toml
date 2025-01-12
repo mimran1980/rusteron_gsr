@@ -39,8 +39,6 @@ cmake = {  workspace = true }
 dunce = {  workspace = true }
 pkg-config = {  workspace = true }
 proc-macro2 = {  workspace = true }
-quote = {  workspace = true }
-itertools = {  workspace = true }
 regex = { workspace = true}
 log = { workspace = true}
 rusteron-code-gen = { path = "../rusteron-code-gen" }

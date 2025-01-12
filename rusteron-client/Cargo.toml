@@ -34,10 +34,8 @@ exclude = [
 ctrlc = { workspace = true }
 num-format = {  workspace = true }
 hdrhistogram = { workspace = true}
-zerocopy = { workspace = true }
 log = { workspace = true}
 regex = { workspace = true}
-
 
 
 [build-dependencies]
@@ -45,9 +43,7 @@ bindgen = {  workspace = true }
 cmake = {  workspace = true }
 dunce = {  workspace = true }
 pkg-config = {  workspace = true }
-syn = {  workspace = true }
 proc-macro2 = {  workspace = true }
-quote = {  workspace = true }
 itertools = {  workspace = true }
 rusteron-code-gen = { path = "../rusteron-code-gen" }
 log = { workspace = true}
