@@ -52,7 +52,7 @@ jobs:
           cargo test --workspace -- --nocapture
 
       - name: Install cargo-release
-        run: cargo install cargo-release cargo-edit
+        run: cargo install cargo-release
 
       - name: Run cargo-release for specified version
         env:
