@@ -51,17 +51,17 @@ jobs:
           cargo build --workspace --verbose
           cargo test --workspace -- --nocapture
 
-      - name: Install cargo-smart-release
-        run: cargo install cargo-smart-release
+      - name: Install cargo-release
+        run: cargo install cargo-release
 
-      - name: Run cargo-smart-release for specified version
+      - name: Run cargo-release for specified version
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
           git config --global user.email "mimran1980@gmail.com"
           git config --global user.name "Mo Imran"
           release_type="${{ github.event.inputs.release_type }}"
-          cargo smart-release rusteron-code-gen rusteron-rb rusteron-media-driver rusteron-client rusteron-archive --execute --bump "$release_type" --no-changelog-preview --update-crates-index  --verbose
+          cargo release "$release_type" --workspace --execute --no-confirm --verbose --no-verify
 
       - name: Push new version and tag to GitHub
         uses: ad-m/github-push-action@v0.8.0
