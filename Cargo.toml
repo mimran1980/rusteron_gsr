@@ -30,21 +30,18 @@ log = "0.4"
 
 [release]
 bump = "auto"
-update-dependencies = true
 update_dependencies = true
 publish = true
 workspace = true
-consolidate_commits = true
 auto_publish = true
 push = true
 tag = true
 dependency_version = "update"
-consolidated_commits = true
+consolidate_commits = true
 allow_dirty = true
 no_confirm = true
 update_crates_index = true
 verify = false
-consolidate-commits = true
 
 [profile.release]
 #opt-level = 3
