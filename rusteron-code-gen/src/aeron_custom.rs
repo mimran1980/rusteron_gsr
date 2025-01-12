@@ -37,6 +37,12 @@ impl AeronCounter {
     pub fn addr_atomic(&self) -> &std::sync::atomic::AtomicI64 {
         unsafe { std::sync::atomic::AtomicI64::from_ptr(self.addr()) }
     }
+
+    pub fn get_constants(&self) -> Result<AeronCounterConstants, AeronCError> {
+        let constants = AeronCounterConstants::default();
+        self.constants(&constants)?;
+        Ok(constants)
+    }
 }
 
 impl AeronSubscription {
@@ -195,18 +201,75 @@ impl AeronCountersReader {
         counter_id: i32,
         max_length: usize,
     ) -> Result<String, AeronCError> {
-        let mut buffer = vec![0; max_length];
-        assert_eq!(buffer.len(), max_length);
-        self.counter_label(counter_id, buffer.as_mut_ptr(), max_length)?;
         let mut result = String::with_capacity(max_length);
-        for c in buffer {
-            let b = c as u8;
-            if b == 0 {
-                break;
-            }
-            result.push(b as char);
-        }
+        self.get_counter_label_into(counter_id, &mut result)?;
         Ok(result)
+    }
+
+    #[inline]
+    #[doc = "Get the label for a counter."]
+    pub fn get_counter_label_into(
+        &self,
+        counter_id: i32,
+        dst: &mut String,
+    ) -> Result<(), AeronCError> {
+        unsafe {
+            let capacity = dst.capacity();
+            let vec = dst.as_mut_vec();
+            vec.set_len(capacity);
+            self.counter_label(counter_id, vec.as_mut_ptr() as *mut _, capacity)?;
+            let mut len = 0;
+            loop {
+                if len == capacity {
+                    break;
+                }
+                let val = vec[len];
+                if val == 0 {
+                    break;
+                }
+                len += 1;
+            }
+            vec.set_len(len);
+        }
+        Ok(())
+    }
+
+    #[inline]
+    #[doc = "Get the key for a counter."]
+    pub fn get_counter_key(&self, counter_id: i32) -> Result<Vec<u8>, AeronCError> {
+        let mut dst = Vec::new();
+        self.get_counter_key_into(counter_id, &mut dst)?;
+        Ok(dst)
+    }
+
+    #[inline]
+    #[doc = "Get the key for a counter."]
+    pub fn get_counter_key_into(
+        &self,
+        counter_id: i32,
+        dst: &mut Vec<u8>,
+    ) -> Result<(), AeronCError> {
+        let mut key_ptr: *mut u8 = std::ptr::null_mut();
+        unsafe {
+            let result = bindings::aeron_counters_reader_metadata_key(
+                self.get_inner(),
+                counter_id,
+                &mut key_ptr,
+            );
+            if result < 0 || key_ptr.is_null() {
+                return Err(AeronCError::from_code(result));
+            }
+
+            loop {
+                let val = *key_ptr.add(dst.len());
+                if val == 0 {
+                    break;
+                } else {
+                    dst.push(val);
+                }
+            }
+            Ok(())
+        }
     }
 
     pub fn get_counter_value(&self, counter_id: i32) -> i64 {
