@@ -12,7 +12,7 @@ COPY Cargo.toml ./
 COPY src ./src
 
 # build profile dev or release
-ARG BUILD_TYPE=dev
+ARG BUILD_TYPE=release
 
 ENV RUSTFLAGS="-C target-cpu=native"
 RUN . "$HOME/.cargo/env" && cargo build --profile ${BUILD_TYPE}
@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y libssl-dev uuid-dev ca-certificates  \
 WORKDIR /usr/local/bin
 
 # build directory debug or release
-ARG BUILD_DIR_NAME=debug
+ARG BUILD_DIR_NAME=release
 
 COPY --from=builder /usr/src/app/target/${BUILD_DIR_NAME}/ticker_reader /usr/local/bin/ticker_reader
 COPY --from=builder /usr/src/app/target/${BUILD_DIR_NAME}/ticker_writer /usr/local/bin/ticker_writer

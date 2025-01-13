@@ -47,8 +47,7 @@ jobs:
 
       - name: Build and Test
         run: |
-          # TODO need to work out why cargo build --release fails in CI
-          cargo build --workspace --verbose
+          cargo build --workspace --release
           cargo test --workspace -- --nocapture
 
       - name: Install cargo-release
