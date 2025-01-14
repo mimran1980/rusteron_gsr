@@ -26,7 +26,13 @@ impl LinkType {
     fn link_lib(&self) -> &'static str {
         match self {
             LinkType::Dynamic => "dylib=",
-            LinkType::Static => "static=",
+            LinkType::Static => {
+                if cfg!(target_os = "linux") {
+                    "" // TODO not sure why I need to do this static= should work on linux based on documentation
+                } else {
+                    "static="
+                }
+            }
         }
     }
 

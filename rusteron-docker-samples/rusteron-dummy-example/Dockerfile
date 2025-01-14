@@ -28,6 +28,6 @@ ARG BUILD_DIR_NAME=release
 
 COPY --from=builder /usr/src/app/target/${BUILD_DIR_NAME}/ticker_reader /usr/local/bin/ticker_reader
 COPY --from=builder /usr/src/app/target/${BUILD_DIR_NAME}/ticker_writer /usr/local/bin/ticker_writer
-COPY --from=builder /usr/src/app/target/${BUILD_DIR_NAME}/build/rusteron-archive-*/out/build/lib/*.so /usr/lib
-COPY --from=builder /usr/src/app/target/${BUILD_DIR_NAME}/build/rusteron-media-driver-*/out/build/lib/*.so /usr/lib
+#COPY --from=builder /usr/src/app/target/${BUILD_DIR_NAME}/build/rusteron-archive-*/out/build/lib/*.so /usr/lib
+#COPY --from=builder /usr/src/app/target/${BUILD_DIR_NAME}/build/rusteron-media-driver-*/out/build/lib/*.so /usr/lib
 
