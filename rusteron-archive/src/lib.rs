@@ -149,13 +149,27 @@ mod tests {
         "aeron:udp?control-mode=dynamic|control=localhost:8012";
 
     #[test]
-    #[ignore] // TODO need to finish off
     fn test_uri_string_builder() -> Result<(), AeronCError> {
         let builder = AeronUriStringBuilder::default();
         builder.init_new()?;
-        // builder.put("hello", "world")?;
-        builder.set_initial_position(0, 4, 1024)?;
-        // panic!("{}", builder.build(1024)?);
+        builder
+            .media(Media::Udp)? // very important to set media else set_initial_position will give an error of -1
+            .mtu_length(1024 * 64)?
+            .set_initial_position(127424949617280, 1182294755, 65536)?;
+        let uri = builder.build(1024)?;
+        assert_eq!("aeron:udp?term-id=-1168322114|term-length=65536|mtu=65536|init-term-id=1182294755|term-offset=33408", uri);
+
+        builder.init_new()?;
+        let uri = builder
+            .media(Media::Udp)?
+            .control_mode(ControlMode::Dynamic)?
+            .reliable(false)?
+            .ttl(2)?
+            .endpoint("localhost:1235")?
+            .control("localhost:1234")?
+            .build(1024)?;
+        assert_eq!("aeron:udp?ttl=2|control-mode=dynamic|endpoint=localhost:1235|control=localhost:1234|reliable=false", uri);
+
         Ok(())
     }
 

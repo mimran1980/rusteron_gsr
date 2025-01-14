@@ -195,178 +195,217 @@ impl AeronUriStringBuilder {
         Ok(result)
     }
 
-    pub fn initial_term_id_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str = unsafe { std::str::from_utf8_unchecked(AERON_URI_INITIAL_TERM_ID_KEY) };
-        self.put(KEY, value)?;
+    pub fn media(&self, value: Media) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_STRING_BUILDER_MEDIA_KEY);
+        self.put(key, value.as_str())?;
         Ok(self)
     }
-    pub fn term_id_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str = unsafe { std::str::from_utf8_unchecked(AERON_URI_TERM_ID_KEY) };
-        self.put(KEY, value)?;
+
+    pub fn control_mode(&self, value: ControlMode) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_UDP_CHANNEL_CONTROL_MODE_KEY);
+        self.put(key, value.as_str())?;
         Ok(self)
     }
-    pub fn term_offset_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str = unsafe { std::str::from_utf8_unchecked(AERON_URI_TERM_OFFSET_KEY) };
-        self.put(KEY, value)?;
+
+    pub fn prefix(&self, value: &str) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_STRING_BUILDER_PREFIX_KEY);
+        self.put(key, value)?;
         Ok(self)
     }
-    pub fn alias_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str = unsafe { std::str::from_utf8_unchecked(AERON_URI_ALIAS_KEY) };
-        self.put(KEY, value)?;
+
+    fn strip_null_terminator(bytes: &[u8]) -> &str {
+        let len = bytes.len() - 1;
+        unsafe { std::str::from_utf8_unchecked(&bytes[..len]) }
+    }
+
+    pub fn initial_term_id(&self, value: i32) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_INITIAL_TERM_ID_KEY);
+        self.put_int32(key, value)?;
         Ok(self)
     }
-    pub fn term_length_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str = unsafe { std::str::from_utf8_unchecked(AERON_URI_TERM_LENGTH_KEY) };
-        self.put(KEY, value)?;
+    pub fn term_id(&self, value: i32) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_TERM_ID_KEY);
+        self.put_int32(key, value)?;
         Ok(self)
     }
-    pub fn linger_timeout_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str = unsafe { std::str::from_utf8_unchecked(AERON_URI_LINGER_TIMEOUT_KEY) };
-        self.put(KEY, value)?;
+    pub fn term_offset(&self, value: i32) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_TERM_OFFSET_KEY);
+        self.put_int32(key, value)?;
         Ok(self)
     }
-    pub fn mtu_length_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str = unsafe { std::str::from_utf8_unchecked(AERON_URI_MTU_LENGTH_KEY) };
-        self.put(KEY, value)?;
+    pub fn alias(&self, value: &str) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_ALIAS_KEY);
+        self.put(key, value)?;
         Ok(self)
     }
-    pub fn sparse_term_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str = unsafe { std::str::from_utf8_unchecked(AERON_URI_SPARSE_TERM_KEY) };
-        self.put(KEY, value)?;
+    pub fn term_length(&self, value: &str) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_TERM_LENGTH_KEY);
+        self.put(key, value)?;
         Ok(self)
     }
-    pub fn eos_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str = unsafe { std::str::from_utf8_unchecked(AERON_URI_EOS_KEY) };
-        self.put(KEY, value)?;
+    pub fn linger_timeout(&self, value: i64) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_LINGER_TIMEOUT_KEY);
+        self.put_int64(key, value)?;
         Ok(self)
     }
-    pub fn tether_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str = unsafe { std::str::from_utf8_unchecked(AERON_URI_TETHER_KEY) };
-        self.put(KEY, value)?;
+    pub fn mtu_length(&self, value: i32) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_MTU_LENGTH_KEY);
+        self.put_int32(key, value)?;
         Ok(self)
     }
-    pub fn tags_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str = unsafe { std::str::from_utf8_unchecked(AERON_URI_TAGS_KEY) };
-        self.put(KEY, value)?;
+    pub fn ttl(&self, value: i32) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_UDP_CHANNEL_TTL_KEY);
+        self.put_int32(key, value)?;
         Ok(self)
     }
-    pub fn session_id_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str = unsafe { std::str::from_utf8_unchecked(AERON_URI_SESSION_ID_KEY) };
-        self.put(KEY, value)?;
+    pub fn sparse_term(&self, value: bool) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_SPARSE_TERM_KEY);
+        self.put(key, if value { "true" } else { "false" })?;
         Ok(self)
     }
-    pub fn group_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str = unsafe { std::str::from_utf8_unchecked(AERON_URI_GROUP_KEY) };
-        self.put(KEY, value)?;
+    pub fn reliable(&self, value: bool) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_UDP_CHANNEL_RELIABLE_KEY);
+        self.put(key, if value { "true" } else { "false" })?;
         Ok(self)
     }
-    pub fn rejoin_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str = unsafe { std::str::from_utf8_unchecked(AERON_URI_REJOIN_KEY) };
-        self.put(KEY, value)?;
+    pub fn eos(&self, value: bool) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_EOS_KEY);
+        self.put(key, if value { "true" } else { "false" })?;
         Ok(self)
     }
-    pub fn fc_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str = unsafe { std::str::from_utf8_unchecked(AERON_URI_FC_KEY) };
-        self.put(KEY, value)?;
+    pub fn tether(&self, value: bool) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_TETHER_KEY);
+        self.put(key, if value { "true" } else { "false" })?;
         Ok(self)
     }
-    pub fn gtag_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str = unsafe { std::str::from_utf8_unchecked(AERON_URI_GTAG_KEY) };
-        self.put(KEY, value)?;
+    pub fn tags(&self, value: &str) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_TAGS_KEY);
+        self.put(key, value)?;
         Ok(self)
     }
-    pub fn cc_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str = unsafe { std::str::from_utf8_unchecked(AERON_URI_CC_KEY) };
-        self.put(KEY, value)?;
+    pub fn endpoint(&self, value: &str) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_UDP_CHANNEL_ENDPOINT_KEY);
+        self.put(key, value)?;
         Ok(self)
     }
-    pub fn spies_simulate_connection_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str =
-            unsafe { std::str::from_utf8_unchecked(AERON_URI_SPIES_SIMULATE_CONNECTION_KEY) };
-        self.put(KEY, value)?;
+    pub fn interface(&self, value: &str) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_UDP_CHANNEL_INTERFACE_KEY);
+        self.put(key, value)?;
         Ok(self)
     }
-    pub fn ats_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str = unsafe { std::str::from_utf8_unchecked(AERON_URI_ATS_KEY) };
-        self.put(KEY, value)?;
+    pub fn control(&self, value: &str) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_UDP_CHANNEL_CONTROL_KEY);
+        self.put(key, value)?;
         Ok(self)
     }
-    pub fn socket_sndbuf_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str = unsafe { std::str::from_utf8_unchecked(AERON_URI_SOCKET_SNDBUF_KEY) };
-        self.put(KEY, value)?;
+    pub fn session_id(&self, value: &str) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_SESSION_ID_KEY);
+        self.put(key, value)?;
         Ok(self)
     }
-    pub fn socket_rcvbuf_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str = unsafe { std::str::from_utf8_unchecked(AERON_URI_SOCKET_RCVBUF_KEY) };
-        self.put(KEY, value)?;
+    pub fn group(&self, value: bool) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_GROUP_KEY);
+        self.put(key, if value { "true" } else { "false" })?;
         Ok(self)
     }
-    pub fn receiver_window_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str = unsafe { std::str::from_utf8_unchecked(AERON_URI_RECEIVER_WINDOW_KEY) };
-        self.put(KEY, value)?;
+    pub fn rejoin(&self, value: bool) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_REJOIN_KEY);
+        self.put(key, if value { "true" } else { "false" })?;
         Ok(self)
     }
-    pub fn media_rcv_timestamp_offset_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str =
-            unsafe { std::str::from_utf8_unchecked(AERON_URI_MEDIA_RCV_TIMESTAMP_OFFSET_KEY) };
-        self.put(KEY, value)?;
+    pub fn fc(&self, value: &str) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_FC_KEY);
+        self.put(key, value)?;
         Ok(self)
     }
-    pub fn channel_rcv_timestamp_offset_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str =
-            unsafe { std::str::from_utf8_unchecked(AERON_URI_CHANNEL_RCV_TIMESTAMP_OFFSET_KEY) };
-        self.put(KEY, value)?;
+    pub fn gtag(&self, value: &str) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_GTAG_KEY);
+        self.put(key, value)?;
         Ok(self)
     }
-    pub fn channel_snd_timestamp_offset_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str =
-            unsafe { std::str::from_utf8_unchecked(AERON_URI_CHANNEL_SND_TIMESTAMP_OFFSET_KEY) };
-        self.put(KEY, value)?;
+    pub fn cc(&self, value: &str) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_CC_KEY);
+        self.put(key, value)?;
+        Ok(self)
+    }
+    pub fn spies_simulate_connection(&self, value: bool) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_SPIES_SIMULATE_CONNECTION_KEY);
+        self.put(key, if value { "true" } else { "false" })?;
+        Ok(self)
+    }
+    pub fn ats(&self, value: bool) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_ATS_KEY);
+        self.put(key, if value { "true" } else { "false" })?;
+        Ok(self)
+    }
+    pub fn socket_sndbuf(&self, value: i32) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_SOCKET_SNDBUF_KEY);
+        self.put_int32(key, value)?;
+        Ok(self)
+    }
+    pub fn socket_rcvbuf(&self, value: i32) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_SOCKET_RCVBUF_KEY);
+        self.put_int32(key, value)?;
+        Ok(self)
+    }
+    pub fn receiver_window(&self, value: i32) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_RECEIVER_WINDOW_KEY);
+        self.put_int32(key, value)?;
+        Ok(self)
+    }
+    pub fn media_rcv_timestamp_offset(&self, value: &str) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_MEDIA_RCV_TIMESTAMP_OFFSET_KEY);
+        self.put(key, value)?;
+        Ok(self)
+    }
+    pub fn channel_rcv_timestamp_offset(&self, value: &str) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_CHANNEL_RCV_TIMESTAMP_OFFSET_KEY);
+        self.put(key, value)?;
+        Ok(self)
+    }
+    pub fn channel_snd_timestamp_offset(&self, value: &str) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_CHANNEL_SND_TIMESTAMP_OFFSET_KEY);
+        self.put(key, value)?;
         Ok(self)
     }
     pub fn timestamp_offset_reserved(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str =
-            unsafe { std::str::from_utf8_unchecked(AERON_URI_TIMESTAMP_OFFSET_RESERVED) };
-        self.put(KEY, value)?;
+        let key: &str = Self::strip_null_terminator(AERON_URI_TIMESTAMP_OFFSET_RESERVED);
+        self.put(key, value)?;
         Ok(self)
     }
-    pub fn response_correlation_id_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str =
-            unsafe { std::str::from_utf8_unchecked(AERON_URI_RESPONSE_CORRELATION_ID_KEY) };
-        self.put(KEY, value)?;
+    pub fn response_correlation_id(&self, value: i64) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_RESPONSE_CORRELATION_ID_KEY);
+        self.put_int64(key, value)?;
         Ok(self)
     }
-    pub fn nak_delay_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str = unsafe { std::str::from_utf8_unchecked(AERON_URI_NAK_DELAY_KEY) };
-        self.put(KEY, value)?;
+    pub fn nak_delay(&self, value: i64) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_NAK_DELAY_KEY);
+        self.put_int64(key, value)?;
         Ok(self)
     }
-    pub fn untethered_window_limit_timeout_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str =
-            unsafe { std::str::from_utf8_unchecked(AERON_URI_UNTETHERED_WINDOW_LIMIT_TIMEOUT_KEY) };
-        self.put(KEY, value)?;
+    pub fn untethered_window_limit_timeout(&self, value: i64) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_UNTETHERED_WINDOW_LIMIT_TIMEOUT_KEY);
+        self.put_int64(key, value)?;
         Ok(self)
     }
-    pub fn untethered_resting_timeout_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str =
-            unsafe { std::str::from_utf8_unchecked(AERON_URI_UNTETHERED_RESTING_TIMEOUT_KEY) };
-        self.put(KEY, value)?;
+    pub fn untethered_resting_timeout(&self, value: i64) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_UNTETHERED_RESTING_TIMEOUT_KEY);
+        self.put_int64(key, value)?;
         Ok(self)
     }
-    pub fn max_resend_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str = unsafe { std::str::from_utf8_unchecked(AERON_URI_MAX_RESEND_KEY) };
-        self.put(KEY, value)?;
+    pub fn max_resend(&self, value: i32) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_MAX_RESEND_KEY);
+        self.put_int32(key, value)?;
         Ok(self)
     }
-    pub fn stream_id_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str = unsafe { std::str::from_utf8_unchecked(AERON_URI_STREAM_ID_KEY) };
-        self.put(KEY, value)?;
+    pub fn stream_id(&self, value: i32) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_STREAM_ID_KEY);
+        self.put_int32(key, value)?;
         Ok(self)
     }
-    pub fn publication_window_key(&self, value: &str) -> Result<&Self, AeronCError> {
-        const KEY: &str =
-            unsafe { std::str::from_utf8_unchecked(AERON_URI_PUBLICATION_WINDOW_KEY) };
-        self.put(KEY, value)?;
+    pub fn publication_window(&self, value: i32) -> Result<&Self, AeronCError> {
+        let key: &str = Self::strip_null_terminator(AERON_URI_PUBLICATION_WINDOW_KEY);
+        self.put_int32(key, value)?;
         Ok(self)
     }
 
