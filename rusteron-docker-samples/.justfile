@@ -1,5 +1,6 @@
 # List all available tasks
 list:
+    cargo update
     just --list
 
 # Automatically format code and fix simple Clippy warnings
@@ -8,12 +9,10 @@ fix:
   cd rusteron-dummy-example && cargo clippy --allow-dirty --allow-staged --fix && cd -
 
 docker-build:
-    cd rusteron-docker-samples/rusteron-dummy-example && cargo update && cd -
     docker build -t aeron-media-driver aeron-media-driver
     docker build -t rusteron-dummy-example rusteron-dummy-example
 
 podman-build:
-    cd rusteron-docker-samples/rusteron-dummy-example && cargo update && cd -
     podman build -t rusteron-dummy-example -f Dockerfile rusteron-dummy-example
     podman build -t aeron-media-driver -f Dockerfile aeron-media-driver
 
@@ -32,3 +31,23 @@ k8s-deploy:
 # deletes dummy-example pod
 k8s-clean:
     kubectl delete pod dummy-example
+
+run-aeron-archive-driver:
+    java \
+      --add-opens java.base/jdk.internal.misc=ALL-UNNAMED \
+      -javaagent:../rusteron-archive/aeron/aeron-agent/build/libs/aeron-agent-1.47.0-SNAPSHOT.jar \
+      -cp ../rusteron-archive/aeron/aeron-all/build/libs/aeron-all-1.47.0-SNAPSHOT.jar:../rusteron-archive/aeron/aeron-archive/build/libs/aeron-archive-1.47.0-SNAPSHOT.jar \
+      -Daeron.archive.dir=target/aeron/archive \
+      -Daeron.event.log=all \
+      -Daeron.event.archive.log=all \
+      -Daeron.term.buffer.sparse.file=false \
+      -Daeron.pre.touch.mapped.memory=true \
+      -Dagrona.disable.bounds.checks=true \
+      -Daeron.dir.delete.on.start=true \
+      -Daeron.dir.delete.on.shutdown=true \
+      -Daeron.print.configuration=true \
+      -Daeron.archive.control.channel=aeron:udp?endpoint=localhost:8010 \
+      -Daeron.archive.replication.channel=aeron:udp?endpoint=localhost:8011 \
+      -Daeron.archive.control.response.channel=aeron:udp?endpoint=localhost:8012 \
+      io.aeron.archive.ArchivingMediaDriver
+

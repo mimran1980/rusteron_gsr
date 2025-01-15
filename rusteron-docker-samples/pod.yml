@@ -31,7 +31,7 @@ spec:
         - name: "AERON_ARCHIVE_REPLICATION_CHANNEL"
           value: "aeron:udp?endpoint=localhost:8012"
         - name: "AERON_ARCHIVE_DIR"
-          value: "aeron:udp?endpoint=localhost:8012"
+          value: "/archive"
 
 
     - name: ticker-writer

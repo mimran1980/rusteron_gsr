@@ -1,5 +1,6 @@
 # List all available tasks
 list:
+    cargo update
     just --list
 
 # Check formatting, linting, and compile
@@ -213,5 +214,6 @@ aeron-stat dir:
     java --add-opens java.base/jdk.internal.misc=ALL-UNNAMED -cp ./rusteron-archive/aeron/aeron-all/build/libs/aeron-all-*.jar -Daeron.dir={{dir}} io.aeron.samples.AeronStat
 
 build-docker-samples:
+    cargo update
     cd rusteron-docker-samples/rusteron-dummy-example && cargo build --release && cd ..
     cd rusteron-docker-samples && just build
