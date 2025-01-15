@@ -16,6 +16,7 @@ pub mod bindings {
 
 use bindings::*;
 use log::info;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::{sleep, JoinHandle};
@@ -32,6 +33,8 @@ impl AeronDriver {
         aeron_context: AeronDriverContext,
         register_sigint: bool,
     ) -> (Arc<AtomicBool>, JoinHandle<Result<(), AeronCError>>) {
+        AeronDriver::wait_for_previous_media_driver_to_timeout(&aeron_context);
+
         let stop = Arc::new(AtomicBool::new(false));
         let stop_copy = stop.clone();
         // Register signal handler for SIGINT (Ctrl+C)
@@ -80,6 +83,35 @@ impl AeronDriver {
         info!("started media driver");
 
         (stop_copy, handle)
+    }
+
+    /// if you have existing shm files and its before the driver timeout it will try to reuse it and fail
+    /// this makes sure that if that is the case it will wait else it proceeds
+    pub fn wait_for_previous_media_driver_to_timeout(aeron_context: &AeronDriverContext) {
+        let cnc_file = Path::new(aeron_context.get_dir()).join("cnc.dat");
+
+        if cnc_file.exists() {
+            let timeout =
+                Duration::from_millis(aeron_context.get_driver_timeout_ms() * 2).as_nanos() as i64;
+
+            let mut duration = timeout;
+
+            if let Ok(md) = cnc_file.metadata() {
+                if let Ok(modified_time) = md.modified() {
+                    if let Ok(took) = modified_time.elapsed() {
+                        duration = took.as_nanos() as i64;
+                    }
+                }
+            }
+
+            let delay = timeout - duration;
+
+            if delay > 0 {
+                let sleep_duration = Duration::from_nanos((delay + 1_000_000) as u64);
+                info!("cnc file already exists, will need to wait {sleep_duration:?} for timeout [file={cnc_file:?}]");
+                sleep(sleep_duration);
+            }
+        }
     }
 }
 

@@ -17,7 +17,6 @@ pub mod bindings {
 use bindings::*;
 include!(concat!(env!("OUT_DIR"), "/aeron.rs"));
 include!(concat!(env!("OUT_DIR"), "/aeron_custom.rs"));
-// include!(concat!(env!("OUT_DIR"), "/rb_custom.rs"));
 
 #[cfg(test)]
 mod tests {
@@ -57,6 +56,33 @@ mod tests {
         ctx.set_error_handler(Some(&Handler::leak(error_handler)))?;
 
         assert!(Aeron::epoch_clock() > 0);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    pub fn media_driver_quick_restart() -> Result<(), Box<dyn error::Error>> {
+        let _ = env_logger::Builder::new()
+            .is_test(true)
+            .filter_level(log::LevelFilter::Debug)
+            .try_init();
+
+        for _ in 0..10 {
+            let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
+            let (stop, driver_handle) = rusteron_media_driver::AeronDriver::launch_embedded(
+                media_driver_ctx.clone(),
+                false,
+            );
+
+            let aeron = Aeron::new(&AeronContext::new()?)?;
+            aeron.start()?;
+            let publication =
+                aeron.add_publication("aeron:ipc", 123, Duration::from_millis(1000))?;
+            info!("created publication {publication:?}");
+
+            driver_handle.join().unwrap()?;
+        }
 
         Ok(())
     }

@@ -21,7 +21,6 @@ pub mod testing;
 
 include!(concat!(env!("OUT_DIR"), "/aeron.rs"));
 include!(concat!(env!("OUT_DIR"), "/aeron_custom.rs"));
-// include!(concat!(env!("OUT_DIR"), "/rb_custom.rs"));
 
 pub type SourceLocation = bindings::aeron_archive_source_location_t;
 pub const SOURCE_LOCATION_LOCAL: aeron_archive_source_location_en =
