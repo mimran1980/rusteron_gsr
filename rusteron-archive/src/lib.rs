@@ -16,7 +16,6 @@ pub mod bindings {
 }
 
 use bindings::*;
-use std::str::FromStr;
 
 pub mod testing;
 
