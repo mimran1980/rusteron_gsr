@@ -117,6 +117,7 @@ mod tests {
     use std::cell::Cell;
     use std::error;
     use std::error::Error;
+    use std::str::FromStr;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
     use std::thread::sleep;
@@ -154,6 +155,13 @@ mod tests {
             .build(1024)?;
 
         assert_eq!("aeron:udp?ttl=5|endpoint=localhost:8010", uri);
+
+        let uri = "aeron:udp?endpoint=localhost:8010"
+            .parse::<AeronUriStringBuilder>()?
+            .ttl(6)?
+            .build(1024)?;
+
+        assert_eq!("aeron:udp?ttl=6|endpoint=localhost:8010", uri);
 
         Ok(())
     }
