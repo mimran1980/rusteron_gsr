@@ -122,7 +122,8 @@ let start = Instant::now();
 while !found_recording_signal.get() && start.elapsed().as_secs() < 5 {
     sleep(Duration::from_millis(50));
     archive.poll_for_recording_signals()?;
-    if let Some(err) = archive.poll_for_error() {
+    let err = archive.poll_for_error_response_as_string(4096)?;
+    if !err.is_empty() {
         panic!("{}", err);
     }
 }
@@ -136,7 +137,8 @@ for i in 0..11 {
     {
         sleep(Duration::from_millis(50));
         archive.poll_for_recording_signals()?;
-        if let Some(err) = archive.poll_for_error() {
+        let err = archive.poll_for_error_response_as_string(4096)?;
+        if !err.is_empty() {
             panic!("{}", err);
         }
     }
@@ -167,7 +169,8 @@ while start.elapsed() < Duration::from_secs(5)
 {
     sleep(Duration::from_millis(50));
     archive.poll_for_recording_signals()?;
-    if let Some(err) = archive.poll_for_error() {
+    let err = archive.poll_for_error_response_as_string(4096)?;
+    if !err.is_empty() {
         panic!("{}", err);
     }
 }
@@ -211,7 +214,8 @@ let start = Instant::now();
 while start.elapsed() < Duration::from_secs(5) && subscription.poll(Some(&poll), 100)? <= 0
 {
     archive.poll_for_recording_signals()?;
-    if let Some(err) = archive.poll_for_error() {
+    let err = archive.poll_for_error_response_as_string(4096)?;
+    if !err.is_empty() {
         panic!("{}", err);
     }
 }

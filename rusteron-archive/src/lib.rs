@@ -16,7 +16,6 @@ pub mod bindings {
 }
 
 use bindings::*;
-use std::ffi::{c_char, CStr};
 
 pub mod testing;
 
@@ -105,26 +104,6 @@ impl AeronArchiveContext {
             |_work_count| {},
         ))))?;
         Ok(context)
-    }
-}
-
-impl AeronArchive {
-    pub fn poll_for_error(&self) -> Option<String> {
-        let mut buffer: Vec<u8> = vec![0; 100];
-        let raw_ptr: *mut c_char = buffer.as_mut_ptr() as *mut c_char;
-        let len = self.poll_for_error_response(raw_ptr, 100).ok()?;
-        if len >= 0 {
-            unsafe {
-                let result = CStr::from_ptr(raw_ptr).to_string_lossy().to_string();
-                if result.is_empty() {
-                    None
-                } else {
-                    Some(result)
-                }
-            }
-        } else {
-            None
-        }
     }
 }
 
@@ -405,7 +384,8 @@ mod tests {
         // Handlers::no_unavailable_image_handler(),
         // Duration::from_secs(5))?;
         assert!(replay_session_id > 0, "Replay failed to start");
-        if let Some(err) = archive.poll_for_error() {
+        let err = archive.poll_for_error_response_as_string(4096)?;
+        if !err.is_empty() {
             panic!("{}", err);
         }
         if aeron.errmsg().len() > 0 && "no error" != aeron.errmsg() {
@@ -422,7 +402,8 @@ mod tests {
             );
             assert!(!replay_merge.has_failed());
             if replay_merge.poll(Some(&handler), 1000)? == 0 {
-                if let Some(err) = archive.poll_for_error() {
+                let err = archive.poll_for_error_response_as_string(4096)?;
+                if !err.is_empty() {
                     panic!("{}", err);
                 }
                 if aeron.errmsg().len() > 0 && "no error" != aeron.errmsg() {
@@ -573,7 +554,8 @@ mod tests {
             {
                 sleep(Duration::from_millis(50));
                 archive.poll_for_recording_signals()?;
-                if let Some(err) = archive.poll_for_error() {
+                let err = archive.poll_for_error_response_as_string(4096)?;
+                if !err.is_empty() {
                     panic!("{}", err);
                 }
             }
@@ -638,7 +620,8 @@ mod tests {
         while start.elapsed() < Duration::from_secs(5) && found_recording_id.get() == -1 {
             archive.list_recordings_for_uri(0, i32::MAX, channel, stream_id, Some(&handler))?;
             archive.poll_for_recording_signals()?;
-            if let Some(err) = archive.poll_for_error() {
+            let err = archive.poll_for_error_response_as_string(4096)?;
+            if !err.is_empty() {
                 panic!("{}", err);
             }
         }
@@ -683,7 +666,8 @@ mod tests {
         while start.elapsed() < Duration::from_secs(10) && subscription.poll(Some(&poll), 100)? <= 0
         {
             let count = archive.poll_for_recording_signals()?;
-            if let Some(err) = archive.poll_for_error() {
+            let err = archive.poll_for_error_response_as_string(4096)?;
+            if !err.is_empty() {
                 panic!("{}", err);
             }
         }

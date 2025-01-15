@@ -411,24 +411,7 @@ impl AeronUriStringBuilder {
 
     #[inline]
     pub fn build_into(&self, dst: &mut String) -> Result<(), AeronCError> {
-        unsafe {
-            let capacity = dst.capacity();
-            let vec = dst.as_mut_vec();
-            vec.set_len(capacity);
-            self.sprint(vec.as_mut_ptr() as *mut _, capacity)?;
-            let mut len = 0;
-            loop {
-                if len == capacity {
-                    break;
-                }
-                let val = vec[len];
-                if val == 0 {
-                    break;
-                }
-                len += 1;
-            }
-            vec.set_len(len);
-        }
+        self.sprint_into(dst)?;
         Ok(())
     }
 }

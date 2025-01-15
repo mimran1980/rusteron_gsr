@@ -58,6 +58,7 @@ impl Arg {
 impl Arg {
     const C_INT_RETURN_TYPE_STR: &'static str = ":: std :: os :: raw :: c_int";
     const C_CHAR_STR: &'static str = "* const :: std :: os :: raw :: c_char";
+    const C_MUT_CHAR_STR: &'static str = "* mut :: std :: os :: raw :: c_char";
     const C_BYTE_ARRAY: &'static str = "* const u8";
     const C_BYTE_MUT_ARRAY: &'static str = "* mut u8";
     const STAR_MUT: &'static str = "* mut";
@@ -66,6 +67,14 @@ impl Arg {
 
     pub fn is_c_string(&self) -> bool {
         self.c_type == Self::C_CHAR_STR
+    }
+
+    pub fn is_mut_c_string(&self) -> bool {
+        self.c_type == Self::C_MUT_CHAR_STR
+    }
+
+    pub fn is_usize(&self) -> bool {
+        self.c_type == "usize"
     }
 
     pub fn is_byte_array(&self) -> bool {
@@ -544,13 +553,63 @@ impl CWrapper {
 
                 let method_docs: Vec<proc_macro2::TokenStream> = get_docs(&method.docs, wrappers, Some(&fn_arguments) );
 
+                let mut additional_methods = vec![];
+
+                if method.arguments.len() == 3 && uses_self {
+                    let method_docs = method_docs.clone();
+                    let into_method = format_ident!("{}_into", fn_name);
+                    if method.arguments[1].is_mut_c_string() && method.arguments[2].is_usize() {
+                        let string_method = format_ident!("{}_as_string", fn_name);
+                        additional_methods.push(quote! {
+    #[inline]
+    #(#method_docs)*
+    pub fn #string_method(
+        &self,
+        max_length: usize,
+    ) -> Result<String, AeronCError> {
+        let mut result = String::with_capacity(max_length);
+        self.#into_method(&mut result)?;
+        Ok(result)
+    }
+
+    #[inline]
+    #(#method_docs)*
+    #[doc = "NOTE: allocation friendly method, the string capacity must be set as it will truncate string to capacity it will never grow the string. So if you pass String::new() it will write 0 chars"]
+    pub fn #into_method(
+        &self,
+        dst_truncate_to_capacity: &mut String,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let capacity = dst_truncate_to_capacity.capacity();
+            let vec = dst_truncate_to_capacity.as_mut_vec();
+            vec.set_len(capacity);
+            let result = self.#fn_name(vec.as_mut_ptr() as *mut _, capacity)?;
+            let mut len = 0;
+            loop {
+                if len == capacity {
+                    break;
+                }
+                let val = vec[len];
+                if val == 0 {
+                    break;
+                }
+                len += 1;
+            }
+            vec.set_len(len);
+            Ok(result)
+        }
+    }
+                        });
+                    }
+                }
+
+
                 let mut_primitivies = method.arguments.iter()
                     .filter(|a| a.is_mut_pointer() && a.is_primitive())
                     .collect_vec();
                 let single_mut_field = method.return_type.is_c_raw_int() && mut_primitivies.len() == 1;
 
-
-               // in aeron some methods return error code but have &mut primitive
+                // in aeron some methods return error code but have &mut primitive
                 // ideally we should return that primitive instead of forcing user to pass it in
                 if single_mut_field {
                     let mut_field = mut_primitivies.first().unwrap();
@@ -609,6 +668,8 @@ impl CWrapper {
                                 }
                             }
                         }
+
+                        #(#additional_methods)*
                     }
                 } else {
                     quote! {
@@ -620,6 +681,8 @@ impl CWrapper {
                                 #converter
                             }
                         }
+
+                        #(#additional_methods)*
                     }
                 }
             })
