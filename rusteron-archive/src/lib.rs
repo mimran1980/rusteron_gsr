@@ -16,6 +16,7 @@ pub mod bindings {
 }
 
 use bindings::*;
+use std::str::FromStr;
 
 pub mod testing;
 
@@ -148,6 +149,12 @@ mod tests {
             .control("localhost:1234")?
             .build(1024)?;
         assert_eq!("aeron:udp?ttl=2|control-mode=dynamic|endpoint=localhost:1235|control=localhost:1234|reliable=false", uri);
+
+        let uri = AeronUriStringBuilder::from_str("aeron:udp?endpoint=localhost:8010")?
+            .ttl(5)?
+            .build(1024)?;
+
+        assert_eq!("aeron:udp?ttl=5|endpoint=localhost:8010", uri);
 
         Ok(())
     }

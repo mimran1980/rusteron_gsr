@@ -187,6 +187,16 @@ impl AeronPublication {
     }
 }
 
+impl std::str::FromStr for AeronUriStringBuilder {
+    type Err = AeronCError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let builder = AeronUriStringBuilder::default();
+        builder.init_on_string(s)?;
+        Ok(builder)
+    }
+}
+
 impl AeronUriStringBuilder {
     #[inline]
     pub fn build(&self, max_str_length: usize) -> Result<String, AeronCError> {

@@ -8,10 +8,12 @@ fix:
   cd rusteron-dummy-example && cargo clippy --allow-dirty --allow-staged --fix && cd -
 
 docker-build:
+    cd rusteron-docker-samples/rusteron-dummy-example && cargo update && cd -
     docker build -t aeron-media-driver aeron-media-driver
     docker build -t rusteron-dummy-example rusteron-dummy-example
 
 podman-build:
+    cd rusteron-docker-samples/rusteron-dummy-example && cargo update && cd -
     podman build -t rusteron-dummy-example -f Dockerfile rusteron-dummy-example
     podman build -t aeron-media-driver -f Dockerfile aeron-media-driver
 
