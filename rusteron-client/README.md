@@ -14,7 +14,7 @@ The **rusteron-client** module acts as a Rust wrapper around the Aeron C client 
 - **Publication**: Send messages to various Aeron channels.
 - **Subscription**: Receive messages from Aeron channels.
 - **Callbacks**: Handle events such as new publications, new subscriptions, and errors.
-- **Automatic Resource Management**: Resources are automatically managed, except for handlers, which require manual management.
+- **Automatic Resource Management (`new` method only)**: The wrappers attempt to automatically manage resources, specifically when using the `new` method. This includes calling the appropriate `xxx_init` method during initialization and automatically invoking `xxx_close` or `xxx_destroy` methods (if one exists) during cleanup. However, this management is partial. For other methods, such as `AeronArchive::set_aeron`, it is the developer's responsibility to ensure that the arguments remain valid and alive during their use. Proper resource management beyond initialization requires manual handling by the user to avoid undefined behavior or resource leaks.
 - Updated methods with a single mutable out primitive to return `Result<primitive, AeronCError>`, enhancing usability and consistency by encapsulating return values and error handling.
 
 ## General Patterns
@@ -23,7 +23,7 @@ The **rusteron-client** module follows several general patterns to simplify the 
 
 - **Cloneable Wrappers**: All Rust wrappers in **rusteron-client** can be cloned, and they will refer to the same underlying Aeron C instance/resource. This allows you to use multiple references to the same object safely.
 - **Mutable and Immutable Operations**: Modifications can be performed directly with `&self`, allowing flexibility without needing additional ownership complexities.
-- **Automatic Resource Management**: The wrappers attempt to automatically manage resources, clearing objects and calling the appropriate close, destroy, or remove methods when needed.
+- **Automatic Resource Management (`new` method only)**: The wrappers attempt to automatically manage resources, clearing objects and calling the appropriate close, destroy, or remove methods when needed.
 - **Manual Handler Management**: Callbacks and handlers require manual management. Handlers are passed into the C bindings using `Handlers::leak(xxx)`, and need to be explicitly released by calling `release()`. This manual process is required due to the complexity of determining when these handlers should be cleaned up once handed off to C.
 
 ## Handlers and Callbacks
