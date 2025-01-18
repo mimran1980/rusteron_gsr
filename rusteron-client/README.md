@@ -54,18 +54,18 @@ In this example, the `AeronErrorHandlerCallback` trait is implemented by `AeronE
 
 ### 2. Using a Closure
 
-Alternatively, you can use closures as handlers. However, due to lifetime issues, all arguments are owned, which results in allocations (e.g., converting strings). This method is not suitable for performance-sensitive roles but is more convenient for simpler, non-critical scenarios. Example:
+Alternatively, you can use closures as handlers. However, all arguments must be copied if your planning to use them later, even ones with static lifetimes. This method is not suitable for performance-sensitive roles but is more convenient for simpler, non-critical scenarios. Example:
 
 ```rust ,no_run
 use rusteron_client::*;
 
-pub struct AeronErrorHandlerClosure<F: FnMut(::std::os::raw::c_int, String) -> ()> {
+pub struct AeronErrorHandlerClosure<F: FnMut(::std::os::raw::c_int, &'static str) -> ()> {
     closure: F,
 }
 
-impl<F: FnMut(::std::os::raw::c_int, String) -> ()> AeronErrorHandlerCallback for AeronErrorHandlerClosure<F> {
-    fn handle_aeron_error_handler(&mut self, errcode: ::std::os::raw::c_int, message: &str) -> () {
-        (self.closure)(errcode.to_owned(), message.to_owned())
+impl<F: FnMut(::std::os::raw::c_int, &'static str) -> ()> AeronErrorHandlerCallback for AeronErrorHandlerClosure<F> {
+    fn handle_aeron_error_handler(&mut self, errcode: ::std::os::raw::c_int, message: &'static str) -> () {
+        (self.closure)(errcode, message)
     }
 }
 ```
