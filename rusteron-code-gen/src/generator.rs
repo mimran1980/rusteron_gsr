@@ -616,7 +616,7 @@ impl CWrapper {
 
                     for c in closure_handlers.iter() {
                         if !c.closure_type_name.is_empty() {
-                            where_clause = where_clause.replace(&c.closure_type_name.to_string(), &c.fn_mut_signature.to_string());
+                            where_clause = where_clause.replace(&c.closure_type_name.to_string(), &c.fn_mut_signature.to_string().replace("' static", "").replace("'static", ""));
                         }
                     }
                     let where_clause = parse_str::<TokenStream>(&where_clause).unwrap();
@@ -683,7 +683,9 @@ impl CWrapper {
                     additional_methods.push(quote! {
                         #[inline]
                         #(#method_docs)*
-                        /// \n\n_NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,
+                        ///
+                        /// 
+                        /// _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,
                         ///  use with care_
                         pub fn #fn_name #where_clause(#possible_self #(#fn_arguments),*) -> #return_type {
                             unsafe {
