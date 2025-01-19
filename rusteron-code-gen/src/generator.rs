@@ -683,7 +683,7 @@ impl CWrapper {
                     additional_methods.push(quote! {
                         #[inline]
                         #(#method_docs)*
-                        /// \n_NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour, 
+                        /// \n\n_NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,
                         ///  use with care_
                         pub fn #fn_name #where_clause(#possible_self #(#fn_arguments),*) -> #return_type {
                             unsafe {
