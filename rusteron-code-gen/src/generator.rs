@@ -124,12 +124,14 @@ impl Arg {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct CHandler {
     pub type_name: String,
     pub args: Vec<Arg>,
     pub return_type: Arg,
     pub docs: HashSet<String>,
+    pub fn_mut_signature: TokenStream,
+    pub closure_type_name: TokenStream,
 }
 
 #[derive(Debug, Clone)]
@@ -445,6 +447,7 @@ impl CWrapper {
     fn generate_methods(
         &self,
         wrappers: &HashMap<String, CWrapper>,
+        closure_handlers: &Vec<CHandler>,
     ) -> Vec<proc_macro2::TokenStream> {
         self.methods
             .iter()
@@ -603,6 +606,93 @@ impl CWrapper {
                     }
                 }
 
+
+                if method.arguments.iter().any(|arg| matches!(arg.processing, ArgProcessing::Handler(_)) && !method.fn_name.starts_with("set_")
+                    && !method.fn_name.starts_with("add_")) {
+                    let fn_name = format_ident!("{}_once", fn_name);
+
+                    // replace type to be FnMut
+                    let mut where_clause = where_clause.to_string();
+
+                    for c in closure_handlers.iter() {
+                        if !c.closure_type_name.is_empty() {
+                            where_clause = where_clause.replace(&c.closure_type_name.to_string(), &c.fn_mut_signature.to_string());
+                        }
+                    }
+                    let where_clause = parse_str::<TokenStream>(&where_clause).unwrap();
+
+                    // replace arguments from Handler to Closure
+                    let fn_arguments = fn_arguments.iter().map(|arg| {
+                        let mut arg = arg.clone();
+                        let str = arg.to_string();
+                        if str.contains("& Handler ") {
+                            // e.g. callback : Option < & Handler < AeronErrorLogReaderFuncHandlerImpl >>
+                            let parts = str.split(" ").collect_vec();
+                            let variable_name = parse_str::<TokenStream>(parts[0]).unwrap();
+                            let closure_type = parse_str::<TokenStream>(parts[parts.len() - 2]).unwrap();
+                            arg = quote! { mut #variable_name : #closure_type };
+                        }
+
+                        arg
+                    });
+
+
+                    // update code to directly call closure without need of box or handler
+                    let arg_names = arg_names.iter().map(|x| {
+                        let mut str = x.to_string()
+                            .replace("_callback :: <", "_callback_for_once_closure :: <")
+                            ;
+
+                        if str.contains("_callback_for_once_closure") {
+                            /*
+                                let callback: aeron_counters_reader_foreach_counter_func_t = if func.is_none() {
+                                        None
+                                    } else {
+                                        Some(
+                                            aeron_counters_reader_foreach_counter_func_t_callback_for_once_closure::<
+                                                AeronCountersReaderForeachCounterFuncHandlerImpl,
+                                            >,
+                                        )
+                                    };
+                                    callback
+                                },
+                                func.map(|m| m.as_raw())
+                                    .unwrap_or_else(|| std::ptr::null_mut()),
+
+                             */
+                            let caps = regex::Regex::new(
+                                r#"let callback\s*:\s*(?P<type>[\w_]+)\s*=\s*if\s*(?P<handler_var_name>[\w_]+)\s*\.\s*is_none\s*\(\).*Some\s*\(\s*(?P<callback>[\w_]+)\s*::\s*<\s*(?P<handler>[\w_]+)\s*>\s*\).*"#
+                            )
+                                .unwrap()
+                                .captures(&str)
+                                .expect(&format!("regex failed for {str}"));
+                            let func_type = parse_str::<TokenStream>(&caps["type"]).unwrap();
+                            let handler_var_name = parse_str::<TokenStream>(&caps["handler_var_name"]).unwrap();
+                            let callback = parse_str::<TokenStream>(&caps["callback"]).unwrap();
+                            let handler_type = parse_str::<TokenStream>(&caps["handler"]).unwrap();
+
+                            let new_code = quote! {
+                                Some(#callback::<#handler_type>),
+                                &mut #handler_var_name as *mut _ as *mut std::os::raw::c_void
+                            };
+                            str = new_code.to_string();
+                        }
+
+                        parse_str::<TokenStream>(&str).unwrap()
+                    }).collect_vec();
+                    additional_methods.push(quote! {
+                        #[inline]
+                        #(#method_docs)*
+                        /// _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour
+                        ///  use with care_
+                        pub fn #fn_name #where_clause(#possible_self #(#fn_arguments),*) -> #return_type {
+                            unsafe {
+                                let result = #ffi_call(#(#arg_names),*);
+                                #converter
+                            }
+                        }
+                    })
+                }
 
                 let mut_primitivies = method.arguments.iter()
                     .filter(|a| a.is_mut_pointer() && a.is_primitive())
@@ -1183,7 +1273,7 @@ fn get_docs(
         .collect()
 }
 
-pub fn generate_handlers(handler: &CHandler, bindings: &CBinding) -> TokenStream {
+pub fn generate_handlers(handler: &mut CHandler, bindings: &CBinding) -> TokenStream {
     if handler
         .args
         .iter()
@@ -1193,6 +1283,7 @@ pub fn generate_handlers(handler: &CHandler, bindings: &CBinding) -> TokenStream
     }
 
     let fn_name = format_ident!("{}_callback", handler.type_name);
+    let closure_fn_name = format_ident!("{}_callback_for_once_closure", handler.type_name);
     let doc_comments: Vec<proc_macro2::TokenStream> = handler
         .docs
         .iter()
@@ -1254,24 +1345,6 @@ pub fn generate_handlers(handler: &CHandler, bindings: &CBinding) -> TokenStream
         })
         .filter(|t| !t.is_empty())
         .collect();
-
-    // let needs_lifetime = !handler.args.is_empty() && handler.args.iter().any(|arg| {
-    //     let return_type = ReturnType::new(arg.clone(), bindings.wrappers.clone());
-    //     let type_name = return_type.get_new_return_type(false, false);
-    //     let type_name = type_name.to_string();
-    //     type_name.contains("&") && !type_name.contains(" self")
-    // });
-    //
-    // let lifetime = if needs_lifetime {
-    //     quote! {'a}
-    // } else {
-    //     quote! {}
-    // };
-    // let lifetime_comma = if needs_lifetime {
-    //     quote! { 'a , }
-    // } else {
-    //     quote! {}
-    // };
 
     let closure_args: Vec<proc_macro2::TokenStream> = handler
         .args
@@ -1357,6 +1430,13 @@ pub fn generate_handlers(handler: &CHandler, bindings: &CBinding) -> TokenStream
         .filter(|t| !t.is_empty())
         .collect();
 
+    handler.fn_mut_signature = quote! {
+       FnMut(#(#fn_mut_args),*) -> #closure_return_type
+    };
+    handler.closure_type_name = quote! {
+       #closure_type_name
+    };
+
     let logger_return_type = if closure_return_type.to_token_stream().to_string().eq("()") {
         closure_return_type.clone().to_token_stream()
     } else {
@@ -1437,13 +1517,29 @@ pub fn generate_handlers(handler: &CHandler, bindings: &CBinding) -> TokenStream
             #(#args),*
         ) -> #closure_return_type
         {
-            if !#closure_name.is_null() {
-                let closure: &mut F = &mut *(#closure_name as *mut F);
-                closure.#handle_method_name(#(#converted_args),*)
-            } else {
+            #[cfg(debug_assertions)]
+            if #closure_name.is_null() {
                 unimplemented!("closure should not be null")
             }
+            let closure: &mut F = &mut *(#closure_name as *mut F);
+            closure.#handle_method_name(#(#converted_args),*)
         }
+
+        // #[no_mangle]
+        #[allow(dead_code)]
+        #(#doc_comments)*
+        unsafe extern "C" fn #closure_fn_name<F: FnMut(#(#fn_mut_args),*) -> #closure_return_type>(
+            #(#args),*
+        ) -> #closure_return_type
+        {
+            #[cfg(debug_assertions)]
+            if #closure_name.is_null() {
+                unimplemented!("closure should not be null")
+            }
+            let closure: &mut F = &mut *(#closure_name as *mut F);
+            closure(#(#converted_args),*)
+        }
+
     }
 }
 
@@ -1453,11 +1549,12 @@ pub fn generate_rust_code(
     include_common_code: bool,
     include_clippy: bool,
     include_aeron_client_registering_resource_t: bool,
+    closure_handlers: &Vec<CHandler>,
 ) -> proc_macro2::TokenStream {
     let class_name = syn::Ident::new(&wrapper.class_name, proc_macro2::Span::call_site());
     let type_name = syn::Ident::new(&wrapper.type_name, proc_macro2::Span::call_site());
 
-    let methods = wrapper.generate_methods(wrappers);
+    let methods = wrapper.generate_methods(wrappers, closure_handlers);
     let constructor = wrapper.generate_constructor(wrappers);
 
     let async_impls = if wrapper.type_name.starts_with("aeron_async_")
