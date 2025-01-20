@@ -1470,6 +1470,8 @@ pub fn generate_handlers(handler: &mut CHandler, bindings: &CBinding) -> TokenSt
 
     quote! {
         #(#doc_comments)*
+        ///
+        ///
         /// _(note you must copy any arguments that you use afterwards even those with static lifetimes)_
         pub trait #closure_type_name {
             fn #handle_method_name(&mut self, #(#closure_args),*) -> #closure_return_type;
@@ -1493,6 +1495,7 @@ pub fn generate_handlers(handler: &mut CHandler, bindings: &CBinding) -> TokenSt
         /// Utility class designed to simplify the creation of handlers by allowing the use of closures.
         /// Note due to lifetime issues with FnMut, all arguments will be owned i.e. performs allocation for strings
         /// This is not the case if you use the trait instead of closure
+        ///
         /// _(note you must copy any arguments that you use afterwards even those with static lifetimes)_
         pub struct #wrapper_closure_type_name<F: FnMut(#(#fn_mut_args),*) -> #closure_return_type> {
             closure: F,
