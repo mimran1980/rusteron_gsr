@@ -140,6 +140,10 @@ pub fn main() {
             non_exhaustive: false,
         })
         .derive_debug(true)
+        .derive_copy(true)
+        .derive_eq(true)
+        .derive_default(true)
+        .derive_hash(true)
         .generate()
         .expect("Unable to generate aeron_driver bindings");
 

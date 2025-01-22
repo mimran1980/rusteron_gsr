@@ -74,10 +74,14 @@ async fn main() -> websocket_lite::Result<()> {
     Ok(())
 }
 
+unsafe impl Send for AeronRecorder {}
+unsafe impl Sync for AeronRecorder {}
+
 #[derive(Debug, Clone)]
 struct AeronRecorder {
-    publication: AeronExclusivePublication,
+    publication: AeronPublication,
     published_count: usize,
+    aeron: Aeron,
 }
 
 impl AeronRecorder {
@@ -95,17 +99,17 @@ impl AeronRecorder {
             archive.start_recording(channel, stream_id, SOURCE_LOCATION_REMOTE, true)?;
         info!("started recording ticker stream [subscriptionId={subscription_id}]");
 
-        let publication =
-            aeron.add_exclusive_publication(channel, stream_id, Duration::from_secs(60))?;
+        let publication = aeron.add_publication(channel, stream_id, Duration::from_secs(60))?;
 
         info!(
-            "created exclusive ticker publication [sessionId={}]",
+            "created ticker publication [sessionId={}]",
             publication.get_constants()?.session_id
         );
 
         Ok(Self {
             publication,
             published_count: 0,
+            aeron: aeron.clone(),
         })
     }
 }
@@ -133,7 +137,20 @@ impl JsonMesssageHandler for AeronRecorder {
                     "failed to publish [error={:?}, payload={}]",
                     AeronCError::from_code(result as i32),
                     msg
-                )
+                );
+                if result as i32 == AeronErrorType::PublicationClosed.code() {
+                    let channel = TICKER_CHANNEL;
+                    let stream_id = TICKER_STREAM_ID;
+                    self.publication = self
+                        .aeron
+                        .add_publication(channel, stream_id, Duration::from_secs(60))
+                        .expect("failed to add exclusive publication");
+
+                    info!(
+                        "created ticker publication [sessionId={}]",
+                        self.publication.get_constants().unwrap().session_id()
+                    );
+                }
             }
         }
 

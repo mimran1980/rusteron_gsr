@@ -35,10 +35,10 @@ k8s-clean:
 run-aeron-archive-driver:
     java \
       --add-opens java.base/jdk.internal.misc=ALL-UNNAMED \
-      -javaagent:../rusteron-archive/aeron/aeron-agent/build/libs/aeron-agent-1.47.0-SNAPSHOT.jar \
+      -javaagent:../rusteron-archive/aeron/aeron-agent/build/libs/aeron-agent-1.48.0-SNAPSHOT.jar \
       -cp ../rusteron-archive/aeron/aeron-all/build/libs/aeron-all-1.47.0-SNAPSHOT.jar:../rusteron-archive/aeron/aeron-archive/build/libs/aeron-archive-1.47.0-SNAPSHOT.jar \
       -Daeron.archive.dir=target/aeron/archive \
-      -Daeron.event.log=all \
+      -Daeron.event.log=admin \
       -Daeron.event.archive.log=all \
       -Daeron.term.buffer.sparse.file=false \
       -Daeron.pre.touch.mapped.memory=true \

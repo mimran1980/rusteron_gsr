@@ -68,6 +68,11 @@ impl<T> ManagedCResource<T> {
         self.resource
     }
 
+    #[inline(always)]
+    pub fn get_mut(&self) -> &mut T {
+        unsafe { &mut *self.resource }
+    }
+
     /// Closes the resource by calling the cleanup function.
     ///
     /// If cleanup fails, it returns an `AeronError`.

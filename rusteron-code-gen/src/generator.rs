@@ -1913,6 +1913,22 @@ pub fn generate_rust_code(
                     #class_name::new_zeroed().unwrap()
                 }
             }
+
+            impl #class_name {
+                /// Regular clone just increases the reference count of underlying count.
+                /// `clone_struct` shallow copies the content of the underlying struct.
+                ///
+                /// NOTE: if the struct has references to other structs these will not be copied
+                ///
+                /// Must be only used on structs which has no init/clean up methods.
+                /// So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription
+                /// More intended for AeronArchiveRecordDescriptor
+                pub fn clone_struct(&self) -> Self {
+                    let copy = Self::default();
+                    copy.inner.get_mut().clone_from(self.deref());
+                    copy
+                }
+            }
         }
     } else {
         quote! {}
@@ -1945,7 +1961,6 @@ pub fn generate_rust_code(
             pub fn get_inner(&self) -> *mut #type_name {
                 self.inner.get()
             }
-
 
             // #[inline(always)]
             // pub fn get_inner_and_disable_drop(&self) -> *mut #type_name {

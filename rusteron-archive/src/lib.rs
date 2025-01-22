@@ -176,7 +176,7 @@ mod tests {
 
         let _ = env_logger::Builder::new()
             .is_test(true)
-            .filter_level(log::LevelFilter::Debug)
+            .filter_level(log::LevelFilter::Info)
             .try_init();
 
         assert!(is_udp_port_available(23265));
@@ -278,7 +278,7 @@ mod tests {
 
         sleep(Duration::from_secs(5));
 
-        let replay_channel = format!("aeron:udp?session-id={session_id}");
+        let replay_channel = format!("aeron:udp?control-mode=manual|session-id={session_id}");
         info!("replay channel {}", replay_channel);
 
         let replay_destination = format!("aeron:udp?endpoint={REPLAY_ENDPOINT}");
@@ -333,9 +333,6 @@ mod tests {
             Handlers::no_unavailable_image_handler(),
             Duration::from_secs(5),
         )?;
-
-        // subscription.add_destination(&aeron, &replay_destination, Duration::from_secs(5))?;
-        // subscription.add_destination(&aeron, &live_destination, Duration::from_secs(5))?;
 
         let replay_merge = AeronArchiveReplayMerge::new(
             &subscription,
