@@ -116,7 +116,7 @@ mod tests {
         let closure = AeronFragmentHandlerClosure::from(|msg: &[u8], header: AeronHeader| {
             println!("foo");
         });
-        let fragment_handler = Handler::wrap(Box::new(&closure));
+        let fragment_handler = Handler::leak(closure);
         subscription.poll(Some(&fragment_handler), 1024).unwrap();
         subscription
             .poll_once(|msg, header| println!("foo"), 1024)
