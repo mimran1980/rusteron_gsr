@@ -212,7 +212,8 @@ mod tests {
         assert!(!aeron.is_closed());
 
         let publication = aeron.add_publication(
-            &format!("aeron:udp?control={CONTROL_ENDPOINT}|control-mode=dynamic|term-length=65536|fc=tagged,g:99901/1,t:5s"),
+            // &format!("aeron:udp?control={CONTROL_ENDPOINT}|control-mode=dynamic|term-length=65536|fc=tagged,g:99901/1,t:5s"),
+            &format!("aeron:udp?control={CONTROL_ENDPOINT}|control-mode=dynamic|term-length=65536"),
             STREAM_ID,
             Duration::from_secs(5),
         )?;
@@ -226,10 +227,16 @@ mod tests {
 
         let session_id = publication.session_id();
         let recording_channel = format!(
-            "aeron:udp?endpoint={RECORDING_ENDPOINT}|control={CONTROL_ENDPOINT}|session-id={session_id}|gtag=99901"
+            // "aeron:udp?endpoint={RECORDING_ENDPOINT}|control={CONTROL_ENDPOINT}|session-id={session_id}|gtag=99901"
+            "aeron:udp?endpoint={RECORDING_ENDPOINT}|control={CONTROL_ENDPOINT}|session-id={session_id}"
         );
         info!("recording channel {}", recording_channel);
-        archive.start_recording(&recording_channel, STREAM_ID, SOURCE_LOCATION_REMOTE, true)?;
+        archive.start_recording(
+            &format!("aeron:udp?endpoint={RECORDING_ENDPOINT}|control={CONTROL_ENDPOINT}"),
+            STREAM_ID,
+            SOURCE_LOCATION_REMOTE,
+            true,
+        )?;
 
         info!("waiting for publisher to be connected");
         while !publication.is_connected() {
@@ -308,16 +315,16 @@ mod tests {
         let recording_id = Cell::new(-1);
         let start_position = Cell::new(-1);
 
-        let list_recordings_handler = Handler::leak(
-            crate::AeronArchiveRecordingDescriptorConsumerFuncClosure::from(
-                |descriptor: AeronArchiveRecordingDescriptor| {
-                    info!("Recording descriptor: {:?}", descriptor);
-                    recording_id.set(descriptor.recording_id);
-                    start_position.set(descriptor.start_position);
-                    assert_eq!(descriptor.session_id, session_id);
-                },
-            ),
+        let closure = crate::AeronArchiveRecordingDescriptorConsumerFuncClosure::from(
+            |descriptor: AeronArchiveRecordingDescriptor| {
+                info!("Recording descriptor: {:?}", descriptor);
+                recording_id.set(descriptor.recording_id);
+                start_position.set(descriptor.start_position);
+                assert_eq!(descriptor.session_id, session_id);
+                assert_eq!(descriptor.stream_id, STREAM_ID);
+            },
         );
+        let list_recordings_handler = Handler::leak(closure);
         assert!(archive.list_recordings(0, 1000, Some(&list_recordings_handler))? > 0);
         assert!(recording_id.get() >= 0);
 
@@ -355,9 +362,9 @@ mod tests {
             live_destination
         );
 
-        // media_driver
-        //     .run_aeron_stats()
-        //     .expect("Failed to run aeron stats");
+        media_driver
+            .run_aeron_stats()
+            .expect("Failed to run aeron stats");
 
         // info!("Waiting for subscription to connect...");
         // while !subscription.is_connected() {
@@ -602,9 +609,17 @@ mod tests {
         let found_recording_id = Cell::new(-1);
         let start_pos = Cell::new(-1);
         let end_pos = Cell::new(-1);
-        let handler = Handler::leak(
-            crate::AeronArchiveRecordingDescriptorConsumerFuncClosure::from(
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_secs(5) && found_recording_id.get() == -1 {
+            let mut count = 0;
+            archive.list_recordings_for_uri_once(
+                &mut count,
+                0,
+                i32::MAX,
+                channel,
+                stream_id,
                 |d: AeronArchiveRecordingDescriptor| {
+                    assert_eq!(d.stream_id, stream_id);
                     info!("found recording {:#?}", d);
                     if d.stop_position > d.start_position && d.stop_position > 0 {
                         found_recording_id.set(d.recording_id);
@@ -612,11 +627,7 @@ mod tests {
                         end_pos.set(d.stop_position);
                     }
                 },
-            ),
-        );
-        let start = Instant::now();
-        while start.elapsed() < Duration::from_secs(5) && found_recording_id.get() == -1 {
-            archive.list_recordings_for_uri(0, i32::MAX, channel, stream_id, Some(&handler))?;
+            )?;
             archive.poll_for_recording_signals()?;
             let err = archive.poll_for_error_response_as_string(4096)?;
             if !err.is_empty() {

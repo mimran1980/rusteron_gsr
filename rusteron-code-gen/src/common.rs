@@ -297,14 +297,6 @@ impl<T> Handler<T> {
         }
     }
 
-    pub fn wrap(handler: Box<&T>) -> Self {
-        let raw_ptr = Box::into_raw(handler) as *mut T;
-        Self {
-            raw_ptr,
-            should_drop: false,
-        }
-    }
-
     pub fn is_none(&self) -> bool {
         self.raw_ptr.is_null()
     }
