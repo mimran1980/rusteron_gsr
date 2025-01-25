@@ -220,8 +220,8 @@ mod tests {
     pub const CONTROL_ENDPOINT: &str = "localhost:23265";
     pub const RECORDING_ENDPOINT: &str = "localhost:23266";
     pub const LIVE_ENDPOINT: &str = "localhost:23267";
-    // pub const REPLAY_ENDPOINT: &str = "localhost:0";
-    pub const REPLAY_ENDPOINT: &str = "localhost:23268";
+    pub const REPLAY_ENDPOINT: &str = "localhost:0";
+    // pub const REPLAY_ENDPOINT: &str = "localhost:23268";
 
     #[test]
     #[serial]
