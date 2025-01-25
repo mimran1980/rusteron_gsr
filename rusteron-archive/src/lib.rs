@@ -485,9 +485,7 @@ mod tests {
             assert!(!replay_merge.has_failed());
             if replay_merge.poll_once(
                 |buffer, _header| {
-                    // panic!("it worked")
                     reply_count += 1;
-                    debug!("Replayed message: {}", String::from_utf8_lossy(buffer));
                 },
                 100,
             )? == 0
@@ -505,6 +503,7 @@ mod tests {
         }
         assert!(!replay_merge.has_failed());
         assert!(replay_merge.is_live_added());
+        assert!(reply_count > 20_000);
         Ok(())
     }
 
