@@ -162,7 +162,7 @@ impl AeronArchiveContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use log::{debug, error, info};
+    use log::{error, info};
 
     use crate::testing::EmbeddedArchiveMediaDriverProcess;
     use serial_test::serial;
@@ -475,13 +475,6 @@ mod tests {
 
         let mut reply_count = 0;
         while !replay_merge.is_merged() {
-            debug!(
-                "ReplayMerge state: is_live_added={} is_merged={} has_failed={}, image={:?}",
-                replay_merge.is_live_added(),
-                replay_merge.is_merged(),
-                replay_merge.has_failed(),
-                replay_merge.image(),
-            );
             assert!(!replay_merge.has_failed());
             if replay_merge.poll_once(
                 |buffer, _header| {
