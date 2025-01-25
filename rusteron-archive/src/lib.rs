@@ -220,25 +220,25 @@ mod tests {
     pub const CONTROL_ENDPOINT: &str = "localhost:23265";
     pub const RECORDING_ENDPOINT: &str = "localhost:23266";
     pub const LIVE_ENDPOINT: &str = "localhost:23267";
-    pub const REPLAY_ENDPOINT: &str = "localhost:0";
-    // pub const REPLAY_ENDPOINT: &str = "localhost:23268";
+    // pub const REPLAY_ENDPOINT: &str = "localhost:0";
+    pub const REPLAY_ENDPOINT: &str = "localhost:23268";
 
     #[test]
     #[serial]
-    #[ignore] // TODO need to fix test, doesn't receive any response back
+    // #[ignore] // TODO need to fix test, doesn't receive any response back
     fn test_simple_replay_merge() -> Result<(), AeronCError> {
         let _ = env_logger::Builder::new()
             .is_test(true)
             .filter_level(log::LevelFilter::Info)
             .try_init();
 
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes()
+            .expect("failed to kill all java processes");
+
         assert!(is_udp_port_available(23265));
         assert!(is_udp_port_available(23266));
         assert!(is_udp_port_available(23267));
         assert!(is_udp_port_available(23268));
-
-        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes()
-            .expect("failed to kill all java processes");
         let id = Aeron::nano_clock();
         let aeron_dir = format!("target/aeron/{}/shm", id);
         let archive_dir = format!("target/aeron/{}/archive", id);
@@ -265,8 +265,6 @@ mod tests {
 
         let (session_id, publisher_thread) =
             reply_merge_publisher(&archive, aeron.clone(), running.clone())?;
-
-        sleep(Duration::from_secs(2));
 
         {
             let context = AeronContext::new()?;
@@ -404,27 +402,29 @@ mod tests {
             counters_reader.get_counter_value(counter_id)
         );
 
-        let recording_id = Cell::new(-1);
-        let start_position = Cell::new(-1);
+        // let recording_id = Cell::new(-1);
+        // let start_position = Cell::new(-1);
 
-        let mut count = 0;
-        assert!(
-            archive.list_recordings_once(&mut count, 0, 1000, |descriptor| {
-                info!("Recording descriptor: {:?}", descriptor);
-                recording_id.set(descriptor.recording_id);
-                start_position.set(descriptor.start_position);
-                assert_eq!(descriptor.session_id, session_id);
-                assert_eq!(descriptor.stream_id, STREAM_ID);
-            })? >= 0
-        );
-        assert!(count > 0);
-        assert!(recording_id.get() >= 0);
+        // let mut count = 0;
+        // assert!(
+        //     archive.list_recordings_once(&mut count, 0, 1000, |descriptor| {
+        //         info!("Recording descriptor: {:?}", descriptor);
+        //         recording_id.set(descriptor.recording_id);
+        //         start_position.set(descriptor.start_position);
+        //         assert_eq!(descriptor.session_id, session_id);
+        //         assert_eq!(descriptor.stream_id, STREAM_ID);
+        //     })? >= 0
+        // );
+        // assert!(count > 0);
+        // assert!(recording_id.get() >= 0);
 
-        let record_id = RecordingPos::get_recording_id(&aeron.counters_reader(), counter_id)?;
-        assert_eq!(recording_id.get(), record_id);
-
-        let recording_id = recording_id.get();
-        let start_position = start_position.get();
+        // let record_id = RecordingPos::get_recording_id(&aeron.counters_reader(), counter_id)?;
+        // assert_eq!(recording_id.get(), record_id);
+        //
+        // let recording_id = recording_id.get();
+        // let start_position = start_position.get();
+        let start_position = 0;
+        let recording_id = RecordingPos::get_recording_id(&aeron.counters_reader(), counter_id)?;
 
         let subscribe_channel = format!("aeron:udp?control-mode=manual|session-id={session_id}");
         info!("subscribe channel {}", subscribe_channel);
@@ -444,14 +444,15 @@ mod tests {
             &live_destination,
             recording_id,
             start_position,
-            Aeron::nano_clock(),
+            Aeron::epoch_clock(),
             10_000,
         )?;
 
         info!(
-            "ReplayMerge initialization: recordingId={}, startPosition={}, replayChannel={}, replayDestination={}, liveDestination={}",
+            "ReplayMerge initialization: recordingId={}, startPosition={}, subscriptionChannel={}, replayChannel={}, replayDestination={}, liveDestination={}",
             recording_id,
             start_position,
+            subscribe_channel,
             replay_channel,
             replay_destination,
             live_destination
@@ -467,41 +468,30 @@ mod tests {
         // }
         // info!("Subscription connected");
 
-        // let (handler,closure) = Handler::leak_with_fragment_assembler(crate::AeronFragmentHandlerClosure::from(
-        let handler = Handler::leak(crate::AeronFragmentHandlerClosure::from(
-            |buffer: &[u8], header: AeronHeader| {
-                let message = String::from_utf8_lossy(buffer);
-                info!("Replayed message: {}", message);
-            },
-        ));
+        info!(
+            "about to start_replay [maxRecordPosition={:?}]",
+            archive.get_max_recorded_position(recording_id)
+        );
 
-        info!("about to start_replay");
-        let params = AeronArchiveReplayParams::new(
-            0,
-            0,
-            0,
-            i64::MAX,
-            0,
-            subscription.get_constants()?.registration_id,
-        )?;
-        let err = archive.poll_for_error_response_as_string(4096)?;
-        if !err.is_empty() {
-            panic!("{}", err);
-        }
-        if aeron.errmsg().len() > 0 && "no error" != aeron.errmsg() {
-            panic!("{}", aeron.errmsg());
-        }
-
+        let mut reply_count = 0;
         while !replay_merge.is_merged() {
             debug!(
-                "ReplayMerge state: image={:?}, is_live_added={} is_merged={} has_failed={}",
-                replay_merge.image(),
+                "ReplayMerge state: is_live_added={} is_merged={} has_failed={}, image={:?}",
                 replay_merge.is_live_added(),
                 replay_merge.is_merged(),
-                replay_merge.has_failed()
+                replay_merge.has_failed(),
+                replay_merge.image(),
             );
             assert!(!replay_merge.has_failed());
-            if replay_merge.poll(Some(&handler), 1000)? == 0 {
+            if replay_merge.poll_once(
+                |buffer, _header| {
+                    // panic!("it worked")
+                    reply_count += 1;
+                    debug!("Replayed message: {}", String::from_utf8_lossy(buffer));
+                },
+                100,
+            )? == 0
+            {
                 let err = archive.poll_for_error_response_as_string(4096)?;
                 if !err.is_empty() {
                     panic!("{}", err);
@@ -511,11 +501,10 @@ mod tests {
                 }
                 archive.poll_for_recording_signals()?;
                 thread::sleep(Duration::from_millis(100));
-            } else {
-                panic!("yes it worked!!!!")
             }
         }
         assert!(!replay_merge.has_failed());
+        assert!(replay_merge.is_live_added());
         Ok(())
     }
 

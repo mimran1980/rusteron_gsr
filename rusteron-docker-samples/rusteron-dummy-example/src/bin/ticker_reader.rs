@@ -87,7 +87,7 @@ fn main() -> Result<()> {
                             &live_destination,
                             record.recording_id,
                             record.start_position,
-                            Aeron::nano_clock(),
+                            Aeron::epoch_clock(),
                             10_000,
                         )?;
 
