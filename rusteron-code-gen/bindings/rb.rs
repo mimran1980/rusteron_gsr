@@ -11,7 +11,7 @@ unsafe extern "C" {
     pub fn aeron_randomised_int32() -> i32;
 }
 #[repr(C, packed(4))]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct aeron_broadcast_descriptor_stct {
     pub tail_intent_counter: i64,
     pub tail_counter: i64,
@@ -33,9 +33,18 @@ const _: () = {
     ["Offset of field: aeron_broadcast_descriptor_stct::pad"]
         [::std::mem::offset_of!(aeron_broadcast_descriptor_stct, pad) - 24usize];
 };
+impl Default for aeron_broadcast_descriptor_stct {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
+}
 pub type aeron_broadcast_descriptor_t = aeron_broadcast_descriptor_stct;
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct aeron_broadcast_record_descriptor_stct {
     pub length: i32,
     pub msg_type_id: i32,
@@ -53,7 +62,7 @@ const _: () = {
 };
 pub type aeron_broadcast_record_descriptor_t = aeron_broadcast_record_descriptor_stct;
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct aeron_broadcast_receiver_stct {
     pub scratch_buffer: [u8; 4096usize],
     pub buffer: *mut u8,
@@ -90,6 +99,15 @@ const _: () = {
     ["Offset of field: aeron_broadcast_receiver_stct::lapped_count"]
         [::std::mem::offset_of!(aeron_broadcast_receiver_stct, lapped_count) - 4152usize];
 };
+impl Default for aeron_broadcast_receiver_stct {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
+}
 pub type aeron_broadcast_receiver_t = aeron_broadcast_receiver_stct;
 pub type aeron_broadcast_receiver_handler_t = ::std::option::Option<
     unsafe extern "C" fn(
@@ -114,7 +132,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct aeron_broadcast_transmitter_stct {
     pub buffer: *mut u8,
     pub descriptor: *mut aeron_broadcast_descriptor_t,
@@ -136,6 +154,15 @@ const _: () = {
     ["Offset of field: aeron_broadcast_transmitter_stct::max_message_length"]
         [::std::mem::offset_of!(aeron_broadcast_transmitter_stct, max_message_length) - 24usize];
 };
+impl Default for aeron_broadcast_transmitter_stct {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
+}
 pub type aeron_broadcast_transmitter_t = aeron_broadcast_transmitter_stct;
 unsafe extern "C" {
     pub fn aeron_broadcast_transmitter_init(
@@ -153,7 +180,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 #[repr(C, packed(4))]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct aeron_rb_descriptor_stct {
     pub begin_pad: [u8; 128usize],
     pub tail_position: i64,
@@ -196,9 +223,18 @@ const _: () = {
     ["Offset of field: aeron_rb_descriptor_stct::consumer_heartbeat_pad"]
         [::std::mem::offset_of!(aeron_rb_descriptor_stct, consumer_heartbeat_pad) - 648usize];
 };
+impl Default for aeron_rb_descriptor_stct {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
+}
 pub type aeron_rb_descriptor_t = aeron_rb_descriptor_stct;
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct aeron_rb_record_descriptor_stct {
     pub length: i32,
     pub msg_type_id: i32,
@@ -249,7 +285,7 @@ pub type aeron_rb_controlled_handler_t = ::std::option::Option<
     ) -> aeron_rb_read_action_t,
 >;
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct aeron_mpsc_rb_stct {
     pub buffer: *mut u8,
     pub descriptor: *mut aeron_rb_descriptor_t,
@@ -269,6 +305,15 @@ const _: () = {
     ["Offset of field: aeron_mpsc_rb_stct::max_message_length"]
         [::std::mem::offset_of!(aeron_mpsc_rb_stct, max_message_length) - 24usize];
 };
+impl Default for aeron_mpsc_rb_stct {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
+}
 pub type aeron_mpsc_rb_t = aeron_mpsc_rb_stct;
 unsafe extern "C" {
     pub fn aeron_mpsc_rb_init(
@@ -333,7 +378,7 @@ unsafe extern "C" {
     pub fn aeron_mpsc_rb_unblock(ring_buffer: *mut aeron_mpsc_rb_t) -> bool;
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct iovec {
     pub iov_base: *mut ::std::os::raw::c_void,
     pub iov_len: usize,
@@ -345,8 +390,17 @@ const _: () = {
     ["Offset of field: iovec::iov_base"][::std::mem::offset_of!(iovec, iov_base) - 0usize];
     ["Offset of field: iovec::iov_len"][::std::mem::offset_of!(iovec, iov_len) - 8usize];
 };
+impl Default for iovec {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
+}
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct aeron_spsc_rb_stct {
     pub buffer: *mut u8,
     pub descriptor: *mut aeron_rb_descriptor_t,
@@ -366,6 +420,15 @@ const _: () = {
     ["Offset of field: aeron_spsc_rb_stct::max_message_length"]
         [::std::mem::offset_of!(aeron_spsc_rb_stct, max_message_length) - 24usize];
 };
+impl Default for aeron_spsc_rb_stct {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
+}
 pub type aeron_spsc_rb_t = aeron_spsc_rb_stct;
 unsafe extern "C" {
     pub fn aeron_spsc_rb_init(

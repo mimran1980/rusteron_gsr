@@ -139,6 +139,7 @@ pub fn main() {
         .derive_eq(true)
         .derive_default(true)
         .derive_hash(true)
+        .derive_partialeq(true)
         .generate()
         .expect("Unable to generate aeron bindings");
 

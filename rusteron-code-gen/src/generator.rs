@@ -69,6 +69,10 @@ impl Arg {
         self.c_type == Self::C_CHAR_STR
     }
 
+    pub fn is_c_string_any(&self) -> bool {
+        self.is_c_string() || self.is_mut_c_string()
+    }
+
     pub fn is_mut_c_string(&self) -> bool {
         self.c_type == Self::C_MUT_CHAR_STR
     }
@@ -820,7 +824,7 @@ impl CWrapper {
                 let converter = rt.handle_c_to_rs_return(quote! { self.#fn_name }, false, true);
 
                 if rt.original.is_primitive()
-                    || rt.original.is_c_string()
+                    || rt.original.is_c_string_any()
                     || rt.original.is_byte_array()
                     || cwrappers.contains_key(&rt.original.c_type)
                 {

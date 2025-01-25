@@ -635,10 +635,12 @@ mod tests {
                 if !err.is_empty() {
                     panic!("{}", err);
                 }
+                archive.idle();
             }
             info!("sent message {i} [test_aeron_archive]");
         }
 
+        archive.idle();
         let session_id = publication.get_constants()?.session_id;
         info!("publication session id {}", session_id);
         // since this is single threaded need to make sure it did write to archiver, usually not required in multi-proccess app
