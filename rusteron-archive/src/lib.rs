@@ -361,7 +361,7 @@ mod tests {
                     while counters_reader.get_counter_value(counter_id) < publication.position() {
                         thread::sleep(Duration::from_micros(1));
                     }
-                    thread::sleep(Duration::from_micros(100));
+                    thread::sleep(Duration::from_micros(200));
                 }
             }
             info!("Publisher thread terminated");
@@ -479,6 +479,14 @@ mod tests {
             if replay_merge.poll_once(
                 |buffer, _header| {
                     reply_count += 1;
+                    if reply_count % 10_000 == 0 {
+                        info!(
+                            "replay-merge [count={}, isMerged={}, isLive={}]",
+                            reply_count,
+                            replay_merge.is_merged(),
+                            replay_merge.is_live_added()
+                        );
+                    }
                 },
                 100,
             )? == 0
@@ -695,6 +703,11 @@ mod tests {
                 |d: AeronArchiveRecordingDescriptor| {
                     assert_eq!(d.stream_id, stream_id);
                     info!("found recording {:#?}", d);
+                    info!(
+                        "strippedChannel={}, originalChannel={}",
+                        d.stripped_channel(),
+                        d.original_channel()
+                    );
                     if d.stop_position > d.start_position && d.stop_position > 0 {
                         found_recording_id.set(d.recording_id);
                         start_pos.set(d.start_position);

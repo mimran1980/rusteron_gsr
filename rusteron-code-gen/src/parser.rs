@@ -306,7 +306,7 @@ fn process_types(mut name_and_type: Vec<Arg>) -> Vec<Arg> {
             let processing = ArgProcessing::Handler(vec![param1.clone(), param2.clone()]);
             name_and_type[i - 1].processing = processing.clone();
             name_and_type[i].processing = processing.clone();
-        } else if param1.is_c_string() && !param1.is_mut_pointer() && is_int && length_field {
+        } else if param1.is_c_string_any() && !param1.is_mut_pointer() && is_int && length_field {
             //     pub stripped_channel: *mut ::std::os::raw::c_char,
             //     pub stripped_channel_length: usize,
             let processing = ArgProcessing::StringWithLength(vec![param1.clone(), param2.clone()]);

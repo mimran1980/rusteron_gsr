@@ -174,6 +174,8 @@ impl ReturnType {
             if self.original.name.len() > 0 {
                 if self.original.is_c_string() {
                     return quote! { &str };
+                } else if self.original.is_mut_c_string() {
+                    // return quote! { &mut str };
                 } else {
                     return quote! {};
                 }
@@ -215,6 +217,9 @@ impl ReturnType {
         if self.original.is_c_string() {
             return quote! { &str };
         }
+        if self.original.is_mut_c_string() {
+            // return quote! { &mut str };
+        }
         let return_type: syn::Type = syn::parse_str(&self.original).expect("Invalid return type");
         if self.original.is_single_mut_pointer() && self.original.is_primitive() {
             let mut_type: Type = parse_str(
@@ -236,7 +241,7 @@ impl ReturnType {
         use_self: bool,
     ) -> proc_macro2::TokenStream {
         if let ArgProcessing::StringWithLength(_) = &self.original.processing {
-            if !self.original.is_c_string() {
+            if !self.original.is_c_string_any() {
                 return quote! {};
             }
         }
@@ -785,7 +790,7 @@ impl CWrapper {
             .collect()
     }
 
-    /// Generate the fields
+    /// Generate the fields / getters
     fn generate_fields(
         &self,
         cwrappers: &HashMap<String, CWrapper>,
@@ -804,6 +809,11 @@ impl CWrapper {
                 let field_name = &arg.name;
                 let fn_name = syn::Ident::new(field_name, proc_macro2::Span::call_site());
 
+                let mut arg = arg.clone();
+                // for mut strings return just &str not &mut str
+                if arg.is_mut_c_string() {
+                    arg.c_type = arg.c_type.replace(" mut ", " const ");
+                }
                 let mut rt = ReturnType::new(arg.clone(), cwrappers.clone());
                 let mut return_type = rt.get_new_return_type(false, false);
                 let handler = if let ArgProcessing::Handler(_) = &arg.processing {
@@ -1926,7 +1936,7 @@ pub fn generate_rust_code(
                 ///
                 /// Must be only used on structs which has no init/clean up methods.
                 /// So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription
-                /// More intended for AeronArchiveRecordDescriptor
+                /// More intended for AeronArchiveRecordingDescriptor
                 pub fn clone_struct(&self) -> Self {
                     let copy = Self::default();
                     copy.inner.get_mut().clone_from(self.deref());
