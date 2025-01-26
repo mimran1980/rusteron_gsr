@@ -35,6 +35,19 @@ Ensure that you have also set up the necessary Aeron C libraries required by **r
 - **Callbacks**: Handle events such as new publications, new subscriptions, and errors.
 - **Automatic Resource Management (`new` method only)**: The wrappers attempt to automatically manage resources, specifically when using the `new` method. This includes calling the appropriate `xxx_init` method during initialization and automatically invoking `xxx_close` or `xxx_destroy` methods (if one exists) during cleanup. However, this management is partial. For other methods, such as `AeronArchive::set_aeron`, it is the developer's responsibility to ensure that the arguments remain valid and alive during their use. Proper resource management beyond initialization requires manual handling by the user to avoid undefined behavior or resource leaks.
 
+## General Patterns
+
+The **rusteron-archive** module follows several general patterns to simplify the use of Aeron functionalities in Rust:
+
+- **Cloneable Wrappers**: All Rust wrappers in **rusteron-archive** can be cloned, and they will refer to the same underlying Aeron C instance/resource. This allows you to use multiple references to the same object safely. If you need to make a shallow copy use `clone_struct()` which copies the underlying c struct.
+- **Mutable and Immutable Operations**: Modifications can be performed directly with `&self`, allowing flexibility without needing additional ownership complexities.
+- **Automatic Resource Management (`new` method only)**: The wrappers attempt to automatically manage resources, clearing objects and calling the appropriate close, destroy, or remove methods when needed.
+- **Manual Handler Management**: Callbacks and handlers require manual management. Handlers are passed into the C bindings using `Handlers::leak(xxx)`, and need to be explicitly released by calling `release()`. This manual process is required due to the complexity of determining when these handlers should be cleaned up once handed off to C.
+  For methods where the callback is not stored and only used there and then e.g. poll, you can pass in a closure directory e.g.
+```rust, no_run
+  subscription.poll_once(|msg, header| { ... })
+```
+
 ## Safety Considerations
 
 **Resource Management for AeronArchive**: The current implementation has a critical limitation: the `Aeron` object must be kept alive explicitly. The `AeronArchive` does not take ownership or manage its lifetime correctly. Instead of passing the `Aeron` instance through the constructor, the `set_aeron` function is used, which can lead to potential segmentation faults if the `Aeron` instance is prematurely dropped. Extra caution is required to ensure the `Aeron` instance remains valid during the lifetime of the `AeronArchive`.

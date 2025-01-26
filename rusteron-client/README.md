@@ -21,10 +21,14 @@ The **rusteron-client** module acts as a Rust wrapper around the Aeron C client 
 
 The **rusteron-client** module follows several general patterns to simplify the use of Aeron functionalities in Rust:
 
-- **Cloneable Wrappers**: All Rust wrappers in **rusteron-client** can be cloned, and they will refer to the same underlying Aeron C instance/resource. This allows you to use multiple references to the same object safely.
+- **Cloneable Wrappers**: All Rust wrappers in **rusteron-client** can be cloned, and they will refer to the same underlying Aeron C instance/resource. This allows you to use multiple references to the same object safely. If you need to make a shallow copy use `clone_struct()` which copies the underlying c struct.
 - **Mutable and Immutable Operations**: Modifications can be performed directly with `&self`, allowing flexibility without needing additional ownership complexities.
 - **Automatic Resource Management (`new` method only)**: The wrappers attempt to automatically manage resources, clearing objects and calling the appropriate close, destroy, or remove methods when needed.
-- **Manual Handler Management**: Callbacks and handlers require manual management. Handlers are passed into the C bindings using `Handlers::leak(xxx)`, and need to be explicitly released by calling `release()`. This manual process is required due to the complexity of determining when these handlers should be cleaned up once handed off to C.
+- **Manual Handler Management**: Callbacks and handlers require manual management. Handlers are passed into the C bindings using `Handlers::leak(xxx)`, and need to be explicitly released by calling `release()`. This manual process is required due to the complexity of determining when these handlers should be cleaned up once handed off to C. 
+  For methods where the callback is not stored and only used there and then e.g. poll, you can pass in a closure directory e.g. 
+```rust, no_run
+  subscription.poll_once(|msg, header| { ... })
+```
 
 ## Handlers and Callbacks
 
