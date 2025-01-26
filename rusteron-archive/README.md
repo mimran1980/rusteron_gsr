@@ -1,16 +1,16 @@
 # rusteron-archive
 
-**rusteron-archive** is a module within the **rusteron** project that provides functionalities for interacting with Aeron's archive capabilities in a Rust environment. This module aims to extend **rusteron-client** by offering features for recording streams, managing archives, and handling replay capabilities.
+**rusteron-archive** is a module within the **rusteron** project that provides functionalities for interacting with Aeron's archive capabilities in a Rust environment. This module extends **rusteron-client** by offering features for recording streams, managing archives, and handling replay capabilities.
 
 ## Overview
 
 The **rusteron-archive** module is intended to help Rust developers leverage Aeron's archive functionalities, including the recording and replaying of messages. However, this module is currently in an early stage and has not been thoroughly tested.
 
-The code in **rusteron-archive** is generated as a Rust wrapper around the Aeron C archive API, making it easier for Rust developers to work with Aeron's archiving capabilities. Since this module also uses C bindings, it involves an `unsafe` context, and extra caution is advised when using it.
+> **Important**: The module is in an early stage and might undergo changes. Ensure that you test thoroughly when incorporating it in production-grade systems.
 
 ## Installation
 
-To use **rusteron-archive**, add it to your `Cargo.toml`:
+Add **rusteron-archive** to your `Cargo.toml`:
 
 dynamic lib
 ```toml
@@ -30,6 +30,10 @@ Ensure that you have also set up the necessary Aeron C libraries required by **r
 
 - **Stream Recording**: Enables recording of Aeron streams.
 - **Replay Handling**: Provides capabilities for replaying recorded messages.
+- **Publication**: Send messages to various Aeron channels.
+- **Subscription**: Receive messages from Aeron channels.
+- **Callbacks**: Handle events such as new publications, new subscriptions, and errors.
+- **Automatic Resource Management (`new` method only)**: The wrappers attempt to automatically manage resources, specifically when using the `new` method. This includes calling the appropriate `xxx_init` method during initialization and automatically invoking `xxx_close` or `xxx_destroy` methods (if one exists) during cleanup. However, this management is partial. For other methods, such as `AeronArchive::set_aeron`, it is the developer's responsibility to ensure that the arguments remain valid and alive during their use. Proper resource management beyond initialization requires manual handling by the user to avoid undefined behavior or resource leaks.
 
 ## Safety Considerations
 
