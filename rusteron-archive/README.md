@@ -8,15 +8,6 @@ The **rusteron-archive** module is intended to help Rust developers leverage Aer
 
 The code in **rusteron-archive** is generated as a Rust wrapper around the Aeron C archive API, making it easier for Rust developers to work with Aeron's archiving capabilities. Since this module also uses C bindings, it involves an `unsafe` context, and extra caution is advised when using it.
 
-## Project Status
-
-- **Current Focus**: Our primary focus is currently on **rusteron-client**. However, developers can run a unit test in **rusteron-archive** that demonstrates recording and replaying from the archive.- 
-- **Alpha Version**: **rusteron-archive** is in alpha stage due to aeron archive c bindings not been offically realeased by aeron, and developers are encouraged to experiment with it, but it is not recommended for production use at this point.
-
-⚠ **Important Warning**: The Aeron Archive C bindings used in this module require Aeron version **1.47** or newer, which has not yet been officially released. The library is currently built using the master branch of Aeron. Consequently, the Media Driver must also be running version **1.47** or the master branch to avoid segmentation faults.
-
-
-
 ## Installation
 
 To use **rusteron-archive**, add it to your `Cargo.toml`:

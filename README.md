@@ -7,7 +7,7 @@
 
 **rusteron** is a Rust client wrapper for the [Aeron](https://github.com/real-logic/aeron) C API, designed to help Rust developers interact with Aeron, a high-performance messaging system. This library is built as an extension to the Aeron C bindings, making it easier to leverage Aeron's low-latency communication capabilities in Rust applications.
 
-> **Note**: For an idiomatic Rust API for Aeron, consider using [`aeron-rs`](https://github.com/UnitedTraders/aeron-rs) instead, as this library is still in an alpha phase.
+> **Note**: For an idiomatic Rust API for Aeron, consider using [`aeron-rs`](https://github.com/UnitedTraders/aeron-rs) instead, as this library is still in beta phase.
 
 ## Project Background
 
@@ -19,11 +19,10 @@ The modules in **rusteron** aim to replicate and extend the capabilities availab
 
 ## Project Status
 
-**rusteron** is currently in alpha, meaning:
+**rusteron** is currently in beta, meaning:
 
 - It is still under active development.
 - APIs may be subject to breaking changes.
-- It is not recommended for production use at this time.
 
 Community feedback and contributions are welcome to improve its functionality and usability.
 
@@ -41,7 +40,7 @@ The library is divided into several modules, each focusing on specific parts of 
 
 - **[rusteron-archive](https://github.com/mimran1980/rusteron/tree/main/rusteron-archive)**: Extends the Aeron client to
   include archiving features, such as recording streams and handling replay capabilities. It uses the Aeron C bindings
-  from aeron-archive module. _(Note requires aeron >=1.47/master)_
+  from aeron-archive module.
   Note rusteron-archive also includes rusteron-client code so no need to have them both as dependancies. Also make sure
   the media driver matches lib version.
 
