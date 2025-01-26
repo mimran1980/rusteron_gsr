@@ -602,3 +602,12 @@ impl AeronBufferClaim {
         unsafe { &mut *self.frame_header.cast::<aeron_header_values_frame_t>() }
     }
 }
+
+pub struct AeronErrorLogger;
+impl AeronErrorHandlerCallback for AeronErrorLogger {
+    fn handle_aeron_error_handler(&mut self, error_code: std::ffi::c_int, msg: &'static str) -> () {
+        log::error!("aeron error {}: {}", error_code, msg);
+    }
+}
+unsafe impl Send for AeronErrorLogger {}
+unsafe impl Sync for AeronErrorLogger {}
