@@ -764,7 +764,6 @@ impl CWrapper {
                                 if err_code < 0 {
                                     return Err(AeronCError::from_code(err_code));
                                 } else {
-
                                     return Ok(mut_result);
                                 }
                             }

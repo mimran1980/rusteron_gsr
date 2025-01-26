@@ -26,8 +26,8 @@ The **rusteron-client** module follows several general patterns to simplify the 
 - **Automatic Resource Management (`new` method only)**: The wrappers attempt to automatically manage resources, clearing objects and calling the appropriate close, destroy, or remove methods when needed.
 - **Manual Handler Management**: Callbacks and handlers require manual management. Handlers are passed into the C bindings using `Handlers::leak(xxx)`, and need to be explicitly released by calling `release()`. This manual process is required due to the complexity of determining when these handlers should be cleaned up once handed off to C. 
   For methods where the callback is not stored and only used there and then e.g. poll, you can pass in a closure directory e.g. 
-```rust ,no_run
-  subscription.poll_once(|msg, header| { ... })
+```rust ,ignore
+  subscription.poll_once(|msg, header| { println!("msg={:?}, header={:?}", msg, header) })
 ```
 
 ## Handlers and Callbacks
