@@ -1392,7 +1392,8 @@ pub fn generate_handlers(handler: &mut CHandler, bindings: &CBinding) -> TokenSt
         .filter(|t| !t.is_empty())
         .collect();
 
-    let closure_unused_args: Vec<proc_macro2::TokenStream> = handler
+    let mut log_field_names = vec![];
+    let closure_args_in_logger: Vec<proc_macro2::TokenStream> = handler
         .args
         .iter()
         .filter_map(|arg| {
@@ -1403,10 +1404,14 @@ pub fn generate_handlers(handler: &mut CHandler, bindings: &CBinding) -> TokenSt
 
             let return_type = ReturnType::new(arg.clone(), bindings.wrappers.clone());
             let type_name = return_type.get_new_return_type(false, false);
-            let field_name = format_ident!("_{}", name);
+            let field_name = format_ident!("{}", name);
             if type_name.is_empty() {
                 None
             } else {
+                log_field_names.push({
+                    Some(quote! { format!("{} : {:?}", stringify!(#field_name), #field_name) })
+                });
+
                 Some(quote! {
                     #field_name: #type_name
                 })
@@ -1414,6 +1419,10 @@ pub fn generate_handlers(handler: &mut CHandler, bindings: &CBinding) -> TokenSt
         })
         .filter(|t| !t.is_empty())
         .collect();
+
+    if log_field_names.is_empty() {
+        log_field_names.push(Some(quote! { "" }));
+    }
 
     let fn_mut_args: Vec<proc_macro2::TokenStream> = handler
         .args
@@ -1493,8 +1502,11 @@ pub fn generate_handlers(handler: &mut CHandler, bindings: &CBinding) -> TokenSt
 
         pub struct #logger_type_name;
         impl #closure_type_name for #logger_type_name {
-            fn #handle_method_name(&mut self, #(#closure_unused_args),*) -> #closure_return_type {
-                log::info!("{}", stringify!(#handle_method_name));
+            fn #handle_method_name(&mut self, #(#closure_args_in_logger),*) -> #closure_return_type {
+                log::info!("{}(\n\t{}\n)",
+                    stringify!(#handle_method_name),
+                    [#(#log_field_names),*].join(",\n\t"),
+                );
                 #logger_return_type
             }
         }
