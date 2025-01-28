@@ -60,15 +60,15 @@ The recommended approach is to define a trait for your handler and implement it 
 ```rust ,no_run
 use rusteron_archive::*;
 
-pub trait ArchiveErrorHandlerCallback {
-    fn handle_archive_error(&mut self, errcode: ::std::os::raw::c_int, message: &str);
+pub trait AeronErrorHandlerCallback {
+    fn handle_aeron_error_handler(&mut self, errcode: ::std::os::raw::c_int, message: &str) -> ();
 }
 
-pub struct ArchiveErrorHandlerLogger;
+pub struct AeronErrorHandlerLogger;
 
-impl ArchiveErrorHandlerCallback for ArchiveErrorHandlerLogger {
-    fn handle_archive_error(&mut self, _errcode: ::std::os::raw::c_int, _message: &str) {
-        println!("Logging archive error");
+impl AeronErrorHandlerCallback for AeronErrorHandlerLogger {
+    fn handle_aeron_error_handler(&mut self, _errcode: ::std::os::raw::c_int, _message: &str) -> () {
+        println!("{}", stringify!(handle_aeron_error_handler));
     }
 }
 ```
@@ -82,12 +82,12 @@ Alternatively, you can use closures as handlers. This approach may be less effic
 ```rust ,no_run
 use rusteron_archive::*;
 
-pub struct ArchiveErrorHandlerClosure<F: FnMut(::std::os::raw::c_int, &'static str)> {
+pub struct AeronErrorHandlerClosure<F: FnMut(::std::os::raw::c_int, &'static str) -> ()> {
     closure: F,
 }
 
-impl<F: FnMut(::std::os::raw::c_int, &'static str)> ArchiveErrorHandlerCallback for ArchiveErrorHandlerClosure<F> {
-    fn handle_archive_error(&mut self, errcode: ::std::os::raw::c_int, message: &'static str) {
+impl<F: FnMut(::std::os::raw::c_int, &'static str) -> ()> AeronErrorHandlerCallback for AeronErrorHandlerClosure<F> {
+    fn handle_aeron_error_handler(&mut self, errcode: ::std::os::raw::c_int, message: &'static str) -> () {
         (self.closure)(errcode, message)
     }
 }
@@ -106,8 +106,9 @@ If you do not need to set a particular handler, you can pass `None`. However, do
 ```rust ,ignore
 use rusteron_archive::*;
 impl Handlers {
-    pub fn no_error_handler_handler() -> Option<&'static Handler<ArchiveErrorHandlerLogger>> {
-        None::<&Handler<ArchiveErrorHandlerLogger>>
+    #[doc = r" No handler is set i.e. None with correct type"]
+    pub fn no_error_handler_handler() -> Option<&'static Handler<AeronErrorHandlerLogger>> {
+        None::<&Handler<AeronErrorHandlerLogger>>
     }
 }
 ```
@@ -120,17 +121,26 @@ These methods make it easy to specify that no handler is required, keeping your 
 
 ### Error Type Enum
 
-When an error code is negative, it is mapped to an `AeronCError` that categorises the error. The underlying error type enum (`AeronErrorType`) includes, for example:
+The `AeronErrorType` enum defines various error types that may occur:
 
-- `NullOrNotConnected`
-- `ClientErrorDriverTimeout`
-- `PublicationBackPressured`
-- `PublicationClosed`
-- `TimedOut`
-- `Unknown(i32)`
-- ... and others as necessary for archive operations.
+| Error Type | Description |
+|------------|-------------|
+| `NullOrNotConnected` | Null value or not connected |
+| `ClientErrorDriverTimeout` | Driver timeout error |
+| `ClientErrorClientTimeout` | Client timeout error |
+| `ClientErrorConductorServiceTimeout` | Conductor service timeout error |
+| `ClientErrorBufferFull` | Buffer is full |
+| `PublicationBackPressured` | Back pressure on publication |
+| `PublicationAdminAction` | Admin action during publication |
+| `PublicationClosed` | Publication has been closed |
+| `PublicationMaxPositionExceeded` | Maximum position exceeded for publication |
+| `PublicationError` | General publication error |
+| `TimedOut` | Operation timed out |
+| `Unknown(i32)` | Unknown error code |
 
-By classifying the error codes, **rusteron-archive** helps you handle specific Aeron conditions gracefully, e.g. back pressure on publication or timeouts during replay.
+These error types help provide more context on the underlying issues when working with Aeron. For example, if a publication is closed or back-pressured, these specific errors can be captured and managed accordingly.
+
+The `AeronCError` struct encapsulates the error code and provides methods to retrieve the corresponding error type and a human-readable description. Error handling in **rusteron-client** is designed to make working with Aeron C bindings more ergonomic by providing clear error types and descriptions for easier debugging.
 
 ## Safety Considerations
 
