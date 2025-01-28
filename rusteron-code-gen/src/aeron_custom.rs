@@ -13,6 +13,7 @@ unsafe impl Send for AeronCounter {}
 unsafe impl Sync for AeronCounter {}
 
 impl AeronCounter {
+    #[inline]
     pub fn addr_atomic(&self) -> &std::sync::atomic::AtomicI64 {
         unsafe { std::sync::atomic::AtomicI64::from_ptr(self.addr()) }
     }
@@ -466,6 +467,7 @@ impl AeronCountersReader {
         }
     }
 
+    #[inline]
     pub fn get_counter_value(&self, counter_id: i32) -> i64 {
         unsafe { *self.addr(counter_id) }
     }
