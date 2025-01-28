@@ -24,7 +24,7 @@ static lib
 rusteron-archive = { version = "0.1", features= ["static"] }
 ```
 
-Ensure that you have also set up the necessary Aeron C libraries required by **rusteron-archive**.
+You must also ensure that you include Aeron C libraries required by **rusteron-archive** when using default feature. (Using static will automatically include these dependancies in binary).
 
 ## Features
 
@@ -33,13 +33,14 @@ Ensure that you have also set up the necessary Aeron C libraries required by **r
 - **Publication**: Send messages to various Aeron channels.
 - **Subscription**: Receive messages from Aeron channels.
 - **Callbacks**: Handle events such as new publications, new subscriptions, and errors.
-- **Automatic Resource Management (`new` method only)**: The wrappers attempt to automatically manage resources, specifically when using the `new` method. This includes calling the appropriate `xxx_init` method during initialization and automatically invoking `xxx_close` or `xxx_destroy` methods (if one exists) during cleanup. However, this management is partial. For other methods, such as `AeronArchive::set_aeron`, it is the developer's responsibility to ensure that the arguments remain valid and alive during their use. Proper resource management beyond initialization requires manual handling by the user to avoid undefined behavior or resource leaks.
+- **Automatic Resource Management (`new` method only)**: The wrappers attempt to automatically manage resources, specifically when using the `new` method. This includes calling the appropriate `xxx_init` method during initialisation and automatically invoking `xxx_close` or `xxx_destroy` methods (if one exists) during cleanup. However, this management is partial. For other methods, such as `AeronArchive::set_aeron`, it is the developer's responsibility to ensure that the arguments remain valid and alive during their use. Proper resource management beyond initialisation requires manual handling by the user to avoid undefined behaviour or resource leaks.
 
 ## General Patterns
 
-The **rusteron-archive** module follows several general patterns to simplify the use of Aeron functionalities in Rust:
+Much like **rusteron-client**, the **rusteron-archive** module follows several general patterns to simplify usage of Aeron functionalities in Rust:
 
-- **Cloneable Wrappers**: All Rust wrappers in **rusteron-archive** can be cloned, and they will refer to the same underlying Aeron C instance/resource. This allows you to use multiple references to the same object safely. If you need to make a shallow copy use `clone_struct()` which copies the underlying c struct.
+- **Cloneable Wrappers**: All Rust wrappers in **rusteron-archive** can be cloned, and they will refer to the same underlying Aeron C instance/resource. This allows safe use of multiple references to the same object. If you need a shallow copy, use `clone_struct()`, which copies only the underlying C struct.
+
 - **Mutable and Immutable Operations**: Modifications can be performed directly with `&self`, allowing flexibility without needing additional ownership complexities.
 - **Automatic Resource Management (`new` method only)**: The wrappers attempt to automatically manage resources, clearing objects and calling the appropriate close, destroy, or remove methods when needed.
 - **Manual Handler Management**: Callbacks and handlers require manual management. Handlers are passed into the C bindings using `Handlers::leak(xxx)`, and need to be explicitly released by calling `release()`. This manual process is required due to the complexity of determining when these handlers should be cleaned up once handed off to C.
@@ -48,10 +49,99 @@ The **rusteron-archive** module follows several general patterns to simplify the
   subscription.poll_once(|msg, header| { println!("msg={:?}, header={:?}", msg, header) })
 ```
 
+## Handlers and Callbacks
+
+Handlers within **rusteron-archive** work just like those in **rusteron-client**. You can attach and manage them using two main approaches:
+
+### 1. Implementing a Trait
+
+The recommended approach is to define a trait for your handler and implement it within your own struct. This pattern is performant and safe as it does not require additional allocations. For instance:
+
+```rust ,no_run
+use rusteron_archive::*;
+
+pub trait ArchiveErrorHandlerCallback {
+    fn handle_archive_error(&mut self, errcode: ::std::os::raw::c_int, message: &str);
+}
+
+pub struct ArchiveErrorHandlerLogger;
+
+impl ArchiveErrorHandlerCallback for ArchiveErrorHandlerLogger {
+    fn handle_archive_error(&mut self, _errcode: ::std::os::raw::c_int, _message: &str) {
+        println!("Logging archive error");
+    }
+}
+```
+
+By passing instances of this trait to the archive context, you gain a reusable and safe way to respond to errors or other events without incurring unnecessary runtime overhead.
+
+### 2. Using a Closure
+
+Alternatively, you can use closures as handlers. This approach may be less efficient due to potential allocations, but it is often more convenient for quick, less performance-critical tasks. For example:
+
+```rust ,no_run
+use rusteron_archive::*;
+
+pub struct ArchiveErrorHandlerClosure<F: FnMut(::std::os::raw::c_int, &'static str)> {
+    closure: F,
+}
+
+impl<F: FnMut(::std::os::raw::c_int, &'static str)> ArchiveErrorHandlerCallback for ArchiveErrorHandlerClosure<F> {
+    fn handle_archive_error(&mut self, errcode: ::std::os::raw::c_int, message: &'static str) {
+        (self.closure)(errcode, message)
+    }
+}
+```
+
+Closures are wrapped here in a struct so they may be passed into C safely.
+
+### Wrapping Callbacks with Handler
+
+Regardless of the approach, callbacks must be wrapped in a `Handler`. This ensures proper integration with the Aeron C API. Use `Handlers::leak(xxx)` to pass a handler into C bindings. When your handler is no longer needed, call `release()` to free up resources and avoid memory leaks.
+
+### Handler Convenience Methods
+
+If you do not need to set a particular handler, you can pass `None`. However, doing so manually can be awkward due to static type requirements. To simplify this, **rusteron-archive** (like **rusteron-client**) provides convenience methods prefixed with `Handlers::no_...`, returning `None` with the correct type signature. For example:
+
+```rust ,ignore
+use rusteron_archive::*;
+impl Handlers {
+    pub fn no_error_handler_handler() -> Option<&'static Handler<ArchiveErrorHandlerLogger>> {
+        None::<&Handler<ArchiveErrorHandlerLogger>>
+    }
+}
+```
+
+These methods make it easy to specify that no handler is required, keeping your code concise.
+
+## Error Handling with Aeron C Bindings
+
+**rusteron-archive** relies on the same Aeron C bindings as **rusteron-client**, using `i32` error codes to indicate the outcome of operations. In Rust, these are wrapped within a `Result<i32, AeronCError>` to provide clearer, more idiomatic error handling.
+
+### Error Type Enum
+
+When an error code is negative, it is mapped to an `AeronCError` that categorises the error. The underlying error type enum (`AeronErrorType`) includes, for example:
+
+- `NullOrNotConnected`
+- `ClientErrorDriverTimeout`
+- `PublicationBackPressured`
+- `PublicationClosed`
+- `TimedOut`
+- `Unknown(i32)`
+- ... and others as necessary for archive operations.
+
+By classifying the error codes, **rusteron-archive** helps you handle specific Aeron conditions gracefully, e.g. back pressure on publication or timeouts during replay.
+
 ## Safety Considerations
 
-**Resource Management for AeronArchive**: The current implementation has a critical limitation: the `Aeron` object must be kept alive explicitly. The `AeronArchive` does not take ownership or manage its lifetime correctly. Instead of passing the `Aeron` instance through the constructor, the `set_aeron` function is used, which can lead to potential segmentation faults if the `Aeron` instance is prematurely dropped. Extra caution is required to ensure the `Aeron` instance remains valid during the lifetime of the `AeronArchive`.
-Since **rusteron-archive** relies on Aeron C bindings, it uses `unsafe` Rust code. Users must ensure that resources are managed properly to avoid crashes or undefined behaviour.
+**Resource Management**:  
+1. **Lifetime of `Aeron`**: The `AeronArchive` does not take full ownership or manage the lifetime of the `Aeron` instance. Instead, it calls `AeronArchive::set_aeron`, meaning you must ensure the `Aeron` object remains valid throughout the archive's usage. Dropping or losing reference to the `Aeron` too soon can lead to segmentation faults or undefined behaviour.
+
+2. **Unsafe Bindings**: Since **rusteron-archive** relies on Aeron C bindings, you must carefully manage resources (publishers, subscriptions, handlers, etc.) to avoid crashes or undefined behaviour. This includes ensuring you do not publish messages after closing the Aeron client or the associated archive context.
+
+3. **Partial Automatic Resource Management**: While constructors aim to manage resources automatically, many aspects of resource lifecycles remain manual. For instance, handlers require a call to `release()` to clean up memory. Be especially cautious in multithreaded environments, ensuring synchronisation is properly handled.
+
+Failure to follow these guidelines can lead to unstable or unpredictable results.
 
 ## Example Usage: Recording and Replaying a Stream with Aeron Archive
 
@@ -110,6 +200,7 @@ archive_context.set_error_handler(Some(&error_handler))?;
 let connect = AeronArchiveAsyncConnect::new(&archive_context.clone())?;
 let archive = connect.poll_blocking(Duration::from_secs(5))?;
 
+// Start recording a channel and stream
 let channel = "aeron:ipc";
 let stream_id = 10;
 
@@ -122,6 +213,7 @@ let subscription_id = archive.start_recording(
 
 println!("subscription id {}", subscription_id);
 
+// Publish messages to be recorded
 let publication = aeron
     .async_add_exclusive_publication(channel, stream_id)?
     .poll_blocking(Duration::from_secs(5))?;
@@ -137,7 +229,7 @@ while !found_recording_signal.get() && start.elapsed().as_secs() < 5 {
 }
 assert!(start.elapsed().as_secs() < 5);
 
-for i in 0..11 {
+for _ in 0..11 {
     while publication.offer(
         "123456".as_bytes(),
         Handlers::no_reserved_value_supplier_handler(),
@@ -155,6 +247,7 @@ for i in 0..11 {
 archive.stop_recording_channel_and_stream(channel, stream_id)?;
 drop(publication);
 
+// Locate the recorded stream in the archive
 println!("list recordings");
 let found_recording_id = Cell::new(-1);
 let start_pos = Cell::new(-1);
@@ -183,6 +276,8 @@ while start.elapsed() < Duration::from_secs(5)
     }
 }
 assert!(start.elapsed() < Duration::from_secs(5));
+
+// Replay the recorded stream on a new stream_id
 println!("start replay");
 let params = AeronArchiveReplayParams::new(
     0,
@@ -235,19 +330,17 @@ Ok::<(), AeronCError>(())
 ```
 
 ### Workflow Overview
-1. **Initialize Context**: Configures the archive and client contexts.
-2. **Start Recording**: Begins recording a specified channel and stream.
-3. **Publish Messages**: Sends messages to be recorded.
-4. **Stop Recording**: Ends the recording session.
-5. **Locate Recording**: Finds the recorded stream in the archive.
-6. **Replay Setup**: Sets up replay parameters and initiates replay on a new stream.
-7. **Subscribe and Receive**: Subscribes to the replayed messages, receiving and printing them as they arrive.
-
-This example provides a practical usage of `AeronArchive` for recording and replaying streams.
+1. **Initialise Contexts**: Set up archive and client contexts.
+2. **Start Recording**: Begin recording a specified channel and stream.
+3. **Publish Messages**: Send messages to be captured by the archive.
+4. **Stop Recording**: Conclude the recording session.
+5. **Locate Recording**: Identify and retrieve details about the recorded stream.
+6. **Replay Setup**: Configure replay parameters and replay the recorded messages on a new stream.
+7. **Subscribe and Receive**: Subscribe to the replay stream, receiving the replayed messages as they appear.
 
 ## Building This Project
 
-For detailed instructions on how to build **rusteron**, please refer to the [HOW_TO_BUILD.md](../HOW_TO_BUILD.md) file.
+For full details on building the **rusteron** project, please refer to the [HOW_TO_BUILD.md](../HOW_TO_BUILD.md) file.
 
 ## Benchmarks
 
