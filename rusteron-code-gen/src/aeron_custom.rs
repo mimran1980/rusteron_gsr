@@ -12,36 +12,9 @@ unsafe impl Sync for AeronExclusivePublication {}
 unsafe impl Send for AeronCounter {}
 unsafe impl Sync for AeronCounter {}
 
-impl AeronSubscription {
-    /// Retrieves the channel URI for this subscription with any wildcard ports filled in.
-    ///
-    /// If the channel is not UDP or does not have a wildcard port (0), then it will return the original URI.
-    ///
-    /// # Errors
-    /// Returns an `Error` if resolving the channel endpoint fails.
-    ///
-    /// # Returns
-    /// A `Result` containing the resolved URI as a `String` on success, or an `Error` on failure.
-    pub fn try_resolve_channel_endpoint_uri(&self) -> Result<String, AeronCError> {
-        const BUFFER_CAPACITY: usize = 1024;
-        let mut uri_buffer = vec![0u8; BUFFER_CAPACITY];
-        let uri_ptr = uri_buffer.as_mut_ptr() as *mut std::os::raw::c_char;
-        let bytes_written = self.try_resolve_channel_endpoint_port(uri_ptr, BUFFER_CAPACITY)?;
-        let resolved_uri =
-            String::from_utf8_lossy(&uri_buffer[..bytes_written as usize]).to_string();
-        Ok(resolved_uri)
-    }
-}
-
 impl AeronCounter {
     pub fn addr_atomic(&self) -> &std::sync::atomic::AtomicI64 {
         unsafe { std::sync::atomic::AtomicI64::from_ptr(self.addr()) }
-    }
-
-    pub fn get_constants(&self) -> Result<AeronCounterConstants, AeronCError> {
-        let constants = AeronCounterConstants::default();
-        self.constants(&constants)?;
-        Ok(constants)
     }
 }
 
@@ -52,12 +25,6 @@ impl AeronSubscription {
         destination: &str,
     ) -> Result<AeronAsyncDestination, AeronCError> {
         AeronAsyncDestination::aeron_subscription_async_add_destination(client, self, destination)
-    }
-
-    pub fn get_constants(&self) -> Result<AeronSubscriptionConstants, AeronCError> {
-        let constants = AeronSubscriptionConstants::default();
-        self.constants(&constants)?;
-        Ok(constants)
     }
 
     pub fn add_destination(
@@ -104,12 +71,6 @@ impl AeronExclusivePublication {
         )
     }
 
-    pub fn get_constants(&self) -> Result<AeronPublicationConstants, AeronCError> {
-        let constants = AeronPublicationConstants::default();
-        self.constants(&constants)?;
-        Ok(constants)
-    }
-
     pub fn add_destination(
         &mut self,
         client: &Aeron,
@@ -148,12 +109,6 @@ impl AeronPublication {
         destination: &str,
     ) -> Result<AeronAsyncDestination, AeronCError> {
         AeronAsyncDestination::aeron_publication_async_add_destination(client, self, destination)
-    }
-
-    pub fn get_constants(&self) -> Result<AeronPublicationConstants, AeronCError> {
-        let constants = AeronPublicationConstants::default();
-        self.constants(&constants)?;
-        Ok(constants)
     }
 
     pub fn add_destination(
