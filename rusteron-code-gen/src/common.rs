@@ -255,16 +255,6 @@ impl fmt::Debug for AeronCError {
 
 impl std::error::Error for AeronCError {}
 
-// fn cleanup_closure<T>(clientd: *mut ::std::os::raw::c_void) {
-//     if !clientd.is_null() {
-//         unsafe {
-//             // Convert the raw pointer back into a Box and drop it.
-//             Box::from_raw(clientd as *mut T);
-//             // The Box is dropped when it goes out of scope, automatically calling the destructor (drop).
-//         }
-//     }
-// }
-
 /// # Handler
 ///
 /// `Handler` is a struct that wraps a raw pointer and a drop flag.
@@ -352,10 +342,6 @@ impl ChannelUri {
     pub const SPY_QUALIFIER: &'static str = "aeron-spy";
     pub const MAX_URI_LENGTH: usize = 4095;
 }
-
-/// Common constants and utilities for Aeron context.
-///
-/// This module provides configuration properties, default values, and a builder for creating Aeron URIs.
 
 pub const DRIVER_TIMEOUT_MS_DEFAULT: u64 = 10_000;
 pub const AERON_DIR_PROP_NAME: &str = "aeron.dir";
