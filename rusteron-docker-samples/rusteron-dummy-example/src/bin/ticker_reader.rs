@@ -120,7 +120,7 @@ fn main() -> Result<()> {
                                 Handlers::no_unavailable_image_handler(),
                                 Duration::from_secs(5),
                             )?
-                            .try_resolve_channel_endpoint_uri()?;
+                            .try_resolve_channel_endpoint_port_as_string(4096)?;
                         let recording_id = record.recording_id();
                         assert_eq!(record.recording_id(), recording_id);
                         info!(
