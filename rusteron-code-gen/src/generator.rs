@@ -1034,13 +1034,13 @@ impl CWrapper {
                             })));
                             let resource_constructor = ManagedCResource::new(
                                 move |ctx_field| unsafe { #init_fn(#(#init_args),*) },
-                                move |ctx_field| {
+                                Some(Box::new(move |ctx_field| {
                                     let result = unsafe { #close_fn(#(#close_args),*) };
                                     if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
                                        drop_closure();
                                     }
                                     result
-                                },
+                                })),
                                 false
                             )?;
 
@@ -1063,16 +1063,18 @@ impl CWrapper {
             let type_name = format_ident!("{}", self.type_name);
             let zeroed_impl = quote! {
                 #[inline]
+                /// creates zeroed struct where the underlying c struct is on the heap
                 pub fn new_zeroed() -> Result<Self, AeronCError> {
                     let resource = ManagedCResource::new(
                         move |ctx_field| {
-                            log::debug!("creating zeroed empty resource {}", stringify!(#type_name));
+                            #[cfg(debug_assertions)]
+                            log::debug!("creating zeroed empty resource on heap {}", stringify!(#type_name));
                             let inst: #type_name = unsafe { std::mem::zeroed() };
                             let inner_ptr: *mut #type_name = Box::into_raw(Box::new(inst));
                             unsafe { *ctx_field = inner_ptr };
                             0
                         },
-                        move |_ctx_field| { 0 },
+                        None,
                         true
                     )?;
 
@@ -1148,12 +1150,12 @@ impl CWrapper {
                                 unsafe { *ctx_field = inner_ptr };
                                 0
                             },
-                            move |_ctx_field| {
+                            Some(Box::new(move |_ctx_field| {
                                 if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
                                        drop_closure();
                                 }
                                 0
-                            },
+                            })),
                             true
                         )?;
 
@@ -1848,10 +1850,7 @@ pub fn generate_rust_code(
                                 move |ctx_field| unsafe {
                                     #poll_method_name(#(#init_args),*)
                                 },
-                                move |_ctx_field| {
-                                    // TODO is there any cleanup to do
-                                    0
-                                },
+                                None,
                                 false
                             )?;
                             Ok(Self {
@@ -1899,10 +1898,7 @@ pub fn generate_rust_code(
                                 move |ctx_field| unsafe {
                                     #new_method_name(#(#async_init_args),*)
                                 },
-                                move |_ctx_field| {
-                                    // TODO is there any cleanup to do
-                                    0
-                                },
+                                None,
                                 false
                             )?;
                             Ok(Self {
@@ -2002,13 +1998,13 @@ pub fn generate_rust_code(
             /// This will create an instance where the struct is zeroed, use with care
             impl Default for #class_name {
                 fn default() -> Self {
-                    #class_name::new_zeroed().unwrap()
+                    #class_name::new_zeroed().expect("failed to create struct")
                 }
             }
 
             impl #class_name {
                 /// Regular clone just increases the reference count of underlying count.
-                /// `clone_struct` shallow copies the content of the underlying struct.
+                /// `clone_struct` shallow copies the content of the underlying struct on heap.
                 ///
                 /// NOTE: if the struct has references to other structs these will not be copied
                 ///
