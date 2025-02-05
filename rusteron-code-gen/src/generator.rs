@@ -1908,7 +1908,7 @@ pub fn generate_rust_code(
 
                         pub fn poll(&self) -> Result<Option<#main_class_name>, AeronCError> {
                             match #main_class_name::new(self) {
-                                Ok(publication) => Ok(Some(publication)),
+                                Ok(result) => Ok(Some(result)),
                                 Err(AeronCError {code }) if code == 0 => {
                                   Ok(None) // try again
                                 }
@@ -1917,14 +1917,14 @@ pub fn generate_rust_code(
                         }
 
                         pub fn poll_blocking(&self, timeout: std::time::Duration) -> Result<#main_class_name, AeronCError> {
-                            if let Some(publication) = self.poll()? {
-                                return Ok(publication);
+                            if let Some(result) = self.poll()? {
+                                return Ok(result);
                             }
 
                             let time = std::time::Instant::now();
                             while time.elapsed() < timeout {
-                                if let Some(publication) = self.poll()? {
-                                    return Ok(publication);
+                                if let Some(result) = self.poll()? {
+                                    return Ok(result);
                                 }
                                 #[cfg(debug_assertions)]
                                 std::thread::sleep(std::time::Duration::from_millis(10));
