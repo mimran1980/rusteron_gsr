@@ -1579,6 +1579,9 @@ pub fn generate_handlers(handler: &mut CHandler, bindings: &CBinding) -> TokenSt
             }
         }
 
+        unsafe impl Send for #logger_type_name {}
+        unsafe impl Sync for #logger_type_name {}
+
         impl Handlers {
             /// No handler is set i.e. None with correct type
             pub fn #no_method_name() -> Option<&'static Handler<#logger_type_name>> {
