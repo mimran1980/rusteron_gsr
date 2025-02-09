@@ -278,6 +278,9 @@ pub struct Handler<T> {
     should_drop: bool,
 }
 
+unsafe impl<T> Send for Handler<T> {}
+unsafe impl<T> Sync for Handler<T> {}
+
 /// Utility method for setting empty handlers
 pub struct Handlers;
 
