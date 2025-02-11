@@ -51,6 +51,8 @@ regex = { workspace = true}
 # using static as different modules have different versions of aeron which don't seem to play nicely
 default=[]
 static=[]
+# logs the backtrace on each AeronCError
+backtrace = []
 
 [[bin]]
 name = "media_driver"

@@ -203,7 +203,7 @@ impl AeronCError {
     ///
     /// Error codes below zero are considered failure.
     pub fn from_code(code: i32) -> Self {
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "backtrace")]
         {
             if code < 0 {
                 let backtrace = Backtrace::capture();

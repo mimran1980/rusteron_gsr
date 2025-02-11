@@ -9,6 +9,7 @@
 //!
 //! - **`static`**: When enabled, this feature statically links the Aeron C code.
 //!   By default, the library uses dynamic linking to the Aeron C libraries.
+//! - **`backtrace`** - When enabled will log a backtrace for each AeronCError
 
 pub mod bindings {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));

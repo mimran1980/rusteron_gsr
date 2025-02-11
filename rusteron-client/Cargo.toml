@@ -59,6 +59,8 @@ env_logger = "0.11"
 # using static as different modules have different versions of aeron which don't seem to play nicely
 default = []
 static = ["rusteron-media-driver/static"]
+# logs the backtrace on each AeronCError
+backtrace = []
 
 [[bench]]
 name = "ping_pong"
