@@ -779,7 +779,7 @@ impl CWrapper {
         method_docs: &Vec<TokenStream>,
         additional_methods: &mut Vec<TokenStream>,
     ) {
-        if ["constants", "buffers"]
+        if ["constants", "buffers", "values"]
             .iter()
             .any(|name| method.struct_method_name == *name)
             && method.arguments.len() == 2
