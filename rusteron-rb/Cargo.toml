@@ -49,3 +49,5 @@ regex = { workspace = true}
 [features]
 default = []
 static = []
+# logs the backtrace on each AeronCError
+backtrace = []

@@ -1,5 +1,5 @@
 use crate::AeronErrorType::Unknown;
-#[cfg(debug_assertions)]
+#[cfg(feature = "backtrace")]
 use std::backtrace::Backtrace;
 use std::fmt::{Debug, Formatter};
 use std::ops::{Deref, DerefMut};
