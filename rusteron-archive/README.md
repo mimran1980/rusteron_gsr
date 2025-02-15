@@ -4,9 +4,7 @@
 
 ## Overview
 
-The **rusteron-archive** module is intended to help Rust developers leverage Aeron's archive functionalities, including the recording and replaying of messages. However, this module is currently in an early stage and has not been thoroughly tested.
-
-> **Important**: The module is in an early stage and might undergo changes. Ensure that you test thoroughly when incorporating it in production-grade systems.
+The **rusteron-archive** module is intended to help Rust developers leverage Aeron's archive functionalities, including the recording and replaying of messages. 
 
 ## Installation
 

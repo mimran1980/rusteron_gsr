@@ -7,7 +7,7 @@
 
 **rusteron** is a Rust client wrapper for the [Aeron](https://github.com/real-logic/aeron) C API, designed to help Rust developers interact with Aeron, a high-performance messaging system. This library is built as an extension to the Aeron C bindings, making it easier to leverage Aeron's low-latency communication capabilities in Rust applications.
 
-> **Note**: For an idiomatic Rust API for Aeron, consider using [`aeron-rs`](https://github.com/UnitedTraders/aeron-rs) instead, as this library is still in beta phase.
+> **Note**: For an idiomatic Rust API for Aeron, consider using [`aeron-rs`](https://github.com/UnitedTraders/aeron-rs)
 
 ## Project Background
 
@@ -19,7 +19,7 @@ The modules in **rusteron** aim to replicate and extend the capabilities availab
 
 ## Project Status
 
-**rusteron** is currently in beta, meaning:
+**rusteron** is currently in release candiante phase it is being planned to be used in a production system, meaning:
 
 - It is still under active development.
 - APIs may be subject to breaking changes.
