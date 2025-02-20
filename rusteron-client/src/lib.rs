@@ -209,6 +209,30 @@ mod tests {
 
         let _ = publisher_handler.join().unwrap();
         let _ = driver_handle.join().unwrap();
+
+        let cnc = AeronCnc::new(ctx.get_dir())?;
+        cnc.counters_reader().foreach_counter_once(
+            |value: i64, id: i32, type_id: i32, key: &[u8], label: &str| {
+                println!("counter reader id={id}, type_id={type_id}, key={key:?}, label={label}, value={value}");
+            },
+        );
+        cnc.error_log_read_once(| observation_count: i32,
+                                     first_observation_timestamp: i64,
+                                     last_observation_timestamp: i64,
+                                     error: &str| {
+            println!("error: {error} observationCount={observation_count}, first_observation_timestamp={first_observation_timestamp}, last_observation_timestamp={last_observation_timestamp}");
+        }, 0);
+        cnc.loss_reporter_read_once(|    observation_count: i64,
+                                    total_bytes_lost: i64,
+                                    first_observation_timestamp: i64,
+                                    last_observation_timestamp: i64,
+                                    session_id: i32,
+                                    stream_id: i32,
+                                    channel: &str,
+                                    source: &str,| {
+            println!("loss reporter observationCount={observation_count}, totalBytesLost={total_bytes_lost}, first_observed={first_observation_timestamp}, last_observed={last_observation_timestamp}, session_id={session_id}, stream_id={stream_id}, channel={channel} source={source}");
+        })?;
+
         Ok(())
     }
 
