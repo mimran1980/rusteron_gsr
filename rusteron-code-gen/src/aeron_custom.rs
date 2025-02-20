@@ -12,6 +12,80 @@ unsafe impl Sync for AeronExclusivePublication {}
 unsafe impl Send for AeronCounter {}
 unsafe impl Sync for AeronCounter {}
 
+impl AeronCnc {
+    pub fn new(aeron_dir: &str) -> Result<AeronCnc,AeronCError> {
+        let resource = ManagedCResource::new(
+            move |cnc| {
+                unsafe {
+                    aeron_cnc_init(
+                        cnc,
+                        std::ffi::CString::new(aeron_dir).expect("").as_ptr(),
+                        0,
+                    )
+                }
+            },
+            Some(Box::new(move |cnc| unsafe {
+                aeron_cnc_close(*cnc);
+                0
+            })),
+            false,
+        )?;
+
+        let result = Self {
+            inner: std::rc::Rc::new(resource),
+        };
+        Ok(result)
+    }
+
+    #[doc = " Gets the timestamp of the last heartbeat sent to the media driver from any client.\n\n @param aeron_cnc to query\n @return last heartbeat timestamp in ms."]
+    pub fn get_to_driver_heartbeat_ms(&self) -> Result<i64, AeronCError> {
+        unsafe {
+            let timestamp = aeron_cnc_to_driver_heartbeat(self.get_inner());
+            if timestamp >= 0 {
+                return Ok(timestamp);
+            } else {
+                return Err(AeronCError::from_code(timestamp as i32));
+            }
+        }
+    }
+}
+
+impl AeronCncMetadata {
+    pub fn load_from_file(aeron_dir: &str) -> Result<Self, AeronCError> {
+        let aeron_dir = std::ffi::CString::new(aeron_dir).expect("CString::new failed");
+        let mapped_file = std::rc::Rc::new(std::cell::RefCell::new(aeron_mapped_file_t {
+            addr: std::ptr::null_mut(),
+            length: 0,
+        }));
+        let mapped_file2 = std::rc::Rc::clone(&mapped_file);
+        let resource = ManagedCResource::new(
+            move |ctx| {
+                let result = unsafe {
+                    aeron_cnc_map_file_and_load_metadata(
+                        aeron_dir.as_ptr(),
+                        mapped_file.borrow_mut().deref_mut() as *mut aeron_mapped_file_t,
+                        ctx,
+                    )
+                };
+                if result == aeron_cnc_load_result_t::AERON_CNC_LOAD_SUCCESS {
+                    1
+                } else {
+                    -1
+                }
+            },
+            Some(Box::new(move |ctx| unsafe {
+                aeron_unmap(mapped_file2.borrow_mut().deref_mut() as *mut aeron_mapped_file_t)
+            })),
+            false,
+        )?;
+
+        let result = Self {
+            inner: std::rc::Rc::new(resource),
+        };
+        Ok(result)
+    }
+}
+
 impl AeronCounter {
     #[inline]
     pub fn addr_atomic(&self) -> &std::sync::atomic::AtomicI64 {

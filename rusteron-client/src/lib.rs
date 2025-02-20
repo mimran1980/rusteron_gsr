@@ -16,6 +16,7 @@ pub mod bindings {
 }
 
 use bindings::*;
+
 include!(concat!(env!("OUT_DIR"), "/aeron.rs"));
 include!(concat!(env!("OUT_DIR"), "/aeron_custom.rs"));
 
@@ -105,6 +106,9 @@ mod tests {
         let publisher = aeron.add_publication(AERON_IPC_STREAM, 123, Duration::from_secs(5))?;
         info!("created publisher");
 
+        assert!(AeronCncMetadata::load_from_file(ctx.get_dir())?.pid > 0);
+        assert!(AeronCnc::new(ctx.get_dir())?.get_to_driver_heartbeat_ms()? > 0);
+
         let subscription = aeron.add_subscription(
             AERON_IPC_STREAM,
             123,
@@ -138,6 +142,7 @@ mod tests {
                     }
                     let result =
                         publisher.offer(large_msg, Handlers::no_reserved_value_supplier_handler());
+
                     if result < large_msg.len() as i64 {
                         let error = AeronCError::from_code(result as i32);
                         match error.kind() {
