@@ -51,3 +51,4 @@ default = []
 static = []
 # logs the backtrace on each AeronCError
 backtrace = []
+extra-logging = []

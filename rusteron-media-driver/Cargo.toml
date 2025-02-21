@@ -53,6 +53,7 @@ default=[]
 static=[]
 # logs the backtrace on each AeronCError
 backtrace = []
+extra-logging = []
 
 [[bin]]
 name = "media_driver"
