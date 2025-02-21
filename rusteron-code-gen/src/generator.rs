@@ -65,6 +65,10 @@ impl Arg {
     const DOUBLE_STAR_MUT: &'static str = "* mut * mut";
     const C_VOID: &'static str = "* mut :: std :: os :: raw :: c_void";
 
+    pub fn is_any_pointer(&self) -> bool {
+        self.c_type.starts_with("* const") || self.c_type.starts_with("* mut")
+    }
+
     pub fn is_c_string(&self) -> bool {
         self.c_type == Self::C_CHAR_STR
     }
@@ -258,11 +262,11 @@ impl ReturnType {
                 };
                 if self.original.is_mut_byte_array() {
                     return quote! {
-                        unsafe { std::slice::from_raw_parts_mut(#me #star_const, #me #length.try_into().unwrap()) }
+                        unsafe { if #me #star_const.is_null() { &mut [] as &mut [_]  } else {std::slice::from_raw_parts_mut(#me #star_const, #me #length.try_into().unwrap()) } }
                     };
                 } else {
                     return quote! {
-                        std::slice::from_raw_parts(#me #star_const, #me #length)
+                        if #me #star_const.is_null() { &[] as &[_]  } else { std::slice::from_raw_parts(#me #star_const, #me #length) }
                     };
                 }
             }
@@ -279,9 +283,9 @@ impl ReturnType {
         } else if self.original.is_c_string() {
             if let ArgProcessing::StringWithLength(args) = &self.original.processing {
                 let length = &args[1].as_ident();
-                return quote! { std::str::from_utf8_unchecked(std::slice::from_raw_parts(#result as *const u8, #length.try_into().unwrap()))};
+                return quote! { if #result.is_null() { ""} else { std::str::from_utf8_unchecked(std::slice::from_raw_parts(#result as *const u8, #length.try_into().unwrap()))}};
             } else {
-                return quote! { unsafe { std::ffi::CStr::from_ptr(#result).to_str().unwrap() } };
+                return quote! { if #result.is_null() { ""} else { unsafe { std::ffi::CStr::from_ptr(#result).to_str().unwrap() } } };
             }
         } else if self.original.is_single_mut_pointer() && self.original.is_primitive() {
             return quote! {
@@ -908,7 +912,10 @@ impl CWrapper {
                     || rt.original.is_byte_array()
                     || cwrappers.contains_key(&rt.original.c_type)
                 {
-                    debug_fields.push(quote! { .field(stringify!(#fn_name), &self.#fn_name()) });
+                    if !rt.original.is_any_pointer() {
+                        debug_fields
+                            .push(quote! { .field(stringify!(#fn_name), &self.#fn_name()) });
+                    }
                 }
 
                 quote! {

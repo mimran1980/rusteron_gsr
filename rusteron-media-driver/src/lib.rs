@@ -233,8 +233,23 @@ mod tests {
 
         Ok(())
     }
-}
 
-// fn cleanup_subscription(clientd: *mut ::std::os::raw::c_void) {
-//     cleanup_closure::<OnAvailableImageClosure>(clientd);
-// }
+    #[test]
+    pub fn test_debug() -> Result<(), Box<dyn std::error::Error>> {
+        let ctx = AeronDriverContext::new()?;
+
+        println!("{:#?}", ctx);
+
+        let closure = AeronAgentStartFuncClosure::from(|role| unsafe {
+            aeron_set_thread_affinity_on_start(
+                ctx.get_inner() as *mut _,
+                std::ffi::CString::new(role).unwrap().into_raw(),
+            );
+        });
+        ctx.set_agent_on_start_function(Some(&Handler::leak(closure)))?;
+
+        println!("{:#?}", ctx);
+
+        Ok(())
+    }
+}

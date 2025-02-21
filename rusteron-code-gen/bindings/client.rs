@@ -3512,6 +3512,9 @@ unsafe extern "C" {
 unsafe extern "C" {
     pub fn aeron_msync(addr: *mut ::std::os::raw::c_void, length: usize) -> ::std::os::raw::c_int;
 }
+unsafe extern "C" {
+    pub fn aeron_delete_file(path: *const ::std::os::raw::c_char) -> ::std::os::raw::c_int;
+}
 pub type aeron_usable_fs_space_func_t =
     ::std::option::Option<unsafe extern "C" fn(path: *const ::std::os::raw::c_char) -> u64>;
 unsafe extern "C" {
