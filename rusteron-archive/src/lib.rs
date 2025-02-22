@@ -19,6 +19,7 @@ pub mod bindings {
 
 use bindings::*;
 use std::cell::Cell;
+use std::os::raw::c_int;
 
 pub mod testing;
 
@@ -30,6 +31,12 @@ pub const SOURCE_LOCATION_LOCAL: aeron_archive_source_location_en =
     SourceLocation::AERON_ARCHIVE_SOURCE_LOCATION_LOCAL;
 pub const SOURCE_LOCATION_REMOTE: aeron_archive_source_location_en =
     SourceLocation::AERON_ARCHIVE_SOURCE_LOCATION_REMOTE;
+
+pub struct NoOpAeronIdleStrategyFunc;
+
+impl AeronIdleStrategyFuncCallback for NoOpAeronIdleStrategyFunc {
+    fn handle_aeron_idle_strategy_func(&mut self, _work_count: c_int) -> () {}
+}
 
 pub struct RecordingPos;
 impl RecordingPos {
@@ -154,9 +161,7 @@ impl AeronArchiveContext {
         context.set_control_response_channel(response_control_channel)?;
         context.set_recording_events_channel(recording_events_channel)?;
         // see https://github.com/mimran1980/rusteron/issues/18
-        context.set_idle_strategy(Some(&Handler::leak(AeronIdleStrategyFuncClosure::from(
-            |_work_count| {},
-        ))))?;
+        context.set_idle_strategy(Some(&Handler::leak(NoOpAeronIdleStrategyFunc)))?;
         Ok(context)
     }
 }
@@ -176,6 +181,18 @@ mod tests {
     use std::sync::Arc;
     use std::thread::{sleep, JoinHandle};
     use std::time::{Duration, Instant};
+
+    #[derive(Default, Debug)]
+    struct ErrorCount {
+        error_count: usize,
+    }
+
+    impl AeronErrorHandlerCallback for ErrorCount {
+        fn handle_aeron_error_handler(&mut self, error_code: c_int, msg: &str) {
+            error!("Aeron error {}: {}", error_code, msg);
+            self.error_count += 1;
+        }
+    }
 
     pub const ARCHIVE_CONTROL_REQUEST: &str = "aeron:udp?endpoint=localhost:8010";
     pub const ARCHIVE_CONTROL_RESPONSE: &str = "aeron:udp?endpoint=localhost:8011";
@@ -271,9 +288,7 @@ mod tests {
         {
             let context = AeronContext::new()?;
             context.set_dir(&media_driver.aeron_dir)?;
-            let error_handler = Handler::leak(AeronErrorHandlerClosure::from(|code, msg| {
-                error!("[archive] {}: {}", code, msg);
-            }));
+            let error_handler = Handler::leak(ErrorCount::default());
             context.set_error_handler(Some(&error_handler))?;
             let aeron = Aeron::new(&context)?;
             aeron.start()?;
@@ -527,7 +542,7 @@ mod tests {
     // pub fn test_failed_connect() -> Result<(), Box<dyn error::Error>> {
     //         env_logger::Builder::new()
     //         .is_test(true)
-    //         .filter_level(log::LevelFilter::Debug)
+    //         .filter_level(log::LevelFilter::Info)
     //         .init();
     //     let ctx = AeronArchiveContext::new()?;
     //     std::env::set_var("AERON_DRIVER_TIMEOUT", "1");
@@ -580,9 +595,7 @@ mod tests {
         aeron_context.set_publication_error_frame_handler(Some(&Handler::leak(
             AeronPublicationErrorFrameHandlerLogger,
         )))?;
-        let error_handler = Handler::leak(AeronErrorHandlerClosure::from(|error_code, msg| {
-            panic!("error {} {}", error_code, msg)
-        }));
+        let error_handler = Handler::leak(ErrorCount::default());
         aeron_context.set_error_handler(Some(&error_handler))?;
         let aeron = Aeron::new(&aeron_context)?;
         aeron.start()?;
@@ -602,7 +615,7 @@ mod tests {
     pub fn test_aeron_archive() -> Result<(), Box<dyn error::Error>> {
         let _ = env_logger::Builder::new()
             .is_test(true)
-            .filter_level(log::LevelFilter::Debug)
+            .filter_level(log::LevelFilter::Info)
             .try_init();
         EmbeddedArchiveMediaDriverProcess::kill_all_java_processes()
             .expect("failed to kill all java processes");
@@ -754,16 +767,25 @@ mod tests {
             )?
             .poll_blocking(Duration::from_secs(10))?;
 
-        let count = Cell::new(0);
-        let poll = Handler::leak(crate::AeronFragmentHandlerClosure::from(|msg, header| {
-            assert_eq!(msg, "123456".as_bytes().to_vec());
-            count.set(count.get() + 1);
-        }));
+        #[derive(Default)]
+        struct FragmentHandler {
+            count: Cell<usize>,
+        }
+
+        impl AeronFragmentHandlerCallback for FragmentHandler {
+            fn handle_aeron_fragment_handler(&mut self, buffer: &[u8], _header: AeronHeader) {
+                assert_eq!(buffer, "123456".as_bytes());
+
+                // Update count (using Cell for interior mutability)
+                self.count.set(self.count.get() + 1);
+            }
+        }
+
+        let poll = Handler::leak(FragmentHandler::default());
 
         let start = Instant::now();
         while start.elapsed() < Duration::from_secs(10) && subscription.poll(Some(&poll), 100)? <= 0
         {
-            let count = archive.poll_for_recording_signals()?;
             let err = archive.poll_for_error_response_as_string(4096)?;
             if !err.is_empty() {
                 panic!("{}", err);
@@ -771,11 +793,12 @@ mod tests {
         }
         assert!(
             start.elapsed() < Duration::from_secs(10),
-            "messages not received {count:?}"
+            "messages not received {:?}",
+            poll.count
         );
         info!("aeron {:?}", aeron);
         info!("ctx {:?}", archive_context);
-        assert_eq!(11, count.get());
+        assert_eq!(11, poll.count.get());
         Ok(())
     }
 }

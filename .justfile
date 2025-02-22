@@ -1,5 +1,7 @@
 # List all available tasks
 list:
+    cargo install cargo-udeps
+    cargo install cargo-edit
     cargo update
     just --list
 
@@ -13,8 +15,13 @@ check:
 # Automatically format code and fix simple Clippy warnings
 fix:
   cargo fmt --all
-  cargo clippy --allow-dirty --allow-staged --fix
+  cargo clippy --allow-dirty --allow-staged --fix -- -W unused_imports -W clippy::all
   cd rusteron-docker-samples/rusteron-dummy-example && just fix
+
+check-udeps:
+  cargo +nightly tree --duplicate
+  cargo +nightly udeps
+
 
 # Clean the project by removing the target directory
 clean:
@@ -218,3 +225,13 @@ build-docker-samples:
     cargo update
     cd rusteron-docker-samples/rusteron-dummy-example && cargo build --release && cd ..
     cd rusteron-docker-samples && just build
+
+# updates aeron version e.g. tags/1.47.3 or master
+update-aeron-version version:
+    cd rusteron-client/aeron && git checkout {{version}} && cd -
+    cd rusteron-archive/aeron && git checkout {{version}} && cd -
+    cd rusteron-media-driver/aeron && git checkout {{version}} && cd -
+
+update_to-latest-aeron-version:
+    just update-aeron-version tags/`curl -s https://github.com/aeron-io/aeron/releases | grep -o 'tag/[0-9]*\.[0-9]*\.[0-9]*' | head -1 | cut -d'/' -f2`
+

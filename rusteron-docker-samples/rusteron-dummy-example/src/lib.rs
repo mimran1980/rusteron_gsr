@@ -86,26 +86,12 @@ pub fn archive_connect() -> Result<(AeronArchive, Aeron), io::Error> {
         .expect("missing environment variable AERON_ARCHIVE_REPLICATION_CHANNEL");
 
     let start = Instant::now();
-    let signal_consumer =
-        Handler::leak(crate::AeronArchiveRecordingSignalConsumerFuncClosure::from(
-            |signal: AeronArchiveRecordingSignal| {
-                info!("Recording signal received: {:?}", signal);
-            },
-        ));
-
-    let error_handler = Handler::leak(crate::AeronErrorHandlerClosure::from(|code, msg| {
-        error!("err code: {}, msg: {}", code, msg);
-    }));
 
     while start.elapsed() < Duration::from_secs(30) {
         match AeronContext::new() {
             Ok(aeron_context) => {
                 aeron_context
-                    .set_error_handler(Some(&Handler::leak(AeronErrorHandlerClosure::from(
-                        |error_code, msg| {
-                            error!("aeron error {}: {}", error_code, msg);
-                        },
-                    ))))
+                    .set_error_handler(Some(&Handler::leak(AeronErrorHandlerLogger)))
                     .unwrap();
 
                 match Aeron::new(&aeron_context) {
@@ -125,17 +111,6 @@ pub fn archive_connect() -> Result<(AeronArchive, Aeron), io::Error> {
                                 recording_events_channel,
                             ) {
                                 Ok(archive_context) => {
-                                    archive_context
-                                        .set_recording_signal_consumer(Some(&signal_consumer))
-                                        .expect("Failed to set recording signal consumer");
-                                    archive_context
-                                        .set_error_handler(Some(&error_handler))
-                                        .expect("unable to set error handler");
-                                    archive_context
-                                        .set_idle_strategy(Some(&Handler::leak(
-                                            AeronIdleStrategyFuncClosure::from(|_work_count| {}),
-                                        )))
-                                        .expect("unable to set idle strategy");
                                     match AeronArchiveAsyncConnect::new(&archive_context) {
                                         Ok(connect) => {
                                             match connect.poll_blocking(Duration::from_secs(10)) {
