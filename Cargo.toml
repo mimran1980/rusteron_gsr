@@ -10,7 +10,7 @@ exclude = ["rusteron-docker-samples/rusteron-dummy-example"]
 resolver = "2"
 
 [workspace.dependencies]
-rusteron-code-gen = { path = "rusteron-code-gen", version = "0.1.88" }
+rusteron-code-gen = { path = "rusteron-code-gen", version = "0.1.89" }
 ctrlc = "3.4"
 bindgen = "0.71"
 cmake = "0.1"
