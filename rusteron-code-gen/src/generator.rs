@@ -2034,10 +2034,16 @@ pub fn generate_rust_code(
 
         impl core::fmt::Debug for  #class_name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                f.debug_struct(stringify!(#class_name))
-                    .field("inner", &self.inner)
-                    #(#debug_fields)*
+                if self.inner.resource.is_null() {
+                    f.debug_struct(stringify!(#class_name))
+                    .field("inner", &"null")
                     .finish()
+                } else {
+                    f.debug_struct(stringify!(#class_name))
+                      .field("inner", &self.inner)
+                      #(#debug_fields)*
+                      .finish()
+                }
             }
         }
 

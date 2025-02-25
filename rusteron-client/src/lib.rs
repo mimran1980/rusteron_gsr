@@ -217,8 +217,9 @@ mod tests {
             subscription.poll(Some(&closure), 128)?;
         }
 
-        info!("stopping client");
+        subscription.close(Handlers::no_notification_handler())?;
 
+        info!("stopping client");
         stop.store(true, Ordering::SeqCst);
 
         let _ = publisher_handler.join().unwrap();
