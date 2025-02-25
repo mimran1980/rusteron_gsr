@@ -1932,7 +1932,7 @@ pub fn generate_rust_code(
             additional_impls.push(quote! {
                 impl Drop for #class_name {
                     fn drop(&mut self) {
-                        if self.is_closed() {
+                        if !self.is_closed() {
                             log::warn!("struct may have not been correctly closed {self:?}");
                         }
                     }

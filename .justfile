@@ -228,9 +228,9 @@ build-docker-samples:
 
 # updates aeron version e.g. tags/1.47.3 or master
 update-aeron-version version:
-    cd rusteron-client/aeron && git checkout {{version}} && cd -
-    cd rusteron-archive/aeron && git checkout {{version}} && cd -
-    cd rusteron-media-driver/aeron && git checkout {{version}} && cd -
+    cd rusteron-client/aeron && git fetch && git checkout {{version}} && cd -
+    cd rusteron-archive/aeron && git fetch && git checkout {{version}} && cd -
+    cd rusteron-media-driver/aeron && git fetch && git checkout {{version}} && cd -
 
 update_to-latest-aeron-version:
     just update-aeron-version tags/`curl -s https://github.com/aeron-io/aeron/releases | grep -o 'tag/[0-9]*\.[0-9]*\.[0-9]*' | head -1 | cut -d'/' -f2`
