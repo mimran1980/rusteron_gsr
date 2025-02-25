@@ -16,6 +16,7 @@ pub mod bindings {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
+use std::rc::Rc;
 use bindings::*;
 
 include!(concat!(env!("OUT_DIR"), "/aeron.rs"));

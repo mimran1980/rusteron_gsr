@@ -1,5 +1,4 @@
 // code here is included in all modules and extends generated classes
-
 pub const AERON_IPC_STREAM: &'static str = "aeron:ipc";
 
 unsafe impl Send for AeronCountersReader {}
@@ -537,6 +536,37 @@ impl AeronCountersReader {
     #[inline]
     pub fn get_counter_value(&self, counter_id: i32) -> i64 {
         unsafe { *self.addr(counter_id) }
+    }
+}
+
+
+impl Drop for AeronSubscription {
+    fn drop(&mut self) {
+        if !self.inner.resource.is_null() && std::rc::Rc::strong_count(&self.inner) == 1 && !self.is_closed() {
+            let c = self.get_constants().expect("Error getting a constants");
+            log::info!("closing subscription [channel={}, streamId={}]", c.channel(), c.stream_id());
+            self.close(Handlers::no_notification_handler()).expect("Error while closing a subscription");
+        }
+    }
+}
+
+impl Drop for AeronPublication {
+    fn drop(&mut self) {
+        if !self.inner.resource.is_null() && std::rc::Rc::strong_count(&self.inner) == 1 && !self.is_closed() {
+            let c = self.get_constants().expect("Error getting a constants");
+            log::info!("closing publication [channel={}, streamId={}]", c.channel(), c.stream_id());
+            self.close(Handlers::no_notification_handler()).expect("Error while closing a publication");
+        }
+    }
+}
+
+impl Drop for AeronExclusivePublication {
+    fn drop(&mut self) {
+        if !self.inner.resource.is_null() && std::rc::Rc::strong_count(&self.inner) == 1 && !self.is_closed() {
+            let c = self.get_constants().expect("Error getting a constants");
+            log::info!("closing exclusive publication [channel={}, streamId={}]", c.channel(), c.stream_id());
+            self.close(Handlers::no_notification_handler()).expect("Error while closing an exclusive publication");
+        }
     }
 }
 
