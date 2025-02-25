@@ -539,37 +539,6 @@ impl AeronCountersReader {
     }
 }
 
-
-impl Drop for AeronSubscription {
-    fn drop(&mut self) {
-        if !self.inner.resource.is_null() && std::rc::Rc::strong_count(&self.inner) == 1 && !self.is_closed() {
-            let c = self.get_constants().expect("Error getting a constants");
-            log::info!("closing subscription [channel={}, streamId={}]", c.channel(), c.stream_id());
-            self.close(Handlers::no_notification_handler()).expect("Error while closing a subscription");
-        }
-    }
-}
-
-impl Drop for AeronPublication {
-    fn drop(&mut self) {
-        if !self.inner.resource.is_null() && std::rc::Rc::strong_count(&self.inner) == 1 && !self.is_closed() {
-            let c = self.get_constants().expect("Error getting a constants");
-            log::info!("closing publication [channel={}, streamId={}]", c.channel(), c.stream_id());
-            self.close(Handlers::no_notification_handler()).expect("Error while closing a publication");
-        }
-    }
-}
-
-impl Drop for AeronExclusivePublication {
-    fn drop(&mut self) {
-        if !self.inner.resource.is_null() && std::rc::Rc::strong_count(&self.inner) == 1 && !self.is_closed() {
-            let c = self.get_constants().expect("Error getting a constants");
-            log::info!("closing exclusive publication [channel={}, streamId={}]", c.channel(), c.stream_id());
-            self.close(Handlers::no_notification_handler()).expect("Error while closing an exclusive publication");
-        }
-    }
-}
-
 impl Aeron {
     pub fn new_blocking(
         context: &AeronContext,
