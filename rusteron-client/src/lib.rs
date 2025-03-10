@@ -34,7 +34,6 @@ mod tests {
     use std::thread::sleep;
     use std::time::{Duration, Instant};
 
-
     #[derive(Default, Debug)]
     struct ErrorCount {
         error_count: usize,

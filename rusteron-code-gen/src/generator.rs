@@ -1655,10 +1655,8 @@ pub fn generate_rust_code(
 
     let mut additional_impls = vec![];
 
-
     let methods = wrapper.generate_methods(wrappers, closure_handlers, &mut additional_impls);
     let constructor = wrapper.generate_constructor(wrappers);
-
 
     let async_impls = if wrapper.type_name.starts_with("aeron_async_")
         || wrapper.type_name.starts_with("aeron_archive_async_")
@@ -1848,97 +1846,97 @@ pub fn generate_rust_code(
                 .collect();
 
             quote! {
-                    impl #main_class_name {
-                        #[inline]
-                        pub fn new #where_clause_main (#(#new_args),*) -> Result<Self, AeronCError> {
-                            let resource = ManagedCResource::new(
-                                move |ctx_field| unsafe {
-                                    #poll_method_name(#(#init_args),*)
-                                },
-                                None,
-                                false
-                            )?;
-                            Ok(Self {
-                                inner: std::rc::Rc::new(resource),
-                            })
-                        }
-                    }
+            impl #main_class_name {
+                #[inline]
+                pub fn new #where_clause_main (#(#new_args),*) -> Result<Self, AeronCError> {
+                    let resource = ManagedCResource::new(
+                        move |ctx_field| unsafe {
+                            #poll_method_name(#(#init_args),*)
+                        },
+                        None,
+                        false
+                    )?;
+                    Ok(Self {
+                        inner: std::rc::Rc::new(resource),
+                    })
+                }
+            }
 
-                    impl #client_type {
-                        #[inline]
-                        pub fn #client_type_method_name #where_clause_async(&self, #(#async_new_args_for_client),*) -> Result<#async_class_name, AeronCError> {
-                            #async_class_name::new(self, #(#async_new_args_name_only),*)
-                        }
-                    }
+            impl #client_type {
+                #[inline]
+                pub fn #client_type_method_name #where_clause_async(&self, #(#async_new_args_for_client),*) -> Result<#async_class_name, AeronCError> {
+                    #async_class_name::new(self, #(#async_new_args_name_only),*)
+                }
+            }
 
-                    impl #client_type {
-                        #[inline]
-                        pub fn #client_type_method_name_without_async #where_clause_async(&self #(
-                    , #async_new_args_for_client)*,  timeout: std::time::Duration) -> Result<#autoclose_class_name, AeronCError> {
-                            let start = std::time::Instant::now();
-                            loop {
-                                if let Ok(poller) = #async_class_name::new(self, #(#async_new_args_name_only),*) {
-                                    while start.elapsed() <= timeout  {
-                                      if let Some(result) = poller.poll()? {
-                                          return Ok(result);
-                                      }
-                                    #[cfg(debug_assertions)]
-                                    std::thread::sleep(std::time::Duration::from_millis(10));
-                                  }
-                                }
-                            if start.elapsed() > timeout {
-                                log::error!("failed async poll for {:?}", self);
-                                return Err(AeronErrorType::TimedOut.into());
-                            }
+            impl #client_type {
+                #[inline]
+                pub fn #client_type_method_name_without_async #where_clause_async(&self #(
+            , #async_new_args_for_client)*,  timeout: std::time::Duration) -> Result<#autoclose_class_name, AeronCError> {
+                    let start = std::time::Instant::now();
+                    loop {
+                        if let Ok(poller) = #async_class_name::new(self, #(#async_new_args_name_only),*) {
+                            while start.elapsed() <= timeout  {
+                              if let Some(result) = poller.poll()? {
+                                  return Ok(result);
+                              }
                             #[cfg(debug_assertions)]
                             std::thread::sleep(std::time::Duration::from_millis(10));
                           }
-                         }
+                        }
+                    if start.elapsed() > timeout {
+                        log::error!("failed async poll for {:?}", self);
+                        return Err(AeronErrorType::TimedOut.into());
+                    }
+                    #[cfg(debug_assertions)]
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                  }
+                 }
+            }
+
+            impl #async_class_name {
+                #[inline]
+                pub fn new #where_clause_async (#(#async_new_args),*) -> Result<Self, AeronCError> {
+                    let resource_async = ManagedCResource::new(
+                        move |ctx_field| unsafe {
+                            #new_method_name(#(#async_init_args),*)
+                        },
+                        None,
+                        false
+                    )?;
+                    Ok(Self {
+                        inner: std::rc::Rc::new(resource_async),
+                    })
+                }
+
+                pub fn poll(&self) -> Result<Option<#autoclose_class_name>, AeronCError> {
+                    match #main_class_name::new(self) {
+                        Ok(result) => Ok(Some(#autoclose_class_name::new(result))),
+                        Err(AeronCError {code }) if code == 0 => {
+                          Ok(None) // try again
+                        }
+                        Err(e) => Err(e)
+                    }
+                }
+
+                pub fn poll_blocking(&self, timeout: std::time::Duration) -> Result<#autoclose_class_name, AeronCError> {
+                    if let Some(result) = self.poll()? {
+                        return Ok(result);
                     }
 
-                    impl #async_class_name {
-                        #[inline]
-                        pub fn new #where_clause_async (#(#async_new_args),*) -> Result<Self, AeronCError> {
-                            let resource_async = ManagedCResource::new(
-                                move |ctx_field| unsafe {
-                                    #new_method_name(#(#async_init_args),*)
-                                },
-                                None,
-                                false
-                            )?;
-                            Ok(Self {
-                                inner: std::rc::Rc::new(resource_async),
-                            })
+                    let time = std::time::Instant::now();
+                    while time.elapsed() < timeout {
+                        if let Some(result) = self.poll()? {
+                            return Ok(result);
                         }
-
-                        pub fn poll(&self) -> Result<Option<#autoclose_class_name>, AeronCError> {
-                            match #main_class_name::new(self) {
-                                Ok(result) => Ok(Some(#autoclose_class_name::new(result))),
-                                Err(AeronCError {code }) if code == 0 => {
-                                  Ok(None) // try again
-                                }
-                                Err(e) => Err(e)
-                            }
-                        }
-
-                        pub fn poll_blocking(&self, timeout: std::time::Duration) -> Result<#autoclose_class_name, AeronCError> {
-                            if let Some(result) = self.poll()? {
-                                return Ok(result);
-                            }
-
-                            let time = std::time::Instant::now();
-                            while time.elapsed() < timeout {
-                                if let Some(result) = self.poll()? {
-                                    return Ok(result);
-                                }
-                                #[cfg(debug_assertions)]
-                                std::thread::sleep(std::time::Duration::from_millis(10));
-                            }
-                            log::error!("failed async poll for {:?}", self);
-                            Err(AeronErrorType::TimedOut.into())
-                        }
+                        #[cfg(debug_assertions)]
+                        std::thread::sleep(std::time::Duration::from_millis(10));
                     }
-                                }
+                    log::error!("failed async poll for {:?}", self);
+                    Err(AeronErrorType::TimedOut.into())
+                }
+            }
+                        }
         } else {
             quote! {}
         }
@@ -1951,26 +1949,28 @@ pub fn generate_rust_code(
         .iter()
         .filter(|m| m.struct_method_name == "close")
         .collect_vec();
-    if close_methods.len() == 1
-    {
+    if close_methods.len() == 1 {
         let autoclose = format_ident!("AutoClose{}", class_name);
-        let close_result = ReturnType::new(close_methods[0].return_type.clone(), wrappers.clone()).get_new_return_type(true, false);
+        let close_result = ReturnType::new(close_methods[0].return_type.clone(), wrappers.clone())
+            .get_new_return_type(true, false);
 
         let close_check = if wrapper
             .methods
             .iter()
-            .any(|m| m.struct_method_name == "is_closed") {
+            .any(|m| m.struct_method_name == "is_closed")
+        {
             quote! { !self.is_closed() }
         } else {
-            quote!{ true }
+            quote! { true }
         };
         let call_close = if wrapper
             .methods
             .iter()
-            .any(|m| m.struct_method_name == "close" && m.arguments.len() == 1) {
+            .any(|m| m.struct_method_name == "close" && m.arguments.len() == 1)
+        {
             quote! { self.inner.close() }
         } else {
-            quote!{ self.close_with_no_args() }
+            quote! { self.close_with_no_args() }
         };
 
         additional_impls.push(quote! {
