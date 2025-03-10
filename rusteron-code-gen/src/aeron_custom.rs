@@ -10,6 +10,14 @@ unsafe impl Send for AeronExclusivePublication {}
 unsafe impl Sync for AeronExclusivePublication {}
 unsafe impl Send for AeronCounter {}
 unsafe impl Sync for AeronCounter {}
+unsafe impl Send for AutoCloseAeronSubscription {}
+unsafe impl Sync for AutoCloseAeronSubscription {}
+unsafe impl Send for AutoCloseAeronPublication {}
+unsafe impl Sync for AutoCloseAeronPublication {}
+unsafe impl Send for AutoCloseAeronExclusivePublication {}
+unsafe impl Sync for AutoCloseAeronExclusivePublication {}
+unsafe impl Send for AutoCloseAeronCounter {}
+unsafe impl Sync for AutoCloseAeronCounter {}
 
 impl AeronCnc {
     pub fn new(aeron_dir: &str) -> Result<AeronCnc, AeronCError> {
@@ -75,6 +83,34 @@ impl AeronCncMetadata {
             inner: std::rc::Rc::new(resource),
         };
         Ok(result)
+    }
+}
+
+impl AutoCloseAeronSubscription {
+    pub fn close_with_no_args(&mut self) -> Result<i32, AeronCError> {
+        self.closed.set(true);
+        self.inner.close(Handlers::no_notification_handler())
+    }
+}
+
+impl AutoCloseAeronPublication {
+    pub fn close_with_no_args(&self) -> Result<i32, AeronCError> {
+        self.closed.set(true);
+        self.inner.close(Handlers::no_notification_handler())
+    }
+}
+
+impl AutoCloseAeronExclusivePublication {
+    pub fn close_with_no_args(&self) -> Result<i32, AeronCError> {
+        self.closed.set(true);
+        self.inner.close(Handlers::no_notification_handler())
+    }
+}
+
+impl AutoCloseAeronCounter {
+    pub fn close_with_no_args(&self) -> Result<i32, AeronCError> {
+        self.closed.set(true);
+        self.inner.close(Handlers::no_notification_handler())
     }
 }
 

@@ -68,10 +68,7 @@ pub fn format_token_stream(tokens: TokenStream) -> String {
 mod tests {
     use crate::generator::MEDIA_DRIVER_BINDINGS;
     use crate::parser::parse_bindings;
-    use crate::{
-        append_to_file, format_token_stream, format_with_rustfmt, ARCHIVE_BINDINGS,
-        CLIENT_BINDINGS, RB,
-    };
+    use crate::{append_to_file, format_token_stream, format_with_rustfmt, ARCHIVE_BINDINGS, CLIENT_BINDINGS, CUSTOM_AERON_CODE, RB};
     use proc_macro2::TokenStream;
     use std::fs;
 
@@ -117,7 +114,10 @@ mod tests {
             append_to_file(&file, &format_with_rustfmt(&code.to_string()).unwrap()).unwrap();
         }
         let t = trybuild::TestCases::new();
+        append_to_file(&file, "use bindings::*; mod bindings { ").unwrap();
         append_to_file(&file, MEDIA_DRIVER_BINDINGS).unwrap();
+        append_to_file(&file, "}").unwrap();
+        append_to_file(&file, CUSTOM_AERON_CODE).unwrap();
         append_to_file(&file, "\npub fn main() {}\n").unwrap();
         t.pass(&file)
     }
@@ -165,7 +165,10 @@ mod tests {
         }
 
         let t = trybuild::TestCases::new();
+        append_to_file(&file, "use bindings::*; mod bindings { ").unwrap();
         append_to_file(&file, CLIENT_BINDINGS).unwrap();
+        append_to_file(&file, "}").unwrap();
+        append_to_file(&file, CUSTOM_AERON_CODE).unwrap();
         append_to_file(&file, "\npub fn main() {}\n").unwrap();
         t.pass(file)
     }
@@ -247,7 +250,10 @@ mod tests {
             append_to_file(&file, &format_with_rustfmt(&code.to_string()).unwrap()).unwrap();
         }
         let t = trybuild::TestCases::new();
+        append_to_file(&file, "use bindings::*; mod bindings { ").unwrap();
         append_to_file(&file, ARCHIVE_BINDINGS).unwrap();
+        append_to_file(&file, "}").unwrap();
+        append_to_file(&file, CUSTOM_AERON_CODE).unwrap();
         append_to_file(&file, "\npub fn main() {}\n").unwrap();
         t.pass(file)
     }

@@ -461,6 +461,7 @@ impl CWrapper {
         &self,
         wrappers: &HashMap<String, CWrapper>,
         closure_handlers: &Vec<CHandler>,
+        additional_outer_impls: &mut Vec<TokenStream>,
     ) -> Vec<TokenStream> {
         self.methods
             .iter()
@@ -577,6 +578,29 @@ impl CWrapper {
                 Self::add_getter_instead_of_mut_arg_if_applicable(wrappers, method, &fn_name, &where_clause, &possible_self, &method_docs, &mut additional_methods);
 
                 Self::add_once_methods_for_handlers(closure_handlers, method, &fn_name, &return_type, &ffi_call, &where_clause, &fn_arguments, &mut arg_names, &converter, &possible_self, &method_docs, &mut additional_methods);
+
+                if method.struct_method_name == "close" {
+                    let autoclose = format_ident!("AutoClose{}",self.class_name);
+
+                    let args = fn_arguments.iter().map(|f| {
+                        let f = f.to_string();
+                        let f = &f[..f.find(':').unwrap_or_default()];
+                        parse_str::<TokenStream>(f).unwrap()
+                    }).collect_vec();
+
+                    additional_outer_impls.push(quote! {
+                        impl #autoclose {
+                            #[inline]
+                            #(#method_docs)*
+                            pub fn #fn_name #where_clause(#possible_self #(#fn_arguments),*) -> #return_type {
+                                unsafe {
+                                    self.closed.set(true);
+                                    self.inner.#fn_name(#(#args),*)
+                                }
+                            }
+                        }
+                    })
+                }
 
                 let mut_primitivies = method.arguments.iter()
                     .filter(|a| a.is_mut_pointer() && a.is_primitive())
@@ -1629,8 +1653,12 @@ pub fn generate_rust_code(
     let class_name = Ident::new(&wrapper.class_name, proc_macro2::Span::call_site());
     let type_name = Ident::new(&wrapper.type_name, proc_macro2::Span::call_site());
 
-    let methods = wrapper.generate_methods(wrappers, closure_handlers);
+    let mut additional_impls = vec![];
+
+
+    let methods = wrapper.generate_methods(wrappers, closure_handlers, &mut additional_impls);
     let constructor = wrapper.generate_constructor(wrappers);
+
 
     let async_impls = if wrapper.type_name.starts_with("aeron_async_")
         || wrapper.type_name.starts_with("aeron_archive_async_")
@@ -1657,6 +1685,7 @@ pub fn generate_rust_code(
                 .find(|m| m.fn_name == format!("{}_poll", wrapper.without_name))
                 .unwrap();
 
+            let autoclose_class_name = format_ident!("AutoClose{}", main.class_name);
             let main_class_name = format_ident!("{}", main.class_name);
             let async_class_name = format_ident!("{}", wrapper.class_name);
             let poll_method_name = format_ident!("{}_poll", wrapper.without_name);
@@ -1845,7 +1874,7 @@ pub fn generate_rust_code(
                     impl #client_type {
                         #[inline]
                         pub fn #client_type_method_name_without_async #where_clause_async(&self #(
-                    , #async_new_args_for_client)*,  timeout: std::time::Duration) -> Result<#main_class_name, AeronCError> {
+                    , #async_new_args_for_client)*,  timeout: std::time::Duration) -> Result<#autoclose_class_name, AeronCError> {
                             let start = std::time::Instant::now();
                             loop {
                                 if let Ok(poller) = #async_class_name::new(self, #(#async_new_args_name_only),*) {
@@ -1864,7 +1893,7 @@ pub fn generate_rust_code(
                             #[cfg(debug_assertions)]
                             std::thread::sleep(std::time::Duration::from_millis(10));
                           }
-            }
+                         }
                     }
 
                     impl #async_class_name {
@@ -1882,9 +1911,9 @@ pub fn generate_rust_code(
                             })
                         }
 
-                        pub fn poll(&self) -> Result<Option<#main_class_name>, AeronCError> {
+                        pub fn poll(&self) -> Result<Option<#autoclose_class_name>, AeronCError> {
                             match #main_class_name::new(self) {
-                                Ok(result) => Ok(Some(result)),
+                                Ok(result) => Ok(Some(#autoclose_class_name::new(result))),
                                 Err(AeronCError {code }) if code == 0 => {
                                   Ok(None) // try again
                                 }
@@ -1892,7 +1921,7 @@ pub fn generate_rust_code(
                             }
                         }
 
-                        pub fn poll_blocking(&self, timeout: std::time::Duration) -> Result<#main_class_name, AeronCError> {
+                        pub fn poll_blocking(&self, timeout: std::time::Duration) -> Result<#autoclose_class_name, AeronCError> {
                             if let Some(result) = self.poll()? {
                                 return Ok(result);
                             }
@@ -1917,29 +1946,73 @@ pub fn generate_rust_code(
         quote! {}
     };
 
-    let mut additional_impls = vec![];
-
-    if wrapper
+    let close_methods = wrapper
         .methods
         .iter()
-        .any(|m| m.struct_method_name == "closed")
-        || wrapper
+        .filter(|m| m.struct_method_name == "close")
+        .collect_vec();
+    if close_methods.len() == 1
+    {
+        let autoclose = format_ident!("AutoClose{}", class_name);
+        let close_result = ReturnType::new(close_methods[0].return_type.clone(), wrappers.clone()).get_new_return_type(true, false);
+
+        let close_check = if wrapper
             .methods
             .iter()
-            .any(|m| m.struct_method_name == "is_closed")
-    {
-        if !wrapper.methods.iter().any(|m| m.fn_name.contains("_init")) {
-            additional_impls.push(quote! {
-                impl Drop for #class_name {
-                    fn drop(&mut self) {
-                        #[cfg(any(debug_assertions, feature = "extra-logging"))]
-                        if !self.inner.resource.is_null() && std::rc::Rc::strong_count(&self.inner) == 1 && !self.is_closed() {
-                            log::warn!("struct may have not been correctly closed {self:?}");
-                        }
+            .any(|m| m.struct_method_name == "is_closed") {
+            quote! { !self.is_closed() }
+        } else {
+            quote!{ true }
+        };
+        let call_close = if wrapper
+            .methods
+            .iter()
+            .any(|m| m.struct_method_name == "close" && m.arguments.len() == 1) {
+            quote! { self.inner.close() }
+        } else {
+            quote!{ self.close_with_no_args() }
+        };
+
+        additional_impls.push(quote! {
+            #[derive(Debug, Clone)]
+            pub struct #autoclose {
+                inner: #class_name,
+                closed: std::rc::Rc<std::cell::Cell<bool>>,
+            }
+
+            impl #autoclose {
+                pub fn new(inner: #class_name) -> Self {
+                    Self {
+                        inner,
+                        closed: std::rc::Rc::new(std::cell::Cell::new(false))
                     }
                 }
-            });
-        }
+            }
+            impl Drop for #autoclose {
+                fn drop(&mut self) {
+                    if !self.closed.get() && #close_check && std::rc::Rc::strong_count(&self.closed) == 1 {
+                        log::info!("automatically closing {:?}", self.inner);
+                        let result = #call_close;
+                        log::info!("automatically closed {:?}", result);
+                    }
+                }
+            }
+
+            impl Deref for #autoclose {
+                type Target = #class_name;
+
+                fn deref(&self) -> &Self::Target {
+                    &self.inner
+                }
+            }
+
+            impl From<#class_name> for #autoclose {
+                #[inline]
+                fn from(value: #class_name) -> Self {
+                    #autoclose::new(value)
+                }
+            }
+        });
     }
 
     let common_code = if !include_common_code {
@@ -2030,6 +2103,7 @@ pub fn generate_rust_code(
         #[derive(Clone)]
         pub struct #class_name {
             inner: std::rc::Rc<ManagedCResource<#type_name>>,
+
         }
 
         impl core::fmt::Debug for  #class_name {
