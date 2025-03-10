@@ -951,13 +951,18 @@ impl CWrapper {
     }
 
     /// Generate the constructor for the struct
-    fn generate_constructor(&self, wrappers: &HashMap<String, CWrapper>) -> Vec<TokenStream> {
+    fn generate_constructor(
+        &self,
+        wrappers: &HashMap<String, CWrapper>,
+        add_aeron_ref: bool,
+    ) -> Vec<TokenStream> {
         let constructors = self
             .methods
             .iter()
             .filter(|m| m.arguments.iter().any(|arg| arg.is_double_mut_pointer()))
             .map(|method| {
                 let init_fn = format_ident!("{}", method.fn_name);
+                let mut aeron_field_use = if add_aeron_ref { quote! { aeron: None, } } else { quote!()};
 
                 let close_method = self.find_close_method(method);
                 let found_close = close_method.is_some()
@@ -999,7 +1004,7 @@ impl CWrapper {
                         })
                         .filter(|t| !t.is_empty())
                         .collect();
-                    let lets: Vec<TokenStream> = Self::lets_for_copying_arguments(wrappers, &method.arguments, true);
+                    let lets: Vec<TokenStream> = Self::lets_for_copying_arguments(wrappers, &method.arguments, true, add_aeron_ref);
                     let drop_copies: Vec<TokenStream> = Self::drop_copies(wrappers, &method.arguments);
 
                     let new_args: Vec<TokenStream> = method
@@ -1007,6 +1012,12 @@ impl CWrapper {
                         .iter()
                         .enumerate()
                         .filter_map(|(_idx, arg)| {
+
+                            if add_aeron_ref && arg.c_type.ends_with(" aeron_t") {
+                                let a = format_ident!("{}_aeron_field", arg.as_ident());
+                                aeron_field_use = quote! { aeron: Some(#a) }
+                            }
+
                             if arg.is_double_mut_pointer() {
                                 None
                             } else {
@@ -1072,7 +1083,7 @@ impl CWrapper {
                                 false
                             )?;
 
-                            Ok(Self { inner: std::rc::Rc::new(resource_constructor) })
+                            Ok(Self { inner: std::rc::Rc::new(resource_constructor), #aeron_field_use })
                         }
                     }
                 } else {
@@ -1081,6 +1092,11 @@ impl CWrapper {
             })
             .collect_vec();
 
+        let aeron_field_use = if add_aeron_ref {
+            quote! { aeron: None, }
+        } else {
+            quote!()
+        };
         let no_constructor = constructors
             .iter()
             .map(|x| x.to_string())
@@ -1106,11 +1122,18 @@ impl CWrapper {
                         true
                     )?;
 
-                    Ok(Self { inner: std::rc::Rc::new(resource) })
+                    Ok(Self { inner: std::rc::Rc::new(resource), #aeron_field_use })
                 }
             };
             if self.has_default_method() {
                 let type_name = format_ident!("{}", self.type_name);
+
+                let aeron_field_use = if add_aeron_ref {
+                    quote! { aeron: None, }
+                } else {
+                    quote!()
+                };
+
                 let new_args: Vec<TokenStream> = self
                     .fields
                     .iter()
@@ -1159,8 +1182,12 @@ impl CWrapper {
                     .filter(|a| a.processing == ArgProcessing::Default)
                     .cloned()
                     .collect_vec();
-                let lets: Vec<TokenStream> =
-                    Self::lets_for_copying_arguments(wrappers, &cloned_fields, false);
+                let lets: Vec<TokenStream> = Self::lets_for_copying_arguments(
+                    wrappers,
+                    &cloned_fields,
+                    false,
+                    add_aeron_ref,
+                );
                 let drop_copies: Vec<TokenStream> = Self::drop_copies(wrappers, &self.fields);
 
                 vec![quote! {
@@ -1187,7 +1214,7 @@ impl CWrapper {
                             true
                         )?;
 
-                        Ok(Self { inner: std::rc::Rc::new(r_constructor) })
+                        Ok(Self { inner: std::rc::Rc::new(r_constructor), #aeron_field_use })
                     }
 
                     #zeroed_impl
@@ -1229,6 +1256,7 @@ impl CWrapper {
         wrappers: &HashMap<String, CWrapper>,
         arguments: &Vec<Arg>,
         include_let_statements: bool,
+        add_aeron_ref: bool,
     ) -> Vec<TokenStream> {
         arguments
             .iter()
@@ -1244,9 +1272,19 @@ impl CWrapper {
                     let fields = if arg.is_single_mut_pointer()
                         && wrappers.contains_key(arg.c_type.split_whitespace().last().unwrap())
                     {
+                        let another_copy = if add_aeron_ref && arg.c_type.ends_with(" aeron_t") {
+                            let arg_copy = format_ident!("{}_aeron_field", arg.name);
+                            quote! {
+                                let #arg_copy = #arg_name.clone();
+                            }
+                        } else {
+                            quote! {}
+                        };
+
                         let arg_copy = format_ident!("{}_copy", arg.name);
                         quote! {
                             let #arg_copy = #arg_name.clone();
+                            #another_copy
                         }
                     } else {
                         quote! {}
@@ -1655,8 +1693,10 @@ pub fn generate_rust_code(
 
     let mut additional_impls = vec![];
 
+    let add_aeron_ref = wrapper.type_name.contains("async_");
+
     let methods = wrapper.generate_methods(wrappers, closure_handlers, &mut additional_impls);
-    let constructor = wrapper.generate_constructor(wrappers);
+    let constructor = wrapper.generate_constructor(wrappers, add_aeron_ref);
 
     let async_impls = if wrapper.type_name.starts_with("aeron_async_")
         || wrapper.type_name.starts_with("aeron_archive_async_")
@@ -1822,6 +1862,17 @@ pub fn generate_rust_code(
                 .filter(|t| !t.is_empty())
                 .collect();
 
+            let aeron_field = new_method
+                .arguments
+                .iter()
+                .filter(|arg| arg.c_type.ends_with(" aeron_t"))
+                .map(|a| {
+                    let a = a.as_ident();
+                    quote! { Some(#a.clone())}
+                })
+                .next()
+                .unwrap_or(quote! {None});
+
             let async_new_args_for_client = async_new_args.iter().skip(1).cloned().collect_vec();
 
             let async_new_args_name_only: Vec<TokenStream> = new_method
@@ -1905,13 +1956,13 @@ pub fn generate_rust_code(
                         false
                     )?;
                     Ok(Self {
-                        inner: std::rc::Rc::new(resource_async),
+                        inner: std::rc::Rc::new(resource_async), aeron: #aeron_field
                     })
                 }
 
                 pub fn poll(&self) -> Result<Option<#autoclose_class_name>, AeronCError> {
                     match #main_class_name::new(self) {
-                        Ok(result) => Ok(Some(#autoclose_class_name::new(result))),
+                        Ok(result) => Ok(Some(if let Some(aeron) = &self.aeron { #autoclose_class_name::new_with_aeron(result, aeron) } else { #autoclose_class_name::new(result)} )),
                         Err(AeronCError {code }) if code == 0 => {
                           Ok(None) // try again
                         }
@@ -1978,13 +2029,22 @@ pub fn generate_rust_code(
             pub struct #autoclose {
                 inner: #class_name,
                 closed: std::rc::Rc<std::cell::Cell<bool>>,
+                aeron: Option<Aeron>,
             }
 
             impl #autoclose {
                 pub fn new(inner: #class_name) -> Self {
                     Self {
                         inner,
-                        closed: std::rc::Rc::new(std::cell::Cell::new(false))
+                        closed: std::rc::Rc::new(std::cell::Cell::new(false)),
+                        aeron: None
+                    }
+                }
+                pub fn new_with_aeron(inner: #class_name, aeron: &Aeron) -> Self {
+                    Self {
+                        inner,
+                        closed: std::rc::Rc::new(std::cell::Cell::new(false)),
+                        aeron: Some(aeron.clone())
                     }
                 }
             }
@@ -2096,6 +2156,12 @@ pub fn generate_rust_code(
         quote! {}
     };
 
+    let (aeron_field, aeron_field_use) = if add_aeron_ref {
+        (quote! { aeron: Option<Aeron>}, quote! { aeron: None })
+    } else {
+        (quote! {}, quote! {})
+    };
+
     quote! {
         #warning_code
 
@@ -2103,7 +2169,7 @@ pub fn generate_rust_code(
         #[derive(Clone)]
         pub struct #class_name {
             inner: std::rc::Rc<ManagedCResource<#type_name>>,
-
+            #aeron_field
         }
 
         impl core::fmt::Debug for  #class_name {
@@ -2157,7 +2223,8 @@ pub fn generate_rust_code(
             #[inline]
             fn from(value: *mut #type_name) -> Self {
                 #class_name {
-                    inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value))
+                    inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value)),
+                    #aeron_field_use
                 }
             }
         }
@@ -2187,7 +2254,8 @@ pub fn generate_rust_code(
             #[inline]
             fn from(value: *const #type_name) -> Self {
                 #class_name {
-                    inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value))
+                    inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value)),
+                    #aeron_field_use
                 }
             }
         }
@@ -2196,7 +2264,8 @@ pub fn generate_rust_code(
             #[inline]
             fn from(mut value: #type_name) -> Self {
                 #class_name {
-                    inner: std::rc::Rc::new(ManagedCResource::new_borrowed(&mut value as *mut #type_name))
+                    inner: std::rc::Rc::new(ManagedCResource::new_borrowed(&mut value as *mut #type_name)),
+                    #aeron_field_use
                 }
             }
         }
