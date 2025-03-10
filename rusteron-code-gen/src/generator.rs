@@ -962,7 +962,7 @@ impl CWrapper {
             .filter(|m| m.arguments.iter().any(|arg| arg.is_double_mut_pointer()))
             .map(|method| {
                 let init_fn = format_ident!("{}", method.fn_name);
-                let mut aeron_field_use = if add_aeron_ref { quote! { aeron: None, } } else { quote!()};
+                let mut aeron_field_use = if add_aeron_ref { quote! { _aeron: None, } } else { quote!()};
 
                 let close_method = self.find_close_method(method);
                 let found_close = close_method.is_some()
@@ -1015,7 +1015,7 @@ impl CWrapper {
 
                             if add_aeron_ref && arg.c_type.ends_with(" aeron_t") {
                                 let a = format_ident!("{}_aeron_field", arg.as_ident());
-                                aeron_field_use = quote! { aeron: Some(#a) }
+                                aeron_field_use = quote! { _aeron: Some(#a) }
                             }
 
                             if arg.is_double_mut_pointer() {
@@ -1093,7 +1093,7 @@ impl CWrapper {
             .collect_vec();
 
         let aeron_field_use = if add_aeron_ref {
-            quote! { aeron: None, }
+            quote! { _aeron: None, }
         } else {
             quote!()
         };
@@ -1129,7 +1129,7 @@ impl CWrapper {
                 let type_name = format_ident!("{}", self.type_name);
 
                 let aeron_field_use = if add_aeron_ref {
-                    quote! { aeron: None, }
+                    quote! { _aeron: None, }
                 } else {
                     quote!()
                 };
@@ -1956,13 +1956,13 @@ pub fn generate_rust_code(
                         false
                     )?;
                     Ok(Self {
-                        inner: std::rc::Rc::new(resource_async), aeron: #aeron_field
+                        inner: std::rc::Rc::new(resource_async), _aeron: #aeron_field
                     })
                 }
 
                 pub fn poll(&self) -> Result<Option<#autoclose_class_name>, AeronCError> {
                     match #main_class_name::new(self) {
-                        Ok(result) => Ok(Some(if let Some(aeron) = &self.aeron { #autoclose_class_name::new_with_aeron(result, aeron) } else { #autoclose_class_name::new(result)} )),
+                        Ok(result) => Ok(Some(if let Some(aeron) = &self._aeron { #autoclose_class_name::new_with_aeron(result, aeron) } else { #autoclose_class_name::new(result)} )),
                         Err(AeronCError {code }) if code == 0 => {
                           Ok(None) // try again
                         }
@@ -2029,7 +2029,7 @@ pub fn generate_rust_code(
             pub struct #autoclose {
                 inner: #class_name,
                 closed: std::rc::Rc<std::cell::Cell<bool>>,
-                aeron: Option<Aeron>,
+                _aeron: Option<Aeron>,
             }
 
             impl #autoclose {
@@ -2037,14 +2037,14 @@ pub fn generate_rust_code(
                     Self {
                         inner,
                         closed: std::rc::Rc::new(std::cell::Cell::new(false)),
-                        aeron: None
+                        _aeron: None
                     }
                 }
                 pub fn new_with_aeron(inner: #class_name, aeron: &Aeron) -> Self {
                     Self {
                         inner,
                         closed: std::rc::Rc::new(std::cell::Cell::new(false)),
-                        aeron: Some(aeron.clone())
+                        _aeron: Some(aeron.clone())
                     }
                 }
             }
@@ -2157,7 +2157,7 @@ pub fn generate_rust_code(
     };
 
     let (aeron_field, aeron_field_use) = if add_aeron_ref {
-        (quote! { aeron: Option<Aeron>}, quote! { aeron: None })
+        (quote! { _aeron: Option<Aeron>}, quote! { _aeron: None })
     } else {
         (quote! {}, quote! {})
     };

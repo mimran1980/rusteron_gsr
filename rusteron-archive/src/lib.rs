@@ -309,6 +309,8 @@ mod tests {
         running.store(false, Ordering::Release);
         publisher_thread.join().unwrap();
 
+        drop(archive);
+
         Ok(())
     }
 
@@ -799,6 +801,7 @@ mod tests {
         info!("aeron {:?}", aeron);
         info!("ctx {:?}", archive_context);
         assert_eq!(11, poll.count.get());
+        drop(archive);
         Ok(())
     }
 }
