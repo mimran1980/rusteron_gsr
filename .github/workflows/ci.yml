@@ -95,7 +95,7 @@ jobs:
         run: |
           cargo test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
           cargo clean
-          cargo build --release --workspace ${{ env.feature-flags }}
+          PUBLISH_ARTIFACTS=true cargo build --release --workspace ${{ env.feature-flags }}
 
       - name: Commit and Push Artifacts
         if: github.ref == 'refs/heads/main'

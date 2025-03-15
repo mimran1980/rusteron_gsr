@@ -253,9 +253,11 @@ pub fn main() {
         copy_binds(out);
     }
 
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let cmake_lib_dir = cmake_output;
-    publish_artifacts(&out_path, &cmake_lib_dir).expect("Failed to publish artifacts");
+    if std::env::var("PUBLISH_ARTIFACTS").is_ok() {
+        let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+        let cmake_lib_dir = cmake_output;
+        publish_artifacts(&out_path, &cmake_lib_dir).expect("Failed to publish artifacts");
+    }
 }
 
 // helps with easier testing
