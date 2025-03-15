@@ -102,5 +102,5 @@ jobs:
           git config --global user.name "Mo Imran"
           git pull --rebase origin 
           git add rusteron-archive/artifacts rusteron-client/artifacts rusteron-media-driver/artifacts rusteron-rb/artifacts
-          git commit -m "Add prebuilt binareies from CI"
+          git commit -m "Add prebuilt binareies from CI [skip ci]"
           git push origin main
