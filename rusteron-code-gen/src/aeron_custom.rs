@@ -10,14 +10,6 @@ unsafe impl Send for AeronExclusivePublication {}
 unsafe impl Sync for AeronExclusivePublication {}
 unsafe impl Send for AeronCounter {}
 unsafe impl Sync for AeronCounter {}
-unsafe impl Send for AutoCloseAeronSubscription {}
-unsafe impl Sync for AutoCloseAeronSubscription {}
-unsafe impl Send for AutoCloseAeronPublication {}
-unsafe impl Sync for AutoCloseAeronPublication {}
-unsafe impl Send for AutoCloseAeronExclusivePublication {}
-unsafe impl Sync for AutoCloseAeronExclusivePublication {}
-unsafe impl Send for AutoCloseAeronCounter {}
-unsafe impl Sync for AutoCloseAeronCounter {}
 
 impl AeronCnc {
     pub fn new(aeron_dir: &str) -> Result<AeronCnc, AeronCError> {
@@ -29,6 +21,7 @@ impl AeronCnc {
                 0
             })),
             false,
+            None,
         )?;
 
         let result = Self {
@@ -77,6 +70,7 @@ impl AeronCncMetadata {
                 aeron_unmap(mapped_file2.borrow_mut().deref_mut() as *mut aeron_mapped_file_t)
             })),
             false,
+            None,
         )?;
 
         let result = Self {
@@ -86,31 +80,31 @@ impl AeronCncMetadata {
     }
 }
 
-impl AutoCloseAeronSubscription {
-    pub fn close_with_no_args(&mut self) -> Result<i32, AeronCError> {
-        self.closed.set(true);
-        self.inner.close(Handlers::no_notification_handler())
+impl AeronSubscription {
+    pub fn close_with_no_args(&mut self) -> Result<(), AeronCError> {
+        self.close(Handlers::no_notification_handler())?;
+        Ok(())
     }
 }
 
-impl AutoCloseAeronPublication {
-    pub fn close_with_no_args(&self) -> Result<i32, AeronCError> {
-        self.closed.set(true);
-        self.inner.close(Handlers::no_notification_handler())
+impl AeronPublication {
+    pub fn close_with_no_args(&self) -> Result<(), AeronCError> {
+        self.close(Handlers::no_notification_handler())?;
+        Ok(())
     }
 }
 
-impl AutoCloseAeronExclusivePublication {
-    pub fn close_with_no_args(&self) -> Result<i32, AeronCError> {
-        self.closed.set(true);
-        self.inner.close(Handlers::no_notification_handler())
+impl AeronExclusivePublication {
+    pub fn close_with_no_args(&self) -> Result<(), AeronCError> {
+        self.close(Handlers::no_notification_handler())?;
+        Ok(())
     }
 }
 
-impl AutoCloseAeronCounter {
-    pub fn close_with_no_args(&self) -> Result<i32, AeronCError> {
-        self.closed.set(true);
-        self.inner.close(Handlers::no_notification_handler())
+impl AeronCounter {
+    pub fn close_with_no_args(&self) -> Result<(), AeronCError> {
+        self.close(Handlers::no_notification_handler())?;
+        Ok(())
     }
 }
 

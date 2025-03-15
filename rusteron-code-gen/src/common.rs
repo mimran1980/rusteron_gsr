@@ -1,26 +1,46 @@
 use crate::AeronErrorType::Unknown;
+use std::any::Any;
 #[cfg(feature = "backtrace")]
 use std::backtrace::Backtrace;
-use std::fmt::{Debug, Formatter};
+use std::cell::UnsafeCell;
 use std::ops::{Deref, DerefMut};
-use std::{any, fmt, ptr};
 
 /// A custom struct for managing C resources with automatic cleanup.
 ///
 /// It handles initialisation and clean-up of the resource and ensures that resources
 /// are properly released when they go out of scope.
+#[allow(dead_code)]
 pub struct ManagedCResource<T> {
     resource: *mut T,
     cleanup: Option<Box<dyn FnMut(*mut *mut T) -> i32>>,
     cleanup_struct: bool,
     borrowed: bool,
+    /// if someone externally rusteron calls close
+    close_already_called: std::cell::Cell<bool>,
+    /// if there is a c method to verify it someone has closed it, only few structs have this functionality
+    check_for_is_closed: Option<Box<dyn Fn(*mut T) -> bool>>,
+    /// this will be called if closed hasn't already happened even if its borrowed
+    auto_close: std::cell::Cell<bool>,
+    // to prevent the dependencies from being dropped as you have a copy here
+    dependencies: UnsafeCell<Vec<std::rc::Rc<dyn Any>>>,
 }
 
-impl<T> Debug for ManagedCResource<T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ManagedCResource")
-            .field("resource", &self.resource)
-            .field("type", &any::type_name::<T>())
+impl<T> std::fmt::Debug for ManagedCResource<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut debug_struct = f.debug_struct("ManagedCResource");
+
+        if !self.close_already_called.get()
+            && !self.resource.is_null()
+            && !self
+                .check_for_is_closed
+                .as_ref()
+                .map_or(false, |f| f(self.resource))
+        {
+            debug_struct.field("resource", &self.resource);
+        }
+
+        debug_struct
+            .field("type", &std::any::type_name::<T>())
             .finish()
     }
 }
@@ -36,8 +56,9 @@ impl<T> ManagedCResource<T> {
         init: impl FnOnce(*mut *mut T) -> i32,
         cleanup: Option<Box<dyn FnMut(*mut *mut T) -> i32>>,
         cleanup_struct: bool,
+        check_for_is_closed: Option<Box<dyn Fn(*mut T) -> bool>>,
     ) -> Result<Self, AeronCError> {
-        let mut resource: *mut T = ptr::null_mut();
+        let mut resource: *mut T = std::ptr::null_mut();
         let result = init(&mut resource);
         if result < 0 || resource.is_null() {
             return Err(AeronCError::from_code(result));
@@ -48,18 +69,38 @@ impl<T> ManagedCResource<T> {
             cleanup,
             cleanup_struct,
             borrowed: false,
+            close_already_called: std::cell::Cell::new(false),
+            check_for_is_closed,
+            auto_close: std::cell::Cell::new(false),
+            dependencies: UnsafeCell::new(vec![]),
         };
         #[cfg(feature = "extra-logging")]
         log::debug!("created c resource: {:?}", result);
         Ok(result)
     }
 
-    pub fn new_borrowed(value: *const T) -> Self {
+    pub fn is_closed_already_called(&self) -> bool {
+        self.close_already_called.get()
+            || self.resource.is_null()
+            || self
+                .check_for_is_closed
+                .as_ref()
+                .map_or(false, |f| f(self.resource))
+    }
+
+    pub fn new_borrowed(
+        value: *const T,
+        check_for_is_closed: Option<Box<dyn Fn(*mut T) -> bool>>,
+    ) -> Self {
         Self {
             resource: value as *mut _,
             cleanup: None,
             cleanup_struct: false,
             borrowed: true,
+            close_already_called: std::cell::Cell::new(false),
+            check_for_is_closed,
+            auto_close: std::cell::Cell::new(false),
+            dependencies: UnsafeCell::new(vec![]),
         }
     }
 
@@ -74,15 +115,34 @@ impl<T> ManagedCResource<T> {
         unsafe { &mut *self.resource }
     }
 
+    // to prevent the dependencies from being dropped as you have a copy here
+    pub fn add_dependency<D: Any>(&self, dep: D) {
+        unsafe {
+            (*self.dependencies.get()).push(std::rc::Rc::new(dep));
+        }
+    }
+
     /// Closes the resource by calling the cleanup function.
     ///
     /// If cleanup fails, it returns an `AeronError`.
     pub fn close(&mut self) -> Result<(), AeronCError> {
+        if self.close_already_called.get() {
+            return Ok(());
+        }
+        self.close_already_called.set(true);
+
+        let already_closed = self
+            .check_for_is_closed
+            .as_ref()
+            .map_or(false, |f| f(self.resource));
+
         if let Some(mut cleanup) = self.cleanup.take() {
             if !self.resource.is_null() {
-                let result = cleanup(&mut self.resource);
-                if result < 0 {
-                    return Err(AeronCError::from_code(result));
+                if !already_closed {
+                    let result = cleanup(&mut self.resource);
+                    if result < 0 {
+                        return Err(AeronCError::from_code(result));
+                    }
                 }
                 self.resource = std::ptr::null_mut();
             }
@@ -94,21 +154,37 @@ impl<T> ManagedCResource<T> {
 
 impl<T> Drop for ManagedCResource<T> {
     fn drop(&mut self) {
-        if !self.resource.is_null() && !self.borrowed {
-            let resource = self.resource.clone();
-            // Ensure the clean-up function is called when the resource is dropped.
-            #[cfg(feature = "extra-logging")]
-            log::debug!("closing c resource: {:?}", self);
-            let _ = self.close(); // Ignore errors during an automatic drop to avoid panics.
+        if !self.resource.is_null() {
+            let already_closed = self.close_already_called.get()
+                || self
+                    .check_for_is_closed
+                    .as_ref()
+                    .map_or(false, |f| f(self.resource));
+            if !self.borrowed {
+                let resource = if already_closed {
+                    self.resource
+                } else {
+                    self.resource.clone()
+                };
 
-            if self.cleanup_struct {
-                #[cfg(feature = "extra-logging")]
-                log::debug!("closing rust struct resource: {:?}", resource);
-                unsafe {
-                    let _ = Box::from_raw(resource);
+                if !already_closed {
+                    // Ensure the clean-up function is called when the resource is dropped.
+                    #[cfg(feature = "extra-logging")]
+                    log::debug!("closing c resource: {:?}", self);
+                    let _ = self.close(); // Ignore errors during an automatic drop to avoid panics.
+                }
+
+                if self.cleanup_struct {
+                    #[cfg(feature = "extra-logging")]
+                    log::debug!("closing rust struct resource: {:?}", resource);
+                    unsafe {
+                        let _ = Box::from_raw(resource);
+                    }
                 }
             }
         }
+
+        self.close_already_called.set(true);
     }
 }
 
@@ -241,14 +317,14 @@ impl AeronCError {
     }
 }
 
-impl fmt::Display for AeronCError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for AeronCError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Aeron error {}: {:?}", self.code, self.kind())
     }
 }
 
-impl fmt::Debug for AeronCError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Debug for AeronCError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AeronCError")
             .field("code", &self.code)
             .field("kind", &self.kind())

@@ -1,6 +1,6 @@
 use crate::{
-    Aeron, AeronArchiveAsyncConnect, AeronArchiveContext, AeronContext, AutoCloseAeronArchive,
-    Handler, NoOpAeronIdleStrategyFunc,
+    Aeron, AeronArchive, AeronArchiveAsyncConnect, AeronArchiveContext, AeronContext, Handler,
+    NoOpAeronIdleStrategyFunc,
 };
 use log::info;
 use log::{error, warn};
@@ -118,7 +118,7 @@ impl EmbeddedArchiveMediaDriverProcess {
             .spawn()
     }
 
-    pub fn archive_connect(&self) -> Result<(AutoCloseAeronArchive, Aeron), io::Error> {
+    pub fn archive_connect(&self) -> Result<(AeronArchive, Aeron), io::Error> {
         let start = Instant::now();
         while start.elapsed() < Duration::from_secs(30) {
             if let Ok(aeron_context) = AeronContext::new() {
