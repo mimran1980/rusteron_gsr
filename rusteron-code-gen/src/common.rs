@@ -161,6 +161,7 @@ impl<T> Drop for ManagedCResource<T> {
                     .as_ref()
                     .map_or(false, |f| f(self.resource));
             if !self.borrowed {
+                self.close_already_called.set(true);
                 let resource = if already_closed {
                     self.resource
                 } else {
@@ -183,8 +184,6 @@ impl<T> Drop for ManagedCResource<T> {
                 }
             }
         }
-
-        self.close_already_called.set(true);
     }
 }
 
