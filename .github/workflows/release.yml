@@ -12,10 +12,6 @@ on:
           - major
           - minor
           - patch
-  workflow_run:
-    workflows: ["CI"]
-    types:
-      - completed
 
 env:
   RUST_BACKTRACE: 1
