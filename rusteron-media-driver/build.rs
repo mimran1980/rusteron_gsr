@@ -63,12 +63,10 @@ pub fn main() {
         );
         // Add the artifacts folder to the linker search path.
 
-        if cfg!(target_os = "macos") {
-            println!(
-                "cargo:rustc-link-arg=-Wl,-rpath,{}",
-                artifacts_dir.display()
-            );
-        }
+        println!(
+            "cargo:rustc-link-arg=-Wl,-rpath,{}",
+            artifacts_dir.display()
+        );
         println!("cargo:rustc-link-search=native={}", artifacts_dir.display());
         let link_type = LinkType::detect();
         println!(
