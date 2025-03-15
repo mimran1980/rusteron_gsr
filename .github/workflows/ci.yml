@@ -91,5 +91,25 @@ jobs:
 
       - name: Build and Test
         run: |
-          cargo build --workspace ${{ env.feature-flags }}
-          cargo test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
+          rm -rf rusteron-archive/artifacts
+          rm -rf rusteron-client/artifacts
+          rm -rf rusteron-media-driver/artifacts
+          rm -rf rusteron-rb/artifacts
+          cargo test --release --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
+          rm -rf rusteron-archive/artifacts
+          rm -rf rusteron-client/artifacts
+          rm -rf rusteron-media-driver/artifacts
+          rm -rf rusteron-rb/artifacts
+          cargo build --release --workspace ${{ env.feature-flags }}
+
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.features }}
+          path: |
+            rusteron-archive/artifacts/**
+            rusteron-client/artifacts/**
+            rusteron-media-driver/artifacts/**
+            rusteron-rb/artifacts/**
+          if-no-files-found: error
