@@ -22,6 +22,12 @@ static lib
 rusteron-archive = { version = "0.1", features= ["static"] }
 ```
 
+static lib using precompile code (no cmake or java required)
+```toml
+[dependencies]
+rusteron-archive = { version = "0.1", features= ["static", "precompile"] }
+```
+
 You must also ensure that you include Aeron C libraries required by **rusteron-archive** when using default feature. (Using static will automatically include these dependancies in binary).
 
 ## Features

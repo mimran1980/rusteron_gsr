@@ -139,6 +139,12 @@ static lib
 rusteron-client = { version = "0.1", features= ["static"] }
 ```
 
+static lib with precompiled c libs
+```toml
+[dependencies]
+rusteron-client = { version = "0.1", features= ["static", "precompile"] }
+```
+
 Ensure you have also set up the necessary Aeron C libraries required by **rusteron-client**.
 
 ## Usage Example

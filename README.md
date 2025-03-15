@@ -75,6 +75,13 @@ static lib
 rusteron-client = { version = "0.1", features= ["static"] }
 ```
 
+static lib with precompiled c libs
+```toml
+[dependencies]
+rusteron-client = { version = "0.1", features= ["static", "precompile"] }
+```
+
+
 Replace `rusteron-client` with `rusteron-archive`/`rusteron-media-driver`/`rusteron-rb` as per your requirement.
 
 ## Usage Example
