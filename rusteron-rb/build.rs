@@ -45,14 +45,14 @@ impl LinkType {
 
 pub fn main() {
     // Determine the artifacts folder based on feature, OS, and architecture.
-    #[cfg(feature = "precompile")]
+    #[cfg(all(feature = "precompile", feature = "static"))]
     let artifacts_dir = get_artifact_path();
 
-    #[cfg(feature = "precompile")]
+    #[cfg(all(feature = "precompile", feature = "static"))]
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
 
     // If the artifacts folder exists use that instead of doing cmake and requiring java to be installed
-    #[cfg(feature = "precompile")]
+    #[cfg(all(feature = "precompile", feature = "static"))]
     if artifacts_dir.exists() && fs::read_dir(&artifacts_dir).unwrap().next().is_some() {
         println!(
             "Artifacts found in {}. Using published artifacts.",

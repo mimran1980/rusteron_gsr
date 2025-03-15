@@ -62,7 +62,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, macos-13]
 #        os: [ubuntu-latest]
 #        features: [default, static]
-        features: [static]
+        features: [default, static]
         rust-version: ["stable"]
 
     env:
