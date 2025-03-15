@@ -34,6 +34,10 @@ jobs:
         with:
           toolchain: stable
 
+      - name: Install dependencies on Ubuntu
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y uuid-dev
+
       - name: build with artifacts
         run: |
           cargo build --features precompile --features static --workspace --release
