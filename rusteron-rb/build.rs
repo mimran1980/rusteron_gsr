@@ -71,6 +71,21 @@ pub fn main() {
             link_type.target_name()
         );
 
+        if pkg_config::probe_library("uuid").is_err() {
+            eprintln!("uuid lib not found in path");
+        }
+        if let LinkType::Static = link_type {
+            // On Windows, there are some extra libraries needed for static link
+            // that aren't included by Aeron.
+            if cfg!(target_os = "windows") {
+                println!("cargo:rustc-link-lib=shell32");
+                println!("cargo:rustc-link-lib=iphlpapi");
+            }
+            if cfg!(target_os = "linux") {
+                println!("cargo:rustc-link-lib=uuid");
+            }
+        }
+
         // Copy generated Rust files (*.rs) from the artifacts folder into OUT_DIR.
         for entry in WalkDir::new(&artifacts_dir) {
             let entry = entry.unwrap();
