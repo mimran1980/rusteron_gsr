@@ -58,10 +58,9 @@ jobs:
       fail-fast: false
       matrix:
 #        os: [ubuntu-latest, windows-latest, macos-latest]
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, ubuntu-24.04-arm, macos-13]
 #        os: [ubuntu-latest]
         features: [default, static]
-        #        rust-version: ["stable", "stable 6 months ago"]
         rust-version: ["stable"]
 
     env:
