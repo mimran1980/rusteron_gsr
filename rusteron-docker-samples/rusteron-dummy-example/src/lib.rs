@@ -111,7 +111,8 @@ pub fn archive_connect() -> Result<(AeronArchive, Aeron), io::Error> {
                                 recording_events_channel,
                             ) {
                                 Ok(archive_context) => {
-                                    match AeronArchiveAsyncConnect::new(&archive_context) {
+                                    match AeronArchiveAsyncConnect::new_with_aeron(&archive_context)
+                                    {
                                         Ok(connect) => {
                                             match connect.poll_blocking(Duration::from_secs(10)) {
                                                 Ok(archive) => {

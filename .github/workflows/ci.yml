@@ -118,12 +118,11 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          submodules: recursive
 
       - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
-          # Download all uploaded artifacts to a directory called merged-artifacts
           path: ./merged-artifacts
 
       - name: Merge Artifacts into Repository
@@ -141,7 +140,6 @@ jobs:
         run: |
           git config --global user.email "mimran1980@example.com"
           git config --global user.name "Mo Imran"
-          git pull --rebase origin main
           git add rusteron-archive/artifacts rusteron-client/artifacts rusteron-media-driver/artifacts rusteron-rb/artifacts
           git commit -m "Add prebuilt binaries from CI [skip ci]" || echo "No changes to commit"
           git push --force-with-lease origin main

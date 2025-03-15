@@ -2011,7 +2011,7 @@ pub fn generate_rust_code(
             additional_impls.push(quote! {
                 impl Drop for #class_name {
                     fn drop(&mut self) {
-                            if self.inner.borrowed && std::rc::Rc::strong_count(&self.inner) == 1 && self.inner.is_closed_already_called() {
+                            if (self.inner.borrowed || self.inner.cleanup.is_none() ) && std::rc::Rc::strong_count(&self.inner) == 1 && !self.inner.is_closed_already_called() {
                                 if self.inner.auto_close.get() {
                                 let result = self.#close_method_call();
                                 log::info!("auto closing {} {:?}", stringify!(#class_name), result);

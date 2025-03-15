@@ -139,7 +139,9 @@ impl EmbeddedArchiveMediaDriverProcess {
                             archive_context
                                 .set_idle_strategy(Some(&Handler::leak(NoOpAeronIdleStrategyFunc)))
                                 .expect("unable to set idle strategy");
-                            if let Ok(connect) = AeronArchiveAsyncConnect::new(&archive_context) {
+                            if let Ok(connect) =
+                                AeronArchiveAsyncConnect::new_with_aeron(&archive_context, &aeron)
+                            {
                                 if let Ok(archive) = connect.poll_blocking(Duration::from_secs(10))
                                 {
                                     let i = archive.get_archive_id();
