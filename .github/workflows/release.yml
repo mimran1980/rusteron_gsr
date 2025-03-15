@@ -12,6 +12,10 @@ on:
           - major
           - minor
           - patch
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
 
 env:
   RUST_BACKTRACE: 1
@@ -21,7 +25,6 @@ jobs:
   release:
     timeout-minutes: 45
     runs-on: ubuntu-latest
-    needs: build
 
     steps:
       - name: Checkout
