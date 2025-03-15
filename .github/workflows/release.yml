@@ -21,6 +21,7 @@ jobs:
   release:
     timeout-minutes: 45
     runs-on: ubuntu-latest
+    needs: build
 
     steps:
       - name: Checkout
@@ -33,22 +34,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          components: clippy, rustfmt
 
-      - name: Install dependencies on Ubuntu
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y uuid-dev
-
-      - name: Install Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '23'
-
-      - name: Build and Test
+      - name: remove artifacts
         run: |
-          cargo build --workspace --release
-          cargo test --workspace -- --nocapture
           rm -rf rusteron-archive/artifacts
           rm -rf rusteron-client/artifacts
           rm -rf rusteron-media-driver/artifacts
@@ -67,12 +55,17 @@ jobs:
           mv downloaded-artifacts/build-artifacts*/* rusteron-media-driver/artifacts/ || true
           mv downloaded-artifacts/build-artifacts*/* rusteron-rb/artifacts/ || true
 
+      - name: build with artifacts
+        run: |
+          cargo build --features precompile --workspace --release
+          cargo test --features precompile --workspace -- --nocapture
+
       - name: Commit and Push Artifacts
         run: |
           git config --global user.email "mimran1980@example.com"
           git config --global user.name "Mo Imran"
           git add rusteron-archive/artifacts rusteron-client/artifacts rusteron-media-driver/artifacts rusteron-rb/artifacts
-          git commit -m "Add prebuilt artifacts from CI"
+          git commit -m "Add prebuilt binareies from CI"
           git push origin main
 
       - name: Install cargo-release
