@@ -1,23 +1,84 @@
 
 type aeron_client_registering_resource_t = aeron_client_registering_resource_stct;
+#[doc = "Configuration for an image that does not change during it's lifetime."]
 #[derive(Clone)]
-pub struct AeronAsyncAddExclusivePublication {
-    inner: std::rc::Rc<ManagedCResource<aeron_async_add_exclusive_publication_t>>,
+pub struct AeronImageConstants {
+    inner: std::rc::Rc<ManagedCResource<aeron_image_constants_t>>,
 }
-impl core::fmt::Debug for AeronAsyncAddExclusivePublication {
+impl core::fmt::Debug for AeronImageConstants {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronAsyncAddExclusivePublication))
+            f.debug_struct(stringify!(AeronImageConstants))
                 .field("inner", &"null")
                 .finish()
         } else {
-            f.debug_struct(stringify!(AeronAsyncAddExclusivePublication))
+            f.debug_struct(stringify!(AeronImageConstants))
                 .field("inner", &self.inner)
+                .field(stringify!(correlation_id), &self.correlation_id())
+                .field(stringify!(join_position), &self.join_position())
+                .field(
+                    stringify!(position_bits_to_shift),
+                    &self.position_bits_to_shift(),
+                )
+                .field(stringify!(term_buffer_length), &self.term_buffer_length())
+                .field(stringify!(mtu_length), &self.mtu_length())
+                .field(stringify!(session_id), &self.session_id())
+                .field(stringify!(initial_term_id), &self.initial_term_id())
+                .field(
+                    stringify!(subscriber_position_id),
+                    &self.subscriber_position_id(),
+                )
                 .finish()
         }
     }
 }
-impl AeronAsyncAddExclusivePublication {
+impl AeronImageConstants {
+    #[inline]
+    pub fn new(
+        subscription: &AeronSubscription,
+        source_identity: &str,
+        correlation_id: i64,
+        join_position: i64,
+        position_bits_to_shift: usize,
+        term_buffer_length: usize,
+        mtu_length: usize,
+        session_id: i32,
+        initial_term_id: i32,
+        subscriber_position_id: i32,
+    ) -> Result<Self, AeronCError> {
+        let subscription_copy = subscription.clone();
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_image_constants_t {
+                    subscription: subscription.into(),
+                    source_identity: std::ffi::CString::new(source_identity).unwrap().into_raw(),
+                    correlation_id: correlation_id.into(),
+                    join_position: join_position.into(),
+                    position_bits_to_shift: position_bits_to_shift.into(),
+                    term_buffer_length: term_buffer_length.into(),
+                    mtu_length: mtu_length.into(),
+                    session_id: session_id.into(),
+                    initial_term_id: initial_term_id.into(),
+                    subscriber_position_id: subscriber_position_id.into(),
+                };
+                let inner_ptr: *mut aeron_image_constants_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
     #[inline]
     #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
     pub fn new_zeroed() -> Result<Self, AeronCError> {
@@ -26,11 +87,10 @@ impl AeronAsyncAddExclusivePublication {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_async_add_exclusive_publication_t)
+                    stringify!(aeron_image_constants_t)
                 );
-                let inst: aeron_async_add_exclusive_publication_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_async_add_exclusive_publication_t =
-                    Box::into_raw(Box::new(inst));
+                let inst: aeron_image_constants_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_image_constants_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -43,185 +103,128 @@ impl AeronAsyncAddExclusivePublication {
         })
     }
     #[inline]
-    #[doc = "Gets the registration id for addition of the exclusive_publication. Note that using this after a call to poll the"]
-    #[doc = " succeeds or errors is undefined behaviour. As the async_add_exclusive_publication_t may have been freed."]
-    #[doc = ""]
-    #[doc = " \n# Return\n registration id for the exclusive_publication."]
-    pub fn aeron_async_add_exclusive_exclusive_publication_get_registration_id(&self) -> i64 {
-        unsafe {
-            let result = aeron_async_add_exclusive_exclusive_publication_get_registration_id(
-                self.get_inner(),
-            );
-            result.into()
+    pub fn subscription(&self) -> AeronSubscription {
+        self.subscription.into()
+    }
+    #[inline]
+    pub fn source_identity(&self) -> &str {
+        if self.source_identity.is_null() {
+            ""
+        } else {
+            unsafe {
+                std::ffi::CStr::from_ptr(self.source_identity)
+                    .to_str()
+                    .unwrap()
+            }
         }
     }
+    #[inline]
+    pub fn correlation_id(&self) -> i64 {
+        self.correlation_id.into()
+    }
+    #[inline]
+    pub fn join_position(&self) -> i64 {
+        self.join_position.into()
+    }
+    #[inline]
+    pub fn position_bits_to_shift(&self) -> usize {
+        self.position_bits_to_shift.into()
+    }
+    #[inline]
+    pub fn term_buffer_length(&self) -> usize {
+        self.term_buffer_length.into()
+    }
+    #[inline]
+    pub fn mtu_length(&self) -> usize {
+        self.mtu_length.into()
+    }
+    #[inline]
+    pub fn session_id(&self) -> i32 {
+        self.session_id.into()
+    }
+    #[inline]
+    pub fn initial_term_id(&self) -> i32 {
+        self.initial_term_id.into()
+    }
+    #[inline]
+    pub fn subscriber_position_id(&self) -> i32 {
+        self.subscriber_position_id.into()
+    }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_async_add_exclusive_publication_t {
+    pub fn get_inner(&self) -> *mut aeron_image_constants_t {
         self.inner.get()
     }
 }
-impl std::ops::Deref for AeronAsyncAddExclusivePublication {
-    type Target = aeron_async_add_exclusive_publication_t;
+impl std::ops::Deref for AeronImageConstants {
+    type Target = aeron_image_constants_t;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.inner.get() }
     }
 }
-impl From<*mut aeron_async_add_exclusive_publication_t> for AeronAsyncAddExclusivePublication {
+impl From<*mut aeron_image_constants_t> for AeronImageConstants {
     #[inline]
-    fn from(value: *mut aeron_async_add_exclusive_publication_t) -> Self {
-        AeronAsyncAddExclusivePublication {
+    fn from(value: *mut aeron_image_constants_t) -> Self {
+        AeronImageConstants {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<AeronAsyncAddExclusivePublication> for *mut aeron_async_add_exclusive_publication_t {
+impl From<AeronImageConstants> for *mut aeron_image_constants_t {
     #[inline]
-    fn from(value: AeronAsyncAddExclusivePublication) -> Self {
+    fn from(value: AeronImageConstants) -> Self {
         value.get_inner()
     }
 }
-impl From<&AeronAsyncAddExclusivePublication> for *mut aeron_async_add_exclusive_publication_t {
+impl From<&AeronImageConstants> for *mut aeron_image_constants_t {
     #[inline]
-    fn from(value: &AeronAsyncAddExclusivePublication) -> Self {
+    fn from(value: &AeronImageConstants) -> Self {
         value.get_inner()
     }
 }
-impl From<AeronAsyncAddExclusivePublication> for aeron_async_add_exclusive_publication_t {
+impl From<AeronImageConstants> for aeron_image_constants_t {
     #[inline]
-    fn from(value: AeronAsyncAddExclusivePublication) -> Self {
+    fn from(value: AeronImageConstants) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const aeron_async_add_exclusive_publication_t> for AeronAsyncAddExclusivePublication {
+impl From<*const aeron_image_constants_t> for AeronImageConstants {
     #[inline]
-    fn from(value: *const aeron_async_add_exclusive_publication_t) -> Self {
-        AeronAsyncAddExclusivePublication {
+    fn from(value: *const aeron_image_constants_t) -> Self {
+        AeronImageConstants {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<aeron_async_add_exclusive_publication_t> for AeronAsyncAddExclusivePublication {
+impl From<aeron_image_constants_t> for AeronImageConstants {
     #[inline]
-    fn from(mut value: aeron_async_add_exclusive_publication_t) -> Self {
-        AeronAsyncAddExclusivePublication {
+    fn from(mut value: aeron_image_constants_t) -> Self {
+        AeronImageConstants {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_async_add_exclusive_publication_t,
+                &mut value as *mut aeron_image_constants_t,
                 None,
             )),
         }
     }
 }
-impl AeronExclusivePublication {
-    #[inline]
-    pub fn new(async_: &AeronAsyncAddExclusivePublication) -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| unsafe {
-                aeron_async_add_exclusive_publication_poll(ctx_field, async_.into())
-            },
-            None,
-            false,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronImageConstants {
+    fn default() -> Self {
+        AeronImageConstants::new_zeroed().expect("failed to create struct")
     }
 }
-impl Aeron {
-    #[inline]
-    pub fn async_add_exclusive_publication(
-        &self,
-        uri: &str,
-        stream_id: i32,
-    ) -> Result<AeronAsyncAddExclusivePublication, AeronCError> {
-        let result = AeronAsyncAddExclusivePublication::new(self, uri, stream_id);
-        if let Ok(result) = &result {
-            result.inner.add_dependency(self.clone());
-        }
-        result
-    }
-}
-impl Aeron {
-    #[inline]
-    pub fn add_exclusive_publication(
-        &self,
-        uri: &str,
-        stream_id: i32,
-        timeout: std::time::Duration,
-    ) -> Result<AeronExclusivePublication, AeronCError> {
-        let start = std::time::Instant::now();
-        loop {
-            if let Ok(poller) = AeronAsyncAddExclusivePublication::new(self, uri, stream_id) {
-                while start.elapsed() <= timeout {
-                    if let Some(result) = poller.poll()? {
-                        return Ok(result);
-                    }
-                    #[cfg(debug_assertions)]
-                    std::thread::sleep(std::time::Duration::from_millis(10));
-                }
-            }
-            if start.elapsed() > timeout {
-                log::error!("failed async poll for {:?}", self);
-                return Err(AeronErrorType::TimedOut.into());
-            }
-            #[cfg(debug_assertions)]
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-    }
-}
-impl AeronAsyncAddExclusivePublication {
-    #[inline]
-    pub fn new(client: &Aeron, uri: &str, stream_id: i32) -> Result<Self, AeronCError> {
-        let resource_async = ManagedCResource::new(
-            move |ctx_field| unsafe {
-                aeron_async_add_exclusive_publication(
-                    ctx_field,
-                    client.into(),
-                    std::ffi::CString::new(uri).unwrap().into_raw(),
-                    stream_id.into(),
-                )
-            },
-            None,
-            false,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource_async),
-        })
-    }
-    pub fn poll(&self) -> Result<Option<AeronExclusivePublication>, AeronCError> {
-        let result = AeronExclusivePublication::new(self);
-        if let Ok(result) = &result {
-            unsafe {
-                for d in (&*self.inner.dependencies.get()).iter() {
-                    result.inner.add_dependency(d.clone());
-                }
-                result.inner.auto_close.set(true);
-            }
-        }
-        match result {
-            Ok(result) => Ok(Some(result)),
-            Err(AeronCError { code }) if code == 0 => Ok(None),
-            Err(e) => Err(e),
-        }
-    }
-    pub fn poll_blocking(
-        &self,
-        timeout: std::time::Duration,
-    ) -> Result<AeronExclusivePublication, AeronCError> {
-        if let Some(result) = self.poll()? {
-            return Ok(result);
-        }
-        let time = std::time::Instant::now();
-        while time.elapsed() < timeout {
-            if let Some(result) = self.poll()? {
-                return Ok(result);
-            }
-            #[cfg(debug_assertions)]
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-        log::error!("failed async poll for {:?}", self);
-        Err(AeronErrorType::TimedOut.into())
+impl AeronImageConstants {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
     }
 }
 use crate::AeronErrorType::Unknown;
@@ -639,50 +642,38 @@ impl ControlMode {
     }
 }
 #[derive(Clone)]
-pub struct AeronRttmHeader {
-    inner: std::rc::Rc<ManagedCResource<aeron_rttm_header_t>>,
+pub struct AeronUri {
+    inner: std::rc::Rc<ManagedCResource<aeron_uri_t>>,
 }
-impl core::fmt::Debug for AeronRttmHeader {
+impl core::fmt::Debug for AeronUri {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronRttmHeader))
+            f.debug_struct(stringify!(AeronUri))
                 .field("inner", &"null")
                 .finish()
         } else {
-            f.debug_struct(stringify!(AeronRttmHeader))
+            f.debug_struct(stringify!(AeronUri))
                 .field("inner", &self.inner)
-                .field(stringify!(frame_header), &self.frame_header())
-                .field(stringify!(session_id), &self.session_id())
-                .field(stringify!(stream_id), &self.stream_id())
-                .field(stringify!(echo_timestamp), &self.echo_timestamp())
-                .field(stringify!(reception_delta), &self.reception_delta())
-                .field(stringify!(receiver_id), &self.receiver_id())
                 .finish()
         }
     }
 }
-impl AeronRttmHeader {
+impl AeronUri {
     #[inline]
     pub fn new(
-        frame_header: AeronFrameHeader,
-        session_id: i32,
-        stream_id: i32,
-        echo_timestamp: i64,
-        reception_delta: i64,
-        receiver_id: i64,
+        mutable_uri: [::std::os::raw::c_char; 4096usize],
+        type_: aeron_uri_type_t,
+        params: aeron_uri_stct__bindgen_ty_1,
     ) -> Result<Self, AeronCError> {
         let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
         let r_constructor = ManagedCResource::new(
             move |ctx_field| {
-                let inst = aeron_rttm_header_t {
-                    frame_header: frame_header.into(),
-                    session_id: session_id.into(),
-                    stream_id: stream_id.into(),
-                    echo_timestamp: echo_timestamp.into(),
-                    reception_delta: reception_delta.into(),
-                    receiver_id: receiver_id.into(),
+                let inst = aeron_uri_t {
+                    mutable_uri: mutable_uri.into(),
+                    type_: type_.into(),
+                    params: params.into(),
                 };
-                let inner_ptr: *mut aeron_rttm_header_t = Box::into_raw(Box::new(inst));
+                let inner_ptr: *mut aeron_uri_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -707,10 +698,1478 @@ impl AeronRttmHeader {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_rttm_header_t)
+                    stringify!(aeron_uri_t)
                 );
-                let inst: aeron_rttm_header_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_rttm_header_t = Box::into_raw(Box::new(inst));
+                let inst: aeron_uri_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_uri_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn mutable_uri(&self) -> [::std::os::raw::c_char; 4096usize] {
+        self.mutable_uri.into()
+    }
+    #[inline]
+    pub fn type_(&self) -> aeron_uri_type_t {
+        self.type_.into()
+    }
+    #[inline]
+    pub fn params(&self) -> aeron_uri_stct__bindgen_ty_1 {
+        self.params.into()
+    }
+    #[inline]
+    pub fn parse_params<AeronUriParseCallbackHandlerImpl: AeronUriParseCallbackCallback>(
+        uri: *mut ::std::os::raw::c_char,
+        param_func: Option<&Handler<AeronUriParseCallbackHandlerImpl>>,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_uri_parse_params(
+                uri.into(),
+                {
+                    let callback: aeron_uri_parse_callback_t = if param_func.is_none() {
+                        None
+                    } else {
+                        Some(
+                            aeron_uri_parse_callback_t_callback::<AeronUriParseCallbackHandlerImpl>,
+                        )
+                    };
+                    callback
+                },
+                param_func
+                    .map(|m| m.as_raw())
+                    .unwrap_or_else(|| std::ptr::null_mut()),
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = r""]
+    #[doc = r""]
+    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
+    #[doc = r"  use with care_"]
+    pub fn parse_params_once<
+        AeronUriParseCallbackHandlerImpl: FnMut(&str, &str) -> ::std::os::raw::c_int,
+    >(
+        uri: *mut ::std::os::raw::c_char,
+        mut param_func: AeronUriParseCallbackHandlerImpl,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_uri_parse_params(
+                uri.into(),
+                Some(
+                    aeron_uri_parse_callback_t_callback_for_once_closure::<
+                        AeronUriParseCallbackHandlerImpl,
+                    >,
+                ),
+                &mut param_func as *mut _ as *mut std::os::raw::c_void,
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    pub fn parse(&self, uri_length: usize, uri: &str) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_uri_parse(
+                uri_length.into(),
+                std::ffi::CString::new(uri).unwrap().into_raw(),
+                self.get_inner(),
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    pub fn close(&self) -> () {
+        self.inner.close_already_called.set(true);
+        unsafe {
+            let result = aeron_uri_close(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn multicast_ttl(&self) -> u8 {
+        unsafe {
+            let result = aeron_uri_multicast_ttl(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn sprint(
+        &self,
+        buffer: *mut ::std::os::raw::c_char,
+        buffer_len: usize,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_uri_sprint(self.get_inner(), buffer.into(), buffer_len.into());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    pub fn sprint_as_string(&self, max_length: usize) -> Result<String, AeronCError> {
+        let mut result = String::with_capacity(max_length);
+        self.sprint_into(&mut result)?;
+        Ok(result)
+    }
+    #[inline]
+    #[doc = "NOTE: allocation friendly method, the string capacity must be set as it will truncate string to capacity it will never grow the string. So if you pass String::new() it will write 0 chars"]
+    pub fn sprint_into(&self, dst_truncate_to_capacity: &mut String) -> Result<i32, AeronCError> {
+        unsafe {
+            let capacity = dst_truncate_to_capacity.capacity();
+            let vec = dst_truncate_to_capacity.as_mut_vec();
+            vec.set_len(capacity);
+            let result = self.sprint(vec.as_mut_ptr() as *mut _, capacity)?;
+            let mut len = 0;
+            loop {
+                if len == capacity {
+                    break;
+                }
+                let val = vec[len];
+                if val == 0 {
+                    break;
+                }
+                len += 1;
+            }
+            vec.set_len(len);
+            Ok(result)
+        }
+    }
+    #[inline]
+    pub fn parse_tag(tag_str: &str) -> i64 {
+        unsafe {
+            let result = aeron_uri_parse_tag(std::ffi::CString::new(tag_str).unwrap().into_raw());
+            result.into()
+        }
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_uri_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronUri {
+    type Target = aeron_uri_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_uri_t> for AeronUri {
+    #[inline]
+    fn from(value: *mut aeron_uri_t) -> Self {
+        AeronUri {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronUri> for *mut aeron_uri_t {
+    #[inline]
+    fn from(value: AeronUri) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronUri> for *mut aeron_uri_t {
+    #[inline]
+    fn from(value: &AeronUri) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronUri> for aeron_uri_t {
+    #[inline]
+    fn from(value: AeronUri) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_uri_t> for AeronUri {
+    #[inline]
+    fn from(value: *const aeron_uri_t) -> Self {
+        AeronUri {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_uri_t> for AeronUri {
+    #[inline]
+    fn from(mut value: aeron_uri_t) -> Self {
+        AeronUri {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_uri_t,
+                None,
+            )),
+        }
+    }
+}
+impl Drop for AeronUri {
+    fn drop(&mut self) {
+        if (self.inner.borrowed || self.inner.cleanup.is_none())
+            && std::rc::Rc::strong_count(&self.inner) == 1
+            && !self.inner.is_closed_already_called()
+        {
+            if self.inner.auto_close.get() {
+                let result = self.close();
+                log::info!("auto closing {} {:?}", stringify!(AeronUri), result);
+            } else {
+                log::warn!("{} not closed", stringify!(AeronUri));
+            }
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronUri {
+    fn default() -> Self {
+        AeronUri::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronUri {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[derive(Clone)]
+pub struct AeronResolutionHeader {
+    inner: std::rc::Rc<ManagedCResource<aeron_resolution_header_t>>,
+}
+impl core::fmt::Debug for AeronResolutionHeader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronResolutionHeader))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronResolutionHeader))
+                .field("inner", &self.inner)
+                .field(stringify!(udp_port), &self.udp_port())
+                .field(stringify!(age_in_ms), &self.age_in_ms())
+                .finish()
+        }
+    }
+}
+impl AeronResolutionHeader {
+    #[inline]
+    pub fn new(
+        res_type: i8,
+        res_flags: u8,
+        udp_port: u16,
+        age_in_ms: i32,
+    ) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_resolution_header_t {
+                    res_type: res_type.into(),
+                    res_flags: res_flags.into(),
+                    udp_port: udp_port.into(),
+                    age_in_ms: age_in_ms.into(),
+                };
+                let inner_ptr: *mut aeron_resolution_header_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_resolution_header_t)
+                );
+                let inst: aeron_resolution_header_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_resolution_header_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn res_type(&self) -> i8 {
+        self.res_type.into()
+    }
+    #[inline]
+    pub fn res_flags(&self) -> u8 {
+        self.res_flags.into()
+    }
+    #[inline]
+    pub fn udp_port(&self) -> u16 {
+        self.udp_port.into()
+    }
+    #[inline]
+    pub fn age_in_ms(&self) -> i32 {
+        self.age_in_ms.into()
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_resolution_header_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronResolutionHeader {
+    type Target = aeron_resolution_header_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_resolution_header_t> for AeronResolutionHeader {
+    #[inline]
+    fn from(value: *mut aeron_resolution_header_t) -> Self {
+        AeronResolutionHeader {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronResolutionHeader> for *mut aeron_resolution_header_t {
+    #[inline]
+    fn from(value: AeronResolutionHeader) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronResolutionHeader> for *mut aeron_resolution_header_t {
+    #[inline]
+    fn from(value: &AeronResolutionHeader) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronResolutionHeader> for aeron_resolution_header_t {
+    #[inline]
+    fn from(value: AeronResolutionHeader) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_resolution_header_t> for AeronResolutionHeader {
+    #[inline]
+    fn from(value: *const aeron_resolution_header_t) -> Self {
+        AeronResolutionHeader {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_resolution_header_t> for AeronResolutionHeader {
+    #[inline]
+    fn from(mut value: aeron_resolution_header_t) -> Self {
+        AeronResolutionHeader {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_resolution_header_t,
+                None,
+            )),
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronResolutionHeader {
+    fn default() -> Self {
+        AeronResolutionHeader::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronResolutionHeader {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[derive(Clone)]
+pub struct AeronMappedBuffer {
+    inner: std::rc::Rc<ManagedCResource<aeron_mapped_buffer_t>>,
+}
+impl core::fmt::Debug for AeronMappedBuffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronMappedBuffer))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronMappedBuffer))
+                .field("inner", &self.inner)
+                .field(stringify!(length), &self.length())
+                .finish()
+        }
+    }
+}
+impl AeronMappedBuffer {
+    #[inline]
+    pub fn new(addr: &mut [u8]) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_mapped_buffer_t {
+                    addr: addr.as_ptr() as *mut _,
+                    length: addr.len(),
+                };
+                let inner_ptr: *mut aeron_mapped_buffer_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_mapped_buffer_t)
+                );
+                let inst: aeron_mapped_buffer_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_mapped_buffer_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn addr(&self) -> &mut [u8] {
+        unsafe {
+            if self.addr.is_null() {
+                &mut [] as &mut [_]
+            } else {
+                std::slice::from_raw_parts_mut(self.addr, self.length.try_into().unwrap())
+            }
+        }
+    }
+    #[inline]
+    pub fn length(&self) -> usize {
+        self.length.into()
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_mapped_buffer_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronMappedBuffer {
+    type Target = aeron_mapped_buffer_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_mapped_buffer_t> for AeronMappedBuffer {
+    #[inline]
+    fn from(value: *mut aeron_mapped_buffer_t) -> Self {
+        AeronMappedBuffer {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronMappedBuffer> for *mut aeron_mapped_buffer_t {
+    #[inline]
+    fn from(value: AeronMappedBuffer) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronMappedBuffer> for *mut aeron_mapped_buffer_t {
+    #[inline]
+    fn from(value: &AeronMappedBuffer) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronMappedBuffer> for aeron_mapped_buffer_t {
+    #[inline]
+    fn from(value: AeronMappedBuffer) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_mapped_buffer_t> for AeronMappedBuffer {
+    #[inline]
+    fn from(value: *const aeron_mapped_buffer_t) -> Self {
+        AeronMappedBuffer {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_mapped_buffer_t> for AeronMappedBuffer {
+    #[inline]
+    fn from(mut value: aeron_mapped_buffer_t) -> Self {
+        AeronMappedBuffer {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_mapped_buffer_t,
+                None,
+            )),
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronMappedBuffer {
+    fn default() -> Self {
+        AeronMappedBuffer::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronMappedBuffer {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[derive(Clone)]
+pub struct AeronIovec {
+    inner: std::rc::Rc<ManagedCResource<aeron_iovec_t>>,
+}
+impl core::fmt::Debug for AeronIovec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronIovec))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronIovec))
+                .field("inner", &self.inner)
+                .field(stringify!(iov_len), &self.iov_len())
+                .finish()
+        }
+    }
+}
+impl AeronIovec {
+    #[inline]
+    pub fn new(iov_base: *mut u8, iov_len: usize) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_iovec_t {
+                    iov_base: iov_base.into(),
+                    iov_len: iov_len.into(),
+                };
+                let inner_ptr: *mut aeron_iovec_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_iovec_t)
+                );
+                let inst: aeron_iovec_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_iovec_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn iov_base(&self) -> *mut u8 {
+        self.iov_base.into()
+    }
+    #[inline]
+    pub fn iov_len(&self) -> usize {
+        self.iov_len.into()
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_iovec_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronIovec {
+    type Target = aeron_iovec_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_iovec_t> for AeronIovec {
+    #[inline]
+    fn from(value: *mut aeron_iovec_t) -> Self {
+        AeronIovec {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronIovec> for *mut aeron_iovec_t {
+    #[inline]
+    fn from(value: AeronIovec) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronIovec> for *mut aeron_iovec_t {
+    #[inline]
+    fn from(value: &AeronIovec) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronIovec> for aeron_iovec_t {
+    #[inline]
+    fn from(value: AeronIovec) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_iovec_t> for AeronIovec {
+    #[inline]
+    fn from(value: *const aeron_iovec_t) -> Self {
+        AeronIovec {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_iovec_t> for AeronIovec {
+    #[inline]
+    fn from(mut value: aeron_iovec_t) -> Self {
+        AeronIovec {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_iovec_t,
+                None,
+            )),
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronIovec {
+    fn default() -> Self {
+        AeronIovec::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronIovec {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[doc = "Configuration for a publication that does not change during it's lifetime."]
+#[derive(Clone)]
+pub struct AeronPublicationConstants {
+    inner: std::rc::Rc<ManagedCResource<aeron_publication_constants_t>>,
+}
+impl core::fmt::Debug for AeronPublicationConstants {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronPublicationConstants))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronPublicationConstants))
+                .field("inner", &self.inner)
+                .field(
+                    stringify!(original_registration_id),
+                    &self.original_registration_id(),
+                )
+                .field(stringify!(registration_id), &self.registration_id())
+                .field(
+                    stringify!(max_possible_position),
+                    &self.max_possible_position(),
+                )
+                .field(
+                    stringify!(position_bits_to_shift),
+                    &self.position_bits_to_shift(),
+                )
+                .field(stringify!(term_buffer_length), &self.term_buffer_length())
+                .field(stringify!(max_message_length), &self.max_message_length())
+                .field(stringify!(max_payload_length), &self.max_payload_length())
+                .field(stringify!(stream_id), &self.stream_id())
+                .field(stringify!(session_id), &self.session_id())
+                .field(stringify!(initial_term_id), &self.initial_term_id())
+                .field(
+                    stringify!(publication_limit_counter_id),
+                    &self.publication_limit_counter_id(),
+                )
+                .field(
+                    stringify!(channel_status_indicator_id),
+                    &self.channel_status_indicator_id(),
+                )
+                .finish()
+        }
+    }
+}
+impl AeronPublicationConstants {
+    #[inline]
+    pub fn new(
+        channel: &str,
+        original_registration_id: i64,
+        registration_id: i64,
+        max_possible_position: i64,
+        position_bits_to_shift: usize,
+        term_buffer_length: usize,
+        max_message_length: usize,
+        max_payload_length: usize,
+        stream_id: i32,
+        session_id: i32,
+        initial_term_id: i32,
+        publication_limit_counter_id: i32,
+        channel_status_indicator_id: i32,
+    ) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_publication_constants_t {
+                    channel: std::ffi::CString::new(channel).unwrap().into_raw(),
+                    original_registration_id: original_registration_id.into(),
+                    registration_id: registration_id.into(),
+                    max_possible_position: max_possible_position.into(),
+                    position_bits_to_shift: position_bits_to_shift.into(),
+                    term_buffer_length: term_buffer_length.into(),
+                    max_message_length: max_message_length.into(),
+                    max_payload_length: max_payload_length.into(),
+                    stream_id: stream_id.into(),
+                    session_id: session_id.into(),
+                    initial_term_id: initial_term_id.into(),
+                    publication_limit_counter_id: publication_limit_counter_id.into(),
+                    channel_status_indicator_id: channel_status_indicator_id.into(),
+                };
+                let inner_ptr: *mut aeron_publication_constants_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_publication_constants_t)
+                );
+                let inst: aeron_publication_constants_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_publication_constants_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn channel(&self) -> &str {
+        if self.channel.is_null() {
+            ""
+        } else {
+            unsafe { std::ffi::CStr::from_ptr(self.channel).to_str().unwrap() }
+        }
+    }
+    #[inline]
+    pub fn original_registration_id(&self) -> i64 {
+        self.original_registration_id.into()
+    }
+    #[inline]
+    pub fn registration_id(&self) -> i64 {
+        self.registration_id.into()
+    }
+    #[inline]
+    pub fn max_possible_position(&self) -> i64 {
+        self.max_possible_position.into()
+    }
+    #[inline]
+    pub fn position_bits_to_shift(&self) -> usize {
+        self.position_bits_to_shift.into()
+    }
+    #[inline]
+    pub fn term_buffer_length(&self) -> usize {
+        self.term_buffer_length.into()
+    }
+    #[inline]
+    pub fn max_message_length(&self) -> usize {
+        self.max_message_length.into()
+    }
+    #[inline]
+    pub fn max_payload_length(&self) -> usize {
+        self.max_payload_length.into()
+    }
+    #[inline]
+    pub fn stream_id(&self) -> i32 {
+        self.stream_id.into()
+    }
+    #[inline]
+    pub fn session_id(&self) -> i32 {
+        self.session_id.into()
+    }
+    #[inline]
+    pub fn initial_term_id(&self) -> i32 {
+        self.initial_term_id.into()
+    }
+    #[inline]
+    pub fn publication_limit_counter_id(&self) -> i32 {
+        self.publication_limit_counter_id.into()
+    }
+    #[inline]
+    pub fn channel_status_indicator_id(&self) -> i32 {
+        self.channel_status_indicator_id.into()
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_publication_constants_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronPublicationConstants {
+    type Target = aeron_publication_constants_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_publication_constants_t> for AeronPublicationConstants {
+    #[inline]
+    fn from(value: *mut aeron_publication_constants_t) -> Self {
+        AeronPublicationConstants {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronPublicationConstants> for *mut aeron_publication_constants_t {
+    #[inline]
+    fn from(value: AeronPublicationConstants) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronPublicationConstants> for *mut aeron_publication_constants_t {
+    #[inline]
+    fn from(value: &AeronPublicationConstants) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronPublicationConstants> for aeron_publication_constants_t {
+    #[inline]
+    fn from(value: AeronPublicationConstants) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_publication_constants_t> for AeronPublicationConstants {
+    #[inline]
+    fn from(value: *const aeron_publication_constants_t) -> Self {
+        AeronPublicationConstants {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_publication_constants_t> for AeronPublicationConstants {
+    #[inline]
+    fn from(mut value: aeron_publication_constants_t) -> Self {
+        AeronPublicationConstants {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_publication_constants_t,
+                None,
+            )),
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronPublicationConstants {
+    fn default() -> Self {
+        AeronPublicationConstants::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronPublicationConstants {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[derive(Clone)]
+pub struct AeronStrToPtrHashMapKey {
+    inner: std::rc::Rc<ManagedCResource<aeron_str_to_ptr_hash_map_key_t>>,
+}
+impl core::fmt::Debug for AeronStrToPtrHashMapKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronStrToPtrHashMapKey))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronStrToPtrHashMapKey))
+                .field("inner", &self.inner)
+                .field(stringify!(hash_code), &self.hash_code())
+                .field(stringify!(str_length), &self.str_length())
+                .finish()
+        }
+    }
+}
+impl AeronStrToPtrHashMapKey {
+    #[inline]
+    pub fn new(str_: &str, hash_code: u64, str_length: usize) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_str_to_ptr_hash_map_key_t {
+                    str_: std::ffi::CString::new(str_).unwrap().into_raw(),
+                    hash_code: hash_code.into(),
+                    str_length: str_length.into(),
+                };
+                let inner_ptr: *mut aeron_str_to_ptr_hash_map_key_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_str_to_ptr_hash_map_key_t)
+                );
+                let inst: aeron_str_to_ptr_hash_map_key_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_str_to_ptr_hash_map_key_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn str_(&self) -> &str {
+        if self.str_.is_null() {
+            ""
+        } else {
+            unsafe { std::ffi::CStr::from_ptr(self.str_).to_str().unwrap() }
+        }
+    }
+    #[inline]
+    pub fn hash_code(&self) -> u64 {
+        self.hash_code.into()
+    }
+    #[inline]
+    pub fn str_length(&self) -> usize {
+        self.str_length.into()
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_str_to_ptr_hash_map_key_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronStrToPtrHashMapKey {
+    type Target = aeron_str_to_ptr_hash_map_key_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_str_to_ptr_hash_map_key_t> for AeronStrToPtrHashMapKey {
+    #[inline]
+    fn from(value: *mut aeron_str_to_ptr_hash_map_key_t) -> Self {
+        AeronStrToPtrHashMapKey {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronStrToPtrHashMapKey> for *mut aeron_str_to_ptr_hash_map_key_t {
+    #[inline]
+    fn from(value: AeronStrToPtrHashMapKey) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronStrToPtrHashMapKey> for *mut aeron_str_to_ptr_hash_map_key_t {
+    #[inline]
+    fn from(value: &AeronStrToPtrHashMapKey) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronStrToPtrHashMapKey> for aeron_str_to_ptr_hash_map_key_t {
+    #[inline]
+    fn from(value: AeronStrToPtrHashMapKey) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_str_to_ptr_hash_map_key_t> for AeronStrToPtrHashMapKey {
+    #[inline]
+    fn from(value: *const aeron_str_to_ptr_hash_map_key_t) -> Self {
+        AeronStrToPtrHashMapKey {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_str_to_ptr_hash_map_key_t> for AeronStrToPtrHashMapKey {
+    #[inline]
+    fn from(mut value: aeron_str_to_ptr_hash_map_key_t) -> Self {
+        AeronStrToPtrHashMapKey {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_str_to_ptr_hash_map_key_t,
+                None,
+            )),
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronStrToPtrHashMapKey {
+    fn default() -> Self {
+        AeronStrToPtrHashMapKey::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronStrToPtrHashMapKey {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[derive(Clone)]
+pub struct AeronMappedRawLog {
+    inner: std::rc::Rc<ManagedCResource<aeron_mapped_raw_log_t>>,
+}
+impl core::fmt::Debug for AeronMappedRawLog {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronMappedRawLog))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronMappedRawLog))
+                .field("inner", &self.inner)
+                .field(stringify!(log_meta_data), &self.log_meta_data())
+                .field(stringify!(mapped_file), &self.mapped_file())
+                .field(stringify!(term_length), &self.term_length())
+                .finish()
+        }
+    }
+}
+impl AeronMappedRawLog {
+    #[inline]
+    pub fn new(
+        term_buffers: [aeron_mapped_buffer_t; 3usize],
+        log_meta_data: AeronMappedBuffer,
+        mapped_file: AeronMappedFile,
+        term_length: usize,
+    ) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_mapped_raw_log_t {
+                    term_buffers: term_buffers.into(),
+                    log_meta_data: log_meta_data.into(),
+                    mapped_file: mapped_file.into(),
+                    term_length: term_length.into(),
+                };
+                let inner_ptr: *mut aeron_mapped_raw_log_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_mapped_raw_log_t)
+                );
+                let inst: aeron_mapped_raw_log_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_mapped_raw_log_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn term_buffers(&self) -> [aeron_mapped_buffer_t; 3usize] {
+        self.term_buffers.into()
+    }
+    #[inline]
+    pub fn log_meta_data(&self) -> AeronMappedBuffer {
+        self.log_meta_data.into()
+    }
+    #[inline]
+    pub fn mapped_file(&self) -> AeronMappedFile {
+        self.mapped_file.into()
+    }
+    #[inline]
+    pub fn term_length(&self) -> usize {
+        self.term_length.into()
+    }
+    #[inline]
+    pub fn aeron_raw_log_map(
+        &self,
+        path: &str,
+        use_sparse_files: bool,
+        term_length: u64,
+        page_size: u64,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_raw_log_map(
+                self.get_inner(),
+                std::ffi::CString::new(path).unwrap().into_raw(),
+                use_sparse_files.into(),
+                term_length.into(),
+                page_size.into(),
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    pub fn aeron_raw_log_map_existing(
+        &self,
+        path: &str,
+        pre_touch: bool,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_raw_log_map_existing(
+                self.get_inner(),
+                std::ffi::CString::new(path).unwrap().into_raw(),
+                pre_touch.into(),
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    pub fn aeron_raw_log_close(&self, filename: &str) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_raw_log_close(
+                self.get_inner(),
+                std::ffi::CString::new(filename).unwrap().into_raw(),
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    pub fn aeron_raw_log_free(&self, filename: &str) -> bool {
+        unsafe {
+            let result = aeron_raw_log_free(
+                self.get_inner(),
+                std::ffi::CString::new(filename).unwrap().into_raw(),
+            );
+            result.into()
+        }
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_mapped_raw_log_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronMappedRawLog {
+    type Target = aeron_mapped_raw_log_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_mapped_raw_log_t> for AeronMappedRawLog {
+    #[inline]
+    fn from(value: *mut aeron_mapped_raw_log_t) -> Self {
+        AeronMappedRawLog {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronMappedRawLog> for *mut aeron_mapped_raw_log_t {
+    #[inline]
+    fn from(value: AeronMappedRawLog) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronMappedRawLog> for *mut aeron_mapped_raw_log_t {
+    #[inline]
+    fn from(value: &AeronMappedRawLog) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronMappedRawLog> for aeron_mapped_raw_log_t {
+    #[inline]
+    fn from(value: AeronMappedRawLog) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_mapped_raw_log_t> for AeronMappedRawLog {
+    #[inline]
+    fn from(value: *const aeron_mapped_raw_log_t) -> Self {
+        AeronMappedRawLog {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_mapped_raw_log_t> for AeronMappedRawLog {
+    #[inline]
+    fn from(mut value: aeron_mapped_raw_log_t) -> Self {
+        AeronMappedRawLog {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_mapped_raw_log_t,
+                None,
+            )),
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronMappedRawLog {
+    fn default() -> Self {
+        AeronMappedRawLog::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronMappedRawLog {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[derive(Clone)]
+pub struct AeronSetupHeader {
+    inner: std::rc::Rc<ManagedCResource<aeron_setup_header_t>>,
+}
+impl core::fmt::Debug for AeronSetupHeader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronSetupHeader))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronSetupHeader))
+                .field("inner", &self.inner)
+                .field(stringify!(frame_header), &self.frame_header())
+                .field(stringify!(term_offset), &self.term_offset())
+                .field(stringify!(session_id), &self.session_id())
+                .field(stringify!(stream_id), &self.stream_id())
+                .field(stringify!(initial_term_id), &self.initial_term_id())
+                .field(stringify!(active_term_id), &self.active_term_id())
+                .field(stringify!(term_length), &self.term_length())
+                .field(stringify!(mtu), &self.mtu())
+                .field(stringify!(ttl), &self.ttl())
+                .finish()
+        }
+    }
+}
+impl AeronSetupHeader {
+    #[inline]
+    pub fn new(
+        frame_header: AeronFrameHeader,
+        term_offset: i32,
+        session_id: i32,
+        stream_id: i32,
+        initial_term_id: i32,
+        active_term_id: i32,
+        term_length: i32,
+        mtu: i32,
+        ttl: i32,
+    ) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_setup_header_t {
+                    frame_header: frame_header.into(),
+                    term_offset: term_offset.into(),
+                    session_id: session_id.into(),
+                    stream_id: stream_id.into(),
+                    initial_term_id: initial_term_id.into(),
+                    active_term_id: active_term_id.into(),
+                    term_length: term_length.into(),
+                    mtu: mtu.into(),
+                    ttl: ttl.into(),
+                };
+                let inner_ptr: *mut aeron_setup_header_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_setup_header_t)
+                );
+                let inst: aeron_setup_header_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_setup_header_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -727,6 +2186,10 @@ impl AeronRttmHeader {
         self.frame_header.into()
     }
     #[inline]
+    pub fn term_offset(&self) -> i32 {
+        self.term_offset.into()
+    }
+    #[inline]
     pub fn session_id(&self) -> i32 {
         self.session_id.into()
     }
@@ -735,80 +2198,88 @@ impl AeronRttmHeader {
         self.stream_id.into()
     }
     #[inline]
-    pub fn echo_timestamp(&self) -> i64 {
-        self.echo_timestamp.into()
+    pub fn initial_term_id(&self) -> i32 {
+        self.initial_term_id.into()
     }
     #[inline]
-    pub fn reception_delta(&self) -> i64 {
-        self.reception_delta.into()
+    pub fn active_term_id(&self) -> i32 {
+        self.active_term_id.into()
     }
     #[inline]
-    pub fn receiver_id(&self) -> i64 {
-        self.receiver_id.into()
+    pub fn term_length(&self) -> i32 {
+        self.term_length.into()
+    }
+    #[inline]
+    pub fn mtu(&self) -> i32 {
+        self.mtu.into()
+    }
+    #[inline]
+    pub fn ttl(&self) -> i32 {
+        self.ttl.into()
     }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_rttm_header_t {
+    pub fn get_inner(&self) -> *mut aeron_setup_header_t {
         self.inner.get()
     }
 }
-impl std::ops::Deref for AeronRttmHeader {
-    type Target = aeron_rttm_header_t;
+impl std::ops::Deref for AeronSetupHeader {
+    type Target = aeron_setup_header_t;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.inner.get() }
     }
 }
-impl From<*mut aeron_rttm_header_t> for AeronRttmHeader {
+impl From<*mut aeron_setup_header_t> for AeronSetupHeader {
     #[inline]
-    fn from(value: *mut aeron_rttm_header_t) -> Self {
-        AeronRttmHeader {
+    fn from(value: *mut aeron_setup_header_t) -> Self {
+        AeronSetupHeader {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<AeronRttmHeader> for *mut aeron_rttm_header_t {
+impl From<AeronSetupHeader> for *mut aeron_setup_header_t {
     #[inline]
-    fn from(value: AeronRttmHeader) -> Self {
+    fn from(value: AeronSetupHeader) -> Self {
         value.get_inner()
     }
 }
-impl From<&AeronRttmHeader> for *mut aeron_rttm_header_t {
+impl From<&AeronSetupHeader> for *mut aeron_setup_header_t {
     #[inline]
-    fn from(value: &AeronRttmHeader) -> Self {
+    fn from(value: &AeronSetupHeader) -> Self {
         value.get_inner()
     }
 }
-impl From<AeronRttmHeader> for aeron_rttm_header_t {
+impl From<AeronSetupHeader> for aeron_setup_header_t {
     #[inline]
-    fn from(value: AeronRttmHeader) -> Self {
+    fn from(value: AeronSetupHeader) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const aeron_rttm_header_t> for AeronRttmHeader {
+impl From<*const aeron_setup_header_t> for AeronSetupHeader {
     #[inline]
-    fn from(value: *const aeron_rttm_header_t) -> Self {
-        AeronRttmHeader {
+    fn from(value: *const aeron_setup_header_t) -> Self {
+        AeronSetupHeader {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<aeron_rttm_header_t> for AeronRttmHeader {
+impl From<aeron_setup_header_t> for AeronSetupHeader {
     #[inline]
-    fn from(mut value: aeron_rttm_header_t) -> Self {
-        AeronRttmHeader {
+    fn from(mut value: aeron_setup_header_t) -> Self {
+        AeronSetupHeader {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_rttm_header_t,
+                &mut value as *mut aeron_setup_header_t,
                 None,
             )),
         }
     }
 }
 #[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronRttmHeader {
+impl Default for AeronSetupHeader {
     fn default() -> Self {
-        AeronRttmHeader::new_zeroed().expect("failed to create struct")
+        AeronSetupHeader::new_zeroed().expect("failed to create struct")
     }
 }
-impl AeronRttmHeader {
+impl AeronSetupHeader {
     #[doc = r" Regular clone just increases the reference count of underlying count."]
     #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
     #[doc = r""]
@@ -824,23 +2295,63 @@ impl AeronRttmHeader {
     }
 }
 #[derive(Clone)]
-pub struct AeronExclusivePublication {
-    inner: std::rc::Rc<ManagedCResource<aeron_exclusive_publication_t>>,
+pub struct AeronCounterValueDescriptor {
+    inner: std::rc::Rc<ManagedCResource<aeron_counter_value_descriptor_t>>,
 }
-impl core::fmt::Debug for AeronExclusivePublication {
+impl core::fmt::Debug for AeronCounterValueDescriptor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronExclusivePublication))
+            f.debug_struct(stringify!(AeronCounterValueDescriptor))
                 .field("inner", &"null")
                 .finish()
         } else {
-            f.debug_struct(stringify!(AeronExclusivePublication))
+            f.debug_struct(stringify!(AeronCounterValueDescriptor))
                 .field("inner", &self.inner)
+                .field(stringify!(counter_value), &self.counter_value())
+                .field(stringify!(registration_id), &self.registration_id())
+                .field(stringify!(owner_id), &self.owner_id())
+                .field(stringify!(reference_id), &self.reference_id())
                 .finish()
         }
     }
 }
-impl AeronExclusivePublication {
+impl AeronCounterValueDescriptor {
+    #[inline]
+    pub fn new(
+        counter_value: i64,
+        registration_id: i64,
+        owner_id: i64,
+        reference_id: i64,
+        pad1: [u8; 96usize],
+    ) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_counter_value_descriptor_t {
+                    counter_value: counter_value.into(),
+                    registration_id: registration_id.into(),
+                    owner_id: owner_id.into(),
+                    reference_id: reference_id.into(),
+                    pad1: pad1.into(),
+                };
+                let inner_ptr: *mut aeron_counter_value_descriptor_t =
+                    Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
     #[inline]
     #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
     pub fn new_zeroed() -> Result<Self, AeronCError> {
@@ -849,245 +2360,214 @@ impl AeronExclusivePublication {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_exclusive_publication_t)
+                    stringify!(aeron_counter_value_descriptor_t)
                 );
-                let inst: aeron_exclusive_publication_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_exclusive_publication_t = Box::into_raw(Box::new(inst));
+                let inst: aeron_counter_value_descriptor_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_counter_value_descriptor_t =
+                    Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
             None,
             true,
-            Some(Box::new(|c| unsafe {
-                aeron_exclusive_publication_is_closed(c)
-            })),
+            None,
         )?;
         Ok(Self {
             inner: std::rc::Rc::new(resource),
         })
     }
     #[inline]
-    #[doc = "Non-blocking publish of a buffer containing a message."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `buffer` to publish."]
-    #[doc = " \n - `length` of the buffer."]
-    #[doc = " \n - `reserved_value_supplier` to use for setting the reserved value field or NULL."]
-    #[doc = " \n - `clientd` to pass to the reserved_value_supplier."]
-    #[doc = " \n# Return\n the new stream position otherwise a negative error value."]
-    pub fn offer<AeronReservedValueSupplierHandlerImpl: AeronReservedValueSupplierCallback>(
-        &self,
-        buffer: &[u8],
-        reserved_value_supplier: Option<&Handler<AeronReservedValueSupplierHandlerImpl>>,
-    ) -> i64 {
-        unsafe {
-            let result = aeron_exclusive_publication_offer(
-                self.get_inner(),
-                buffer.as_ptr() as *mut _,
-                buffer.len(),
-                {
-                    let callback: aeron_reserved_value_supplier_t =
-                        if reserved_value_supplier.is_none() {
-                            None
-                        } else {
-                            Some(
-                                aeron_reserved_value_supplier_t_callback::<
-                                    AeronReservedValueSupplierHandlerImpl,
-                                >,
-                            )
-                        };
-                    callback
-                },
-                reserved_value_supplier
-                    .map(|m| m.as_raw())
-                    .unwrap_or_else(|| std::ptr::null_mut()),
-            );
-            result.into()
-        }
+    pub fn counter_value(&self) -> i64 {
+        self.counter_value.into()
     }
     #[inline]
-    #[doc = "Non-blocking publish of a buffer containing a message."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `buffer` to publish."]
-    #[doc = " \n - `length` of the buffer."]
-    #[doc = " \n - `reserved_value_supplier` to use for setting the reserved value field or NULL."]
-    #[doc = " \n - `clientd` to pass to the reserved_value_supplier."]
-    #[doc = " \n# Return\n the new stream position otherwise a negative error value."]
+    pub fn registration_id(&self) -> i64 {
+        self.registration_id.into()
+    }
+    #[inline]
+    pub fn owner_id(&self) -> i64 {
+        self.owner_id.into()
+    }
+    #[inline]
+    pub fn reference_id(&self) -> i64 {
+        self.reference_id.into()
+    }
+    #[inline]
+    pub fn pad1(&self) -> [u8; 96usize] {
+        self.pad1.into()
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_counter_value_descriptor_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronCounterValueDescriptor {
+    type Target = aeron_counter_value_descriptor_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_counter_value_descriptor_t> for AeronCounterValueDescriptor {
+    #[inline]
+    fn from(value: *mut aeron_counter_value_descriptor_t) -> Self {
+        AeronCounterValueDescriptor {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronCounterValueDescriptor> for *mut aeron_counter_value_descriptor_t {
+    #[inline]
+    fn from(value: AeronCounterValueDescriptor) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronCounterValueDescriptor> for *mut aeron_counter_value_descriptor_t {
+    #[inline]
+    fn from(value: &AeronCounterValueDescriptor) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronCounterValueDescriptor> for aeron_counter_value_descriptor_t {
+    #[inline]
+    fn from(value: AeronCounterValueDescriptor) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_counter_value_descriptor_t> for AeronCounterValueDescriptor {
+    #[inline]
+    fn from(value: *const aeron_counter_value_descriptor_t) -> Self {
+        AeronCounterValueDescriptor {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_counter_value_descriptor_t> for AeronCounterValueDescriptor {
+    #[inline]
+    fn from(mut value: aeron_counter_value_descriptor_t) -> Self {
+        AeronCounterValueDescriptor {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_counter_value_descriptor_t,
+                None,
+            )),
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronCounterValueDescriptor {
+    fn default() -> Self {
+        AeronCounterValueDescriptor::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronCounterValueDescriptor {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
     #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
-    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
-    #[doc = r"  use with care_"]
-    pub fn offer_once<AeronReservedValueSupplierHandlerImpl: FnMut(*mut u8, usize) -> i64>(
-        &self,
-        buffer: &[u8],
-        mut reserved_value_supplier: AeronReservedValueSupplierHandlerImpl,
-    ) -> i64 {
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[doc = "Structure used to hold information for a try_claim function call."]
+#[derive(Clone)]
+pub struct AeronBufferClaim {
+    inner: std::rc::Rc<ManagedCResource<aeron_buffer_claim_t>>,
+}
+impl core::fmt::Debug for AeronBufferClaim {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronBufferClaim))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronBufferClaim))
+                .field("inner", &self.inner)
+                .field(stringify!(length), &self.length())
+                .finish()
+        }
+    }
+}
+impl AeronBufferClaim {
+    #[inline]
+    pub fn new(frame_header: *mut u8, data: &mut [u8]) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_buffer_claim_t {
+                    frame_header: frame_header.into(),
+                    data: data.as_ptr() as *mut _,
+                    length: data.len(),
+                };
+                let inner_ptr: *mut aeron_buffer_claim_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_buffer_claim_t)
+                );
+                let inst: aeron_buffer_claim_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_buffer_claim_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn frame_header(&self) -> *mut u8 {
+        self.frame_header.into()
+    }
+    #[inline]
+    pub fn data(&self) -> &mut [u8] {
         unsafe {
-            let result = aeron_exclusive_publication_offer(
-                self.get_inner(),
-                buffer.as_ptr() as *mut _,
-                buffer.len(),
-                Some(
-                    aeron_reserved_value_supplier_t_callback_for_once_closure::<
-                        AeronReservedValueSupplierHandlerImpl,
-                    >,
-                ),
-                &mut reserved_value_supplier as *mut _ as *mut std::os::raw::c_void,
-            );
-            result.into()
+            if self.data.is_null() {
+                &mut [] as &mut [_]
+            } else {
+                std::slice::from_raw_parts_mut(self.data, self.length.try_into().unwrap())
+            }
         }
     }
     #[inline]
-    #[doc = "Non-blocking publish by gathering buffer vectors into a message."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `iov` array for the vectors"]
-    #[doc = " \n - `iovcnt` of the number of vectors"]
-    #[doc = " \n - `reserved_value_supplier` to use for setting the reserved value field or NULL."]
-    #[doc = " \n - `clientd` to pass to the reserved_value_supplier."]
-    #[doc = " \n# Return\n the new stream position otherwise a negative error value."]
-    pub fn offerv<AeronReservedValueSupplierHandlerImpl: AeronReservedValueSupplierCallback>(
-        &self,
-        iov: &AeronIovec,
-        iovcnt: usize,
-        reserved_value_supplier: Option<&Handler<AeronReservedValueSupplierHandlerImpl>>,
-    ) -> i64 {
-        unsafe {
-            let result = aeron_exclusive_publication_offerv(
-                self.get_inner(),
-                iov.get_inner(),
-                iovcnt.into(),
-                {
-                    let callback: aeron_reserved_value_supplier_t =
-                        if reserved_value_supplier.is_none() {
-                            None
-                        } else {
-                            Some(
-                                aeron_reserved_value_supplier_t_callback::<
-                                    AeronReservedValueSupplierHandlerImpl,
-                                >,
-                            )
-                        };
-                    callback
-                },
-                reserved_value_supplier
-                    .map(|m| m.as_raw())
-                    .unwrap_or_else(|| std::ptr::null_mut()),
-            );
-            result.into()
-        }
+    pub fn length(&self) -> usize {
+        self.length.into()
     }
     #[inline]
-    #[doc = "Non-blocking publish by gathering buffer vectors into a message."]
+    #[doc = "Commit the given buffer_claim as a complete message available for consumption."]
     #[doc = ""]
-    #[doc = "# Parameters\n \n - `iov` array for the vectors"]
-    #[doc = " \n - `iovcnt` of the number of vectors"]
-    #[doc = " \n - `reserved_value_supplier` to use for setting the reserved value field or NULL."]
-    #[doc = " \n - `clientd` to pass to the reserved_value_supplier."]
-    #[doc = " \n# Return\n the new stream position otherwise a negative error value."]
-    #[doc = r""]
-    #[doc = r""]
-    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
-    #[doc = r"  use with care_"]
-    pub fn offerv_once<AeronReservedValueSupplierHandlerImpl: FnMut(*mut u8, usize) -> i64>(
-        &self,
-        iov: &AeronIovec,
-        iovcnt: usize,
-        mut reserved_value_supplier: AeronReservedValueSupplierHandlerImpl,
-    ) -> i64 {
+    #[doc = " \n# Return\n 0 for success or -1 for error."]
+    pub fn commit(&self) -> Result<i32, AeronCError> {
         unsafe {
-            let result = aeron_exclusive_publication_offerv(
-                self.get_inner(),
-                iov.get_inner(),
-                iovcnt.into(),
-                Some(
-                    aeron_reserved_value_supplier_t_callback_for_once_closure::<
-                        AeronReservedValueSupplierHandlerImpl,
-                    >,
-                ),
-                &mut reserved_value_supplier as *mut _ as *mut std::os::raw::c_void,
-            );
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Try to claim a range in the publication log into which a message can be written with zero copy semantics."]
-    #[doc = " Once the message has been written then aeron_buffer_claim_commit should be called thus making it available."]
-    #[doc = " A claim length cannot be greater than max payload length."]
-    #[doc = " \n"]
-    #[doc = " <b>Note:</b> This method can only be used for message lengths less than MTU length minus header."]
-    #[doc = ""]
-    #[doc = " @code"]
-    #[doc = " `AeronBufferClaim` buffer_claim;"]
-    #[doc = ""]
-    #[doc = " if (`AeronExclusivePublication`ry_claim(publication, length, &buffer_claim) > 0L)"]
-    #[doc = " {"]
-    #[doc = "     // work with buffer_claim->data directly."]
-    #[doc = "     aeron_buffer_claim_commit(&buffer_claim);"]
-    #[doc = " }"]
-    #[doc = " @endcode"]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `length` of the message."]
-    #[doc = " \n - `buffer_claim` to be populated if the claim succeeds."]
-    #[doc = " \n# Return\n the new stream position otherwise a negative error value."]
-    pub fn try_claim(&self, length: usize, buffer_claim: &AeronBufferClaim) -> i64 {
-        unsafe {
-            let result = aeron_exclusive_publication_try_claim(
-                self.get_inner(),
-                length.into(),
-                buffer_claim.get_inner(),
-            );
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Append a padding record log of a given length to make up the log to a position."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `length` of the range to claim, in bytes."]
-    #[doc = " \n# Return\n the new stream position otherwise a negative error value."]
-    pub fn append_padding(&self, length: usize) -> i64 {
-        unsafe {
-            let result =
-                aeron_exclusive_publication_append_padding(self.get_inner(), length.into());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Offer a block of pre-formatted message fragments directly into the current term."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `buffer` containing the pre-formatted block of message fragments."]
-    #[doc = " \n - `offset` offset in the buffer at which the first fragment begins."]
-    #[doc = " \n# Return\n the new stream position otherwise a negative error value."]
-    pub fn offer_block(&self, buffer: &[u8]) -> i64 {
-        unsafe {
-            let result = aeron_exclusive_publication_offer_block(
-                self.get_inner(),
-                buffer.as_ptr() as *mut _,
-                buffer.len(),
-            );
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Get the status of the media channel for this publication."]
-    #[doc = " \n"]
-    #[doc = " The status will be ERRORED (-1) if a socket exception occurs on setup and ACTIVE (1) if all is well."]
-    #[doc = ""]
-    #[doc = " \n# Return\n 1 for ACTIVE, -1 for ERRORED"]
-    pub fn channel_status(&self) -> i64 {
-        unsafe {
-            let result = aeron_exclusive_publication_channel_status(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Fill in a structure with the constants in use by a publication."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `publication` to get the constants for."]
-    #[doc = " \n - `constants` structure to fill in with the constants"]
-    #[doc = " \n# Return\n 0 for success and -1 for error."]
-    pub fn constants(&self, constants: &AeronPublicationConstants) -> Result<i32, AeronCError> {
-        unsafe {
-            let result =
-                aeron_exclusive_publication_constants(self.get_inner(), constants.get_inner());
+            let result = aeron_buffer_claim_commit(self.get_inner());
             if result < 0 {
                 return Err(AeronCError::from_code(result));
             } else {
@@ -1096,37 +2576,1057 @@ impl AeronExclusivePublication {
         }
     }
     #[inline]
-    #[doc = "Fill in a structure with the constants in use by a publication."]
+    #[doc = "Abort the given buffer_claim and assign its position as padding."]
     #[doc = ""]
-    pub fn get_constants(&self) -> Result<AeronPublicationConstants, AeronCError> {
-        let result = AeronPublicationConstants::default();
+    #[doc = " \n# Return\n 0 for success or -1 for error."]
+    pub fn abort(&self) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_buffer_claim_abort(self.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_buffer_claim_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronBufferClaim {
+    type Target = aeron_buffer_claim_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_buffer_claim_t> for AeronBufferClaim {
+    #[inline]
+    fn from(value: *mut aeron_buffer_claim_t) -> Self {
+        AeronBufferClaim {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronBufferClaim> for *mut aeron_buffer_claim_t {
+    #[inline]
+    fn from(value: AeronBufferClaim) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronBufferClaim> for *mut aeron_buffer_claim_t {
+    #[inline]
+    fn from(value: &AeronBufferClaim) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronBufferClaim> for aeron_buffer_claim_t {
+    #[inline]
+    fn from(value: AeronBufferClaim) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_buffer_claim_t> for AeronBufferClaim {
+    #[inline]
+    fn from(value: *const aeron_buffer_claim_t) -> Self {
+        AeronBufferClaim {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_buffer_claim_t> for AeronBufferClaim {
+    #[inline]
+    fn from(mut value: aeron_buffer_claim_t) -> Self {
+        AeronBufferClaim {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_buffer_claim_t,
+                None,
+            )),
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronBufferClaim {
+    fn default() -> Self {
+        AeronBufferClaim::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronBufferClaim {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[derive(Clone)]
+pub struct AeronPublicationErrorValues {
+    inner: std::rc::Rc<ManagedCResource<aeron_publication_error_values_t>>,
+}
+impl core::fmt::Debug for AeronPublicationErrorValues {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronPublicationErrorValues))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronPublicationErrorValues))
+                .field("inner", &self.inner)
+                .field(stringify!(registration_id), &self.registration_id())
+                .field(
+                    stringify!(destination_registration_id),
+                    &self.destination_registration_id(),
+                )
+                .field(stringify!(session_id), &self.session_id())
+                .field(stringify!(stream_id), &self.stream_id())
+                .field(stringify!(receiver_id), &self.receiver_id())
+                .field(stringify!(group_tag), &self.group_tag())
+                .field(stringify!(address_type), &self.address_type())
+                .field(stringify!(source_port), &self.source_port())
+                .field(stringify!(error_code), &self.error_code())
+                .field(
+                    stringify!(error_message_length),
+                    &self.error_message_length(),
+                )
+                .finish()
+        }
+    }
+}
+impl AeronPublicationErrorValues {
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_publication_error_values_t)
+                );
+                let inst: aeron_publication_error_values_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_publication_error_values_t =
+                    Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn registration_id(&self) -> i64 {
+        self.registration_id.into()
+    }
+    #[inline]
+    pub fn destination_registration_id(&self) -> i64 {
+        self.destination_registration_id.into()
+    }
+    #[inline]
+    pub fn session_id(&self) -> i32 {
+        self.session_id.into()
+    }
+    #[inline]
+    pub fn stream_id(&self) -> i32 {
+        self.stream_id.into()
+    }
+    #[inline]
+    pub fn receiver_id(&self) -> i64 {
+        self.receiver_id.into()
+    }
+    #[inline]
+    pub fn group_tag(&self) -> i64 {
+        self.group_tag.into()
+    }
+    #[inline]
+    pub fn address_type(&self) -> i16 {
+        self.address_type.into()
+    }
+    #[inline]
+    pub fn source_port(&self) -> u16 {
+        self.source_port.into()
+    }
+    #[inline]
+    pub fn source_address(&self) -> [u8; 16usize] {
+        self.source_address.into()
+    }
+    #[inline]
+    pub fn error_code(&self) -> i32 {
+        self.error_code.into()
+    }
+    #[inline]
+    pub fn error_message_length(&self) -> i32 {
+        self.error_message_length.into()
+    }
+    #[inline]
+    pub fn error_message(&self) -> [u8; 1usize] {
+        self.error_message.into()
+    }
+    #[inline]
+    #[doc = "Delete a instance of `AeronPublicationErrorValues` that was created when making a copy"]
+    #[doc = " (aeron_publication_error_values_copy). This should not be use on the pointer received via the aeron_frame_handler_t."]
+    pub fn delete(&self) -> () {
+        unsafe {
+            let result = aeron_publication_error_values_delete(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_publication_error_values_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronPublicationErrorValues {
+    type Target = aeron_publication_error_values_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_publication_error_values_t> for AeronPublicationErrorValues {
+    #[inline]
+    fn from(value: *mut aeron_publication_error_values_t) -> Self {
+        AeronPublicationErrorValues {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronPublicationErrorValues> for *mut aeron_publication_error_values_t {
+    #[inline]
+    fn from(value: AeronPublicationErrorValues) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronPublicationErrorValues> for *mut aeron_publication_error_values_t {
+    #[inline]
+    fn from(value: &AeronPublicationErrorValues) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronPublicationErrorValues> for aeron_publication_error_values_t {
+    #[inline]
+    fn from(value: AeronPublicationErrorValues) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_publication_error_values_t> for AeronPublicationErrorValues {
+    #[inline]
+    fn from(value: *const aeron_publication_error_values_t) -> Self {
+        AeronPublicationErrorValues {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_publication_error_values_t> for AeronPublicationErrorValues {
+    #[inline]
+    fn from(mut value: aeron_publication_error_values_t) -> Self {
+        AeronPublicationErrorValues {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_publication_error_values_t,
+                None,
+            )),
+        }
+    }
+}
+#[derive(Clone)]
+pub struct AeronResolutionHeaderIpv4 {
+    inner: std::rc::Rc<ManagedCResource<aeron_resolution_header_ipv4_t>>,
+}
+impl core::fmt::Debug for AeronResolutionHeaderIpv4 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronResolutionHeaderIpv4))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronResolutionHeaderIpv4))
+                .field("inner", &self.inner)
+                .field(stringify!(resolution_header), &self.resolution_header())
+                .field(stringify!(name_length), &self.name_length())
+                .finish()
+        }
+    }
+}
+impl AeronResolutionHeaderIpv4 {
+    #[inline]
+    pub fn new(
+        resolution_header: AeronResolutionHeader,
+        addr: [u8; 4usize],
+        name_length: i16,
+    ) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_resolution_header_ipv4_t {
+                    resolution_header: resolution_header.into(),
+                    addr: addr.into(),
+                    name_length: name_length.into(),
+                };
+                let inner_ptr: *mut aeron_resolution_header_ipv4_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_resolution_header_ipv4_t)
+                );
+                let inst: aeron_resolution_header_ipv4_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_resolution_header_ipv4_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn resolution_header(&self) -> AeronResolutionHeader {
+        self.resolution_header.into()
+    }
+    #[inline]
+    pub fn addr(&self) -> [u8; 4usize] {
+        self.addr.into()
+    }
+    #[inline]
+    pub fn name_length(&self) -> i16 {
+        self.name_length.into()
+    }
+    #[inline]
+    pub fn aeron_res_header_entry_length_ipv4(&self) -> usize {
+        unsafe {
+            let result = aeron_res_header_entry_length_ipv4(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_resolution_header_ipv4_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronResolutionHeaderIpv4 {
+    type Target = aeron_resolution_header_ipv4_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_resolution_header_ipv4_t> for AeronResolutionHeaderIpv4 {
+    #[inline]
+    fn from(value: *mut aeron_resolution_header_ipv4_t) -> Self {
+        AeronResolutionHeaderIpv4 {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronResolutionHeaderIpv4> for *mut aeron_resolution_header_ipv4_t {
+    #[inline]
+    fn from(value: AeronResolutionHeaderIpv4) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronResolutionHeaderIpv4> for *mut aeron_resolution_header_ipv4_t {
+    #[inline]
+    fn from(value: &AeronResolutionHeaderIpv4) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronResolutionHeaderIpv4> for aeron_resolution_header_ipv4_t {
+    #[inline]
+    fn from(value: AeronResolutionHeaderIpv4) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_resolution_header_ipv4_t> for AeronResolutionHeaderIpv4 {
+    #[inline]
+    fn from(value: *const aeron_resolution_header_ipv4_t) -> Self {
+        AeronResolutionHeaderIpv4 {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_resolution_header_ipv4_t> for AeronResolutionHeaderIpv4 {
+    #[inline]
+    fn from(mut value: aeron_resolution_header_ipv4_t) -> Self {
+        AeronResolutionHeaderIpv4 {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_resolution_header_ipv4_t,
+                None,
+            )),
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronResolutionHeaderIpv4 {
+    fn default() -> Self {
+        AeronResolutionHeaderIpv4::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronResolutionHeaderIpv4 {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[derive(Clone)]
+pub struct AeronLossReporterEntry {
+    inner: std::rc::Rc<ManagedCResource<aeron_loss_reporter_entry_t>>,
+}
+impl core::fmt::Debug for AeronLossReporterEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronLossReporterEntry))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronLossReporterEntry))
+                .field("inner", &self.inner)
+                .field(stringify!(observation_count), &self.observation_count())
+                .field(stringify!(total_bytes_lost), &self.total_bytes_lost())
+                .field(
+                    stringify!(first_observation_timestamp),
+                    &self.first_observation_timestamp(),
+                )
+                .field(
+                    stringify!(last_observation_timestamp),
+                    &self.last_observation_timestamp(),
+                )
+                .field(stringify!(session_id), &self.session_id())
+                .field(stringify!(stream_id), &self.stream_id())
+                .finish()
+        }
+    }
+}
+impl AeronLossReporterEntry {
+    #[inline]
+    pub fn new(
+        observation_count: i64,
+        total_bytes_lost: i64,
+        first_observation_timestamp: i64,
+        last_observation_timestamp: i64,
+        session_id: i32,
+        stream_id: i32,
+    ) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_loss_reporter_entry_t {
+                    observation_count: observation_count.into(),
+                    total_bytes_lost: total_bytes_lost.into(),
+                    first_observation_timestamp: first_observation_timestamp.into(),
+                    last_observation_timestamp: last_observation_timestamp.into(),
+                    session_id: session_id.into(),
+                    stream_id: stream_id.into(),
+                };
+                let inner_ptr: *mut aeron_loss_reporter_entry_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_loss_reporter_entry_t)
+                );
+                let inst: aeron_loss_reporter_entry_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_loss_reporter_entry_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn observation_count(&self) -> i64 {
+        self.observation_count.into()
+    }
+    #[inline]
+    pub fn total_bytes_lost(&self) -> i64 {
+        self.total_bytes_lost.into()
+    }
+    #[inline]
+    pub fn first_observation_timestamp(&self) -> i64 {
+        self.first_observation_timestamp.into()
+    }
+    #[inline]
+    pub fn last_observation_timestamp(&self) -> i64 {
+        self.last_observation_timestamp.into()
+    }
+    #[inline]
+    pub fn session_id(&self) -> i32 {
+        self.session_id.into()
+    }
+    #[inline]
+    pub fn stream_id(&self) -> i32 {
+        self.stream_id.into()
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_loss_reporter_entry_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronLossReporterEntry {
+    type Target = aeron_loss_reporter_entry_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_loss_reporter_entry_t> for AeronLossReporterEntry {
+    #[inline]
+    fn from(value: *mut aeron_loss_reporter_entry_t) -> Self {
+        AeronLossReporterEntry {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronLossReporterEntry> for *mut aeron_loss_reporter_entry_t {
+    #[inline]
+    fn from(value: AeronLossReporterEntry) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronLossReporterEntry> for *mut aeron_loss_reporter_entry_t {
+    #[inline]
+    fn from(value: &AeronLossReporterEntry) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronLossReporterEntry> for aeron_loss_reporter_entry_t {
+    #[inline]
+    fn from(value: AeronLossReporterEntry) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_loss_reporter_entry_t> for AeronLossReporterEntry {
+    #[inline]
+    fn from(value: *const aeron_loss_reporter_entry_t) -> Self {
+        AeronLossReporterEntry {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_loss_reporter_entry_t> for AeronLossReporterEntry {
+    #[inline]
+    fn from(mut value: aeron_loss_reporter_entry_t) -> Self {
+        AeronLossReporterEntry {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_loss_reporter_entry_t,
+                None,
+            )),
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronLossReporterEntry {
+    fn default() -> Self {
+        AeronLossReporterEntry::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronLossReporterEntry {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[derive(Clone)]
+pub struct AeronSubscriptionConstants {
+    inner: std::rc::Rc<ManagedCResource<aeron_subscription_constants_t>>,
+}
+impl core::fmt::Debug for AeronSubscriptionConstants {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronSubscriptionConstants))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronSubscriptionConstants))
+                .field("inner", &self.inner)
+                .field(stringify!(registration_id), &self.registration_id())
+                .field(stringify!(stream_id), &self.stream_id())
+                .field(
+                    stringify!(channel_status_indicator_id),
+                    &self.channel_status_indicator_id(),
+                )
+                .finish()
+        }
+    }
+}
+impl AeronSubscriptionConstants {
+    #[inline]
+    pub fn new(
+        channel: &str,
+        on_available_image: aeron_on_available_image_t,
+        on_unavailable_image: aeron_on_unavailable_image_t,
+        registration_id: i64,
+        stream_id: i32,
+        channel_status_indicator_id: i32,
+    ) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_subscription_constants_t {
+                    channel: std::ffi::CString::new(channel).unwrap().into_raw(),
+                    on_available_image: on_available_image.into(),
+                    on_unavailable_image: on_unavailable_image.into(),
+                    registration_id: registration_id.into(),
+                    stream_id: stream_id.into(),
+                    channel_status_indicator_id: channel_status_indicator_id.into(),
+                };
+                let inner_ptr: *mut aeron_subscription_constants_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_subscription_constants_t)
+                );
+                let inst: aeron_subscription_constants_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_subscription_constants_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn channel(&self) -> &str {
+        if self.channel.is_null() {
+            ""
+        } else {
+            unsafe { std::ffi::CStr::from_ptr(self.channel).to_str().unwrap() }
+        }
+    }
+    #[inline]
+    pub fn on_available_image(&self) -> aeron_on_available_image_t {
+        self.on_available_image.into()
+    }
+    #[inline]
+    pub fn on_unavailable_image(&self) -> aeron_on_unavailable_image_t {
+        self.on_unavailable_image.into()
+    }
+    #[inline]
+    pub fn registration_id(&self) -> i64 {
+        self.registration_id.into()
+    }
+    #[inline]
+    pub fn stream_id(&self) -> i32 {
+        self.stream_id.into()
+    }
+    #[inline]
+    pub fn channel_status_indicator_id(&self) -> i32 {
+        self.channel_status_indicator_id.into()
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_subscription_constants_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronSubscriptionConstants {
+    type Target = aeron_subscription_constants_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_subscription_constants_t> for AeronSubscriptionConstants {
+    #[inline]
+    fn from(value: *mut aeron_subscription_constants_t) -> Self {
+        AeronSubscriptionConstants {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronSubscriptionConstants> for *mut aeron_subscription_constants_t {
+    #[inline]
+    fn from(value: AeronSubscriptionConstants) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronSubscriptionConstants> for *mut aeron_subscription_constants_t {
+    #[inline]
+    fn from(value: &AeronSubscriptionConstants) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronSubscriptionConstants> for aeron_subscription_constants_t {
+    #[inline]
+    fn from(value: AeronSubscriptionConstants) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_subscription_constants_t> for AeronSubscriptionConstants {
+    #[inline]
+    fn from(value: *const aeron_subscription_constants_t) -> Self {
+        AeronSubscriptionConstants {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_subscription_constants_t> for AeronSubscriptionConstants {
+    #[inline]
+    fn from(mut value: aeron_subscription_constants_t) -> Self {
+        AeronSubscriptionConstants {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_subscription_constants_t,
+                None,
+            )),
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronSubscriptionConstants {
+    fn default() -> Self {
+        AeronSubscriptionConstants::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronSubscriptionConstants {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[derive(Clone)]
+pub struct AeronCloseClientPair {
+    inner: std::rc::Rc<ManagedCResource<aeron_on_close_client_pair_t>>,
+}
+impl core::fmt::Debug for AeronCloseClientPair {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronCloseClientPair))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronCloseClientPair))
+                .field("inner", &self.inner)
+                .finish()
+        }
+    }
+}
+impl AeronCloseClientPair {
+    #[inline]
+    pub fn new<AeronCloseClientHandlerImpl: AeronCloseClientCallback>(
+        handler: Option<&Handler<AeronCloseClientHandlerImpl>>,
+    ) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_on_close_client_pair_t {
+                    handler: {
+                        let callback: aeron_on_close_client_t = if handler.is_none() {
+                            None
+                        } else {
+                            Some(aeron_on_close_client_t_callback::<AeronCloseClientHandlerImpl>)
+                        };
+                        callback
+                    },
+                    clientd: handler
+                        .map(|m| m.as_raw())
+                        .unwrap_or_else(|| std::ptr::null_mut()),
+                };
+                let inner_ptr: *mut aeron_on_close_client_pair_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_on_close_client_pair_t)
+                );
+                let inst: aeron_on_close_client_pair_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_on_close_client_pair_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn handler(&self) -> aeron_on_close_client_t {
+        self.handler.into()
+    }
+    #[inline]
+    pub fn clientd(&self) -> *mut ::std::os::raw::c_void {
+        self.clientd.into()
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_on_close_client_pair_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronCloseClientPair {
+    type Target = aeron_on_close_client_pair_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_on_close_client_pair_t> for AeronCloseClientPair {
+    #[inline]
+    fn from(value: *mut aeron_on_close_client_pair_t) -> Self {
+        AeronCloseClientPair {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronCloseClientPair> for *mut aeron_on_close_client_pair_t {
+    #[inline]
+    fn from(value: AeronCloseClientPair) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronCloseClientPair> for *mut aeron_on_close_client_pair_t {
+    #[inline]
+    fn from(value: &AeronCloseClientPair) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronCloseClientPair> for aeron_on_close_client_pair_t {
+    #[inline]
+    fn from(value: AeronCloseClientPair) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_on_close_client_pair_t> for AeronCloseClientPair {
+    #[inline]
+    fn from(value: *const aeron_on_close_client_pair_t) -> Self {
+        AeronCloseClientPair {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_on_close_client_pair_t> for AeronCloseClientPair {
+    #[inline]
+    fn from(mut value: aeron_on_close_client_pair_t) -> Self {
+        AeronCloseClientPair {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_on_close_client_pair_t,
+                None,
+            )),
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronCloseClientPair {
+    fn default() -> Self {
+        AeronCloseClientPair::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronCloseClientPair {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[derive(Clone)]
+pub struct AeronCounter {
+    inner: std::rc::Rc<ManagedCResource<aeron_counter_t>>,
+}
+impl core::fmt::Debug for AeronCounter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronCounter))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronCounter))
+                .field("inner", &self.inner)
+                .finish()
+        }
+    }
+}
+impl AeronCounter {
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_counter_t)
+                );
+                let inst: aeron_counter_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_counter_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            Some(Box::new(|c| unsafe { aeron_counter_is_closed(c) })),
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    #[doc = "Return a pointer to the counter value."]
+    #[doc = ""]
+    #[doc = " \n# Return\n pointer to the counter value."]
+    pub fn addr(&self) -> &mut i64 {
+        unsafe {
+            let result = aeron_counter_addr(self.get_inner());
+            unsafe { &mut *result }
+        }
+    }
+    #[inline]
+    #[doc = "Fill in a structure with the constants in use by a counter."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `counter` to get the constants for."]
+    #[doc = " \n - `constants` structure to fill in with the constants."]
+    #[doc = " \n# Return\n 0 for success and -1 for error."]
+    pub fn constants(&self, constants: &AeronCounterConstants) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_counter_constants(self.get_inner(), constants.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Fill in a structure with the constants in use by a counter."]
+    #[doc = ""]
+    pub fn get_constants(&self) -> Result<AeronCounterConstants, AeronCError> {
+        let result = AeronCounterConstants::default();
         self.constants(&result)?;
         Ok(result)
     }
     #[inline]
-    #[doc = "Get the current position to which the publication has advanced for this stream."]
-    #[doc = ""]
-    #[doc = " \n# Return\n the current position to which the publication has advanced for this stream or a negative error value."]
-    pub fn position(&self) -> i64 {
-        unsafe {
-            let result = aeron_exclusive_publication_position(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Get the position limit beyond which this publication will be back pressured."]
-    #[doc = ""]
-    #[doc = " This should only be used as a guide to determine when back pressure is likely to be applied."]
-    #[doc = ""]
-    #[doc = " \n# Return\n the position limit beyond which this publication will be back pressured or a negative error value."]
-    pub fn position_limit(&self) -> i64 {
-        unsafe {
-            let result = aeron_exclusive_publication_position_limit(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Asynchronously close the publication."]
+    #[doc = "Asynchronously close the counter."]
     #[doc = ""]
     #[doc = " \n# Return\n 0 for success or -1 for error."]
     pub fn close<AeronNotificationHandlerImpl: AeronNotificationCallback>(
@@ -1135,7 +3635,7 @@ impl AeronExclusivePublication {
     ) -> Result<i32, AeronCError> {
         self.inner.close_already_called.set(true);
         unsafe {
-            let result = aeron_exclusive_publication_close(
+            let result = aeron_counter_close(
                 self.get_inner(),
                 {
                     let callback: aeron_notification_t = if on_close_complete.is_none() {
@@ -1157,7 +3657,7 @@ impl AeronExclusivePublication {
         }
     }
     #[inline]
-    #[doc = "Asynchronously close the publication."]
+    #[doc = "Asynchronously close the counter."]
     #[doc = ""]
     #[doc = " \n# Return\n 0 for success or -1 for error."]
     #[doc = r""]
@@ -1169,7 +3669,7 @@ impl AeronExclusivePublication {
         mut on_close_complete: AeronNotificationHandlerImpl,
     ) -> Result<i32, AeronCError> {
         unsafe {
-            let result = aeron_exclusive_publication_close(
+            let result = aeron_counter_close(
                 self.get_inner(),
                 Some(
                     aeron_notification_t_callback_for_once_closure::<AeronNotificationHandlerImpl>,
@@ -1184,120 +3684,77 @@ impl AeronExclusivePublication {
         }
     }
     #[inline]
-    #[doc = "Has the exclusive publication closed?"]
-    #[doc = ""]
-    #[doc = " \n# Return\n true if this publication is closed."]
+    #[doc = "Check if the counter is closed"]
+    #[doc = " \n# Return\n true if closed, false otherwise."]
     pub fn is_closed(&self) -> bool {
         unsafe {
-            let result = aeron_exclusive_publication_is_closed(self.get_inner());
+            let result = aeron_counter_is_closed(self.get_inner());
             result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Has the exclusive publication seen an active Subscriber recently?"]
-    #[doc = ""]
-    #[doc = " \n# Return\n true if this publication has recently seen an active subscriber otherwise false."]
-    pub fn is_connected(&self) -> bool {
-        unsafe {
-            let result = aeron_exclusive_publication_is_connected(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Get all of the local socket addresses for this exclusive publication. Typically only one representing the control"]
-    #[doc = " address."]
-    #[doc = ""]
-    #[doc = " @see aeron_subscription_local_sockaddrs"]
-    #[doc = "# Parameters\n \n - `address_vec` to hold the received addresses"]
-    #[doc = " \n - `address_vec_len` available length of the vector to hold the addresses"]
-    #[doc = " \n# Return\n number of addresses found or -1 if there is an error."]
-    pub fn local_sockaddrs(
-        &self,
-        address_vec: &AeronIovec,
-        address_vec_len: usize,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_exclusive_publication_local_sockaddrs(
-                self.get_inner(),
-                address_vec.get_inner(),
-                address_vec_len.into(),
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
         }
     }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_exclusive_publication_t {
+    pub fn get_inner(&self) -> *mut aeron_counter_t {
         self.inner.get()
     }
 }
-impl std::ops::Deref for AeronExclusivePublication {
-    type Target = aeron_exclusive_publication_t;
+impl std::ops::Deref for AeronCounter {
+    type Target = aeron_counter_t;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.inner.get() }
     }
 }
-impl From<*mut aeron_exclusive_publication_t> for AeronExclusivePublication {
+impl From<*mut aeron_counter_t> for AeronCounter {
     #[inline]
-    fn from(value: *mut aeron_exclusive_publication_t) -> Self {
-        AeronExclusivePublication {
+    fn from(value: *mut aeron_counter_t) -> Self {
+        AeronCounter {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
                 value,
-                Some(Box::new(|c| unsafe {
-                    aeron_exclusive_publication_is_closed(c)
-                })),
+                Some(Box::new(|c| unsafe { aeron_counter_is_closed(c) })),
             )),
         }
     }
 }
-impl From<AeronExclusivePublication> for *mut aeron_exclusive_publication_t {
+impl From<AeronCounter> for *mut aeron_counter_t {
     #[inline]
-    fn from(value: AeronExclusivePublication) -> Self {
+    fn from(value: AeronCounter) -> Self {
         value.get_inner()
     }
 }
-impl From<&AeronExclusivePublication> for *mut aeron_exclusive_publication_t {
+impl From<&AeronCounter> for *mut aeron_counter_t {
     #[inline]
-    fn from(value: &AeronExclusivePublication) -> Self {
+    fn from(value: &AeronCounter) -> Self {
         value.get_inner()
     }
 }
-impl From<AeronExclusivePublication> for aeron_exclusive_publication_t {
+impl From<AeronCounter> for aeron_counter_t {
     #[inline]
-    fn from(value: AeronExclusivePublication) -> Self {
+    fn from(value: AeronCounter) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const aeron_exclusive_publication_t> for AeronExclusivePublication {
+impl From<*const aeron_counter_t> for AeronCounter {
     #[inline]
-    fn from(value: *const aeron_exclusive_publication_t) -> Self {
-        AeronExclusivePublication {
+    fn from(value: *const aeron_counter_t) -> Self {
+        AeronCounter {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
                 value,
-                Some(Box::new(|c| unsafe {
-                    aeron_exclusive_publication_is_closed(c)
-                })),
+                Some(Box::new(|c| unsafe { aeron_counter_is_closed(c) })),
             )),
         }
     }
 }
-impl From<aeron_exclusive_publication_t> for AeronExclusivePublication {
+impl From<aeron_counter_t> for AeronCounter {
     #[inline]
-    fn from(mut value: aeron_exclusive_publication_t) -> Self {
-        AeronExclusivePublication {
+    fn from(mut value: aeron_counter_t) -> Self {
+        AeronCounter {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_exclusive_publication_t,
-                Some(Box::new(|c| unsafe {
-                    aeron_exclusive_publication_is_closed(c)
-                })),
+                &mut value as *mut aeron_counter_t,
+                Some(Box::new(|c| unsafe { aeron_counter_is_closed(c) })),
             )),
         }
     }
 }
-impl Drop for AeronExclusivePublication {
+impl Drop for AeronCounter {
     fn drop(&mut self) {
         if (self.inner.borrowed || self.inner.cleanup.is_none())
             && std::rc::Rc::strong_count(&self.inner) == 1
@@ -1305,88 +3762,165 @@ impl Drop for AeronExclusivePublication {
         {
             if self.inner.auto_close.get() {
                 let result = self.close_with_no_args();
-                log::info!(
-                    "auto closing {} {:?}",
-                    stringify!(AeronExclusivePublication),
-                    result
-                );
+                log::info!("auto closing {} {:?}", stringify!(AeronCounter), result);
             } else {
-                log::warn!("{} not closed", stringify!(AeronExclusivePublication));
+                log::warn!("{} not closed", stringify!(AeronCounter));
             }
         }
     }
 }
 #[derive(Clone)]
-pub struct AeronControlledFragmentAssembler {
-    inner: std::rc::Rc<ManagedCResource<aeron_controlled_fragment_assembler_t>>,
+pub struct AeronUriParams {
+    inner: std::rc::Rc<ManagedCResource<aeron_uri_params_t>>,
 }
-impl core::fmt::Debug for AeronControlledFragmentAssembler {
+impl core::fmt::Debug for AeronUriParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronControlledFragmentAssembler))
+            f.debug_struct(stringify!(AeronUriParams))
                 .field("inner", &"null")
                 .finish()
         } else {
-            f.debug_struct(stringify!(AeronControlledFragmentAssembler))
+            f.debug_struct(stringify!(AeronUriParams))
                 .field("inner", &self.inner)
+                .field(stringify!(length), &self.length())
                 .finish()
         }
     }
 }
-impl AeronControlledFragmentAssembler {
-    #[doc = "Create a controlled fragment assembler for use with a subscription."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `delegate` to call on completed"]
-    #[doc = " \n - `delegate_clientd` to pass to delegate handler."]
-    #[doc = " \n# Return\n 0 for success and -1 for error."]
-    pub fn new<
-        AeronControlledFragmentHandlerHandlerImpl: AeronControlledFragmentHandlerCallback,
-    >(
-        delegate: Option<&Handler<AeronControlledFragmentHandlerHandlerImpl>>,
-    ) -> Result<Self, AeronCError> {
-        let (delegate, delegate_clientd) = (
-            {
-                let callback: aeron_controlled_fragment_handler_t = if delegate.is_none() {
-                    None
-                } else {
-                    Some(
-                        aeron_controlled_fragment_handler_t_callback::<
-                            AeronControlledFragmentHandlerHandlerImpl,
-                        >,
-                    )
+impl AeronUriParams {
+    #[inline]
+    pub fn new(length: usize, array: &AeronUriParam) -> Result<Self, AeronCError> {
+        let array_copy = array.clone();
+        let drop_copies_closure =
+            std::rc::Rc::new(std::cell::RefCell::new(Some(|| drop(array_copy))));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_uri_params_t {
+                    length: length.into(),
+                    array: array.into(),
                 };
-                callback
+                let inner_ptr: *mut aeron_uri_params_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
             },
-            delegate
-                .map(|m| m.as_raw())
-                .unwrap_or_else(|| std::ptr::null_mut()),
-        );
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let resource_constructor = ManagedCResource::new(
-            move |ctx_field| unsafe {
-                aeron_controlled_fragment_assembler_create(ctx_field, delegate, delegate_clientd)
-            },
-            Some(Box::new(move |ctx_field| {
-                let result = unsafe { aeron_controlled_fragment_assembler_delete(*ctx_field) };
+            Some(Box::new(move |_ctx_field| {
                 if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
                     drop_closure();
                 }
-                result
+                0
             })),
-            false,
+            true,
             None,
         )?;
         Ok(Self {
-            inner: std::rc::Rc::new(resource_constructor),
+            inner: std::rc::Rc::new(r_constructor),
         })
     }
     #[inline]
-    #[doc = "Delete a controlled fragment assembler."]
-    #[doc = ""]
-    #[doc = " \n# Return\n 0 for success or -1 for error."]
-    pub fn delete(&self) -> Result<i32, AeronCError> {
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_uri_params_t)
+                );
+                let inst: aeron_uri_params_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_uri_params_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn length(&self) -> usize {
+        self.length.into()
+    }
+    #[inline]
+    pub fn array(&self) -> AeronUriParam {
+        self.array.into()
+    }
+    #[inline]
+    pub fn aeron_uri_find_param_value(
+        &self,
+        uri_params: *const aeron_uri_params_t,
+        key: &str,
+    ) -> &str {
         unsafe {
-            let result = aeron_controlled_fragment_assembler_delete(self.get_inner());
+            let result = aeron_uri_find_param_value(
+                uri_params.into(),
+                std::ffi::CString::new(key).unwrap().into_raw(),
+            );
+            if result.is_null() {
+                ""
+            } else {
+                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap() }
+            }
+        }
+    }
+    #[inline]
+    pub fn aeron_uri_get_int32(&self, key: &str) -> Result<i32, AeronCError> {
+        unsafe {
+            let mut mut_result: i32 = Default::default();
+            let err_code = aeron_uri_get_int32(
+                self.get_inner(),
+                std::ffi::CString::new(key).unwrap().into_raw(),
+                &mut mut_result,
+            );
+            if err_code < 0 {
+                return Err(AeronCError::from_code(err_code));
+            } else {
+                return Ok(mut_result);
+            }
+        }
+    }
+    #[inline]
+    pub fn aeron_uri_get_int64(&self, key: &str, default_val: i64) -> Result<i64, AeronCError> {
+        unsafe {
+            let mut mut_result: i64 = Default::default();
+            let err_code = aeron_uri_get_int64(
+                self.get_inner(),
+                std::ffi::CString::new(key).unwrap().into_raw(),
+                default_val.into(),
+                &mut mut_result,
+            );
+            if err_code < 0 {
+                return Err(AeronCError::from_code(err_code));
+            } else {
+                return Ok(mut_result);
+            }
+        }
+    }
+    #[inline]
+    pub fn aeron_uri_get_bool(&self, key: &str) -> Result<bool, AeronCError> {
+        unsafe {
+            let mut mut_result: bool = Default::default();
+            let err_code = aeron_uri_get_bool(
+                self.get_inner(),
+                std::ffi::CString::new(key).unwrap().into_raw(),
+                &mut mut_result,
+            );
+            if err_code < 0 {
+                return Err(AeronCError::from_code(err_code));
+            } else {
+                return Ok(mut_result);
+            }
+        }
+    }
+    #[inline]
+    pub fn aeron_uri_get_ats(
+        &self,
+        uri_ats_status: *mut aeron_uri_ats_status_t,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_uri_get_ats(self.get_inner(), uri_ats_status.into());
             if result < 0 {
                 return Err(AeronCError::from_code(result));
             } else {
@@ -1395,81 +3929,714 @@ impl AeronControlledFragmentAssembler {
         }
     }
     #[inline]
-    #[doc = "Handler function to be passed for handling fragment assembly."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `clientd` passed in the poll call (must be a `AeronControlledFragmentAssembler`)"]
-    #[doc = " \n - `buffer` containing the data."]
-    #[doc = " \n - `header` representing the meta data for the data."]
-    #[doc = " \n# Return\n The action to be taken with regard to the stream position after the callback."]
-    pub fn handler(
-        clientd: *mut ::std::os::raw::c_void,
-        buffer: &[u8],
-        header: &AeronHeader,
-    ) -> aeron_controlled_fragment_handler_action_t {
+    pub fn aeron_uri_get_timeout(&self, param_name: &str) -> Result<u64, AeronCError> {
         unsafe {
-            let result = aeron_controlled_fragment_assembler_handler(
-                clientd.into(),
-                buffer.as_ptr() as *mut _,
-                buffer.len(),
-                header.get_inner(),
+            let mut mut_result: u64 = Default::default();
+            let err_code = aeron_uri_get_timeout(
+                self.get_inner(),
+                std::ffi::CString::new(param_name).unwrap().into_raw(),
+                &mut mut_result,
             );
-            result.into()
+            if err_code < 0 {
+                return Err(AeronCError::from_code(err_code));
+            } else {
+                return Ok(mut_result);
+            }
+        }
+    }
+    #[inline]
+    pub fn aeron_uri_get_socket_buf_lengths(
+        &self,
+        socket_sndbuf_length: &mut usize,
+        socket_rcvbuf_length: &mut usize,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_uri_get_socket_buf_lengths(
+                self.get_inner(),
+                socket_sndbuf_length as *mut _,
+                socket_rcvbuf_length as *mut _,
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    pub fn aeron_uri_get_receiver_window_length(&self) -> Result<usize, AeronCError> {
+        unsafe {
+            let mut mut_result: usize = Default::default();
+            let err_code = aeron_uri_get_receiver_window_length(self.get_inner(), &mut mut_result);
+            if err_code < 0 {
+                return Err(AeronCError::from_code(err_code));
+            } else {
+                return Ok(mut_result);
+            }
         }
     }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_controlled_fragment_assembler_t {
+    pub fn get_inner(&self) -> *mut aeron_uri_params_t {
         self.inner.get()
     }
 }
-impl std::ops::Deref for AeronControlledFragmentAssembler {
-    type Target = aeron_controlled_fragment_assembler_t;
+impl std::ops::Deref for AeronUriParams {
+    type Target = aeron_uri_params_t;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.inner.get() }
     }
 }
-impl From<*mut aeron_controlled_fragment_assembler_t> for AeronControlledFragmentAssembler {
+impl From<*mut aeron_uri_params_t> for AeronUriParams {
     #[inline]
-    fn from(value: *mut aeron_controlled_fragment_assembler_t) -> Self {
-        AeronControlledFragmentAssembler {
+    fn from(value: *mut aeron_uri_params_t) -> Self {
+        AeronUriParams {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<AeronControlledFragmentAssembler> for *mut aeron_controlled_fragment_assembler_t {
+impl From<AeronUriParams> for *mut aeron_uri_params_t {
     #[inline]
-    fn from(value: AeronControlledFragmentAssembler) -> Self {
+    fn from(value: AeronUriParams) -> Self {
         value.get_inner()
     }
 }
-impl From<&AeronControlledFragmentAssembler> for *mut aeron_controlled_fragment_assembler_t {
+impl From<&AeronUriParams> for *mut aeron_uri_params_t {
     #[inline]
-    fn from(value: &AeronControlledFragmentAssembler) -> Self {
+    fn from(value: &AeronUriParams) -> Self {
         value.get_inner()
     }
 }
-impl From<AeronControlledFragmentAssembler> for aeron_controlled_fragment_assembler_t {
+impl From<AeronUriParams> for aeron_uri_params_t {
     #[inline]
-    fn from(value: AeronControlledFragmentAssembler) -> Self {
+    fn from(value: AeronUriParams) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const aeron_controlled_fragment_assembler_t> for AeronControlledFragmentAssembler {
+impl From<*const aeron_uri_params_t> for AeronUriParams {
     #[inline]
-    fn from(value: *const aeron_controlled_fragment_assembler_t) -> Self {
-        AeronControlledFragmentAssembler {
+    fn from(value: *const aeron_uri_params_t) -> Self {
+        AeronUriParams {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<aeron_controlled_fragment_assembler_t> for AeronControlledFragmentAssembler {
+impl From<aeron_uri_params_t> for AeronUriParams {
     #[inline]
-    fn from(mut value: aeron_controlled_fragment_assembler_t) -> Self {
-        AeronControlledFragmentAssembler {
+    fn from(mut value: aeron_uri_params_t) -> Self {
+        AeronUriParams {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_controlled_fragment_assembler_t,
+                &mut value as *mut aeron_uri_params_t,
                 None,
             )),
         }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronUriParams {
+    fn default() -> Self {
+        AeronUriParams::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronUriParams {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[derive(Clone)]
+pub struct AeronHeader {
+    inner: std::rc::Rc<ManagedCResource<aeron_header_t>>,
+}
+impl core::fmt::Debug for AeronHeader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronHeader))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronHeader))
+                .field("inner", &self.inner)
+                .finish()
+        }
+    }
+}
+impl AeronHeader {
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_header_t)
+                );
+                let inst: aeron_header_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_header_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    #[doc = "Get all of the field values from the header. This will do a memcpy into the supplied header_values_t pointer."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `header` to read values from."]
+    #[doc = " \n - `values` to copy values to, must not be null."]
+    #[doc = " \n# Return\n 0 on success, -1 on failure."]
+    pub fn values(&self, values: &AeronHeaderValues) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_header_values(self.get_inner(), values.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Get all of the field values from the header. This will do a memcpy into the supplied header_values_t pointer."]
+    #[doc = ""]
+    pub fn get_values(&self) -> Result<AeronHeaderValues, AeronCError> {
+        let result = AeronHeaderValues::default();
+        self.values(&result)?;
+        Ok(result)
+    }
+    #[inline]
+    #[doc = "Get the current position to which the Image has advanced on reading this message."]
+    #[doc = ""]
+    #[doc = " \n# Return\n the current position to which the Image has advanced on reading this message."]
+    pub fn position(&self) -> i64 {
+        unsafe {
+            let result = aeron_header_position(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Get the number of times to left shift the term count to multiply by term length."]
+    #[doc = ""]
+    #[doc = " \n# Return\n number of times to left shift the term count to multiply by term length."]
+    pub fn position_bits_to_shift(&self) -> usize {
+        unsafe {
+            let result = aeron_header_position_bits_to_shift(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Calculates the offset of the frame immediately after this one."]
+    #[doc = ""]
+    #[doc = " \n# Return\n the offset of the next frame."]
+    pub fn next_term_offset(&self) -> i32 {
+        unsafe {
+            let result = aeron_header_next_term_offset(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Get a pointer to the context associated with this message. Only valid during poll handling. Is normally a"]
+    #[doc = " pointer to an Image instance."]
+    #[doc = ""]
+    #[doc = " \n# Return\n a pointer to the context associated with this message."]
+    pub fn context(&self) -> *mut ::std::os::raw::c_void {
+        unsafe {
+            let result = aeron_header_context(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_header_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronHeader {
+    type Target = aeron_header_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_header_t> for AeronHeader {
+    #[inline]
+    fn from(value: *mut aeron_header_t) -> Self {
+        AeronHeader {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronHeader> for *mut aeron_header_t {
+    #[inline]
+    fn from(value: AeronHeader) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronHeader> for *mut aeron_header_t {
+    #[inline]
+    fn from(value: &AeronHeader) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronHeader> for aeron_header_t {
+    #[inline]
+    fn from(value: AeronHeader) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_header_t> for AeronHeader {
+    #[inline]
+    fn from(value: *const aeron_header_t) -> Self {
+        AeronHeader {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_header_t> for AeronHeader {
+    #[inline]
+    fn from(mut value: aeron_header_t) -> Self {
+        AeronHeader {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_header_t,
+                None,
+            )),
+        }
+    }
+}
+#[derive(Clone)]
+pub struct AeronLogbufferMetadata {
+    inner: std::rc::Rc<ManagedCResource<aeron_logbuffer_metadata_t>>,
+}
+impl core::fmt::Debug for AeronLogbufferMetadata {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronLogbufferMetadata))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronLogbufferMetadata))
+                .field("inner", &self.inner)
+                .field(stringify!(active_term_count), &self.active_term_count())
+                .field(
+                    stringify!(end_of_stream_position),
+                    &self.end_of_stream_position(),
+                )
+                .field(stringify!(is_connected), &self.is_connected())
+                .field(
+                    stringify!(active_transport_count),
+                    &self.active_transport_count(),
+                )
+                .field(stringify!(correlation_id), &self.correlation_id())
+                .field(stringify!(initial_term_id), &self.initial_term_id())
+                .field(
+                    stringify!(default_frame_header_length),
+                    &self.default_frame_header_length(),
+                )
+                .field(stringify!(mtu_length), &self.mtu_length())
+                .field(stringify!(term_length), &self.term_length())
+                .field(stringify!(page_size), &self.page_size())
+                .field(
+                    stringify!(publication_window_length),
+                    &self.publication_window_length(),
+                )
+                .field(
+                    stringify!(receiver_window_length),
+                    &self.receiver_window_length(),
+                )
+                .field(
+                    stringify!(socket_sndbuf_length),
+                    &self.socket_sndbuf_length(),
+                )
+                .field(
+                    stringify!(os_default_socket_sndbuf_length),
+                    &self.os_default_socket_sndbuf_length(),
+                )
+                .field(
+                    stringify!(os_max_socket_sndbuf_length),
+                    &self.os_max_socket_sndbuf_length(),
+                )
+                .field(
+                    stringify!(socket_rcvbuf_length),
+                    &self.socket_rcvbuf_length(),
+                )
+                .field(
+                    stringify!(os_default_socket_rcvbuf_length),
+                    &self.os_default_socket_rcvbuf_length(),
+                )
+                .field(
+                    stringify!(os_max_socket_rcvbuf_length),
+                    &self.os_max_socket_rcvbuf_length(),
+                )
+                .field(stringify!(max_resend), &self.max_resend())
+                .field(stringify!(entity_tag), &self.entity_tag())
+                .field(
+                    stringify!(response_correlation_id),
+                    &self.response_correlation_id(),
+                )
+                .field(stringify!(linger_timeout_ns), &self.linger_timeout_ns())
+                .field(
+                    stringify!(untethered_window_limit_timeout_ns),
+                    &self.untethered_window_limit_timeout_ns(),
+                )
+                .field(
+                    stringify!(untethered_resting_timeout_ns),
+                    &self.untethered_resting_timeout_ns(),
+                )
+                .finish()
+        }
+    }
+}
+impl AeronLogbufferMetadata {
+    #[inline]
+    pub fn new(
+        term_tail_counters: [i64; 3usize],
+        active_term_count: i32,
+        pad1: [u8; 100usize],
+        end_of_stream_position: i64,
+        is_connected: i32,
+        active_transport_count: i32,
+        pad2: [u8; 112usize],
+        correlation_id: i64,
+        initial_term_id: i32,
+        default_frame_header_length: i32,
+        mtu_length: i32,
+        term_length: i32,
+        page_size: i32,
+        publication_window_length: i32,
+        receiver_window_length: i32,
+        socket_sndbuf_length: i32,
+        os_default_socket_sndbuf_length: i32,
+        os_max_socket_sndbuf_length: i32,
+        socket_rcvbuf_length: i32,
+        os_default_socket_rcvbuf_length: i32,
+        os_max_socket_rcvbuf_length: i32,
+        max_resend: i32,
+        default_header: [u8; 128usize],
+        entity_tag: i64,
+        response_correlation_id: i64,
+        linger_timeout_ns: i64,
+        untethered_window_limit_timeout_ns: i64,
+        untethered_resting_timeout_ns: i64,
+        group: u8,
+        is_response: u8,
+        rejoin: u8,
+        reliable: u8,
+        sparse: u8,
+        signal_eos: u8,
+        spies_simulate_connection: u8,
+        tether: u8,
+    ) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_logbuffer_metadata_t {
+                    term_tail_counters: term_tail_counters.into(),
+                    active_term_count: active_term_count.into(),
+                    pad1: pad1.into(),
+                    end_of_stream_position: end_of_stream_position.into(),
+                    is_connected: is_connected.into(),
+                    active_transport_count: active_transport_count.into(),
+                    pad2: pad2.into(),
+                    correlation_id: correlation_id.into(),
+                    initial_term_id: initial_term_id.into(),
+                    default_frame_header_length: default_frame_header_length.into(),
+                    mtu_length: mtu_length.into(),
+                    term_length: term_length.into(),
+                    page_size: page_size.into(),
+                    publication_window_length: publication_window_length.into(),
+                    receiver_window_length: receiver_window_length.into(),
+                    socket_sndbuf_length: socket_sndbuf_length.into(),
+                    os_default_socket_sndbuf_length: os_default_socket_sndbuf_length.into(),
+                    os_max_socket_sndbuf_length: os_max_socket_sndbuf_length.into(),
+                    socket_rcvbuf_length: socket_rcvbuf_length.into(),
+                    os_default_socket_rcvbuf_length: os_default_socket_rcvbuf_length.into(),
+                    os_max_socket_rcvbuf_length: os_max_socket_rcvbuf_length.into(),
+                    max_resend: max_resend.into(),
+                    default_header: default_header.into(),
+                    entity_tag: entity_tag.into(),
+                    response_correlation_id: response_correlation_id.into(),
+                    linger_timeout_ns: linger_timeout_ns.into(),
+                    untethered_window_limit_timeout_ns: untethered_window_limit_timeout_ns.into(),
+                    untethered_resting_timeout_ns: untethered_resting_timeout_ns.into(),
+                    group: group.into(),
+                    is_response: is_response.into(),
+                    rejoin: rejoin.into(),
+                    reliable: reliable.into(),
+                    sparse: sparse.into(),
+                    signal_eos: signal_eos.into(),
+                    spies_simulate_connection: spies_simulate_connection.into(),
+                    tether: tether.into(),
+                };
+                let inner_ptr: *mut aeron_logbuffer_metadata_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_logbuffer_metadata_t)
+                );
+                let inst: aeron_logbuffer_metadata_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_logbuffer_metadata_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn term_tail_counters(&self) -> [i64; 3usize] {
+        self.term_tail_counters.into()
+    }
+    #[inline]
+    pub fn active_term_count(&self) -> i32 {
+        self.active_term_count.into()
+    }
+    #[inline]
+    pub fn pad1(&self) -> [u8; 100usize] {
+        self.pad1.into()
+    }
+    #[inline]
+    pub fn end_of_stream_position(&self) -> i64 {
+        self.end_of_stream_position.into()
+    }
+    #[inline]
+    pub fn is_connected(&self) -> i32 {
+        self.is_connected.into()
+    }
+    #[inline]
+    pub fn active_transport_count(&self) -> i32 {
+        self.active_transport_count.into()
+    }
+    #[inline]
+    pub fn pad2(&self) -> [u8; 112usize] {
+        self.pad2.into()
+    }
+    #[inline]
+    pub fn correlation_id(&self) -> i64 {
+        self.correlation_id.into()
+    }
+    #[inline]
+    pub fn initial_term_id(&self) -> i32 {
+        self.initial_term_id.into()
+    }
+    #[inline]
+    pub fn default_frame_header_length(&self) -> i32 {
+        self.default_frame_header_length.into()
+    }
+    #[inline]
+    pub fn mtu_length(&self) -> i32 {
+        self.mtu_length.into()
+    }
+    #[inline]
+    pub fn term_length(&self) -> i32 {
+        self.term_length.into()
+    }
+    #[inline]
+    pub fn page_size(&self) -> i32 {
+        self.page_size.into()
+    }
+    #[inline]
+    pub fn publication_window_length(&self) -> i32 {
+        self.publication_window_length.into()
+    }
+    #[inline]
+    pub fn receiver_window_length(&self) -> i32 {
+        self.receiver_window_length.into()
+    }
+    #[inline]
+    pub fn socket_sndbuf_length(&self) -> i32 {
+        self.socket_sndbuf_length.into()
+    }
+    #[inline]
+    pub fn os_default_socket_sndbuf_length(&self) -> i32 {
+        self.os_default_socket_sndbuf_length.into()
+    }
+    #[inline]
+    pub fn os_max_socket_sndbuf_length(&self) -> i32 {
+        self.os_max_socket_sndbuf_length.into()
+    }
+    #[inline]
+    pub fn socket_rcvbuf_length(&self) -> i32 {
+        self.socket_rcvbuf_length.into()
+    }
+    #[inline]
+    pub fn os_default_socket_rcvbuf_length(&self) -> i32 {
+        self.os_default_socket_rcvbuf_length.into()
+    }
+    #[inline]
+    pub fn os_max_socket_rcvbuf_length(&self) -> i32 {
+        self.os_max_socket_rcvbuf_length.into()
+    }
+    #[inline]
+    pub fn max_resend(&self) -> i32 {
+        self.max_resend.into()
+    }
+    #[inline]
+    pub fn default_header(&self) -> [u8; 128usize] {
+        self.default_header.into()
+    }
+    #[inline]
+    pub fn entity_tag(&self) -> i64 {
+        self.entity_tag.into()
+    }
+    #[inline]
+    pub fn response_correlation_id(&self) -> i64 {
+        self.response_correlation_id.into()
+    }
+    #[inline]
+    pub fn linger_timeout_ns(&self) -> i64 {
+        self.linger_timeout_ns.into()
+    }
+    #[inline]
+    pub fn untethered_window_limit_timeout_ns(&self) -> i64 {
+        self.untethered_window_limit_timeout_ns.into()
+    }
+    #[inline]
+    pub fn untethered_resting_timeout_ns(&self) -> i64 {
+        self.untethered_resting_timeout_ns.into()
+    }
+    #[inline]
+    pub fn group(&self) -> u8 {
+        self.group.into()
+    }
+    #[inline]
+    pub fn is_response(&self) -> u8 {
+        self.is_response.into()
+    }
+    #[inline]
+    pub fn rejoin(&self) -> u8 {
+        self.rejoin.into()
+    }
+    #[inline]
+    pub fn reliable(&self) -> u8 {
+        self.reliable.into()
+    }
+    #[inline]
+    pub fn sparse(&self) -> u8 {
+        self.sparse.into()
+    }
+    #[inline]
+    pub fn signal_eos(&self) -> u8 {
+        self.signal_eos.into()
+    }
+    #[inline]
+    pub fn spies_simulate_connection(&self) -> u8 {
+        self.spies_simulate_connection.into()
+    }
+    #[inline]
+    pub fn tether(&self) -> u8 {
+        self.tether.into()
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_logbuffer_metadata_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronLogbufferMetadata {
+    type Target = aeron_logbuffer_metadata_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_logbuffer_metadata_t> for AeronLogbufferMetadata {
+    #[inline]
+    fn from(value: *mut aeron_logbuffer_metadata_t) -> Self {
+        AeronLogbufferMetadata {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronLogbufferMetadata> for *mut aeron_logbuffer_metadata_t {
+    #[inline]
+    fn from(value: AeronLogbufferMetadata) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronLogbufferMetadata> for *mut aeron_logbuffer_metadata_t {
+    #[inline]
+    fn from(value: &AeronLogbufferMetadata) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronLogbufferMetadata> for aeron_logbuffer_metadata_t {
+    #[inline]
+    fn from(value: AeronLogbufferMetadata) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_logbuffer_metadata_t> for AeronLogbufferMetadata {
+    #[inline]
+    fn from(value: *const aeron_logbuffer_metadata_t) -> Self {
+        AeronLogbufferMetadata {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_logbuffer_metadata_t> for AeronLogbufferMetadata {
+    #[inline]
+    fn from(mut value: aeron_logbuffer_metadata_t) -> Self {
+        AeronLogbufferMetadata {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_logbuffer_metadata_t,
+                None,
+            )),
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronLogbufferMetadata {
+    fn default() -> Self {
+        AeronLogbufferMetadata::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronLogbufferMetadata {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
     }
 }
 #[derive(Clone)]
@@ -2163,50 +5330,303 @@ impl From<aeron_image_t> for AeronImage {
     }
 }
 #[derive(Clone)]
-pub struct AeronSubscriptionConstants {
-    inner: std::rc::Rc<ManagedCResource<aeron_subscription_constants_t>>,
+pub struct AeronImageFragmentAssembler {
+    inner: std::rc::Rc<ManagedCResource<aeron_image_fragment_assembler_t>>,
 }
-impl core::fmt::Debug for AeronSubscriptionConstants {
+impl core::fmt::Debug for AeronImageFragmentAssembler {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronSubscriptionConstants))
+            f.debug_struct(stringify!(AeronImageFragmentAssembler))
                 .field("inner", &"null")
                 .finish()
         } else {
-            f.debug_struct(stringify!(AeronSubscriptionConstants))
+            f.debug_struct(stringify!(AeronImageFragmentAssembler))
                 .field("inner", &self.inner)
-                .field(stringify!(registration_id), &self.registration_id())
-                .field(stringify!(stream_id), &self.stream_id())
-                .field(
-                    stringify!(channel_status_indicator_id),
-                    &self.channel_status_indicator_id(),
-                )
                 .finish()
         }
     }
 }
-impl AeronSubscriptionConstants {
+impl AeronImageFragmentAssembler {
+    #[doc = "Create an image fragment assembler for use with a single image."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `delegate` to call on completed."]
+    #[doc = " \n - `delegate_clientd` to pass to delegate handler."]
+    #[doc = " \n# Return\n 0 for success and -1 for error."]
+    pub fn new<AeronFragmentHandlerHandlerImpl: AeronFragmentHandlerCallback>(
+        delegate: Option<&Handler<AeronFragmentHandlerHandlerImpl>>,
+    ) -> Result<Self, AeronCError> {
+        let (delegate, delegate_clientd) = (
+            {
+                let callback: aeron_fragment_handler_t = if delegate.is_none() {
+                    None
+                } else {
+                    Some(aeron_fragment_handler_t_callback::<AeronFragmentHandlerHandlerImpl>)
+                };
+                callback
+            },
+            delegate
+                .map(|m| m.as_raw())
+                .unwrap_or_else(|| std::ptr::null_mut()),
+        );
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let resource_constructor = ManagedCResource::new(
+            move |ctx_field| unsafe {
+                aeron_image_fragment_assembler_create(ctx_field, delegate, delegate_clientd)
+            },
+            Some(Box::new(move |ctx_field| {
+                let result = unsafe { aeron_image_fragment_assembler_delete(*ctx_field) };
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                result
+            })),
+            false,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource_constructor),
+        })
+    }
+    #[inline]
+    #[doc = "Delete an image fragment assembler."]
+    #[doc = ""]
+    #[doc = " \n# Return\n 0 for success or -1 for error."]
+    pub fn delete(&self) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_image_fragment_assembler_delete(self.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Handler function to be passed for handling fragment assembly."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `clientd` passed in the poll call (must be a `AeronImageFragmentAssembler`)"]
+    #[doc = " \n - `buffer` containing the data."]
+    #[doc = " \n - `header` representing the meta data for the data."]
+    pub fn handler(
+        clientd: *mut ::std::os::raw::c_void,
+        buffer: &[u8],
+        header: &AeronHeader,
+    ) -> () {
+        unsafe {
+            let result = aeron_image_fragment_assembler_handler(
+                clientd.into(),
+                buffer.as_ptr() as *mut _,
+                buffer.len(),
+                header.get_inner(),
+            );
+            result.into()
+        }
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_image_fragment_assembler_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronImageFragmentAssembler {
+    type Target = aeron_image_fragment_assembler_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_image_fragment_assembler_t> for AeronImageFragmentAssembler {
+    #[inline]
+    fn from(value: *mut aeron_image_fragment_assembler_t) -> Self {
+        AeronImageFragmentAssembler {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronImageFragmentAssembler> for *mut aeron_image_fragment_assembler_t {
+    #[inline]
+    fn from(value: AeronImageFragmentAssembler) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronImageFragmentAssembler> for *mut aeron_image_fragment_assembler_t {
+    #[inline]
+    fn from(value: &AeronImageFragmentAssembler) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronImageFragmentAssembler> for aeron_image_fragment_assembler_t {
+    #[inline]
+    fn from(value: AeronImageFragmentAssembler) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_image_fragment_assembler_t> for AeronImageFragmentAssembler {
+    #[inline]
+    fn from(value: *const aeron_image_fragment_assembler_t) -> Self {
+        AeronImageFragmentAssembler {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_image_fragment_assembler_t> for AeronImageFragmentAssembler {
+    #[inline]
+    fn from(mut value: aeron_image_fragment_assembler_t) -> Self {
+        AeronImageFragmentAssembler {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_image_fragment_assembler_t,
+                None,
+            )),
+        }
+    }
+}
+#[derive(Clone)]
+pub struct AeronAsyncDestinationById {
+    inner: std::rc::Rc<ManagedCResource<aeron_async_destination_by_id_t>>,
+}
+impl core::fmt::Debug for AeronAsyncDestinationById {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronAsyncDestinationById))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronAsyncDestinationById))
+                .field("inner", &self.inner)
+                .finish()
+        }
+    }
+}
+impl AeronAsyncDestinationById {
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_async_destination_by_id_t)
+                );
+                let inst: aeron_async_destination_by_id_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_async_destination_by_id_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_async_destination_by_id_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronAsyncDestinationById {
+    type Target = aeron_async_destination_by_id_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_async_destination_by_id_t> for AeronAsyncDestinationById {
+    #[inline]
+    fn from(value: *mut aeron_async_destination_by_id_t) -> Self {
+        AeronAsyncDestinationById {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronAsyncDestinationById> for *mut aeron_async_destination_by_id_t {
+    #[inline]
+    fn from(value: AeronAsyncDestinationById) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronAsyncDestinationById> for *mut aeron_async_destination_by_id_t {
+    #[inline]
+    fn from(value: &AeronAsyncDestinationById) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronAsyncDestinationById> for aeron_async_destination_by_id_t {
+    #[inline]
+    fn from(value: AeronAsyncDestinationById) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_async_destination_by_id_t> for AeronAsyncDestinationById {
+    #[inline]
+    fn from(value: *const aeron_async_destination_by_id_t) -> Self {
+        AeronAsyncDestinationById {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_async_destination_by_id_t> for AeronAsyncDestinationById {
+    #[inline]
+    fn from(mut value: aeron_async_destination_by_id_t) -> Self {
+        AeronAsyncDestinationById {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_async_destination_by_id_t,
+                None,
+            )),
+        }
+    }
+}
+#[derive(Clone)]
+pub struct AeronHeaderValuesFrame {
+    inner: std::rc::Rc<ManagedCResource<aeron_header_values_frame_t>>,
+}
+impl core::fmt::Debug for AeronHeaderValuesFrame {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronHeaderValuesFrame))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronHeaderValuesFrame))
+                .field("inner", &self.inner)
+                .field(stringify!(frame_length), &self.frame_length())
+                .field(stringify!(type_), &self.type_())
+                .field(stringify!(term_offset), &self.term_offset())
+                .field(stringify!(session_id), &self.session_id())
+                .field(stringify!(stream_id), &self.stream_id())
+                .field(stringify!(term_id), &self.term_id())
+                .field(stringify!(reserved_value), &self.reserved_value())
+                .finish()
+        }
+    }
+}
+impl AeronHeaderValuesFrame {
     #[inline]
     pub fn new(
-        channel: &str,
-        on_available_image: aeron_on_available_image_t,
-        on_unavailable_image: aeron_on_unavailable_image_t,
-        registration_id: i64,
+        frame_length: i32,
+        version: i8,
+        flags: u8,
+        type_: i16,
+        term_offset: i32,
+        session_id: i32,
         stream_id: i32,
-        channel_status_indicator_id: i32,
+        term_id: i32,
+        reserved_value: i64,
     ) -> Result<Self, AeronCError> {
         let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
         let r_constructor = ManagedCResource::new(
             move |ctx_field| {
-                let inst = aeron_subscription_constants_t {
-                    channel: std::ffi::CString::new(channel).unwrap().into_raw(),
-                    on_available_image: on_available_image.into(),
-                    on_unavailable_image: on_unavailable_image.into(),
-                    registration_id: registration_id.into(),
+                let inst = aeron_header_values_frame_t {
+                    frame_length: frame_length.into(),
+                    version: version.into(),
+                    flags: flags.into(),
+                    type_: type_.into(),
+                    term_offset: term_offset.into(),
+                    session_id: session_id.into(),
                     stream_id: stream_id.into(),
-                    channel_status_indicator_id: channel_status_indicator_id.into(),
+                    term_id: term_id.into(),
+                    reserved_value: reserved_value.into(),
                 };
-                let inner_ptr: *mut aeron_subscription_constants_t = Box::into_raw(Box::new(inst));
+                let inner_ptr: *mut aeron_header_values_frame_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -2231,10 +5651,10 @@ impl AeronSubscriptionConstants {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_subscription_constants_t)
+                    stringify!(aeron_header_values_frame_t)
                 );
-                let inst: aeron_subscription_constants_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_subscription_constants_t = Box::into_raw(Box::new(inst));
+                let inst: aeron_header_values_frame_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_header_values_frame_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -2247,96 +5667,104 @@ impl AeronSubscriptionConstants {
         })
     }
     #[inline]
-    pub fn channel(&self) -> &str {
-        if self.channel.is_null() {
-            ""
-        } else {
-            unsafe { std::ffi::CStr::from_ptr(self.channel).to_str().unwrap() }
-        }
+    pub fn frame_length(&self) -> i32 {
+        self.frame_length.into()
     }
     #[inline]
-    pub fn on_available_image(&self) -> aeron_on_available_image_t {
-        self.on_available_image.into()
+    pub fn version(&self) -> i8 {
+        self.version.into()
     }
     #[inline]
-    pub fn on_unavailable_image(&self) -> aeron_on_unavailable_image_t {
-        self.on_unavailable_image.into()
+    pub fn flags(&self) -> u8 {
+        self.flags.into()
     }
     #[inline]
-    pub fn registration_id(&self) -> i64 {
-        self.registration_id.into()
+    pub fn type_(&self) -> i16 {
+        self.type_.into()
+    }
+    #[inline]
+    pub fn term_offset(&self) -> i32 {
+        self.term_offset.into()
+    }
+    #[inline]
+    pub fn session_id(&self) -> i32 {
+        self.session_id.into()
     }
     #[inline]
     pub fn stream_id(&self) -> i32 {
         self.stream_id.into()
     }
     #[inline]
-    pub fn channel_status_indicator_id(&self) -> i32 {
-        self.channel_status_indicator_id.into()
+    pub fn term_id(&self) -> i32 {
+        self.term_id.into()
+    }
+    #[inline]
+    pub fn reserved_value(&self) -> i64 {
+        self.reserved_value.into()
     }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_subscription_constants_t {
+    pub fn get_inner(&self) -> *mut aeron_header_values_frame_t {
         self.inner.get()
     }
 }
-impl std::ops::Deref for AeronSubscriptionConstants {
-    type Target = aeron_subscription_constants_t;
+impl std::ops::Deref for AeronHeaderValuesFrame {
+    type Target = aeron_header_values_frame_t;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.inner.get() }
     }
 }
-impl From<*mut aeron_subscription_constants_t> for AeronSubscriptionConstants {
+impl From<*mut aeron_header_values_frame_t> for AeronHeaderValuesFrame {
     #[inline]
-    fn from(value: *mut aeron_subscription_constants_t) -> Self {
-        AeronSubscriptionConstants {
+    fn from(value: *mut aeron_header_values_frame_t) -> Self {
+        AeronHeaderValuesFrame {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<AeronSubscriptionConstants> for *mut aeron_subscription_constants_t {
+impl From<AeronHeaderValuesFrame> for *mut aeron_header_values_frame_t {
     #[inline]
-    fn from(value: AeronSubscriptionConstants) -> Self {
+    fn from(value: AeronHeaderValuesFrame) -> Self {
         value.get_inner()
     }
 }
-impl From<&AeronSubscriptionConstants> for *mut aeron_subscription_constants_t {
+impl From<&AeronHeaderValuesFrame> for *mut aeron_header_values_frame_t {
     #[inline]
-    fn from(value: &AeronSubscriptionConstants) -> Self {
+    fn from(value: &AeronHeaderValuesFrame) -> Self {
         value.get_inner()
     }
 }
-impl From<AeronSubscriptionConstants> for aeron_subscription_constants_t {
+impl From<AeronHeaderValuesFrame> for aeron_header_values_frame_t {
     #[inline]
-    fn from(value: AeronSubscriptionConstants) -> Self {
+    fn from(value: AeronHeaderValuesFrame) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const aeron_subscription_constants_t> for AeronSubscriptionConstants {
+impl From<*const aeron_header_values_frame_t> for AeronHeaderValuesFrame {
     #[inline]
-    fn from(value: *const aeron_subscription_constants_t) -> Self {
-        AeronSubscriptionConstants {
+    fn from(value: *const aeron_header_values_frame_t) -> Self {
+        AeronHeaderValuesFrame {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<aeron_subscription_constants_t> for AeronSubscriptionConstants {
+impl From<aeron_header_values_frame_t> for AeronHeaderValuesFrame {
     #[inline]
-    fn from(mut value: aeron_subscription_constants_t) -> Self {
-        AeronSubscriptionConstants {
+    fn from(mut value: aeron_header_values_frame_t) -> Self {
+        AeronHeaderValuesFrame {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_subscription_constants_t,
+                &mut value as *mut aeron_header_values_frame_t,
                 None,
             )),
         }
     }
 }
 #[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronSubscriptionConstants {
+impl Default for AeronHeaderValuesFrame {
     fn default() -> Self {
-        AeronSubscriptionConstants::new_zeroed().expect("failed to create struct")
+        AeronHeaderValuesFrame::new_zeroed().expect("failed to create struct")
     }
 }
-impl AeronSubscriptionConstants {
+impl AeronHeaderValuesFrame {
     #[doc = r" Regular clone just increases the reference count of underlying count."]
     #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
     #[doc = r""]
@@ -2352,47 +5780,77 @@ impl AeronSubscriptionConstants {
     }
 }
 #[derive(Clone)]
-pub struct AeronCounterValueDescriptor {
-    inner: std::rc::Rc<ManagedCResource<aeron_counter_value_descriptor_t>>,
+pub struct AeronCncMetadata {
+    inner: std::rc::Rc<ManagedCResource<aeron_cnc_metadata_t>>,
 }
-impl core::fmt::Debug for AeronCounterValueDescriptor {
+impl core::fmt::Debug for AeronCncMetadata {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronCounterValueDescriptor))
+            f.debug_struct(stringify!(AeronCncMetadata))
                 .field("inner", &"null")
                 .finish()
         } else {
-            f.debug_struct(stringify!(AeronCounterValueDescriptor))
+            f.debug_struct(stringify!(AeronCncMetadata))
                 .field("inner", &self.inner)
-                .field(stringify!(counter_value), &self.counter_value())
-                .field(stringify!(registration_id), &self.registration_id())
-                .field(stringify!(owner_id), &self.owner_id())
-                .field(stringify!(reference_id), &self.reference_id())
+                .field(stringify!(cnc_version), &self.cnc_version())
+                .field(
+                    stringify!(to_driver_buffer_length),
+                    &self.to_driver_buffer_length(),
+                )
+                .field(
+                    stringify!(to_clients_buffer_length),
+                    &self.to_clients_buffer_length(),
+                )
+                .field(
+                    stringify!(counter_metadata_buffer_length),
+                    &self.counter_metadata_buffer_length(),
+                )
+                .field(
+                    stringify!(counter_values_buffer_length),
+                    &self.counter_values_buffer_length(),
+                )
+                .field(
+                    stringify!(error_log_buffer_length),
+                    &self.error_log_buffer_length(),
+                )
+                .field(
+                    stringify!(client_liveness_timeout),
+                    &self.client_liveness_timeout(),
+                )
+                .field(stringify!(start_timestamp), &self.start_timestamp())
+                .field(stringify!(pid), &self.pid())
                 .finish()
         }
     }
 }
-impl AeronCounterValueDescriptor {
+impl AeronCncMetadata {
     #[inline]
     pub fn new(
-        counter_value: i64,
-        registration_id: i64,
-        owner_id: i64,
-        reference_id: i64,
-        pad1: [u8; 96usize],
+        cnc_version: i32,
+        to_driver_buffer_length: i32,
+        to_clients_buffer_length: i32,
+        counter_metadata_buffer_length: i32,
+        counter_values_buffer_length: i32,
+        error_log_buffer_length: i32,
+        client_liveness_timeout: i64,
+        start_timestamp: i64,
+        pid: i64,
     ) -> Result<Self, AeronCError> {
         let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
         let r_constructor = ManagedCResource::new(
             move |ctx_field| {
-                let inst = aeron_counter_value_descriptor_t {
-                    counter_value: counter_value.into(),
-                    registration_id: registration_id.into(),
-                    owner_id: owner_id.into(),
-                    reference_id: reference_id.into(),
-                    pad1: pad1.into(),
+                let inst = aeron_cnc_metadata_t {
+                    cnc_version: cnc_version.into(),
+                    to_driver_buffer_length: to_driver_buffer_length.into(),
+                    to_clients_buffer_length: to_clients_buffer_length.into(),
+                    counter_metadata_buffer_length: counter_metadata_buffer_length.into(),
+                    counter_values_buffer_length: counter_values_buffer_length.into(),
+                    error_log_buffer_length: error_log_buffer_length.into(),
+                    client_liveness_timeout: client_liveness_timeout.into(),
+                    start_timestamp: start_timestamp.into(),
+                    pid: pid.into(),
                 };
-                let inner_ptr: *mut aeron_counter_value_descriptor_t =
-                    Box::into_raw(Box::new(inst));
+                let inner_ptr: *mut aeron_cnc_metadata_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -2417,11 +5875,10 @@ impl AeronCounterValueDescriptor {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_counter_value_descriptor_t)
+                    stringify!(aeron_cnc_metadata_t)
                 );
-                let inst: aeron_counter_value_descriptor_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_counter_value_descriptor_t =
-                    Box::into_raw(Box::new(inst));
+                let inst: aeron_cnc_metadata_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_cnc_metadata_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -2434,88 +5891,111 @@ impl AeronCounterValueDescriptor {
         })
     }
     #[inline]
-    pub fn counter_value(&self) -> i64 {
-        self.counter_value.into()
+    pub fn cnc_version(&self) -> i32 {
+        self.cnc_version.into()
     }
     #[inline]
-    pub fn registration_id(&self) -> i64 {
-        self.registration_id.into()
+    pub fn to_driver_buffer_length(&self) -> i32 {
+        self.to_driver_buffer_length.into()
     }
     #[inline]
-    pub fn owner_id(&self) -> i64 {
-        self.owner_id.into()
+    pub fn to_clients_buffer_length(&self) -> i32 {
+        self.to_clients_buffer_length.into()
     }
     #[inline]
-    pub fn reference_id(&self) -> i64 {
-        self.reference_id.into()
+    pub fn counter_metadata_buffer_length(&self) -> i32 {
+        self.counter_metadata_buffer_length.into()
     }
     #[inline]
-    pub fn pad1(&self) -> [u8; 96usize] {
-        self.pad1.into()
+    pub fn counter_values_buffer_length(&self) -> i32 {
+        self.counter_values_buffer_length.into()
+    }
+    #[inline]
+    pub fn error_log_buffer_length(&self) -> i32 {
+        self.error_log_buffer_length.into()
+    }
+    #[inline]
+    pub fn client_liveness_timeout(&self) -> i64 {
+        self.client_liveness_timeout.into()
+    }
+    #[inline]
+    pub fn start_timestamp(&self) -> i64 {
+        self.start_timestamp.into()
+    }
+    #[inline]
+    pub fn pid(&self) -> i64 {
+        self.pid.into()
+    }
+    #[inline]
+    pub fn aeron_cnc_version_volatile(&self) -> i32 {
+        unsafe {
+            let result = aeron_cnc_version_volatile(self.get_inner());
+            result.into()
+        }
     }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_counter_value_descriptor_t {
+    pub fn get_inner(&self) -> *mut aeron_cnc_metadata_t {
         self.inner.get()
     }
 }
-impl std::ops::Deref for AeronCounterValueDescriptor {
-    type Target = aeron_counter_value_descriptor_t;
+impl std::ops::Deref for AeronCncMetadata {
+    type Target = aeron_cnc_metadata_t;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.inner.get() }
     }
 }
-impl From<*mut aeron_counter_value_descriptor_t> for AeronCounterValueDescriptor {
+impl From<*mut aeron_cnc_metadata_t> for AeronCncMetadata {
     #[inline]
-    fn from(value: *mut aeron_counter_value_descriptor_t) -> Self {
-        AeronCounterValueDescriptor {
+    fn from(value: *mut aeron_cnc_metadata_t) -> Self {
+        AeronCncMetadata {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<AeronCounterValueDescriptor> for *mut aeron_counter_value_descriptor_t {
+impl From<AeronCncMetadata> for *mut aeron_cnc_metadata_t {
     #[inline]
-    fn from(value: AeronCounterValueDescriptor) -> Self {
+    fn from(value: AeronCncMetadata) -> Self {
         value.get_inner()
     }
 }
-impl From<&AeronCounterValueDescriptor> for *mut aeron_counter_value_descriptor_t {
+impl From<&AeronCncMetadata> for *mut aeron_cnc_metadata_t {
     #[inline]
-    fn from(value: &AeronCounterValueDescriptor) -> Self {
+    fn from(value: &AeronCncMetadata) -> Self {
         value.get_inner()
     }
 }
-impl From<AeronCounterValueDescriptor> for aeron_counter_value_descriptor_t {
+impl From<AeronCncMetadata> for aeron_cnc_metadata_t {
     #[inline]
-    fn from(value: AeronCounterValueDescriptor) -> Self {
+    fn from(value: AeronCncMetadata) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const aeron_counter_value_descriptor_t> for AeronCounterValueDescriptor {
+impl From<*const aeron_cnc_metadata_t> for AeronCncMetadata {
     #[inline]
-    fn from(value: *const aeron_counter_value_descriptor_t) -> Self {
-        AeronCounterValueDescriptor {
+    fn from(value: *const aeron_cnc_metadata_t) -> Self {
+        AeronCncMetadata {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<aeron_counter_value_descriptor_t> for AeronCounterValueDescriptor {
+impl From<aeron_cnc_metadata_t> for AeronCncMetadata {
     #[inline]
-    fn from(mut value: aeron_counter_value_descriptor_t) -> Self {
-        AeronCounterValueDescriptor {
+    fn from(mut value: aeron_cnc_metadata_t) -> Self {
+        AeronCncMetadata {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_counter_value_descriptor_t,
+                &mut value as *mut aeron_cnc_metadata_t,
                 None,
             )),
         }
     }
 }
 #[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronCounterValueDescriptor {
+impl Default for AeronCncMetadata {
     fn default() -> Self {
-        AeronCounterValueDescriptor::new_zeroed().expect("failed to create struct")
+        AeronCncMetadata::new_zeroed().expect("failed to create struct")
     }
 }
-impl AeronCounterValueDescriptor {
+impl AeronCncMetadata {
     #[doc = r" Regular clone just increases the reference count of underlying count."]
     #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
     #[doc = r""]
@@ -2531,59 +6011,23 @@ impl AeronCounterValueDescriptor {
     }
 }
 #[derive(Clone)]
-pub struct AeronMappedRawLog {
-    inner: std::rc::Rc<ManagedCResource<aeron_mapped_raw_log_t>>,
+pub struct AeronPublication {
+    inner: std::rc::Rc<ManagedCResource<aeron_publication_t>>,
 }
-impl core::fmt::Debug for AeronMappedRawLog {
+impl core::fmt::Debug for AeronPublication {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronMappedRawLog))
+            f.debug_struct(stringify!(AeronPublication))
                 .field("inner", &"null")
                 .finish()
         } else {
-            f.debug_struct(stringify!(AeronMappedRawLog))
+            f.debug_struct(stringify!(AeronPublication))
                 .field("inner", &self.inner)
-                .field(stringify!(log_meta_data), &self.log_meta_data())
-                .field(stringify!(mapped_file), &self.mapped_file())
-                .field(stringify!(term_length), &self.term_length())
                 .finish()
         }
     }
 }
-impl AeronMappedRawLog {
-    #[inline]
-    pub fn new(
-        term_buffers: [aeron_mapped_buffer_t; 3usize],
-        log_meta_data: AeronMappedBuffer,
-        mapped_file: AeronMappedFile,
-        term_length: usize,
-    ) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_mapped_raw_log_t {
-                    term_buffers: term_buffers.into(),
-                    log_meta_data: log_meta_data.into(),
-                    mapped_file: mapped_file.into(),
-                    term_length: term_length.into(),
-                };
-                let inner_ptr: *mut aeron_mapped_raw_log_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
+impl AeronPublication {
     #[inline]
     #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
     pub fn new_zeroed() -> Result<Self, AeronCError> {
@@ -2592,52 +6036,332 @@ impl AeronMappedRawLog {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_mapped_raw_log_t)
+                    stringify!(aeron_publication_t)
                 );
-                let inst: aeron_mapped_raw_log_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_mapped_raw_log_t = Box::into_raw(Box::new(inst));
+                let inst: aeron_publication_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_publication_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
             None,
             true,
-            None,
+            Some(Box::new(|c| unsafe { aeron_publication_is_closed(c) })),
         )?;
         Ok(Self {
             inner: std::rc::Rc::new(resource),
         })
     }
     #[inline]
-    pub fn term_buffers(&self) -> [aeron_mapped_buffer_t; 3usize] {
-        self.term_buffers.into()
-    }
-    #[inline]
-    pub fn log_meta_data(&self) -> AeronMappedBuffer {
-        self.log_meta_data.into()
-    }
-    #[inline]
-    pub fn mapped_file(&self) -> AeronMappedFile {
-        self.mapped_file.into()
-    }
-    #[inline]
-    pub fn term_length(&self) -> usize {
-        self.term_length.into()
-    }
-    #[inline]
-    pub fn aeron_raw_log_map(
+    #[doc = "Non-blocking publish of a buffer containing a message."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `buffer` to publish."]
+    #[doc = " \n - `length` of the buffer."]
+    #[doc = " \n - `reserved_value_supplier` to use for setting the reserved value field or NULL."]
+    #[doc = " \n - `clientd` to pass to the reserved_value_supplier."]
+    #[doc = " \n# Return\n the new stream position otherwise a negative error value."]
+    pub fn offer<AeronReservedValueSupplierHandlerImpl: AeronReservedValueSupplierCallback>(
         &self,
-        path: &str,
-        use_sparse_files: bool,
-        term_length: u64,
-        page_size: u64,
+        buffer: &[u8],
+        reserved_value_supplier: Option<&Handler<AeronReservedValueSupplierHandlerImpl>>,
+    ) -> i64 {
+        unsafe {
+            let result = aeron_publication_offer(
+                self.get_inner(),
+                buffer.as_ptr() as *mut _,
+                buffer.len(),
+                {
+                    let callback: aeron_reserved_value_supplier_t =
+                        if reserved_value_supplier.is_none() {
+                            None
+                        } else {
+                            Some(
+                                aeron_reserved_value_supplier_t_callback::<
+                                    AeronReservedValueSupplierHandlerImpl,
+                                >,
+                            )
+                        };
+                    callback
+                },
+                reserved_value_supplier
+                    .map(|m| m.as_raw())
+                    .unwrap_or_else(|| std::ptr::null_mut()),
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Non-blocking publish of a buffer containing a message."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `buffer` to publish."]
+    #[doc = " \n - `length` of the buffer."]
+    #[doc = " \n - `reserved_value_supplier` to use for setting the reserved value field or NULL."]
+    #[doc = " \n - `clientd` to pass to the reserved_value_supplier."]
+    #[doc = " \n# Return\n the new stream position otherwise a negative error value."]
+    #[doc = r""]
+    #[doc = r""]
+    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
+    #[doc = r"  use with care_"]
+    pub fn offer_once<AeronReservedValueSupplierHandlerImpl: FnMut(*mut u8, usize) -> i64>(
+        &self,
+        buffer: &[u8],
+        mut reserved_value_supplier: AeronReservedValueSupplierHandlerImpl,
+    ) -> i64 {
+        unsafe {
+            let result = aeron_publication_offer(
+                self.get_inner(),
+                buffer.as_ptr() as *mut _,
+                buffer.len(),
+                Some(
+                    aeron_reserved_value_supplier_t_callback_for_once_closure::<
+                        AeronReservedValueSupplierHandlerImpl,
+                    >,
+                ),
+                &mut reserved_value_supplier as *mut _ as *mut std::os::raw::c_void,
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Non-blocking publish by gathering buffer vectors into a message."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `iov` array for the vectors"]
+    #[doc = " \n - `iovcnt` of the number of vectors"]
+    #[doc = " \n - `reserved_value_supplier` to use for setting the reserved value field or NULL."]
+    #[doc = " \n - `clientd` to pass to the reserved_value_supplier."]
+    #[doc = " \n# Return\n the new stream position otherwise a negative error value."]
+    pub fn offerv<AeronReservedValueSupplierHandlerImpl: AeronReservedValueSupplierCallback>(
+        &self,
+        iov: &AeronIovec,
+        iovcnt: usize,
+        reserved_value_supplier: Option<&Handler<AeronReservedValueSupplierHandlerImpl>>,
+    ) -> i64 {
+        unsafe {
+            let result = aeron_publication_offerv(
+                self.get_inner(),
+                iov.get_inner(),
+                iovcnt.into(),
+                {
+                    let callback: aeron_reserved_value_supplier_t =
+                        if reserved_value_supplier.is_none() {
+                            None
+                        } else {
+                            Some(
+                                aeron_reserved_value_supplier_t_callback::<
+                                    AeronReservedValueSupplierHandlerImpl,
+                                >,
+                            )
+                        };
+                    callback
+                },
+                reserved_value_supplier
+                    .map(|m| m.as_raw())
+                    .unwrap_or_else(|| std::ptr::null_mut()),
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Non-blocking publish by gathering buffer vectors into a message."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `iov` array for the vectors"]
+    #[doc = " \n - `iovcnt` of the number of vectors"]
+    #[doc = " \n - `reserved_value_supplier` to use for setting the reserved value field or NULL."]
+    #[doc = " \n - `clientd` to pass to the reserved_value_supplier."]
+    #[doc = " \n# Return\n the new stream position otherwise a negative error value."]
+    #[doc = r""]
+    #[doc = r""]
+    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
+    #[doc = r"  use with care_"]
+    pub fn offerv_once<AeronReservedValueSupplierHandlerImpl: FnMut(*mut u8, usize) -> i64>(
+        &self,
+        iov: &AeronIovec,
+        iovcnt: usize,
+        mut reserved_value_supplier: AeronReservedValueSupplierHandlerImpl,
+    ) -> i64 {
+        unsafe {
+            let result = aeron_publication_offerv(
+                self.get_inner(),
+                iov.get_inner(),
+                iovcnt.into(),
+                Some(
+                    aeron_reserved_value_supplier_t_callback_for_once_closure::<
+                        AeronReservedValueSupplierHandlerImpl,
+                    >,
+                ),
+                &mut reserved_value_supplier as *mut _ as *mut std::os::raw::c_void,
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Try to claim a range in the publication log into which a message can be written with zero copy semantics."]
+    #[doc = " Once the message has been written then aeron_buffer_claim_commit should be called thus making it available."]
+    #[doc = " A claim length cannot be greater than max payload length."]
+    #[doc = " \n"]
+    #[doc = " <b>Note:</b> This method can only be used for message lengths less than MTU length minus header."]
+    #[doc = " If the claim is held for more than the aeron.publication.unblock.timeout system property then the driver will"]
+    #[doc = " assume the publication thread is dead and will unblock the claim thus allowing other threads to make progress"]
+    #[doc = " and other claims to be sent to reach end-of-stream (EOS)."]
+    #[doc = ""]
+    #[doc = " @code"]
+    #[doc = " `AeronBufferClaim` buffer_claim;"]
+    #[doc = ""]
+    #[doc = " if (`AeronPublication`ry_claim(publication, length, &buffer_claim) > 0L)"]
+    #[doc = " {"]
+    #[doc = "     // work with buffer_claim->data directly."]
+    #[doc = "     aeron_buffer_claim_commit(&buffer_claim);"]
+    #[doc = " }"]
+    #[doc = " @endcode"]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `length` of the message."]
+    #[doc = " \n - `buffer_claim` to be populated if the claim succeeds."]
+    #[doc = " \n# Return\n the new stream position otherwise a negative error value."]
+    pub fn try_claim(&self, length: usize, buffer_claim: &AeronBufferClaim) -> i64 {
+        unsafe {
+            let result = aeron_publication_try_claim(
+                self.get_inner(),
+                length.into(),
+                buffer_claim.get_inner(),
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Get the status of the media channel for this publication."]
+    #[doc = " \n"]
+    #[doc = " The status will be ERRORED (-1) if a socket exception occurs on setup and ACTIVE (1) if all is well."]
+    #[doc = ""]
+    #[doc = " \n# Return\n 1 for ACTIVE, -1 for ERRORED"]
+    pub fn channel_status(&self) -> i64 {
+        unsafe {
+            let result = aeron_publication_channel_status(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Has the publication closed?"]
+    #[doc = ""]
+    #[doc = " \n# Return\n true if this publication is closed."]
+    pub fn is_closed(&self) -> bool {
+        unsafe {
+            let result = aeron_publication_is_closed(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Has the publication seen an active Subscriber recently?"]
+    #[doc = ""]
+    #[doc = " \n# Return\n true if this publication has recently seen an active subscriber otherwise false."]
+    pub fn is_connected(&self) -> bool {
+        unsafe {
+            let result = aeron_publication_is_connected(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Fill in a structure with the constants in use by a publication."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `publication` to get the constants for."]
+    #[doc = " \n - `constants` structure to fill in with the constants"]
+    #[doc = " \n# Return\n 0 for success and -1 for error."]
+    pub fn constants(&self, constants: &AeronPublicationConstants) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_publication_constants(self.get_inner(), constants.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Fill in a structure with the constants in use by a publication."]
+    #[doc = ""]
+    pub fn get_constants(&self) -> Result<AeronPublicationConstants, AeronCError> {
+        let result = AeronPublicationConstants::default();
+        self.constants(&result)?;
+        Ok(result)
+    }
+    #[inline]
+    #[doc = "Get the current position to which the publication has advanced for this stream."]
+    #[doc = ""]
+    #[doc = " \n# Return\n the current position to which the publication has advanced for this stream or a negative error value."]
+    pub fn position(&self) -> i64 {
+        unsafe {
+            let result = aeron_publication_position(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Get the position limit beyond which this publication will be back pressured."]
+    #[doc = ""]
+    #[doc = " This should only be used as a guide to determine when back pressure is likely to be applied."]
+    #[doc = ""]
+    #[doc = " \n# Return\n the position limit beyond which this publication will be back pressured or a negative error value."]
+    pub fn position_limit(&self) -> i64 {
+        unsafe {
+            let result = aeron_publication_position_limit(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Asynchronously close the publication. Will callback on the on_complete notification when the subscription is closed."]
+    #[doc = " The callback is optional, use NULL for the on_complete callback if not required."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `on_close_complete` optional callback to execute once the subscription has been closed and freed. This may"]
+    #[doc = " happen on a separate thread, so the caller should ensure that clientd has the appropriate lifetime."]
+    #[doc = " \n - `on_close_complete_clientd` parameter to pass to the on_complete callback."]
+    #[doc = " \n# Return\n 0 for success or -1 for error."]
+    pub fn close<AeronNotificationHandlerImpl: AeronNotificationCallback>(
+        &self,
+        on_close_complete: Option<&Handler<AeronNotificationHandlerImpl>>,
+    ) -> Result<i32, AeronCError> {
+        self.inner.close_already_called.set(true);
+        unsafe {
+            let result = aeron_publication_close(
+                self.get_inner(),
+                {
+                    let callback: aeron_notification_t = if on_close_complete.is_none() {
+                        None
+                    } else {
+                        Some(aeron_notification_t_callback::<AeronNotificationHandlerImpl>)
+                    };
+                    callback
+                },
+                on_close_complete
+                    .map(|m| m.as_raw())
+                    .unwrap_or_else(|| std::ptr::null_mut()),
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Asynchronously close the publication. Will callback on the on_complete notification when the subscription is closed."]
+    #[doc = " The callback is optional, use NULL for the on_complete callback if not required."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `on_close_complete` optional callback to execute once the subscription has been closed and freed. This may"]
+    #[doc = " happen on a separate thread, so the caller should ensure that clientd has the appropriate lifetime."]
+    #[doc = " \n - `on_close_complete_clientd` parameter to pass to the on_complete callback."]
+    #[doc = " \n# Return\n 0 for success or -1 for error."]
+    #[doc = r""]
+    #[doc = r""]
+    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
+    #[doc = r"  use with care_"]
+    pub fn close_once<AeronNotificationHandlerImpl: FnMut() -> ()>(
+        &self,
+        mut on_close_complete: AeronNotificationHandlerImpl,
     ) -> Result<i32, AeronCError> {
         unsafe {
-            let result = aeron_raw_log_map(
+            let result = aeron_publication_close(
                 self.get_inner(),
-                std::ffi::CString::new(path).unwrap().into_raw(),
-                use_sparse_files.into(),
-                term_length.into(),
-                page_size.into(),
+                Some(
+                    aeron_notification_t_callback_for_once_closure::<AeronNotificationHandlerImpl>,
+                ),
+                &mut on_close_complete as *mut _ as *mut std::os::raw::c_void,
             );
             if result < 0 {
                 return Err(AeronCError::from_code(result));
@@ -2647,16 +6371,55 @@ impl AeronMappedRawLog {
         }
     }
     #[inline]
-    pub fn aeron_raw_log_map_existing(
+    #[doc = "Get the publication's channel"]
+    #[doc = ""]
+    #[doc = " \n# Return\n channel uri string"]
+    pub fn channel(&self) -> &str {
+        unsafe {
+            let result = aeron_publication_channel(self.get_inner());
+            if result.is_null() {
+                ""
+            } else {
+                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap() }
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Get the publication's stream id"]
+    #[doc = ""]
+    #[doc = " \n# Return\n stream id"]
+    pub fn stream_id(&self) -> i32 {
+        unsafe {
+            let result = aeron_publication_stream_id(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Get the publication's session id"]
+    #[doc = " \n# Return\n session id"]
+    pub fn session_id(&self) -> i32 {
+        unsafe {
+            let result = aeron_publication_session_id(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Get all of the local socket addresses for this publication. Typically only one representing the control address."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `address_vec` to hold the received addresses"]
+    #[doc = " \n - `address_vec_len` available length of the vector to hold the addresses"]
+    #[doc = " \n# Return\n number of addresses found or -1 if there is an error."]
+    #[doc = " @see aeron_subscription_local_sockaddrs"]
+    pub fn local_sockaddrs(
         &self,
-        path: &str,
-        pre_touch: bool,
+        address_vec: &AeronIovec,
+        address_vec_len: usize,
     ) -> Result<i32, AeronCError> {
         unsafe {
-            let result = aeron_raw_log_map_existing(
+            let result = aeron_publication_local_sockaddrs(
                 self.get_inner(),
-                std::ffi::CString::new(path).unwrap().into_raw(),
-                pre_touch.into(),
+                address_vec.get_inner(),
+                address_vec_len.into(),
             );
             if result < 0 {
                 return Err(AeronCError::from_code(result));
@@ -2666,11 +6429,18 @@ impl AeronMappedRawLog {
         }
     }
     #[inline]
-    pub fn aeron_raw_log_close(&self, filename: &str) -> Result<i32, AeronCError> {
+    pub fn image_location(
+        dst: *mut ::std::os::raw::c_char,
+        length: usize,
+        aeron_dir: &str,
+        correlation_id: i64,
+    ) -> Result<i32, AeronCError> {
         unsafe {
-            let result = aeron_raw_log_close(
-                self.get_inner(),
-                std::ffi::CString::new(filename).unwrap().into_raw(),
+            let result = aeron_publication_image_location(
+                dst.into(),
+                length.into(),
+                std::ffi::CString::new(aeron_dir).unwrap().into_raw(),
+                correlation_id.into(),
             );
             if result < 0 {
                 return Err(AeronCError::from_code(result));
@@ -2679,79 +6449,1673 @@ impl AeronMappedRawLog {
             }
         }
     }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_publication_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronPublication {
+    type Target = aeron_publication_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_publication_t> for AeronPublication {
     #[inline]
-    pub fn aeron_raw_log_free(&self, filename: &str) -> bool {
+    fn from(value: *mut aeron_publication_t) -> Self {
+        AeronPublication {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                value,
+                Some(Box::new(|c| unsafe { aeron_publication_is_closed(c) })),
+            )),
+        }
+    }
+}
+impl From<AeronPublication> for *mut aeron_publication_t {
+    #[inline]
+    fn from(value: AeronPublication) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronPublication> for *mut aeron_publication_t {
+    #[inline]
+    fn from(value: &AeronPublication) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronPublication> for aeron_publication_t {
+    #[inline]
+    fn from(value: AeronPublication) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_publication_t> for AeronPublication {
+    #[inline]
+    fn from(value: *const aeron_publication_t) -> Self {
+        AeronPublication {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                value,
+                Some(Box::new(|c| unsafe { aeron_publication_is_closed(c) })),
+            )),
+        }
+    }
+}
+impl From<aeron_publication_t> for AeronPublication {
+    #[inline]
+    fn from(mut value: aeron_publication_t) -> Self {
+        AeronPublication {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_publication_t,
+                Some(Box::new(|c| unsafe { aeron_publication_is_closed(c) })),
+            )),
+        }
+    }
+}
+impl Drop for AeronPublication {
+    fn drop(&mut self) {
+        if (self.inner.borrowed || self.inner.cleanup.is_none())
+            && std::rc::Rc::strong_count(&self.inner) == 1
+            && !self.inner.is_closed_already_called()
+        {
+            if self.inner.auto_close.get() {
+                let result = self.close_with_no_args();
+                log::info!("auto closing {} {:?}", stringify!(AeronPublication), result);
+            } else {
+                log::warn!("{} not closed", stringify!(AeronPublication));
+            }
+        }
+    }
+}
+#[derive(Clone)]
+pub struct AeronFragmentAssembler {
+    inner: std::rc::Rc<ManagedCResource<aeron_fragment_assembler_t>>,
+}
+impl core::fmt::Debug for AeronFragmentAssembler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronFragmentAssembler))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronFragmentAssembler))
+                .field("inner", &self.inner)
+                .finish()
+        }
+    }
+}
+impl AeronFragmentAssembler {
+    #[doc = "Create a fragment assembler for use with a subscription."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `delegate` to call on completed"]
+    #[doc = " \n - `delegate_clientd` to pass to delegate handler."]
+    #[doc = " \n# Return\n 0 for success and -1 for error."]
+    pub fn new<AeronFragmentHandlerHandlerImpl: AeronFragmentHandlerCallback>(
+        delegate: Option<&Handler<AeronFragmentHandlerHandlerImpl>>,
+    ) -> Result<Self, AeronCError> {
+        let (delegate, delegate_clientd) = (
+            {
+                let callback: aeron_fragment_handler_t = if delegate.is_none() {
+                    None
+                } else {
+                    Some(aeron_fragment_handler_t_callback::<AeronFragmentHandlerHandlerImpl>)
+                };
+                callback
+            },
+            delegate
+                .map(|m| m.as_raw())
+                .unwrap_or_else(|| std::ptr::null_mut()),
+        );
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let resource_constructor = ManagedCResource::new(
+            move |ctx_field| unsafe {
+                aeron_fragment_assembler_create(ctx_field, delegate, delegate_clientd)
+            },
+            Some(Box::new(move |ctx_field| {
+                let result = unsafe { aeron_fragment_assembler_delete(*ctx_field) };
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                result
+            })),
+            false,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource_constructor),
+        })
+    }
+    #[inline]
+    #[doc = "Delete a fragment assembler."]
+    #[doc = ""]
+    #[doc = " \n# Return\n 0 for success or -1 for error."]
+    pub fn delete(&self) -> Result<i32, AeronCError> {
         unsafe {
-            let result = aeron_raw_log_free(
-                self.get_inner(),
-                std::ffi::CString::new(filename).unwrap().into_raw(),
+            let result = aeron_fragment_assembler_delete(self.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Handler function to be passed for handling fragment assembly."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `clientd` passed in the poll call (must be a `AeronFragmentAssembler`)"]
+    #[doc = " \n - `buffer` containing the data."]
+    #[doc = " \n - `header` representing the meta data for the data."]
+    pub fn handler(
+        clientd: *mut ::std::os::raw::c_void,
+        buffer: &[u8],
+        header: &AeronHeader,
+    ) -> () {
+        unsafe {
+            let result = aeron_fragment_assembler_handler(
+                clientd.into(),
+                buffer.as_ptr() as *mut _,
+                buffer.len(),
+                header.get_inner(),
             );
             result.into()
         }
     }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_mapped_raw_log_t {
+    pub fn get_inner(&self) -> *mut aeron_fragment_assembler_t {
         self.inner.get()
     }
 }
-impl std::ops::Deref for AeronMappedRawLog {
-    type Target = aeron_mapped_raw_log_t;
+impl std::ops::Deref for AeronFragmentAssembler {
+    type Target = aeron_fragment_assembler_t;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.inner.get() }
     }
 }
-impl From<*mut aeron_mapped_raw_log_t> for AeronMappedRawLog {
+impl From<*mut aeron_fragment_assembler_t> for AeronFragmentAssembler {
     #[inline]
-    fn from(value: *mut aeron_mapped_raw_log_t) -> Self {
-        AeronMappedRawLog {
+    fn from(value: *mut aeron_fragment_assembler_t) -> Self {
+        AeronFragmentAssembler {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<AeronMappedRawLog> for *mut aeron_mapped_raw_log_t {
+impl From<AeronFragmentAssembler> for *mut aeron_fragment_assembler_t {
     #[inline]
-    fn from(value: AeronMappedRawLog) -> Self {
+    fn from(value: AeronFragmentAssembler) -> Self {
         value.get_inner()
     }
 }
-impl From<&AeronMappedRawLog> for *mut aeron_mapped_raw_log_t {
+impl From<&AeronFragmentAssembler> for *mut aeron_fragment_assembler_t {
     #[inline]
-    fn from(value: &AeronMappedRawLog) -> Self {
+    fn from(value: &AeronFragmentAssembler) -> Self {
         value.get_inner()
     }
 }
-impl From<AeronMappedRawLog> for aeron_mapped_raw_log_t {
+impl From<AeronFragmentAssembler> for aeron_fragment_assembler_t {
     #[inline]
-    fn from(value: AeronMappedRawLog) -> Self {
+    fn from(value: AeronFragmentAssembler) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const aeron_mapped_raw_log_t> for AeronMappedRawLog {
+impl From<*const aeron_fragment_assembler_t> for AeronFragmentAssembler {
     #[inline]
-    fn from(value: *const aeron_mapped_raw_log_t) -> Self {
-        AeronMappedRawLog {
+    fn from(value: *const aeron_fragment_assembler_t) -> Self {
+        AeronFragmentAssembler {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<aeron_mapped_raw_log_t> for AeronMappedRawLog {
+impl From<aeron_fragment_assembler_t> for AeronFragmentAssembler {
     #[inline]
-    fn from(mut value: aeron_mapped_raw_log_t) -> Self {
-        AeronMappedRawLog {
+    fn from(mut value: aeron_fragment_assembler_t) -> Self {
+        AeronFragmentAssembler {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_mapped_raw_log_t,
+                &mut value as *mut aeron_fragment_assembler_t,
+                None,
+            )),
+        }
+    }
+}
+#[derive(Clone)]
+pub struct Aeron {
+    inner: std::rc::Rc<ManagedCResource<aeron_t>>,
+}
+impl core::fmt::Debug for Aeron {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(Aeron))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(Aeron))
+                .field("inner", &self.inner)
+                .finish()
+        }
+    }
+}
+impl Aeron {
+    #[doc = "Create a `Aeron` client struct and initialize from the `AeronContext` struct."]
+    #[doc = ""]
+    #[doc = " The given `AeronContext` struct will be used exclusively by the client. Do not reuse between clients."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `context` to use for initialization."]
+    #[doc = " \n# Return\n 0 for success and -1 for error."]
+    pub fn new(context: &AeronContext) -> Result<Self, AeronCError> {
+        let context_copy = context.clone();
+        let context: *mut aeron_context_t = context.into();
+        let drop_copies_closure =
+            std::rc::Rc::new(std::cell::RefCell::new(Some(|| drop(context_copy))));
+        let resource_constructor = ManagedCResource::new(
+            move |ctx_field| unsafe { aeron_init(ctx_field, context) },
+            Some(Box::new(move |ctx_field| {
+                let result = unsafe { aeron_close(*ctx_field) };
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                result
+            })),
+            false,
+            Some(Box::new(|c| unsafe { aeron_is_closed(c) })),
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource_constructor),
+        })
+    }
+    #[inline]
+    #[doc = "Start an `Aeron`. This may spawn a thread for the Client Conductor."]
+    #[doc = ""]
+    #[doc = " \n# Return\n 0 for success and -1 for error."]
+    pub fn start(&self) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_start(self.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Call the Conductor main do_work duty cycle once."]
+    #[doc = ""]
+    #[doc = " Client must have been created with use conductor invoker set to true."]
+    #[doc = ""]
+    #[doc = " \n# Return\n 0 for success and -1 for error."]
+    pub fn main_do_work(&self) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_main_do_work(self.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Call the Conductor Idle Strategy."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `work_count` to pass to idle strategy."]
+    pub fn main_idle_strategy(&self, work_count: ::std::os::raw::c_int) -> () {
+        unsafe {
+            let result = aeron_main_idle_strategy(self.get_inner(), work_count.into());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Close and delete `Aeron` struct."]
+    #[doc = ""]
+    #[doc = " \n# Return\n 0 for success and -1 for error."]
+    pub fn close(&self) -> Result<i32, AeronCError> {
+        self.inner.close_already_called.set(true);
+        unsafe {
+            let result = aeron_close(self.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Determines if the client has been closed, e.g. via a driver timeout. Don't call this method after calling"]
+    #[doc = " aeron_close as that will have already freed the associated memory."]
+    #[doc = ""]
+    #[doc = " \n# Return\n true if it has been closed, false otherwise."]
+    pub fn is_closed(&self) -> bool {
+        unsafe {
+            let result = aeron_is_closed(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Call stream_out to print the counter labels and values."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `stream_out` to call for each label and value."]
+    pub fn print_counters(
+        &self,
+        stream_out: ::std::option::Option<
+            unsafe extern "C" fn(arg1: *const ::std::os::raw::c_char),
+        >,
+    ) -> () {
+        unsafe {
+            let result = aeron_print_counters(self.get_inner(), stream_out.into());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Return the `AeronContext` that is in use by the given client."]
+    #[doc = ""]
+    #[doc = " \n# Return\n the `AeronContext` for the given client or NULL for an error."]
+    pub fn context(&self) -> AeronContext {
+        unsafe {
+            let result = aeron_context(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Return the client id in use by the client."]
+    #[doc = ""]
+    #[doc = " \n# Return\n id value or -1 for an error."]
+    pub fn client_id(&self) -> i64 {
+        unsafe {
+            let result = aeron_client_id(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Return a unique correlation id from the driver."]
+    #[doc = ""]
+    #[doc = " \n# Return\n unique correlation id or -1 for an error."]
+    pub fn next_correlation_id(&self) -> i64 {
+        unsafe {
+            let result = aeron_next_correlation_id(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Return a reference to the counters reader of the given client."]
+    #[doc = ""]
+    #[doc = " The `AeronCountersReader` is maintained by the client. And should not be freed."]
+    #[doc = ""]
+    #[doc = " \n# Return\n `AeronCountersReader` or NULL for error."]
+    pub fn counters_reader(&self) -> AeronCountersReader {
+        unsafe {
+            let result = aeron_counters_reader(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Add a handler to be called when a new counter becomes available."]
+    #[doc = ""]
+    #[doc = " NOTE: This function blocks until the handler is added by the client conductor thread."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `pair` holding the handler to call and a clientd to pass when called."]
+    #[doc = " \n# Return\n 0 for success and -1 for error"]
+    pub fn add_available_counter_handler(
+        &self,
+        pair: &AeronAvailableCounterPair,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_add_available_counter_handler(self.get_inner(), pair.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Remove a previously added handler to be called when a new counter becomes available."]
+    #[doc = ""]
+    #[doc = " NOTE: This function blocks until the handler is removed by the client conductor thread."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `pair` holding the handler to call and a clientd to pass when called."]
+    #[doc = " \n# Return\n 0 for success and -1 for error"]
+    pub fn remove_available_counter_handler(
+        &self,
+        pair: &AeronAvailableCounterPair,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_remove_available_counter_handler(self.get_inner(), pair.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Add a handler to be called when a new counter becomes unavailable or goes away."]
+    #[doc = ""]
+    #[doc = " NOTE: This function blocks until the handler is added by the client conductor thread."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `pair` holding the handler to call and a clientd to pass when called."]
+    #[doc = " \n# Return\n 0 for success and -1 for error"]
+    pub fn add_unavailable_counter_handler(
+        &self,
+        pair: &AeronUnavailableCounterPair,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_add_unavailable_counter_handler(self.get_inner(), pair.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Remove a previously added handler to be called when a new counter becomes unavailable or goes away."]
+    #[doc = ""]
+    #[doc = " NOTE: This function blocks until the handler is removed by the client conductor thread."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `pair` holding the handler to call and a clientd to pass when called."]
+    #[doc = " \n# Return\n 0 for success and -1 for error"]
+    pub fn remove_unavailable_counter_handler(
+        &self,
+        pair: &AeronUnavailableCounterPair,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result =
+                aeron_remove_unavailable_counter_handler(self.get_inner(), pair.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Add a handler to be called when client is closed."]
+    #[doc = ""]
+    #[doc = " NOTE: This function blocks until the handler is added by the client conductor thread."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `pair` holding the handler to call and a clientd to pass when called."]
+    #[doc = " \n# Return\n 0 for success and -1 for error"]
+    pub fn add_close_handler(&self, pair: &AeronCloseClientPair) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_add_close_handler(self.get_inner(), pair.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Remove a previously added handler to be called when client is closed."]
+    #[doc = ""]
+    #[doc = " NOTE: This function blocks until the handler is removed by the client conductor thread."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `pair` holding the handler to call and a clientd to pass when called."]
+    #[doc = " \n# Return\n 0 for success and -1 for error"]
+    pub fn remove_close_handler(&self, pair: &AeronCloseClientPair) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_remove_close_handler(self.get_inner(), pair.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Return full version and build string."]
+    #[doc = ""]
+    #[doc = " \n# Return\n full version and build string."]
+    pub fn version_full(&self) -> &str {
+        unsafe {
+            let result = aeron_version_full();
+            if result.is_null() {
+                ""
+            } else {
+                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap() }
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Return version text."]
+    #[doc = ""]
+    #[doc = " \n# Return\n version text."]
+    pub fn version_text(&self) -> &str {
+        unsafe {
+            let result = aeron_version_text();
+            if result.is_null() {
+                ""
+            } else {
+                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap() }
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Return major version number."]
+    #[doc = ""]
+    #[doc = " \n# Return\n major version number."]
+    pub fn version_major() -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_version_major();
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Return minor version number."]
+    #[doc = ""]
+    #[doc = " \n# Return\n minor version number."]
+    pub fn version_minor() -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_version_minor();
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Return patch version number."]
+    #[doc = ""]
+    #[doc = " \n# Return\n patch version number."]
+    pub fn version_patch() -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_version_patch();
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Return the git sha for the current build."]
+    #[doc = ""]
+    #[doc = " \n# Return\n git version"]
+    pub fn version_gitsha(&self) -> &str {
+        unsafe {
+            let result = aeron_version_gitsha();
+            if result.is_null() {
+                ""
+            } else {
+                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap() }
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Return time in nanoseconds for machine. Is not wall clock time."]
+    #[doc = ""]
+    #[doc = " \n# Return\n nanoseconds since epoch for machine."]
+    pub fn nano_clock() -> i64 {
+        unsafe {
+            let result = aeron_nano_clock();
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Return time in milliseconds since epoch. Is wall clock time."]
+    #[doc = ""]
+    #[doc = " \n# Return\n milliseconds since epoch."]
+    pub fn epoch_clock() -> i64 {
+        unsafe {
+            let result = aeron_epoch_clock();
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Determine if an aeron driver is using a given aeron directory."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `dirname`  for aeron directory"]
+    #[doc = " \n - `timeout_ms`  to use to determine activity for aeron directory"]
+    #[doc = " \n - `log_func` to call during activity check to log diagnostic information."]
+    #[doc = " \n# Return\n true for active driver or false for no active driver."]
+    pub fn is_driver_active(dirname: &str, timeout_ms: i64, log_func: aeron_log_func_t) -> bool {
+        unsafe {
+            let result = aeron_is_driver_active(
+                std::ffi::CString::new(dirname).unwrap().into_raw(),
+                timeout_ms.into(),
+                log_func.into(),
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Load properties from a string containing name=value pairs and set appropriate environment variables for the"]
+    #[doc = " process so that subsequent calls to aeron_driver_context_init will use those values."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `buffer` containing properties and values."]
+    #[doc = " \n# Return\n 0 for success and -1 for error."]
+    pub fn properties_buffer_load(buffer: &str) -> Result<i32, AeronCError> {
+        unsafe {
+            let result =
+                aeron_properties_buffer_load(std::ffi::CString::new(buffer).unwrap().into_raw());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Load properties file and set appropriate environment variables for the process so that subsequent"]
+    #[doc = " calls to aeron_driver_context_init will use those values."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `filename` to load."]
+    #[doc = " \n# Return\n 0 for success and -1 for error."]
+    pub fn properties_file_load(filename: &str) -> Result<i32, AeronCError> {
+        unsafe {
+            let result =
+                aeron_properties_file_load(std::ffi::CString::new(filename).unwrap().into_raw());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Load properties from HTTP URL and set environment variables for the process so that subsequent"]
+    #[doc = " calls to aeron_driver_context_init will use those values."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `url` to attempt to retrieve and load."]
+    #[doc = " \n# Return\n 0 for success and -1 for error."]
+    pub fn properties_http_load(url: &str) -> Result<i32, AeronCError> {
+        unsafe {
+            let result =
+                aeron_properties_http_load(std::ffi::CString::new(url).unwrap().into_raw());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Load properties based on URL or filename. If string contains file or http URL, it will attempt"]
+    #[doc = " to load properties from a file or http as indicated. If not a URL, then it will try to load the string"]
+    #[doc = " as a filename."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `url_or_filename` to load properties from."]
+    #[doc = " \n# Return\n 0 for success and -1 for error."]
+    pub fn properties_load(url_or_filename: &str) -> Result<i32, AeronCError> {
+        unsafe {
+            let result =
+                aeron_properties_load(std::ffi::CString::new(url_or_filename).unwrap().into_raw());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Return current aeron error code (errno) for calling thread."]
+    #[doc = ""]
+    #[doc = " \n# Return\n aeron error code for calling thread."]
+    pub fn errcode() -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_errcode();
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Return the current aeron error message for calling thread."]
+    #[doc = ""]
+    #[doc = " \n# Return\n aeron error message for calling thread."]
+    pub fn errmsg(&self) -> &str {
+        unsafe {
+            let result = aeron_errmsg();
+            if result.is_null() {
+                ""
+            } else {
+                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap() }
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Get the default path used by the Aeron media driver."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `path` buffer to store the path."]
+    #[doc = " \n - `path_length` space available in the buffer"]
+    #[doc = " \n# Return\n -1 if there is an issue or the number of bytes written to path excluding the terminator <code>\\0</code>. If this"]
+    #[doc = " is equal to or greater than the path_length then the path has been truncated."]
+    pub fn default_path(
+        path: *mut ::std::os::raw::c_char,
+        path_length: usize,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_default_path(path.into(), path_length.into());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    pub fn semantic_version_compose(major: u8, minor: u8, patch: u8) -> i32 {
+        unsafe {
+            let result = aeron_semantic_version_compose(major.into(), minor.into(), patch.into());
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn semantic_version_major(version: i32) -> u8 {
+        unsafe {
+            let result = aeron_semantic_version_major(version.into());
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn semantic_version_minor(version: i32) -> u8 {
+        unsafe {
+            let result = aeron_semantic_version_minor(version.into());
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn semantic_version_patch(version: i32) -> u8 {
+        unsafe {
+            let result = aeron_semantic_version_patch(version.into());
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn randomised_int32() -> i32 {
+        unsafe {
+            let result = aeron_randomised_int32();
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn format_date(str_: *mut ::std::os::raw::c_char, count: usize, timestamp: i64) -> () {
+        unsafe {
+            let result = aeron_format_date(str_.into(), count.into(), timestamp.into());
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn format_number_to_locale(
+        value: ::std::os::raw::c_longlong,
+        buffer: *mut ::std::os::raw::c_char,
+        buffer_len: usize,
+    ) -> *mut ::std::os::raw::c_char {
+        unsafe {
+            let result =
+                aeron_format_number_to_locale(value.into(), buffer.into(), buffer_len.into());
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn format_to_hex(
+        str_: *mut ::std::os::raw::c_char,
+        str_length: usize,
+        data: *const u8,
+        data_len: usize,
+    ) -> () {
+        unsafe {
+            let result =
+                aeron_format_to_hex(str_.into(), str_length.into(), data.into(), data_len.into());
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn set_errno(errcode: ::std::os::raw::c_int) -> () {
+        unsafe {
+            let result = aeron_set_errno(errcode.into());
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn error_code_str(&self, errcode: ::std::os::raw::c_int) -> &str {
+        unsafe {
+            let result = aeron_error_code_str(errcode.into());
+            if result.is_null() {
+                ""
+            } else {
+                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap() }
+            }
+        }
+    }
+    #[inline]
+    pub fn err_set(
+        errcode: ::std::os::raw::c_int,
+        function: &str,
+        filename: &str,
+        line_number: ::std::os::raw::c_int,
+        format: &str,
+    ) -> () {
+        unsafe {
+            let result = aeron_err_set(
+                errcode.into(),
+                std::ffi::CString::new(function).unwrap().into_raw(),
+                std::ffi::CString::new(filename).unwrap().into_raw(),
+                line_number.into(),
+                std::ffi::CString::new(format).unwrap().into_raw(),
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn err_append(
+        function: &str,
+        filename: &str,
+        line_number: ::std::os::raw::c_int,
+        format: &str,
+    ) -> () {
+        unsafe {
+            let result = aeron_err_append(
+                std::ffi::CString::new(function).unwrap().into_raw(),
+                std::ffi::CString::new(filename).unwrap().into_raw(),
+                line_number.into(),
+                std::ffi::CString::new(format).unwrap().into_raw(),
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn err_clear() -> () {
+        unsafe {
+            let result = aeron_err_clear();
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn free(ptr: *mut ::std::os::raw::c_void) -> () {
+        unsafe {
+            let result = aeron_free(ptr.into());
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn res_header_entry_length(
+        res: *mut ::std::os::raw::c_void,
+        remaining: usize,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_res_header_entry_length(res.into(), remaining.into());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    pub fn logbuffer_check_term_length(term_length: u64) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_logbuffer_check_term_length(term_length.into());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    pub fn logbuffer_check_page_size(page_size: u64) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_logbuffer_check_page_size(page_size.into());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    pub fn is_directory(path: &str) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_is_directory(std::ffi::CString::new(path).unwrap().into_raw());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    pub fn delete_directory(directory: &str) -> Result<i32, AeronCError> {
+        unsafe {
+            let result =
+                aeron_delete_directory(std::ffi::CString::new(directory).unwrap().into_raw());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    pub fn mkdir_recursive(
+        pathname: &str,
+        permission: ::std::os::raw::c_int,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_mkdir_recursive(
+                std::ffi::CString::new(pathname).unwrap().into_raw(),
+                permission.into(),
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    pub fn msync(addr: *mut ::std::os::raw::c_void, length: usize) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_msync(addr.into(), length.into());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    pub fn delete_file(path: &str) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_delete_file(std::ffi::CString::new(path).unwrap().into_raw());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    pub fn file_length(path: &str) -> i64 {
+        unsafe {
+            let result = aeron_file_length(std::ffi::CString::new(path).unwrap().into_raw());
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn usable_fs_space(path: &str) -> u64 {
+        unsafe {
+            let result = aeron_usable_fs_space(std::ffi::CString::new(path).unwrap().into_raw());
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn usable_fs_space_disabled(path: &str) -> u64 {
+        unsafe {
+            let result =
+                aeron_usable_fs_space_disabled(std::ffi::CString::new(path).unwrap().into_raw());
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn ipc_publication_location(
+        dst: *mut ::std::os::raw::c_char,
+        length: usize,
+        aeron_dir: &str,
+        correlation_id: i64,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_ipc_publication_location(
+                dst.into(),
+                length.into(),
+                std::ffi::CString::new(aeron_dir).unwrap().into_raw(),
+                correlation_id.into(),
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    pub fn network_publication_location(
+        dst: *mut ::std::os::raw::c_char,
+        length: usize,
+        aeron_dir: &str,
+        correlation_id: i64,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_network_publication_location(
+                dst.into(),
+                length.into(),
+                std::ffi::CString::new(aeron_dir).unwrap().into_raw(),
+                correlation_id.into(),
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    pub fn temp_filename(filename: *mut ::std::os::raw::c_char, length: usize) -> usize {
+        unsafe {
+            let result = aeron_temp_filename(filename.into(), length.into());
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn file_resolve(
+        parent: &str,
+        child: &str,
+        buffer: *mut ::std::os::raw::c_char,
+        buffer_len: usize,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_file_resolve(
+                std::ffi::CString::new(parent).unwrap().into_raw(),
+                std::ffi::CString::new(child).unwrap().into_raw(),
+                buffer.into(),
+                buffer_len.into(),
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for Aeron {
+    type Target = aeron_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_t> for Aeron {
+    #[inline]
+    fn from(value: *mut aeron_t) -> Self {
+        Aeron {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                value,
+                Some(Box::new(|c| unsafe { aeron_is_closed(c) })),
+            )),
+        }
+    }
+}
+impl From<Aeron> for *mut aeron_t {
+    #[inline]
+    fn from(value: Aeron) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&Aeron> for *mut aeron_t {
+    #[inline]
+    fn from(value: &Aeron) -> Self {
+        value.get_inner()
+    }
+}
+impl From<Aeron> for aeron_t {
+    #[inline]
+    fn from(value: Aeron) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_t> for Aeron {
+    #[inline]
+    fn from(value: *const aeron_t) -> Self {
+        Aeron {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                value,
+                Some(Box::new(|c| unsafe { aeron_is_closed(c) })),
+            )),
+        }
+    }
+}
+impl From<aeron_t> for Aeron {
+    #[inline]
+    fn from(mut value: aeron_t) -> Self {
+        Aeron {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_t,
+                Some(Box::new(|c| unsafe { aeron_is_closed(c) })),
+            )),
+        }
+    }
+}
+#[derive(Clone)]
+pub struct AeronOptionHeader {
+    inner: std::rc::Rc<ManagedCResource<aeron_option_header_t>>,
+}
+impl core::fmt::Debug for AeronOptionHeader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronOptionHeader))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronOptionHeader))
+                .field("inner", &self.inner)
+                .field(stringify!(option_length), &self.option_length())
+                .field(stringify!(type_), &self.type_())
+                .finish()
+        }
+    }
+}
+impl AeronOptionHeader {
+    #[inline]
+    pub fn new(option_length: u16, type_: u16) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_option_header_t {
+                    option_length: option_length.into(),
+                    type_: type_.into(),
+                };
+                let inner_ptr: *mut aeron_option_header_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_option_header_t)
+                );
+                let inst: aeron_option_header_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_option_header_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn option_length(&self) -> u16 {
+        self.option_length.into()
+    }
+    #[inline]
+    pub fn type_(&self) -> u16 {
+        self.type_.into()
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_option_header_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronOptionHeader {
+    type Target = aeron_option_header_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_option_header_t> for AeronOptionHeader {
+    #[inline]
+    fn from(value: *mut aeron_option_header_t) -> Self {
+        AeronOptionHeader {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronOptionHeader> for *mut aeron_option_header_t {
+    #[inline]
+    fn from(value: AeronOptionHeader) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronOptionHeader> for *mut aeron_option_header_t {
+    #[inline]
+    fn from(value: &AeronOptionHeader) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronOptionHeader> for aeron_option_header_t {
+    #[inline]
+    fn from(value: AeronOptionHeader) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_option_header_t> for AeronOptionHeader {
+    #[inline]
+    fn from(value: *const aeron_option_header_t) -> Self {
+        AeronOptionHeader {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_option_header_t> for AeronOptionHeader {
+    #[inline]
+    fn from(mut value: aeron_option_header_t) -> Self {
+        AeronOptionHeader {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_option_header_t,
                 None,
             )),
         }
     }
 }
 #[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronMappedRawLog {
+impl Default for AeronOptionHeader {
     fn default() -> Self {
-        AeronMappedRawLog::new_zeroed().expect("failed to create struct")
+        AeronOptionHeader::new_zeroed().expect("failed to create struct")
     }
 }
-impl AeronMappedRawLog {
+impl AeronOptionHeader {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[derive(Clone)]
+pub struct AeronCncConstants {
+    inner: std::rc::Rc<ManagedCResource<aeron_cnc_constants_t>>,
+}
+impl core::fmt::Debug for AeronCncConstants {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronCncConstants))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronCncConstants))
+                .field("inner", &self.inner)
+                .field(stringify!(cnc_version), &self.cnc_version())
+                .field(
+                    stringify!(to_driver_buffer_length),
+                    &self.to_driver_buffer_length(),
+                )
+                .field(
+                    stringify!(to_clients_buffer_length),
+                    &self.to_clients_buffer_length(),
+                )
+                .field(
+                    stringify!(counter_metadata_buffer_length),
+                    &self.counter_metadata_buffer_length(),
+                )
+                .field(
+                    stringify!(counter_values_buffer_length),
+                    &self.counter_values_buffer_length(),
+                )
+                .field(
+                    stringify!(error_log_buffer_length),
+                    &self.error_log_buffer_length(),
+                )
+                .field(
+                    stringify!(client_liveness_timeout),
+                    &self.client_liveness_timeout(),
+                )
+                .field(stringify!(start_timestamp), &self.start_timestamp())
+                .field(stringify!(pid), &self.pid())
+                .finish()
+        }
+    }
+}
+impl AeronCncConstants {
+    #[inline]
+    pub fn new(
+        cnc_version: i32,
+        to_driver_buffer_length: i32,
+        to_clients_buffer_length: i32,
+        counter_metadata_buffer_length: i32,
+        counter_values_buffer_length: i32,
+        error_log_buffer_length: i32,
+        client_liveness_timeout: i64,
+        start_timestamp: i64,
+        pid: i64,
+    ) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_cnc_constants_t {
+                    cnc_version: cnc_version.into(),
+                    to_driver_buffer_length: to_driver_buffer_length.into(),
+                    to_clients_buffer_length: to_clients_buffer_length.into(),
+                    counter_metadata_buffer_length: counter_metadata_buffer_length.into(),
+                    counter_values_buffer_length: counter_values_buffer_length.into(),
+                    error_log_buffer_length: error_log_buffer_length.into(),
+                    client_liveness_timeout: client_liveness_timeout.into(),
+                    start_timestamp: start_timestamp.into(),
+                    pid: pid.into(),
+                };
+                let inner_ptr: *mut aeron_cnc_constants_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_cnc_constants_t)
+                );
+                let inst: aeron_cnc_constants_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_cnc_constants_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn cnc_version(&self) -> i32 {
+        self.cnc_version.into()
+    }
+    #[inline]
+    pub fn to_driver_buffer_length(&self) -> i32 {
+        self.to_driver_buffer_length.into()
+    }
+    #[inline]
+    pub fn to_clients_buffer_length(&self) -> i32 {
+        self.to_clients_buffer_length.into()
+    }
+    #[inline]
+    pub fn counter_metadata_buffer_length(&self) -> i32 {
+        self.counter_metadata_buffer_length.into()
+    }
+    #[inline]
+    pub fn counter_values_buffer_length(&self) -> i32 {
+        self.counter_values_buffer_length.into()
+    }
+    #[inline]
+    pub fn error_log_buffer_length(&self) -> i32 {
+        self.error_log_buffer_length.into()
+    }
+    #[inline]
+    pub fn client_liveness_timeout(&self) -> i64 {
+        self.client_liveness_timeout.into()
+    }
+    #[inline]
+    pub fn start_timestamp(&self) -> i64 {
+        self.start_timestamp.into()
+    }
+    #[inline]
+    pub fn pid(&self) -> i64 {
+        self.pid.into()
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_cnc_constants_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronCncConstants {
+    type Target = aeron_cnc_constants_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_cnc_constants_t> for AeronCncConstants {
+    #[inline]
+    fn from(value: *mut aeron_cnc_constants_t) -> Self {
+        AeronCncConstants {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronCncConstants> for *mut aeron_cnc_constants_t {
+    #[inline]
+    fn from(value: AeronCncConstants) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronCncConstants> for *mut aeron_cnc_constants_t {
+    #[inline]
+    fn from(value: &AeronCncConstants) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronCncConstants> for aeron_cnc_constants_t {
+    #[inline]
+    fn from(value: AeronCncConstants) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_cnc_constants_t> for AeronCncConstants {
+    #[inline]
+    fn from(value: *const aeron_cnc_constants_t) -> Self {
+        AeronCncConstants {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_cnc_constants_t> for AeronCncConstants {
+    #[inline]
+    fn from(mut value: aeron_cnc_constants_t) -> Self {
+        AeronCncConstants {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_cnc_constants_t,
+                None,
+            )),
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronCncConstants {
+    fn default() -> Self {
+        AeronCncConstants::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronCncConstants {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[derive(Clone)]
+pub struct AeronUnavailableCounterPair {
+    inner: std::rc::Rc<ManagedCResource<aeron_on_unavailable_counter_pair_t>>,
+}
+impl core::fmt::Debug for AeronUnavailableCounterPair {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronUnavailableCounterPair))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronUnavailableCounterPair))
+                .field("inner", &self.inner)
+                .finish()
+        }
+    }
+}
+impl AeronUnavailableCounterPair {
+    #[inline]
+    pub fn new<AeronUnavailableCounterHandlerImpl: AeronUnavailableCounterCallback>(
+        handler: Option<&Handler<AeronUnavailableCounterHandlerImpl>>,
+    ) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_on_unavailable_counter_pair_t {
+                    handler: {
+                        let callback: aeron_on_unavailable_counter_t = if handler.is_none() {
+                            None
+                        } else {
+                            Some(
+                                aeron_on_unavailable_counter_t_callback::<
+                                    AeronUnavailableCounterHandlerImpl,
+                                >,
+                            )
+                        };
+                        callback
+                    },
+                    clientd: handler
+                        .map(|m| m.as_raw())
+                        .unwrap_or_else(|| std::ptr::null_mut()),
+                };
+                let inner_ptr: *mut aeron_on_unavailable_counter_pair_t =
+                    Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_on_unavailable_counter_pair_t)
+                );
+                let inst: aeron_on_unavailable_counter_pair_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_on_unavailable_counter_pair_t =
+                    Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn handler(&self) -> aeron_on_unavailable_counter_t {
+        self.handler.into()
+    }
+    #[inline]
+    pub fn clientd(&self) -> *mut ::std::os::raw::c_void {
+        self.clientd.into()
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_on_unavailable_counter_pair_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronUnavailableCounterPair {
+    type Target = aeron_on_unavailable_counter_pair_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_on_unavailable_counter_pair_t> for AeronUnavailableCounterPair {
+    #[inline]
+    fn from(value: *mut aeron_on_unavailable_counter_pair_t) -> Self {
+        AeronUnavailableCounterPair {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronUnavailableCounterPair> for *mut aeron_on_unavailable_counter_pair_t {
+    #[inline]
+    fn from(value: AeronUnavailableCounterPair) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronUnavailableCounterPair> for *mut aeron_on_unavailable_counter_pair_t {
+    #[inline]
+    fn from(value: &AeronUnavailableCounterPair) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronUnavailableCounterPair> for aeron_on_unavailable_counter_pair_t {
+    #[inline]
+    fn from(value: AeronUnavailableCounterPair) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_on_unavailable_counter_pair_t> for AeronUnavailableCounterPair {
+    #[inline]
+    fn from(value: *const aeron_on_unavailable_counter_pair_t) -> Self {
+        AeronUnavailableCounterPair {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_on_unavailable_counter_pair_t> for AeronUnavailableCounterPair {
+    #[inline]
+    fn from(mut value: aeron_on_unavailable_counter_pair_t) -> Self {
+        AeronUnavailableCounterPair {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_on_unavailable_counter_pair_t,
+                None,
+            )),
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronUnavailableCounterPair {
+    fn default() -> Self {
+        AeronUnavailableCounterPair::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronUnavailableCounterPair {
     #[doc = r" Regular clone just increases the reference count of underlying count."]
     #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
     #[doc = r""]
@@ -2952,23 +8316,23 @@ impl AeronNakHeader {
     }
 }
 #[derive(Clone)]
-pub struct AeronClientRegisteringResource {
-    inner: std::rc::Rc<ManagedCResource<aeron_client_registering_resource_t>>,
+pub struct AeronAsyncAddPublication {
+    inner: std::rc::Rc<ManagedCResource<aeron_async_add_publication_t>>,
 }
-impl core::fmt::Debug for AeronClientRegisteringResource {
+impl core::fmt::Debug for AeronAsyncAddPublication {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronClientRegisteringResource))
+            f.debug_struct(stringify!(AeronAsyncAddPublication))
                 .field("inner", &"null")
                 .finish()
         } else {
-            f.debug_struct(stringify!(AeronClientRegisteringResource))
+            f.debug_struct(stringify!(AeronAsyncAddPublication))
                 .field("inner", &self.inner)
                 .finish()
         }
     }
 }
-impl AeronClientRegisteringResource {
+impl AeronAsyncAddPublication {
     #[inline]
     #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
     pub fn new_zeroed() -> Result<Self, AeronCError> {
@@ -2977,10 +8341,478 @@ impl AeronClientRegisteringResource {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_client_registering_resource_t)
+                    stringify!(aeron_async_add_publication_t)
                 );
-                let inst: aeron_client_registering_resource_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_client_registering_resource_t =
+                let inst: aeron_async_add_publication_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_async_add_publication_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    #[doc = "Gets the registration id for addition of the publication. Note that using this after a call to poll the succeeds or"]
+    #[doc = " errors is undefined behaviour. As the async_add_publication_t may have been freed."]
+    #[doc = ""]
+    #[doc = " \n# Return\n registration id for the publication."]
+    pub fn get_registration_id(&self) -> i64 {
+        unsafe {
+            let result = aeron_async_add_publication_get_registration_id(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_async_add_publication_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronAsyncAddPublication {
+    type Target = aeron_async_add_publication_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_async_add_publication_t> for AeronAsyncAddPublication {
+    #[inline]
+    fn from(value: *mut aeron_async_add_publication_t) -> Self {
+        AeronAsyncAddPublication {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronAsyncAddPublication> for *mut aeron_async_add_publication_t {
+    #[inline]
+    fn from(value: AeronAsyncAddPublication) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronAsyncAddPublication> for *mut aeron_async_add_publication_t {
+    #[inline]
+    fn from(value: &AeronAsyncAddPublication) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronAsyncAddPublication> for aeron_async_add_publication_t {
+    #[inline]
+    fn from(value: AeronAsyncAddPublication) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_async_add_publication_t> for AeronAsyncAddPublication {
+    #[inline]
+    fn from(value: *const aeron_async_add_publication_t) -> Self {
+        AeronAsyncAddPublication {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_async_add_publication_t> for AeronAsyncAddPublication {
+    #[inline]
+    fn from(mut value: aeron_async_add_publication_t) -> Self {
+        AeronAsyncAddPublication {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_async_add_publication_t,
+                None,
+            )),
+        }
+    }
+}
+impl AeronPublication {
+    #[inline]
+    pub fn new(async_: &AeronAsyncAddPublication) -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| unsafe { aeron_async_add_publication_poll(ctx_field, async_.into()) },
+            None,
+            false,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+}
+impl Aeron {
+    #[inline]
+    pub fn async_add_publication(
+        &self,
+        uri: &str,
+        stream_id: i32,
+    ) -> Result<AeronAsyncAddPublication, AeronCError> {
+        let result = AeronAsyncAddPublication::new(self, uri, stream_id);
+        if let Ok(result) = &result {
+            result.inner.add_dependency(self.clone());
+        }
+        result
+    }
+}
+impl Aeron {
+    #[inline]
+    pub fn add_publication(
+        &self,
+        uri: &str,
+        stream_id: i32,
+        timeout: std::time::Duration,
+    ) -> Result<AeronPublication, AeronCError> {
+        let start = std::time::Instant::now();
+        loop {
+            if let Ok(poller) = AeronAsyncAddPublication::new(self, uri, stream_id) {
+                while start.elapsed() <= timeout {
+                    if let Some(result) = poller.poll()? {
+                        return Ok(result);
+                    }
+                    #[cfg(debug_assertions)]
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+            }
+            if start.elapsed() > timeout {
+                log::error!("failed async poll for {:?}", self);
+                return Err(AeronErrorType::TimedOut.into());
+            }
+            #[cfg(debug_assertions)]
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+}
+impl AeronAsyncAddPublication {
+    #[inline]
+    pub fn new(client: &Aeron, uri: &str, stream_id: i32) -> Result<Self, AeronCError> {
+        let resource_async = ManagedCResource::new(
+            move |ctx_field| unsafe {
+                aeron_async_add_publication(
+                    ctx_field,
+                    client.into(),
+                    std::ffi::CString::new(uri).unwrap().into_raw(),
+                    stream_id.into(),
+                )
+            },
+            None,
+            false,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource_async),
+        })
+    }
+    pub fn poll(&self) -> Result<Option<AeronPublication>, AeronCError> {
+        let result = AeronPublication::new(self);
+        if let Ok(result) = &result {
+            unsafe {
+                for d in (&*self.inner.dependencies.get()).iter() {
+                    result.inner.add_dependency(d.clone());
+                }
+                result.inner.auto_close.set(true);
+            }
+        }
+        match result {
+            Ok(result) => Ok(Some(result)),
+            Err(AeronCError { code }) if code == 0 => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+    pub fn poll_blocking(
+        &self,
+        timeout: std::time::Duration,
+    ) -> Result<AeronPublication, AeronCError> {
+        if let Some(result) = self.poll()? {
+            return Ok(result);
+        }
+        let time = std::time::Instant::now();
+        while time.elapsed() < timeout {
+            if let Some(result) = self.poll()? {
+                return Ok(result);
+            }
+            #[cfg(debug_assertions)]
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        log::error!("failed async poll for {:?}", self);
+        Err(AeronErrorType::TimedOut.into())
+    }
+}
+#[derive(Clone)]
+pub struct AeronStatusMessageHeader {
+    inner: std::rc::Rc<ManagedCResource<aeron_status_message_header_t>>,
+}
+impl core::fmt::Debug for AeronStatusMessageHeader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronStatusMessageHeader))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronStatusMessageHeader))
+                .field("inner", &self.inner)
+                .field(stringify!(frame_header), &self.frame_header())
+                .field(stringify!(session_id), &self.session_id())
+                .field(stringify!(stream_id), &self.stream_id())
+                .field(stringify!(consumption_term_id), &self.consumption_term_id())
+                .field(
+                    stringify!(consumption_term_offset),
+                    &self.consumption_term_offset(),
+                )
+                .field(stringify!(receiver_window), &self.receiver_window())
+                .field(stringify!(receiver_id), &self.receiver_id())
+                .finish()
+        }
+    }
+}
+impl AeronStatusMessageHeader {
+    #[inline]
+    pub fn new(
+        frame_header: AeronFrameHeader,
+        session_id: i32,
+        stream_id: i32,
+        consumption_term_id: i32,
+        consumption_term_offset: i32,
+        receiver_window: i32,
+        receiver_id: i64,
+    ) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_status_message_header_t {
+                    frame_header: frame_header.into(),
+                    session_id: session_id.into(),
+                    stream_id: stream_id.into(),
+                    consumption_term_id: consumption_term_id.into(),
+                    consumption_term_offset: consumption_term_offset.into(),
+                    receiver_window: receiver_window.into(),
+                    receiver_id: receiver_id.into(),
+                };
+                let inner_ptr: *mut aeron_status_message_header_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_status_message_header_t)
+                );
+                let inst: aeron_status_message_header_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_status_message_header_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn frame_header(&self) -> AeronFrameHeader {
+        self.frame_header.into()
+    }
+    #[inline]
+    pub fn session_id(&self) -> i32 {
+        self.session_id.into()
+    }
+    #[inline]
+    pub fn stream_id(&self) -> i32 {
+        self.stream_id.into()
+    }
+    #[inline]
+    pub fn consumption_term_id(&self) -> i32 {
+        self.consumption_term_id.into()
+    }
+    #[inline]
+    pub fn consumption_term_offset(&self) -> i32 {
+        self.consumption_term_offset.into()
+    }
+    #[inline]
+    pub fn receiver_window(&self) -> i32 {
+        self.receiver_window.into()
+    }
+    #[inline]
+    pub fn receiver_id(&self) -> i64 {
+        self.receiver_id.into()
+    }
+    #[inline]
+    pub fn aeron_udp_protocol_group_tag(&self) -> Result<i64, AeronCError> {
+        unsafe {
+            let mut mut_result: i64 = Default::default();
+            let err_code = aeron_udp_protocol_group_tag(self.get_inner(), &mut mut_result);
+            if err_code < 0 {
+                return Err(AeronCError::from_code(err_code));
+            } else {
+                return Ok(mut_result);
+            }
+        }
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_status_message_header_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronStatusMessageHeader {
+    type Target = aeron_status_message_header_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_status_message_header_t> for AeronStatusMessageHeader {
+    #[inline]
+    fn from(value: *mut aeron_status_message_header_t) -> Self {
+        AeronStatusMessageHeader {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronStatusMessageHeader> for *mut aeron_status_message_header_t {
+    #[inline]
+    fn from(value: AeronStatusMessageHeader) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronStatusMessageHeader> for *mut aeron_status_message_header_t {
+    #[inline]
+    fn from(value: &AeronStatusMessageHeader) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronStatusMessageHeader> for aeron_status_message_header_t {
+    #[inline]
+    fn from(value: AeronStatusMessageHeader) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_status_message_header_t> for AeronStatusMessageHeader {
+    #[inline]
+    fn from(value: *const aeron_status_message_header_t) -> Self {
+        AeronStatusMessageHeader {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_status_message_header_t> for AeronStatusMessageHeader {
+    #[inline]
+    fn from(mut value: aeron_status_message_header_t) -> Self {
+        AeronStatusMessageHeader {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_status_message_header_t,
+                None,
+            )),
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronStatusMessageHeader {
+    fn default() -> Self {
+        AeronStatusMessageHeader::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronStatusMessageHeader {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[derive(Clone)]
+pub struct AeronAvailableCounterPair {
+    inner: std::rc::Rc<ManagedCResource<aeron_on_available_counter_pair_t>>,
+}
+impl core::fmt::Debug for AeronAvailableCounterPair {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronAvailableCounterPair))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronAvailableCounterPair))
+                .field("inner", &self.inner)
+                .finish()
+        }
+    }
+}
+impl AeronAvailableCounterPair {
+    #[inline]
+    pub fn new<AeronAvailableCounterHandlerImpl: AeronAvailableCounterCallback>(
+        handler: Option<&Handler<AeronAvailableCounterHandlerImpl>>,
+    ) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_on_available_counter_pair_t {
+                    handler: {
+                        let callback: aeron_on_available_counter_t = if handler.is_none() {
+                            None
+                        } else {
+                            Some(
+                                aeron_on_available_counter_t_callback::<
+                                    AeronAvailableCounterHandlerImpl,
+                                >,
+                            )
+                        };
+                        callback
+                    },
+                    clientd: handler
+                        .map(|m| m.as_raw())
+                        .unwrap_or_else(|| std::ptr::null_mut()),
+                };
+                let inner_ptr: *mut aeron_on_available_counter_pair_t =
+                    Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_on_available_counter_pair_t)
+                );
+                let inst: aeron_on_available_counter_pair_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_on_available_counter_pair_t =
                     Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
@@ -2993,60 +8825,89 @@ impl AeronClientRegisteringResource {
             inner: std::rc::Rc::new(resource),
         })
     }
+    #[inline]
+    pub fn handler(&self) -> aeron_on_available_counter_t {
+        self.handler.into()
+    }
+    #[inline]
+    pub fn clientd(&self) -> *mut ::std::os::raw::c_void {
+        self.clientd.into()
+    }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_client_registering_resource_t {
+    pub fn get_inner(&self) -> *mut aeron_on_available_counter_pair_t {
         self.inner.get()
     }
 }
-impl std::ops::Deref for AeronClientRegisteringResource {
-    type Target = aeron_client_registering_resource_t;
+impl std::ops::Deref for AeronAvailableCounterPair {
+    type Target = aeron_on_available_counter_pair_t;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.inner.get() }
     }
 }
-impl From<*mut aeron_client_registering_resource_t> for AeronClientRegisteringResource {
+impl From<*mut aeron_on_available_counter_pair_t> for AeronAvailableCounterPair {
     #[inline]
-    fn from(value: *mut aeron_client_registering_resource_t) -> Self {
-        AeronClientRegisteringResource {
+    fn from(value: *mut aeron_on_available_counter_pair_t) -> Self {
+        AeronAvailableCounterPair {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<AeronClientRegisteringResource> for *mut aeron_client_registering_resource_t {
+impl From<AeronAvailableCounterPair> for *mut aeron_on_available_counter_pair_t {
     #[inline]
-    fn from(value: AeronClientRegisteringResource) -> Self {
+    fn from(value: AeronAvailableCounterPair) -> Self {
         value.get_inner()
     }
 }
-impl From<&AeronClientRegisteringResource> for *mut aeron_client_registering_resource_t {
+impl From<&AeronAvailableCounterPair> for *mut aeron_on_available_counter_pair_t {
     #[inline]
-    fn from(value: &AeronClientRegisteringResource) -> Self {
+    fn from(value: &AeronAvailableCounterPair) -> Self {
         value.get_inner()
     }
 }
-impl From<AeronClientRegisteringResource> for aeron_client_registering_resource_t {
+impl From<AeronAvailableCounterPair> for aeron_on_available_counter_pair_t {
     #[inline]
-    fn from(value: AeronClientRegisteringResource) -> Self {
+    fn from(value: AeronAvailableCounterPair) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const aeron_client_registering_resource_t> for AeronClientRegisteringResource {
+impl From<*const aeron_on_available_counter_pair_t> for AeronAvailableCounterPair {
     #[inline]
-    fn from(value: *const aeron_client_registering_resource_t) -> Self {
-        AeronClientRegisteringResource {
+    fn from(value: *const aeron_on_available_counter_pair_t) -> Self {
+        AeronAvailableCounterPair {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<aeron_client_registering_resource_t> for AeronClientRegisteringResource {
+impl From<aeron_on_available_counter_pair_t> for AeronAvailableCounterPair {
     #[inline]
-    fn from(mut value: aeron_client_registering_resource_t) -> Self {
-        AeronClientRegisteringResource {
+    fn from(mut value: aeron_on_available_counter_pair_t) -> Self {
+        AeronAvailableCounterPair {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_client_registering_resource_t,
+                &mut value as *mut aeron_on_available_counter_pair_t,
                 None,
             )),
         }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronAvailableCounterPair {
+    fn default() -> Self {
+        AeronAvailableCounterPair::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronAvailableCounterPair {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
     }
 }
 #[derive(Clone)]
@@ -3220,319 +9081,33 @@ impl AeronResolutionHeaderIpv6 {
     }
 }
 #[derive(Clone)]
-pub struct AeronUriParams {
-    inner: std::rc::Rc<ManagedCResource<aeron_uri_params_t>>,
+pub struct AeronUriParam {
+    inner: std::rc::Rc<ManagedCResource<aeron_uri_param_t>>,
 }
-impl core::fmt::Debug for AeronUriParams {
+impl core::fmt::Debug for AeronUriParam {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronUriParams))
+            f.debug_struct(stringify!(AeronUriParam))
                 .field("inner", &"null")
                 .finish()
         } else {
-            f.debug_struct(stringify!(AeronUriParams))
+            f.debug_struct(stringify!(AeronUriParam))
                 .field("inner", &self.inner)
-                .field(stringify!(length), &self.length())
                 .finish()
         }
     }
 }
-impl AeronUriParams {
+impl AeronUriParam {
     #[inline]
-    pub fn new(length: usize, array: &AeronUriParam) -> Result<Self, AeronCError> {
-        let array_copy = array.clone();
-        let drop_copies_closure =
-            std::rc::Rc::new(std::cell::RefCell::new(Some(|| drop(array_copy))));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_uri_params_t {
-                    length: length.into(),
-                    array: array.into(),
-                };
-                let inner_ptr: *mut aeron_uri_params_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_uri_params_t)
-                );
-                let inst: aeron_uri_params_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_uri_params_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn length(&self) -> usize {
-        self.length.into()
-    }
-    #[inline]
-    pub fn array(&self) -> AeronUriParam {
-        self.array.into()
-    }
-    #[inline]
-    pub fn aeron_uri_find_param_value(
-        &self,
-        uri_params: *const aeron_uri_params_t,
-        key: &str,
-    ) -> &str {
-        unsafe {
-            let result = aeron_uri_find_param_value(
-                uri_params.into(),
-                std::ffi::CString::new(key).unwrap().into_raw(),
-            );
-            if result.is_null() {
-                ""
-            } else {
-                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap() }
-            }
-        }
-    }
-    #[inline]
-    pub fn aeron_uri_get_int32(&self, key: &str) -> Result<i32, AeronCError> {
-        unsafe {
-            let mut mut_result: i32 = Default::default();
-            let err_code = aeron_uri_get_int32(
-                self.get_inner(),
-                std::ffi::CString::new(key).unwrap().into_raw(),
-                &mut mut_result,
-            );
-            if err_code < 0 {
-                return Err(AeronCError::from_code(err_code));
-            } else {
-                return Ok(mut_result);
-            }
-        }
-    }
-    #[inline]
-    pub fn aeron_uri_get_int64(&self, key: &str, default_val: i64) -> Result<i64, AeronCError> {
-        unsafe {
-            let mut mut_result: i64 = Default::default();
-            let err_code = aeron_uri_get_int64(
-                self.get_inner(),
-                std::ffi::CString::new(key).unwrap().into_raw(),
-                default_val.into(),
-                &mut mut_result,
-            );
-            if err_code < 0 {
-                return Err(AeronCError::from_code(err_code));
-            } else {
-                return Ok(mut_result);
-            }
-        }
-    }
-    #[inline]
-    pub fn aeron_uri_get_bool(&self, key: &str) -> Result<bool, AeronCError> {
-        unsafe {
-            let mut mut_result: bool = Default::default();
-            let err_code = aeron_uri_get_bool(
-                self.get_inner(),
-                std::ffi::CString::new(key).unwrap().into_raw(),
-                &mut mut_result,
-            );
-            if err_code < 0 {
-                return Err(AeronCError::from_code(err_code));
-            } else {
-                return Ok(mut_result);
-            }
-        }
-    }
-    #[inline]
-    pub fn aeron_uri_get_ats(
-        &self,
-        uri_ats_status: *mut aeron_uri_ats_status_t,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_uri_get_ats(self.get_inner(), uri_ats_status.into());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    pub fn aeron_uri_get_timeout(&self, param_name: &str) -> Result<u64, AeronCError> {
-        unsafe {
-            let mut mut_result: u64 = Default::default();
-            let err_code = aeron_uri_get_timeout(
-                self.get_inner(),
-                std::ffi::CString::new(param_name).unwrap().into_raw(),
-                &mut mut_result,
-            );
-            if err_code < 0 {
-                return Err(AeronCError::from_code(err_code));
-            } else {
-                return Ok(mut_result);
-            }
-        }
-    }
-    #[inline]
-    pub fn aeron_uri_get_socket_buf_lengths(
-        &self,
-        socket_sndbuf_length: &mut usize,
-        socket_rcvbuf_length: &mut usize,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_uri_get_socket_buf_lengths(
-                self.get_inner(),
-                socket_sndbuf_length as *mut _,
-                socket_rcvbuf_length as *mut _,
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    pub fn aeron_uri_get_receiver_window_length(&self) -> Result<usize, AeronCError> {
-        unsafe {
-            let mut mut_result: usize = Default::default();
-            let err_code = aeron_uri_get_receiver_window_length(self.get_inner(), &mut mut_result);
-            if err_code < 0 {
-                return Err(AeronCError::from_code(err_code));
-            } else {
-                return Ok(mut_result);
-            }
-        }
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_uri_params_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronUriParams {
-    type Target = aeron_uri_params_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_uri_params_t> for AeronUriParams {
-    #[inline]
-    fn from(value: *mut aeron_uri_params_t) -> Self {
-        AeronUriParams {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronUriParams> for *mut aeron_uri_params_t {
-    #[inline]
-    fn from(value: AeronUriParams) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronUriParams> for *mut aeron_uri_params_t {
-    #[inline]
-    fn from(value: &AeronUriParams) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronUriParams> for aeron_uri_params_t {
-    #[inline]
-    fn from(value: AeronUriParams) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_uri_params_t> for AeronUriParams {
-    #[inline]
-    fn from(value: *const aeron_uri_params_t) -> Self {
-        AeronUriParams {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_uri_params_t> for AeronUriParams {
-    #[inline]
-    fn from(mut value: aeron_uri_params_t) -> Self {
-        AeronUriParams {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_uri_params_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronUriParams {
-    fn default() -> Self {
-        AeronUriParams::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronUriParams {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[doc = "Structure used to hold information for a try_claim function call."]
-#[derive(Clone)]
-pub struct AeronBufferClaim {
-    inner: std::rc::Rc<ManagedCResource<aeron_buffer_claim_t>>,
-}
-impl core::fmt::Debug for AeronBufferClaim {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronBufferClaim))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronBufferClaim))
-                .field("inner", &self.inner)
-                .field(stringify!(length), &self.length())
-                .finish()
-        }
-    }
-}
-impl AeronBufferClaim {
-    #[inline]
-    pub fn new(frame_header: *mut u8, data: &mut [u8]) -> Result<Self, AeronCError> {
+    pub fn new(key: &str, value: &str) -> Result<Self, AeronCError> {
         let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
         let r_constructor = ManagedCResource::new(
             move |ctx_field| {
-                let inst = aeron_buffer_claim_t {
-                    frame_header: frame_header.into(),
-                    data: data.as_ptr() as *mut _,
-                    length: data.len(),
+                let inst = aeron_uri_param_t {
+                    key: std::ffi::CString::new(key).unwrap().into_raw(),
+                    value: std::ffi::CString::new(value).unwrap().into_raw(),
                 };
-                let inner_ptr: *mut aeron_buffer_claim_t = Box::into_raw(Box::new(inst));
+                let inner_ptr: *mut aeron_uri_param_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -3557,10 +9132,10 @@ impl AeronBufferClaim {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_buffer_claim_t)
+                    stringify!(aeron_uri_param_t)
                 );
-                let inst: aeron_buffer_claim_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_buffer_claim_t = Box::into_raw(Box::new(inst));
+                let inst: aeron_uri_param_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_uri_param_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -3573,1108 +9148,84 @@ impl AeronBufferClaim {
         })
     }
     #[inline]
-    pub fn frame_header(&self) -> *mut u8 {
-        self.frame_header.into()
-    }
-    #[inline]
-    pub fn data(&self) -> &mut [u8] {
-        unsafe {
-            if self.data.is_null() {
-                &mut [] as &mut [_]
-            } else {
-                std::slice::from_raw_parts_mut(self.data, self.length.try_into().unwrap())
-            }
-        }
-    }
-    #[inline]
-    pub fn length(&self) -> usize {
-        self.length.into()
-    }
-    #[inline]
-    #[doc = "Commit the given buffer_claim as a complete message available for consumption."]
-    #[doc = ""]
-    #[doc = " \n# Return\n 0 for success or -1 for error."]
-    pub fn commit(&self) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_buffer_claim_commit(self.get_inner());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Abort the given buffer_claim and assign its position as padding."]
-    #[doc = ""]
-    #[doc = " \n# Return\n 0 for success or -1 for error."]
-    pub fn abort(&self) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_buffer_claim_abort(self.get_inner());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_buffer_claim_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronBufferClaim {
-    type Target = aeron_buffer_claim_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_buffer_claim_t> for AeronBufferClaim {
-    #[inline]
-    fn from(value: *mut aeron_buffer_claim_t) -> Self {
-        AeronBufferClaim {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronBufferClaim> for *mut aeron_buffer_claim_t {
-    #[inline]
-    fn from(value: AeronBufferClaim) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronBufferClaim> for *mut aeron_buffer_claim_t {
-    #[inline]
-    fn from(value: &AeronBufferClaim) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronBufferClaim> for aeron_buffer_claim_t {
-    #[inline]
-    fn from(value: AeronBufferClaim) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_buffer_claim_t> for AeronBufferClaim {
-    #[inline]
-    fn from(value: *const aeron_buffer_claim_t) -> Self {
-        AeronBufferClaim {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_buffer_claim_t> for AeronBufferClaim {
-    #[inline]
-    fn from(mut value: aeron_buffer_claim_t) -> Self {
-        AeronBufferClaim {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_buffer_claim_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronBufferClaim {
-    fn default() -> Self {
-        AeronBufferClaim::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronBufferClaim {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[derive(Clone)]
-pub struct AeronCloseClientPair {
-    inner: std::rc::Rc<ManagedCResource<aeron_on_close_client_pair_t>>,
-}
-impl core::fmt::Debug for AeronCloseClientPair {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronCloseClientPair))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronCloseClientPair))
-                .field("inner", &self.inner)
-                .finish()
-        }
-    }
-}
-impl AeronCloseClientPair {
-    #[inline]
-    pub fn new<AeronCloseClientHandlerImpl: AeronCloseClientCallback>(
-        handler: Option<&Handler<AeronCloseClientHandlerImpl>>,
-    ) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_on_close_client_pair_t {
-                    handler: {
-                        let callback: aeron_on_close_client_t = if handler.is_none() {
-                            None
-                        } else {
-                            Some(aeron_on_close_client_t_callback::<AeronCloseClientHandlerImpl>)
-                        };
-                        callback
-                    },
-                    clientd: handler
-                        .map(|m| m.as_raw())
-                        .unwrap_or_else(|| std::ptr::null_mut()),
-                };
-                let inner_ptr: *mut aeron_on_close_client_pair_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_on_close_client_pair_t)
-                );
-                let inst: aeron_on_close_client_pair_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_on_close_client_pair_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn handler(&self) -> aeron_on_close_client_t {
-        self.handler.into()
-    }
-    #[inline]
-    pub fn clientd(&self) -> *mut ::std::os::raw::c_void {
-        self.clientd.into()
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_on_close_client_pair_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronCloseClientPair {
-    type Target = aeron_on_close_client_pair_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_on_close_client_pair_t> for AeronCloseClientPair {
-    #[inline]
-    fn from(value: *mut aeron_on_close_client_pair_t) -> Self {
-        AeronCloseClientPair {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronCloseClientPair> for *mut aeron_on_close_client_pair_t {
-    #[inline]
-    fn from(value: AeronCloseClientPair) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronCloseClientPair> for *mut aeron_on_close_client_pair_t {
-    #[inline]
-    fn from(value: &AeronCloseClientPair) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronCloseClientPair> for aeron_on_close_client_pair_t {
-    #[inline]
-    fn from(value: AeronCloseClientPair) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_on_close_client_pair_t> for AeronCloseClientPair {
-    #[inline]
-    fn from(value: *const aeron_on_close_client_pair_t) -> Self {
-        AeronCloseClientPair {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_on_close_client_pair_t> for AeronCloseClientPair {
-    #[inline]
-    fn from(mut value: aeron_on_close_client_pair_t) -> Self {
-        AeronCloseClientPair {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_on_close_client_pair_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronCloseClientPair {
-    fn default() -> Self {
-        AeronCloseClientPair::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronCloseClientPair {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[derive(Clone)]
-pub struct AeronLogBuffer {
-    inner: std::rc::Rc<ManagedCResource<aeron_log_buffer_t>>,
-}
-impl core::fmt::Debug for AeronLogBuffer {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronLogBuffer))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronLogBuffer))
-                .field("inner", &self.inner)
-                .finish()
-        }
-    }
-}
-impl AeronLogBuffer {
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_log_buffer_t)
-                );
-                let inst: aeron_log_buffer_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_log_buffer_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_log_buffer_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronLogBuffer {
-    type Target = aeron_log_buffer_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_log_buffer_t> for AeronLogBuffer {
-    #[inline]
-    fn from(value: *mut aeron_log_buffer_t) -> Self {
-        AeronLogBuffer {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronLogBuffer> for *mut aeron_log_buffer_t {
-    #[inline]
-    fn from(value: AeronLogBuffer) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronLogBuffer> for *mut aeron_log_buffer_t {
-    #[inline]
-    fn from(value: &AeronLogBuffer) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronLogBuffer> for aeron_log_buffer_t {
-    #[inline]
-    fn from(value: AeronLogBuffer) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_log_buffer_t> for AeronLogBuffer {
-    #[inline]
-    fn from(value: *const aeron_log_buffer_t) -> Self {
-        AeronLogBuffer {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_log_buffer_t> for AeronLogBuffer {
-    #[inline]
-    fn from(mut value: aeron_log_buffer_t) -> Self {
-        AeronLogBuffer {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_log_buffer_t,
-                None,
-            )),
-        }
-    }
-}
-#[derive(Clone)]
-pub struct AeronUri {
-    inner: std::rc::Rc<ManagedCResource<aeron_uri_t>>,
-}
-impl core::fmt::Debug for AeronUri {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronUri))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronUri))
-                .field("inner", &self.inner)
-                .finish()
-        }
-    }
-}
-impl AeronUri {
-    #[inline]
-    pub fn new(
-        mutable_uri: [::std::os::raw::c_char; 4096usize],
-        type_: aeron_uri_type_t,
-        params: aeron_uri_stct__bindgen_ty_1,
-    ) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_uri_t {
-                    mutable_uri: mutable_uri.into(),
-                    type_: type_.into(),
-                    params: params.into(),
-                };
-                let inner_ptr: *mut aeron_uri_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_uri_t)
-                );
-                let inst: aeron_uri_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_uri_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn mutable_uri(&self) -> [::std::os::raw::c_char; 4096usize] {
-        self.mutable_uri.into()
-    }
-    #[inline]
-    pub fn type_(&self) -> aeron_uri_type_t {
-        self.type_.into()
-    }
-    #[inline]
-    pub fn params(&self) -> aeron_uri_stct__bindgen_ty_1 {
-        self.params.into()
-    }
-    #[inline]
-    pub fn parse_params<AeronUriParseCallbackHandlerImpl: AeronUriParseCallbackCallback>(
-        uri: *mut ::std::os::raw::c_char,
-        param_func: Option<&Handler<AeronUriParseCallbackHandlerImpl>>,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_uri_parse_params(
-                uri.into(),
-                {
-                    let callback: aeron_uri_parse_callback_t = if param_func.is_none() {
-                        None
-                    } else {
-                        Some(
-                            aeron_uri_parse_callback_t_callback::<AeronUriParseCallbackHandlerImpl>,
-                        )
-                    };
-                    callback
-                },
-                param_func
-                    .map(|m| m.as_raw())
-                    .unwrap_or_else(|| std::ptr::null_mut()),
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = r""]
-    #[doc = r""]
-    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
-    #[doc = r"  use with care_"]
-    pub fn parse_params_once<
-        AeronUriParseCallbackHandlerImpl: FnMut(&str, &str) -> ::std::os::raw::c_int,
-    >(
-        uri: *mut ::std::os::raw::c_char,
-        mut param_func: AeronUriParseCallbackHandlerImpl,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_uri_parse_params(
-                uri.into(),
-                Some(
-                    aeron_uri_parse_callback_t_callback_for_once_closure::<
-                        AeronUriParseCallbackHandlerImpl,
-                    >,
-                ),
-                &mut param_func as *mut _ as *mut std::os::raw::c_void,
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    pub fn parse(&self, uri_length: usize, uri: &str) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_uri_parse(
-                uri_length.into(),
-                std::ffi::CString::new(uri).unwrap().into_raw(),
-                self.get_inner(),
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    pub fn close(&self) -> () {
-        self.inner.close_already_called.set(true);
-        unsafe {
-            let result = aeron_uri_close(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn multicast_ttl(&self) -> u8 {
-        unsafe {
-            let result = aeron_uri_multicast_ttl(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn sprint(
-        &self,
-        buffer: *mut ::std::os::raw::c_char,
-        buffer_len: usize,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_uri_sprint(self.get_inner(), buffer.into(), buffer_len.into());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    pub fn sprint_as_string(&self, max_length: usize) -> Result<String, AeronCError> {
-        let mut result = String::with_capacity(max_length);
-        self.sprint_into(&mut result)?;
-        Ok(result)
-    }
-    #[inline]
-    #[doc = "NOTE: allocation friendly method, the string capacity must be set as it will truncate string to capacity it will never grow the string. So if you pass String::new() it will write 0 chars"]
-    pub fn sprint_into(&self, dst_truncate_to_capacity: &mut String) -> Result<i32, AeronCError> {
-        unsafe {
-            let capacity = dst_truncate_to_capacity.capacity();
-            let vec = dst_truncate_to_capacity.as_mut_vec();
-            vec.set_len(capacity);
-            let result = self.sprint(vec.as_mut_ptr() as *mut _, capacity)?;
-            let mut len = 0;
-            loop {
-                if len == capacity {
-                    break;
-                }
-                let val = vec[len];
-                if val == 0 {
-                    break;
-                }
-                len += 1;
-            }
-            vec.set_len(len);
-            Ok(result)
-        }
-    }
-    #[inline]
-    pub fn parse_tag(tag_str: &str) -> i64 {
-        unsafe {
-            let result = aeron_uri_parse_tag(std::ffi::CString::new(tag_str).unwrap().into_raw());
-            result.into()
-        }
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_uri_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronUri {
-    type Target = aeron_uri_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_uri_t> for AeronUri {
-    #[inline]
-    fn from(value: *mut aeron_uri_t) -> Self {
-        AeronUri {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronUri> for *mut aeron_uri_t {
-    #[inline]
-    fn from(value: AeronUri) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronUri> for *mut aeron_uri_t {
-    #[inline]
-    fn from(value: &AeronUri) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronUri> for aeron_uri_t {
-    #[inline]
-    fn from(value: AeronUri) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_uri_t> for AeronUri {
-    #[inline]
-    fn from(value: *const aeron_uri_t) -> Self {
-        AeronUri {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_uri_t> for AeronUri {
-    #[inline]
-    fn from(mut value: aeron_uri_t) -> Self {
-        AeronUri {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_uri_t,
-                None,
-            )),
-        }
-    }
-}
-impl Drop for AeronUri {
-    fn drop(&mut self) {
-        if (self.inner.borrowed || self.inner.cleanup.is_none())
-            && std::rc::Rc::strong_count(&self.inner) == 1
-            && !self.inner.is_closed_already_called()
-        {
-            if self.inner.auto_close.get() {
-                let result = self.close();
-                log::info!("auto closing {} {:?}", stringify!(AeronUri), result);
-            } else {
-                log::warn!("{} not closed", stringify!(AeronUri));
-            }
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronUri {
-    fn default() -> Self {
-        AeronUri::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronUri {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[derive(Clone)]
-pub struct AeronHeaderValues {
-    inner: std::rc::Rc<ManagedCResource<aeron_header_values_t>>,
-}
-impl core::fmt::Debug for AeronHeaderValues {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronHeaderValues))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronHeaderValues))
-                .field("inner", &self.inner)
-                .field(stringify!(frame), &self.frame())
-                .field(stringify!(initial_term_id), &self.initial_term_id())
-                .field(
-                    stringify!(position_bits_to_shift),
-                    &self.position_bits_to_shift(),
-                )
-                .finish()
-        }
-    }
-}
-impl AeronHeaderValues {
-    #[inline]
-    pub fn new(
-        frame: AeronHeaderValuesFrame,
-        initial_term_id: i32,
-        position_bits_to_shift: usize,
-    ) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_header_values_t {
-                    frame: frame.into(),
-                    initial_term_id: initial_term_id.into(),
-                    position_bits_to_shift: position_bits_to_shift.into(),
-                };
-                let inner_ptr: *mut aeron_header_values_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_header_values_t)
-                );
-                let inst: aeron_header_values_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_header_values_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn frame(&self) -> AeronHeaderValuesFrame {
-        self.frame.into()
-    }
-    #[inline]
-    pub fn initial_term_id(&self) -> i32 {
-        self.initial_term_id.into()
-    }
-    #[inline]
-    pub fn position_bits_to_shift(&self) -> usize {
-        self.position_bits_to_shift.into()
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_header_values_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronHeaderValues {
-    type Target = aeron_header_values_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_header_values_t> for AeronHeaderValues {
-    #[inline]
-    fn from(value: *mut aeron_header_values_t) -> Self {
-        AeronHeaderValues {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronHeaderValues> for *mut aeron_header_values_t {
-    #[inline]
-    fn from(value: AeronHeaderValues) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronHeaderValues> for *mut aeron_header_values_t {
-    #[inline]
-    fn from(value: &AeronHeaderValues) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronHeaderValues> for aeron_header_values_t {
-    #[inline]
-    fn from(value: AeronHeaderValues) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_header_values_t> for AeronHeaderValues {
-    #[inline]
-    fn from(value: *const aeron_header_values_t) -> Self {
-        AeronHeaderValues {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_header_values_t> for AeronHeaderValues {
-    #[inline]
-    fn from(mut value: aeron_header_values_t) -> Self {
-        AeronHeaderValues {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_header_values_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronHeaderValues {
-    fn default() -> Self {
-        AeronHeaderValues::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronHeaderValues {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[doc = "Configuration for a publication that does not change during it's lifetime."]
-#[derive(Clone)]
-pub struct AeronPublicationConstants {
-    inner: std::rc::Rc<ManagedCResource<aeron_publication_constants_t>>,
-}
-impl core::fmt::Debug for AeronPublicationConstants {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronPublicationConstants))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronPublicationConstants))
-                .field("inner", &self.inner)
-                .field(
-                    stringify!(original_registration_id),
-                    &self.original_registration_id(),
-                )
-                .field(stringify!(registration_id), &self.registration_id())
-                .field(
-                    stringify!(max_possible_position),
-                    &self.max_possible_position(),
-                )
-                .field(
-                    stringify!(position_bits_to_shift),
-                    &self.position_bits_to_shift(),
-                )
-                .field(stringify!(term_buffer_length), &self.term_buffer_length())
-                .field(stringify!(max_message_length), &self.max_message_length())
-                .field(stringify!(max_payload_length), &self.max_payload_length())
-                .field(stringify!(stream_id), &self.stream_id())
-                .field(stringify!(session_id), &self.session_id())
-                .field(stringify!(initial_term_id), &self.initial_term_id())
-                .field(
-                    stringify!(publication_limit_counter_id),
-                    &self.publication_limit_counter_id(),
-                )
-                .field(
-                    stringify!(channel_status_indicator_id),
-                    &self.channel_status_indicator_id(),
-                )
-                .finish()
-        }
-    }
-}
-impl AeronPublicationConstants {
-    #[inline]
-    pub fn new(
-        channel: &str,
-        original_registration_id: i64,
-        registration_id: i64,
-        max_possible_position: i64,
-        position_bits_to_shift: usize,
-        term_buffer_length: usize,
-        max_message_length: usize,
-        max_payload_length: usize,
-        stream_id: i32,
-        session_id: i32,
-        initial_term_id: i32,
-        publication_limit_counter_id: i32,
-        channel_status_indicator_id: i32,
-    ) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_publication_constants_t {
-                    channel: std::ffi::CString::new(channel).unwrap().into_raw(),
-                    original_registration_id: original_registration_id.into(),
-                    registration_id: registration_id.into(),
-                    max_possible_position: max_possible_position.into(),
-                    position_bits_to_shift: position_bits_to_shift.into(),
-                    term_buffer_length: term_buffer_length.into(),
-                    max_message_length: max_message_length.into(),
-                    max_payload_length: max_payload_length.into(),
-                    stream_id: stream_id.into(),
-                    session_id: session_id.into(),
-                    initial_term_id: initial_term_id.into(),
-                    publication_limit_counter_id: publication_limit_counter_id.into(),
-                    channel_status_indicator_id: channel_status_indicator_id.into(),
-                };
-                let inner_ptr: *mut aeron_publication_constants_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_publication_constants_t)
-                );
-                let inst: aeron_publication_constants_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_publication_constants_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn channel(&self) -> &str {
-        if self.channel.is_null() {
+    pub fn key(&self) -> &str {
+        if self.key.is_null() {
             ""
         } else {
-            unsafe { std::ffi::CStr::from_ptr(self.channel).to_str().unwrap() }
+            unsafe { std::ffi::CStr::from_ptr(self.key).to_str().unwrap() }
         }
     }
     #[inline]
-    pub fn original_registration_id(&self) -> i64 {
-        self.original_registration_id.into()
-    }
-    #[inline]
-    pub fn registration_id(&self) -> i64 {
-        self.registration_id.into()
-    }
-    #[inline]
-    pub fn max_possible_position(&self) -> i64 {
-        self.max_possible_position.into()
-    }
-    #[inline]
-    pub fn position_bits_to_shift(&self) -> usize {
-        self.position_bits_to_shift.into()
-    }
-    #[inline]
-    pub fn term_buffer_length(&self) -> usize {
-        self.term_buffer_length.into()
-    }
-    #[inline]
-    pub fn max_message_length(&self) -> usize {
-        self.max_message_length.into()
-    }
-    #[inline]
-    pub fn max_payload_length(&self) -> usize {
-        self.max_payload_length.into()
-    }
-    #[inline]
-    pub fn stream_id(&self) -> i32 {
-        self.stream_id.into()
-    }
-    #[inline]
-    pub fn session_id(&self) -> i32 {
-        self.session_id.into()
-    }
-    #[inline]
-    pub fn initial_term_id(&self) -> i32 {
-        self.initial_term_id.into()
-    }
-    #[inline]
-    pub fn publication_limit_counter_id(&self) -> i32 {
-        self.publication_limit_counter_id.into()
-    }
-    #[inline]
-    pub fn channel_status_indicator_id(&self) -> i32 {
-        self.channel_status_indicator_id.into()
+    pub fn value(&self) -> &str {
+        if self.value.is_null() {
+            ""
+        } else {
+            unsafe { std::ffi::CStr::from_ptr(self.value).to_str().unwrap() }
+        }
     }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_publication_constants_t {
+    pub fn get_inner(&self) -> *mut aeron_uri_param_t {
         self.inner.get()
     }
 }
-impl std::ops::Deref for AeronPublicationConstants {
-    type Target = aeron_publication_constants_t;
+impl std::ops::Deref for AeronUriParam {
+    type Target = aeron_uri_param_t;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.inner.get() }
     }
 }
-impl From<*mut aeron_publication_constants_t> for AeronPublicationConstants {
+impl From<*mut aeron_uri_param_t> for AeronUriParam {
     #[inline]
-    fn from(value: *mut aeron_publication_constants_t) -> Self {
-        AeronPublicationConstants {
+    fn from(value: *mut aeron_uri_param_t) -> Self {
+        AeronUriParam {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<AeronPublicationConstants> for *mut aeron_publication_constants_t {
+impl From<AeronUriParam> for *mut aeron_uri_param_t {
     #[inline]
-    fn from(value: AeronPublicationConstants) -> Self {
+    fn from(value: AeronUriParam) -> Self {
         value.get_inner()
     }
 }
-impl From<&AeronPublicationConstants> for *mut aeron_publication_constants_t {
+impl From<&AeronUriParam> for *mut aeron_uri_param_t {
     #[inline]
-    fn from(value: &AeronPublicationConstants) -> Self {
+    fn from(value: &AeronUriParam) -> Self {
         value.get_inner()
     }
 }
-impl From<AeronPublicationConstants> for aeron_publication_constants_t {
+impl From<AeronUriParam> for aeron_uri_param_t {
     #[inline]
-    fn from(value: AeronPublicationConstants) -> Self {
+    fn from(value: AeronUriParam) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const aeron_publication_constants_t> for AeronPublicationConstants {
+impl From<*const aeron_uri_param_t> for AeronUriParam {
     #[inline]
-    fn from(value: *const aeron_publication_constants_t) -> Self {
-        AeronPublicationConstants {
+    fn from(value: *const aeron_uri_param_t) -> Self {
+        AeronUriParam {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<aeron_publication_constants_t> for AeronPublicationConstants {
+impl From<aeron_uri_param_t> for AeronUriParam {
     #[inline]
-    fn from(mut value: aeron_publication_constants_t) -> Self {
-        AeronPublicationConstants {
+    fn from(mut value: aeron_uri_param_t) -> Self {
+        AeronUriParam {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_publication_constants_t,
+                &mut value as *mut aeron_uri_param_t,
                 None,
             )),
         }
     }
 }
 #[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronPublicationConstants {
+impl Default for AeronUriParam {
     fn default() -> Self {
-        AeronPublicationConstants::new_zeroed().expect("failed to create struct")
+        AeronUriParam::new_zeroed().expect("failed to create struct")
     }
 }
-impl AeronPublicationConstants {
+impl AeronUriParam {
     #[doc = r" Regular clone just increases the reference count of underlying count."]
     #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
     #[doc = r""]
@@ -4690,530 +9241,50 @@ impl AeronPublicationConstants {
     }
 }
 #[derive(Clone)]
-pub struct AeronMappedBuffer {
-    inner: std::rc::Rc<ManagedCResource<aeron_mapped_buffer_t>>,
+pub struct AeronRttmHeader {
+    inner: std::rc::Rc<ManagedCResource<aeron_rttm_header_t>>,
 }
-impl core::fmt::Debug for AeronMappedBuffer {
+impl core::fmt::Debug for AeronRttmHeader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronMappedBuffer))
+            f.debug_struct(stringify!(AeronRttmHeader))
                 .field("inner", &"null")
                 .finish()
         } else {
-            f.debug_struct(stringify!(AeronMappedBuffer))
-                .field("inner", &self.inner)
-                .field(stringify!(length), &self.length())
-                .finish()
-        }
-    }
-}
-impl AeronMappedBuffer {
-    #[inline]
-    pub fn new(addr: &mut [u8]) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_mapped_buffer_t {
-                    addr: addr.as_ptr() as *mut _,
-                    length: addr.len(),
-                };
-                let inner_ptr: *mut aeron_mapped_buffer_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_mapped_buffer_t)
-                );
-                let inst: aeron_mapped_buffer_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_mapped_buffer_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn addr(&self) -> &mut [u8] {
-        unsafe {
-            if self.addr.is_null() {
-                &mut [] as &mut [_]
-            } else {
-                std::slice::from_raw_parts_mut(self.addr, self.length.try_into().unwrap())
-            }
-        }
-    }
-    #[inline]
-    pub fn length(&self) -> usize {
-        self.length.into()
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_mapped_buffer_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronMappedBuffer {
-    type Target = aeron_mapped_buffer_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_mapped_buffer_t> for AeronMappedBuffer {
-    #[inline]
-    fn from(value: *mut aeron_mapped_buffer_t) -> Self {
-        AeronMappedBuffer {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronMappedBuffer> for *mut aeron_mapped_buffer_t {
-    #[inline]
-    fn from(value: AeronMappedBuffer) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronMappedBuffer> for *mut aeron_mapped_buffer_t {
-    #[inline]
-    fn from(value: &AeronMappedBuffer) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronMappedBuffer> for aeron_mapped_buffer_t {
-    #[inline]
-    fn from(value: AeronMappedBuffer) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_mapped_buffer_t> for AeronMappedBuffer {
-    #[inline]
-    fn from(value: *const aeron_mapped_buffer_t) -> Self {
-        AeronMappedBuffer {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_mapped_buffer_t> for AeronMappedBuffer {
-    #[inline]
-    fn from(mut value: aeron_mapped_buffer_t) -> Self {
-        AeronMappedBuffer {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_mapped_buffer_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronMappedBuffer {
-    fn default() -> Self {
-        AeronMappedBuffer::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronMappedBuffer {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[derive(Clone)]
-pub struct AeronStatusMessageOptionalHeader {
-    inner: std::rc::Rc<ManagedCResource<aeron_status_message_optional_header_t>>,
-}
-impl core::fmt::Debug for AeronStatusMessageOptionalHeader {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronStatusMessageOptionalHeader))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronStatusMessageOptionalHeader))
-                .field("inner", &self.inner)
-                .field(stringify!(group_tag), &self.group_tag())
-                .finish()
-        }
-    }
-}
-impl AeronStatusMessageOptionalHeader {
-    #[inline]
-    pub fn new(group_tag: i64) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_status_message_optional_header_t {
-                    group_tag: group_tag.into(),
-                };
-                let inner_ptr: *mut aeron_status_message_optional_header_t =
-                    Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_status_message_optional_header_t)
-                );
-                let inst: aeron_status_message_optional_header_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_status_message_optional_header_t =
-                    Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn group_tag(&self) -> i64 {
-        self.group_tag.into()
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_status_message_optional_header_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronStatusMessageOptionalHeader {
-    type Target = aeron_status_message_optional_header_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_status_message_optional_header_t> for AeronStatusMessageOptionalHeader {
-    #[inline]
-    fn from(value: *mut aeron_status_message_optional_header_t) -> Self {
-        AeronStatusMessageOptionalHeader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronStatusMessageOptionalHeader> for *mut aeron_status_message_optional_header_t {
-    #[inline]
-    fn from(value: AeronStatusMessageOptionalHeader) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronStatusMessageOptionalHeader> for *mut aeron_status_message_optional_header_t {
-    #[inline]
-    fn from(value: &AeronStatusMessageOptionalHeader) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronStatusMessageOptionalHeader> for aeron_status_message_optional_header_t {
-    #[inline]
-    fn from(value: AeronStatusMessageOptionalHeader) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_status_message_optional_header_t> for AeronStatusMessageOptionalHeader {
-    #[inline]
-    fn from(value: *const aeron_status_message_optional_header_t) -> Self {
-        AeronStatusMessageOptionalHeader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_status_message_optional_header_t> for AeronStatusMessageOptionalHeader {
-    #[inline]
-    fn from(mut value: aeron_status_message_optional_header_t) -> Self {
-        AeronStatusMessageOptionalHeader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_status_message_optional_header_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronStatusMessageOptionalHeader {
-    fn default() -> Self {
-        AeronStatusMessageOptionalHeader::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronStatusMessageOptionalHeader {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[derive(Clone)]
-pub struct AeronHeader {
-    inner: std::rc::Rc<ManagedCResource<aeron_header_t>>,
-}
-impl core::fmt::Debug for AeronHeader {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronHeader))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronHeader))
-                .field("inner", &self.inner)
-                .finish()
-        }
-    }
-}
-impl AeronHeader {
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_header_t)
-                );
-                let inst: aeron_header_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_header_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    #[doc = "Get all of the field values from the header. This will do a memcpy into the supplied header_values_t pointer."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `header` to read values from."]
-    #[doc = " \n - `values` to copy values to, must not be null."]
-    #[doc = " \n# Return\n 0 on success, -1 on failure."]
-    pub fn values(&self, values: &AeronHeaderValues) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_header_values(self.get_inner(), values.get_inner());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Get all of the field values from the header. This will do a memcpy into the supplied header_values_t pointer."]
-    #[doc = ""]
-    pub fn get_values(&self) -> Result<AeronHeaderValues, AeronCError> {
-        let result = AeronHeaderValues::default();
-        self.values(&result)?;
-        Ok(result)
-    }
-    #[inline]
-    #[doc = "Get the current position to which the Image has advanced on reading this message."]
-    #[doc = ""]
-    #[doc = " \n# Return\n the current position to which the Image has advanced on reading this message."]
-    pub fn position(&self) -> i64 {
-        unsafe {
-            let result = aeron_header_position(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Get the number of times to left shift the term count to multiply by term length."]
-    #[doc = ""]
-    #[doc = " \n# Return\n number of times to left shift the term count to multiply by term length."]
-    pub fn position_bits_to_shift(&self) -> usize {
-        unsafe {
-            let result = aeron_header_position_bits_to_shift(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Calculates the offset of the frame immediately after this one."]
-    #[doc = ""]
-    #[doc = " \n# Return\n the offset of the next frame."]
-    pub fn next_term_offset(&self) -> i32 {
-        unsafe {
-            let result = aeron_header_next_term_offset(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Get a pointer to the context associated with this message. Only valid during poll handling. Is normally a"]
-    #[doc = " pointer to an Image instance."]
-    #[doc = ""]
-    #[doc = " \n# Return\n a pointer to the context associated with this message."]
-    pub fn context(&self) -> *mut ::std::os::raw::c_void {
-        unsafe {
-            let result = aeron_header_context(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_header_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronHeader {
-    type Target = aeron_header_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_header_t> for AeronHeader {
-    #[inline]
-    fn from(value: *mut aeron_header_t) -> Self {
-        AeronHeader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronHeader> for *mut aeron_header_t {
-    #[inline]
-    fn from(value: AeronHeader) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronHeader> for *mut aeron_header_t {
-    #[inline]
-    fn from(value: &AeronHeader) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronHeader> for aeron_header_t {
-    #[inline]
-    fn from(value: AeronHeader) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_header_t> for AeronHeader {
-    #[inline]
-    fn from(value: *const aeron_header_t) -> Self {
-        AeronHeader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_header_t> for AeronHeader {
-    #[inline]
-    fn from(mut value: aeron_header_t) -> Self {
-        AeronHeader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_header_t,
-                None,
-            )),
-        }
-    }
-}
-#[derive(Clone)]
-pub struct AeronSetupHeader {
-    inner: std::rc::Rc<ManagedCResource<aeron_setup_header_t>>,
-}
-impl core::fmt::Debug for AeronSetupHeader {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronSetupHeader))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronSetupHeader))
+            f.debug_struct(stringify!(AeronRttmHeader))
                 .field("inner", &self.inner)
                 .field(stringify!(frame_header), &self.frame_header())
-                .field(stringify!(term_offset), &self.term_offset())
                 .field(stringify!(session_id), &self.session_id())
                 .field(stringify!(stream_id), &self.stream_id())
-                .field(stringify!(initial_term_id), &self.initial_term_id())
-                .field(stringify!(active_term_id), &self.active_term_id())
-                .field(stringify!(term_length), &self.term_length())
-                .field(stringify!(mtu), &self.mtu())
-                .field(stringify!(ttl), &self.ttl())
+                .field(stringify!(echo_timestamp), &self.echo_timestamp())
+                .field(stringify!(reception_delta), &self.reception_delta())
+                .field(stringify!(receiver_id), &self.receiver_id())
                 .finish()
         }
     }
 }
-impl AeronSetupHeader {
+impl AeronRttmHeader {
     #[inline]
     pub fn new(
         frame_header: AeronFrameHeader,
-        term_offset: i32,
         session_id: i32,
         stream_id: i32,
-        initial_term_id: i32,
-        active_term_id: i32,
-        term_length: i32,
-        mtu: i32,
-        ttl: i32,
+        echo_timestamp: i64,
+        reception_delta: i64,
+        receiver_id: i64,
     ) -> Result<Self, AeronCError> {
         let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
         let r_constructor = ManagedCResource::new(
             move |ctx_field| {
-                let inst = aeron_setup_header_t {
+                let inst = aeron_rttm_header_t {
                     frame_header: frame_header.into(),
-                    term_offset: term_offset.into(),
                     session_id: session_id.into(),
                     stream_id: stream_id.into(),
-                    initial_term_id: initial_term_id.into(),
-                    active_term_id: active_term_id.into(),
-                    term_length: term_length.into(),
-                    mtu: mtu.into(),
-                    ttl: ttl.into(),
+                    echo_timestamp: echo_timestamp.into(),
+                    reception_delta: reception_delta.into(),
+                    receiver_id: receiver_id.into(),
                 };
-                let inner_ptr: *mut aeron_setup_header_t = Box::into_raw(Box::new(inst));
+                let inner_ptr: *mut aeron_rttm_header_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -5238,10 +9309,10 @@ impl AeronSetupHeader {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_setup_header_t)
+                    stringify!(aeron_rttm_header_t)
                 );
-                let inst: aeron_setup_header_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_setup_header_t = Box::into_raw(Box::new(inst));
+                let inst: aeron_rttm_header_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_rttm_header_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -5258,10 +9329,6 @@ impl AeronSetupHeader {
         self.frame_header.into()
     }
     #[inline]
-    pub fn term_offset(&self) -> i32 {
-        self.term_offset.into()
-    }
-    #[inline]
     pub fn session_id(&self) -> i32 {
         self.session_id.into()
     }
@@ -5270,88 +9337,80 @@ impl AeronSetupHeader {
         self.stream_id.into()
     }
     #[inline]
-    pub fn initial_term_id(&self) -> i32 {
-        self.initial_term_id.into()
+    pub fn echo_timestamp(&self) -> i64 {
+        self.echo_timestamp.into()
     }
     #[inline]
-    pub fn active_term_id(&self) -> i32 {
-        self.active_term_id.into()
+    pub fn reception_delta(&self) -> i64 {
+        self.reception_delta.into()
     }
     #[inline]
-    pub fn term_length(&self) -> i32 {
-        self.term_length.into()
-    }
-    #[inline]
-    pub fn mtu(&self) -> i32 {
-        self.mtu.into()
-    }
-    #[inline]
-    pub fn ttl(&self) -> i32 {
-        self.ttl.into()
+    pub fn receiver_id(&self) -> i64 {
+        self.receiver_id.into()
     }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_setup_header_t {
+    pub fn get_inner(&self) -> *mut aeron_rttm_header_t {
         self.inner.get()
     }
 }
-impl std::ops::Deref for AeronSetupHeader {
-    type Target = aeron_setup_header_t;
+impl std::ops::Deref for AeronRttmHeader {
+    type Target = aeron_rttm_header_t;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.inner.get() }
     }
 }
-impl From<*mut aeron_setup_header_t> for AeronSetupHeader {
+impl From<*mut aeron_rttm_header_t> for AeronRttmHeader {
     #[inline]
-    fn from(value: *mut aeron_setup_header_t) -> Self {
-        AeronSetupHeader {
+    fn from(value: *mut aeron_rttm_header_t) -> Self {
+        AeronRttmHeader {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<AeronSetupHeader> for *mut aeron_setup_header_t {
+impl From<AeronRttmHeader> for *mut aeron_rttm_header_t {
     #[inline]
-    fn from(value: AeronSetupHeader) -> Self {
+    fn from(value: AeronRttmHeader) -> Self {
         value.get_inner()
     }
 }
-impl From<&AeronSetupHeader> for *mut aeron_setup_header_t {
+impl From<&AeronRttmHeader> for *mut aeron_rttm_header_t {
     #[inline]
-    fn from(value: &AeronSetupHeader) -> Self {
+    fn from(value: &AeronRttmHeader) -> Self {
         value.get_inner()
     }
 }
-impl From<AeronSetupHeader> for aeron_setup_header_t {
+impl From<AeronRttmHeader> for aeron_rttm_header_t {
     #[inline]
-    fn from(value: AeronSetupHeader) -> Self {
+    fn from(value: AeronRttmHeader) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const aeron_setup_header_t> for AeronSetupHeader {
+impl From<*const aeron_rttm_header_t> for AeronRttmHeader {
     #[inline]
-    fn from(value: *const aeron_setup_header_t) -> Self {
-        AeronSetupHeader {
+    fn from(value: *const aeron_rttm_header_t) -> Self {
+        AeronRttmHeader {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<aeron_setup_header_t> for AeronSetupHeader {
+impl From<aeron_rttm_header_t> for AeronRttmHeader {
     #[inline]
-    fn from(mut value: aeron_setup_header_t) -> Self {
-        AeronSetupHeader {
+    fn from(mut value: aeron_rttm_header_t) -> Self {
+        AeronRttmHeader {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_setup_header_t,
+                &mut value as *mut aeron_rttm_header_t,
                 None,
             )),
         }
     }
 }
 #[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronSetupHeader {
+impl Default for AeronRttmHeader {
     fn default() -> Self {
-        AeronSetupHeader::new_zeroed().expect("failed to create struct")
+        AeronRttmHeader::new_zeroed().expect("failed to create struct")
     }
 }
-impl AeronSetupHeader {
+impl AeronRttmHeader {
     #[doc = r" Regular clone just increases the reference count of underlying count."]
     #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
     #[doc = r""]
@@ -5367,56 +9426,34 @@ impl AeronSetupHeader {
     }
 }
 #[derive(Clone)]
-pub struct AeronLossReporterEntry {
-    inner: std::rc::Rc<ManagedCResource<aeron_loss_reporter_entry_t>>,
+pub struct AeronMappedFile {
+    inner: std::rc::Rc<ManagedCResource<aeron_mapped_file_t>>,
 }
-impl core::fmt::Debug for AeronLossReporterEntry {
+impl core::fmt::Debug for AeronMappedFile {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronLossReporterEntry))
+            f.debug_struct(stringify!(AeronMappedFile))
                 .field("inner", &"null")
                 .finish()
         } else {
-            f.debug_struct(stringify!(AeronLossReporterEntry))
+            f.debug_struct(stringify!(AeronMappedFile))
                 .field("inner", &self.inner)
-                .field(stringify!(observation_count), &self.observation_count())
-                .field(stringify!(total_bytes_lost), &self.total_bytes_lost())
-                .field(
-                    stringify!(first_observation_timestamp),
-                    &self.first_observation_timestamp(),
-                )
-                .field(
-                    stringify!(last_observation_timestamp),
-                    &self.last_observation_timestamp(),
-                )
-                .field(stringify!(session_id), &self.session_id())
-                .field(stringify!(stream_id), &self.stream_id())
+                .field(stringify!(length), &self.length())
                 .finish()
         }
     }
 }
-impl AeronLossReporterEntry {
+impl AeronMappedFile {
     #[inline]
-    pub fn new(
-        observation_count: i64,
-        total_bytes_lost: i64,
-        first_observation_timestamp: i64,
-        last_observation_timestamp: i64,
-        session_id: i32,
-        stream_id: i32,
-    ) -> Result<Self, AeronCError> {
+    pub fn new(addr: *mut ::std::os::raw::c_void, length: usize) -> Result<Self, AeronCError> {
         let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
         let r_constructor = ManagedCResource::new(
             move |ctx_field| {
-                let inst = aeron_loss_reporter_entry_t {
-                    observation_count: observation_count.into(),
-                    total_bytes_lost: total_bytes_lost.into(),
-                    first_observation_timestamp: first_observation_timestamp.into(),
-                    last_observation_timestamp: last_observation_timestamp.into(),
-                    session_id: session_id.into(),
-                    stream_id: stream_id.into(),
+                let inst = aeron_mapped_file_t {
+                    addr: addr.into(),
+                    length: length.into(),
                 };
-                let inner_ptr: *mut aeron_loss_reporter_entry_t = Box::into_raw(Box::new(inst));
+                let inner_ptr: *mut aeron_mapped_file_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -5441,10 +9478,10 @@ impl AeronLossReporterEntry {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_loss_reporter_entry_t)
+                    stringify!(aeron_mapped_file_t)
                 );
-                let inst: aeron_loss_reporter_entry_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_loss_reporter_entry_t = Box::into_raw(Box::new(inst));
+                let inst: aeron_mapped_file_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_mapped_file_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -5457,92 +9494,120 @@ impl AeronLossReporterEntry {
         })
     }
     #[inline]
-    pub fn observation_count(&self) -> i64 {
-        self.observation_count.into()
+    pub fn addr(&self) -> *mut ::std::os::raw::c_void {
+        self.addr.into()
     }
     #[inline]
-    pub fn total_bytes_lost(&self) -> i64 {
-        self.total_bytes_lost.into()
+    pub fn length(&self) -> usize {
+        self.length.into()
     }
     #[inline]
-    pub fn first_observation_timestamp(&self) -> i64 {
-        self.first_observation_timestamp.into()
+    pub fn aeron_map_new_file(
+        &self,
+        path: &str,
+        fill_with_zeroes: bool,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_map_new_file(
+                self.get_inner(),
+                std::ffi::CString::new(path).unwrap().into_raw(),
+                fill_with_zeroes.into(),
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
     }
     #[inline]
-    pub fn last_observation_timestamp(&self) -> i64 {
-        self.last_observation_timestamp.into()
+    pub fn aeron_map_existing_file(&self, path: &str) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_map_existing_file(
+                self.get_inner(),
+                std::ffi::CString::new(path).unwrap().into_raw(),
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
     }
     #[inline]
-    pub fn session_id(&self) -> i32 {
-        self.session_id.into()
-    }
-    #[inline]
-    pub fn stream_id(&self) -> i32 {
-        self.stream_id.into()
+    pub fn aeron_unmap(&self) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_unmap(self.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
     }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_loss_reporter_entry_t {
+    pub fn get_inner(&self) -> *mut aeron_mapped_file_t {
         self.inner.get()
     }
 }
-impl std::ops::Deref for AeronLossReporterEntry {
-    type Target = aeron_loss_reporter_entry_t;
+impl std::ops::Deref for AeronMappedFile {
+    type Target = aeron_mapped_file_t;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.inner.get() }
     }
 }
-impl From<*mut aeron_loss_reporter_entry_t> for AeronLossReporterEntry {
+impl From<*mut aeron_mapped_file_t> for AeronMappedFile {
     #[inline]
-    fn from(value: *mut aeron_loss_reporter_entry_t) -> Self {
-        AeronLossReporterEntry {
+    fn from(value: *mut aeron_mapped_file_t) -> Self {
+        AeronMappedFile {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<AeronLossReporterEntry> for *mut aeron_loss_reporter_entry_t {
+impl From<AeronMappedFile> for *mut aeron_mapped_file_t {
     #[inline]
-    fn from(value: AeronLossReporterEntry) -> Self {
+    fn from(value: AeronMappedFile) -> Self {
         value.get_inner()
     }
 }
-impl From<&AeronLossReporterEntry> for *mut aeron_loss_reporter_entry_t {
+impl From<&AeronMappedFile> for *mut aeron_mapped_file_t {
     #[inline]
-    fn from(value: &AeronLossReporterEntry) -> Self {
+    fn from(value: &AeronMappedFile) -> Self {
         value.get_inner()
     }
 }
-impl From<AeronLossReporterEntry> for aeron_loss_reporter_entry_t {
+impl From<AeronMappedFile> for aeron_mapped_file_t {
     #[inline]
-    fn from(value: AeronLossReporterEntry) -> Self {
+    fn from(value: AeronMappedFile) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const aeron_loss_reporter_entry_t> for AeronLossReporterEntry {
+impl From<*const aeron_mapped_file_t> for AeronMappedFile {
     #[inline]
-    fn from(value: *const aeron_loss_reporter_entry_t) -> Self {
-        AeronLossReporterEntry {
+    fn from(value: *const aeron_mapped_file_t) -> Self {
+        AeronMappedFile {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<aeron_loss_reporter_entry_t> for AeronLossReporterEntry {
+impl From<aeron_mapped_file_t> for AeronMappedFile {
     #[inline]
-    fn from(mut value: aeron_loss_reporter_entry_t) -> Self {
-        AeronLossReporterEntry {
+    fn from(mut value: aeron_mapped_file_t) -> Self {
+        AeronMappedFile {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_loss_reporter_entry_t,
+                &mut value as *mut aeron_mapped_file_t,
                 None,
             )),
         }
     }
 }
 #[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronLossReporterEntry {
+impl Default for AeronMappedFile {
     fn default() -> Self {
-        AeronLossReporterEntry::new_zeroed().expect("failed to create struct")
+        AeronMappedFile::new_zeroed().expect("failed to create struct")
     }
 }
-impl AeronLossReporterEntry {
+impl AeronMappedFile {
     #[doc = r" Regular clone just increases the reference count of underlying count."]
     #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
     #[doc = r""]
@@ -5874,57 +9939,49 @@ impl AeronUriStringBuilder {
     }
 }
 #[derive(Clone)]
-pub struct AeronHeaderValuesFrame {
-    inner: std::rc::Rc<ManagedCResource<aeron_header_values_frame_t>>,
+pub struct AeronStrToPtrHashMap {
+    inner: std::rc::Rc<ManagedCResource<aeron_str_to_ptr_hash_map_t>>,
 }
-impl core::fmt::Debug for AeronHeaderValuesFrame {
+impl core::fmt::Debug for AeronStrToPtrHashMap {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronHeaderValuesFrame))
+            f.debug_struct(stringify!(AeronStrToPtrHashMap))
                 .field("inner", &"null")
                 .finish()
         } else {
-            f.debug_struct(stringify!(AeronHeaderValuesFrame))
+            f.debug_struct(stringify!(AeronStrToPtrHashMap))
                 .field("inner", &self.inner)
-                .field(stringify!(frame_length), &self.frame_length())
-                .field(stringify!(type_), &self.type_())
-                .field(stringify!(term_offset), &self.term_offset())
-                .field(stringify!(session_id), &self.session_id())
-                .field(stringify!(stream_id), &self.stream_id())
-                .field(stringify!(term_id), &self.term_id())
-                .field(stringify!(reserved_value), &self.reserved_value())
+                .field(stringify!(load_factor), &self.load_factor())
+                .field(stringify!(capacity), &self.capacity())
+                .field(stringify!(size), &self.size())
+                .field(stringify!(resize_threshold), &self.resize_threshold())
                 .finish()
         }
     }
 }
-impl AeronHeaderValuesFrame {
+impl AeronStrToPtrHashMap {
     #[inline]
     pub fn new(
-        frame_length: i32,
-        version: i8,
-        flags: u8,
-        type_: i16,
-        term_offset: i32,
-        session_id: i32,
-        stream_id: i32,
-        term_id: i32,
-        reserved_value: i64,
+        keys: &AeronStrToPtrHashMapKey,
+        values: *mut *mut ::std::os::raw::c_void,
+        load_factor: f32,
+        capacity: usize,
+        size: usize,
+        resize_threshold: usize,
     ) -> Result<Self, AeronCError> {
+        let keys_copy = keys.clone();
         let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
         let r_constructor = ManagedCResource::new(
             move |ctx_field| {
-                let inst = aeron_header_values_frame_t {
-                    frame_length: frame_length.into(),
-                    version: version.into(),
-                    flags: flags.into(),
-                    type_: type_.into(),
-                    term_offset: term_offset.into(),
-                    session_id: session_id.into(),
-                    stream_id: stream_id.into(),
-                    term_id: term_id.into(),
-                    reserved_value: reserved_value.into(),
+                let inst = aeron_str_to_ptr_hash_map_t {
+                    keys: keys.into(),
+                    values: values.into(),
+                    load_factor: load_factor.into(),
+                    capacity: capacity.into(),
+                    size: size.into(),
+                    resize_threshold: resize_threshold.into(),
                 };
-                let inner_ptr: *mut aeron_header_values_frame_t = Box::into_raw(Box::new(inst));
+                let inner_ptr: *mut aeron_str_to_ptr_hash_map_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -5949,10 +10006,10 @@ impl AeronHeaderValuesFrame {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_header_values_frame_t)
+                    stringify!(aeron_str_to_ptr_hash_map_t)
                 );
-                let inst: aeron_header_values_frame_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_header_values_frame_t = Box::into_raw(Box::new(inst));
+                let inst: aeron_str_to_ptr_hash_map_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_str_to_ptr_hash_map_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -5965,104 +10022,92 @@ impl AeronHeaderValuesFrame {
         })
     }
     #[inline]
-    pub fn frame_length(&self) -> i32 {
-        self.frame_length.into()
+    pub fn keys(&self) -> AeronStrToPtrHashMapKey {
+        self.keys.into()
     }
     #[inline]
-    pub fn version(&self) -> i8 {
-        self.version.into()
+    pub fn values(&self) -> *mut *mut ::std::os::raw::c_void {
+        self.values.into()
     }
     #[inline]
-    pub fn flags(&self) -> u8 {
-        self.flags.into()
+    pub fn load_factor(&self) -> f32 {
+        self.load_factor.into()
     }
     #[inline]
-    pub fn type_(&self) -> i16 {
-        self.type_.into()
+    pub fn capacity(&self) -> usize {
+        self.capacity.into()
     }
     #[inline]
-    pub fn term_offset(&self) -> i32 {
-        self.term_offset.into()
+    pub fn size(&self) -> usize {
+        self.size.into()
     }
     #[inline]
-    pub fn session_id(&self) -> i32 {
-        self.session_id.into()
-    }
-    #[inline]
-    pub fn stream_id(&self) -> i32 {
-        self.stream_id.into()
-    }
-    #[inline]
-    pub fn term_id(&self) -> i32 {
-        self.term_id.into()
-    }
-    #[inline]
-    pub fn reserved_value(&self) -> i64 {
-        self.reserved_value.into()
+    pub fn resize_threshold(&self) -> usize {
+        self.resize_threshold.into()
     }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_header_values_frame_t {
+    pub fn get_inner(&self) -> *mut aeron_str_to_ptr_hash_map_t {
         self.inner.get()
     }
 }
-impl std::ops::Deref for AeronHeaderValuesFrame {
-    type Target = aeron_header_values_frame_t;
+impl std::ops::Deref for AeronStrToPtrHashMap {
+    type Target = aeron_str_to_ptr_hash_map_t;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.inner.get() }
     }
 }
-impl From<*mut aeron_header_values_frame_t> for AeronHeaderValuesFrame {
+impl From<*mut aeron_str_to_ptr_hash_map_t> for AeronStrToPtrHashMap {
     #[inline]
-    fn from(value: *mut aeron_header_values_frame_t) -> Self {
-        AeronHeaderValuesFrame {
+    fn from(value: *mut aeron_str_to_ptr_hash_map_t) -> Self {
+        AeronStrToPtrHashMap {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<AeronHeaderValuesFrame> for *mut aeron_header_values_frame_t {
+impl From<AeronStrToPtrHashMap> for *mut aeron_str_to_ptr_hash_map_t {
     #[inline]
-    fn from(value: AeronHeaderValuesFrame) -> Self {
+    fn from(value: AeronStrToPtrHashMap) -> Self {
         value.get_inner()
     }
 }
-impl From<&AeronHeaderValuesFrame> for *mut aeron_header_values_frame_t {
+impl From<&AeronStrToPtrHashMap> for *mut aeron_str_to_ptr_hash_map_t {
     #[inline]
-    fn from(value: &AeronHeaderValuesFrame) -> Self {
+    fn from(value: &AeronStrToPtrHashMap) -> Self {
         value.get_inner()
     }
 }
-impl From<AeronHeaderValuesFrame> for aeron_header_values_frame_t {
+impl From<AeronStrToPtrHashMap> for aeron_str_to_ptr_hash_map_t {
     #[inline]
-    fn from(value: AeronHeaderValuesFrame) -> Self {
+    fn from(value: AeronStrToPtrHashMap) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const aeron_header_values_frame_t> for AeronHeaderValuesFrame {
+impl From<*const aeron_str_to_ptr_hash_map_t> for AeronStrToPtrHashMap {
     #[inline]
-    fn from(value: *const aeron_header_values_frame_t) -> Self {
-        AeronHeaderValuesFrame {
+    fn from(value: *const aeron_str_to_ptr_hash_map_t) -> Self {
+        AeronStrToPtrHashMap {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<aeron_header_values_frame_t> for AeronHeaderValuesFrame {
+impl From<aeron_str_to_ptr_hash_map_t> for AeronStrToPtrHashMap {
     #[inline]
-    fn from(mut value: aeron_header_values_frame_t) -> Self {
-        AeronHeaderValuesFrame {
+    fn from(mut value: aeron_str_to_ptr_hash_map_t) -> Self {
+        AeronStrToPtrHashMap {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_header_values_frame_t,
+                &mut value as *mut aeron_str_to_ptr_hash_map_t,
                 None,
             )),
         }
     }
 }
 #[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronHeaderValuesFrame {
+impl Default for AeronStrToPtrHashMap {
     fn default() -> Self {
-        AeronHeaderValuesFrame::new_zeroed().expect("failed to create struct")
+        AeronStrToPtrHashMap::new_zeroed().expect("failed to create struct")
     }
 }
-impl AeronHeaderValuesFrame {
+impl AeronStrToPtrHashMap {
     #[doc = r" Regular clone just increases the reference count of underlying count."]
     #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
     #[doc = r""]
@@ -6078,36 +10123,150 @@ impl AeronHeaderValuesFrame {
     }
 }
 #[derive(Clone)]
-pub struct AeronStrToPtrHashMapKey {
-    inner: std::rc::Rc<ManagedCResource<aeron_str_to_ptr_hash_map_key_t>>,
+pub struct AeronLogBuffer {
+    inner: std::rc::Rc<ManagedCResource<aeron_log_buffer_t>>,
 }
-impl core::fmt::Debug for AeronStrToPtrHashMapKey {
+impl core::fmt::Debug for AeronLogBuffer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronStrToPtrHashMapKey))
+            f.debug_struct(stringify!(AeronLogBuffer))
                 .field("inner", &"null")
                 .finish()
         } else {
-            f.debug_struct(stringify!(AeronStrToPtrHashMapKey))
+            f.debug_struct(stringify!(AeronLogBuffer))
                 .field("inner", &self.inner)
-                .field(stringify!(hash_code), &self.hash_code())
-                .field(stringify!(str_length), &self.str_length())
                 .finish()
         }
     }
 }
-impl AeronStrToPtrHashMapKey {
+impl AeronLogBuffer {
     #[inline]
-    pub fn new(str_: &str, hash_code: u64, str_length: usize) -> Result<Self, AeronCError> {
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_log_buffer_t)
+                );
+                let inst: aeron_log_buffer_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_log_buffer_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_log_buffer_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronLogBuffer {
+    type Target = aeron_log_buffer_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_log_buffer_t> for AeronLogBuffer {
+    #[inline]
+    fn from(value: *mut aeron_log_buffer_t) -> Self {
+        AeronLogBuffer {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronLogBuffer> for *mut aeron_log_buffer_t {
+    #[inline]
+    fn from(value: AeronLogBuffer) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronLogBuffer> for *mut aeron_log_buffer_t {
+    #[inline]
+    fn from(value: &AeronLogBuffer) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronLogBuffer> for aeron_log_buffer_t {
+    #[inline]
+    fn from(value: AeronLogBuffer) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_log_buffer_t> for AeronLogBuffer {
+    #[inline]
+    fn from(value: *const aeron_log_buffer_t) -> Self {
+        AeronLogBuffer {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_log_buffer_t> for AeronLogBuffer {
+    #[inline]
+    fn from(mut value: aeron_log_buffer_t) -> Self {
+        AeronLogBuffer {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_log_buffer_t,
+                None,
+            )),
+        }
+    }
+}
+#[derive(Clone)]
+pub struct AeronError {
+    inner: std::rc::Rc<ManagedCResource<aeron_error_t>>,
+}
+impl core::fmt::Debug for AeronError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronError))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronError))
+                .field("inner", &self.inner)
+                .field(stringify!(frame_header), &self.frame_header())
+                .field(stringify!(session_id), &self.session_id())
+                .field(stringify!(stream_id), &self.stream_id())
+                .field(stringify!(receiver_id), &self.receiver_id())
+                .field(stringify!(group_tag), &self.group_tag())
+                .field(stringify!(error_code), &self.error_code())
+                .field(stringify!(error_length), &self.error_length())
+                .finish()
+        }
+    }
+}
+impl AeronError {
+    #[inline]
+    pub fn new(
+        frame_header: AeronFrameHeader,
+        session_id: i32,
+        stream_id: i32,
+        receiver_id: i64,
+        group_tag: i64,
+        error_code: i32,
+        error_length: i32,
+    ) -> Result<Self, AeronCError> {
         let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
         let r_constructor = ManagedCResource::new(
             move |ctx_field| {
-                let inst = aeron_str_to_ptr_hash_map_key_t {
-                    str_: std::ffi::CString::new(str_).unwrap().into_raw(),
-                    hash_code: hash_code.into(),
-                    str_length: str_length.into(),
+                let inst = aeron_error_t {
+                    frame_header: frame_header.into(),
+                    session_id: session_id.into(),
+                    stream_id: stream_id.into(),
+                    receiver_id: receiver_id.into(),
+                    group_tag: group_tag.into(),
+                    error_code: error_code.into(),
+                    error_length: error_length.into(),
                 };
-                let inner_ptr: *mut aeron_str_to_ptr_hash_map_key_t = Box::into_raw(Box::new(inst));
+                let inner_ptr: *mut aeron_error_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -6132,10 +10291,10 @@ impl AeronStrToPtrHashMapKey {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_str_to_ptr_hash_map_key_t)
+                    stringify!(aeron_error_t)
                 );
-                let inst: aeron_str_to_ptr_hash_map_key_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_str_to_ptr_hash_map_key_t = Box::into_raw(Box::new(inst));
+                let inst: aeron_error_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_error_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -6148,84 +10307,1161 @@ impl AeronStrToPtrHashMapKey {
         })
     }
     #[inline]
-    pub fn str_(&self) -> &str {
-        if self.str_.is_null() {
-            ""
-        } else {
-            unsafe { std::ffi::CStr::from_ptr(self.str_).to_str().unwrap() }
-        }
+    pub fn frame_header(&self) -> AeronFrameHeader {
+        self.frame_header.into()
     }
     #[inline]
-    pub fn hash_code(&self) -> u64 {
-        self.hash_code.into()
+    pub fn session_id(&self) -> i32 {
+        self.session_id.into()
     }
     #[inline]
-    pub fn str_length(&self) -> usize {
-        self.str_length.into()
+    pub fn stream_id(&self) -> i32 {
+        self.stream_id.into()
+    }
+    #[inline]
+    pub fn receiver_id(&self) -> i64 {
+        self.receiver_id.into()
+    }
+    #[inline]
+    pub fn group_tag(&self) -> i64 {
+        self.group_tag.into()
+    }
+    #[inline]
+    pub fn error_code(&self) -> i32 {
+        self.error_code.into()
+    }
+    #[inline]
+    pub fn error_length(&self) -> i32 {
+        self.error_length.into()
     }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_str_to_ptr_hash_map_key_t {
+    pub fn get_inner(&self) -> *mut aeron_error_t {
         self.inner.get()
     }
 }
-impl std::ops::Deref for AeronStrToPtrHashMapKey {
-    type Target = aeron_str_to_ptr_hash_map_key_t;
+impl std::ops::Deref for AeronError {
+    type Target = aeron_error_t;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.inner.get() }
     }
 }
-impl From<*mut aeron_str_to_ptr_hash_map_key_t> for AeronStrToPtrHashMapKey {
+impl From<*mut aeron_error_t> for AeronError {
     #[inline]
-    fn from(value: *mut aeron_str_to_ptr_hash_map_key_t) -> Self {
-        AeronStrToPtrHashMapKey {
+    fn from(value: *mut aeron_error_t) -> Self {
+        AeronError {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<AeronStrToPtrHashMapKey> for *mut aeron_str_to_ptr_hash_map_key_t {
+impl From<AeronError> for *mut aeron_error_t {
     #[inline]
-    fn from(value: AeronStrToPtrHashMapKey) -> Self {
+    fn from(value: AeronError) -> Self {
         value.get_inner()
     }
 }
-impl From<&AeronStrToPtrHashMapKey> for *mut aeron_str_to_ptr_hash_map_key_t {
+impl From<&AeronError> for *mut aeron_error_t {
     #[inline]
-    fn from(value: &AeronStrToPtrHashMapKey) -> Self {
+    fn from(value: &AeronError) -> Self {
         value.get_inner()
     }
 }
-impl From<AeronStrToPtrHashMapKey> for aeron_str_to_ptr_hash_map_key_t {
+impl From<AeronError> for aeron_error_t {
     #[inline]
-    fn from(value: AeronStrToPtrHashMapKey) -> Self {
+    fn from(value: AeronError) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const aeron_str_to_ptr_hash_map_key_t> for AeronStrToPtrHashMapKey {
+impl From<*const aeron_error_t> for AeronError {
     #[inline]
-    fn from(value: *const aeron_str_to_ptr_hash_map_key_t) -> Self {
-        AeronStrToPtrHashMapKey {
+    fn from(value: *const aeron_error_t) -> Self {
+        AeronError {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<aeron_str_to_ptr_hash_map_key_t> for AeronStrToPtrHashMapKey {
+impl From<aeron_error_t> for AeronError {
     #[inline]
-    fn from(mut value: aeron_str_to_ptr_hash_map_key_t) -> Self {
-        AeronStrToPtrHashMapKey {
+    fn from(mut value: aeron_error_t) -> Self {
+        AeronError {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_str_to_ptr_hash_map_key_t,
+                &mut value as *mut aeron_error_t,
                 None,
             )),
         }
     }
 }
 #[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronStrToPtrHashMapKey {
+impl Default for AeronError {
     fn default() -> Self {
-        AeronStrToPtrHashMapKey::new_zeroed().expect("failed to create struct")
+        AeronError::new_zeroed().expect("failed to create struct")
     }
 }
-impl AeronStrToPtrHashMapKey {
+impl AeronError {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[doc = "Configuration for a counter that does not change during it's lifetime."]
+#[derive(Clone)]
+pub struct AeronCounterConstants {
+    inner: std::rc::Rc<ManagedCResource<aeron_counter_constants_t>>,
+}
+impl core::fmt::Debug for AeronCounterConstants {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronCounterConstants))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronCounterConstants))
+                .field("inner", &self.inner)
+                .field(stringify!(registration_id), &self.registration_id())
+                .field(stringify!(counter_id), &self.counter_id())
+                .finish()
+        }
+    }
+}
+impl AeronCounterConstants {
+    #[inline]
+    pub fn new(registration_id: i64, counter_id: i32) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_counter_constants_t {
+                    registration_id: registration_id.into(),
+                    counter_id: counter_id.into(),
+                };
+                let inner_ptr: *mut aeron_counter_constants_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_counter_constants_t)
+                );
+                let inst: aeron_counter_constants_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_counter_constants_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn registration_id(&self) -> i64 {
+        self.registration_id.into()
+    }
+    #[inline]
+    pub fn counter_id(&self) -> i32 {
+        self.counter_id.into()
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_counter_constants_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronCounterConstants {
+    type Target = aeron_counter_constants_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_counter_constants_t> for AeronCounterConstants {
+    #[inline]
+    fn from(value: *mut aeron_counter_constants_t) -> Self {
+        AeronCounterConstants {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronCounterConstants> for *mut aeron_counter_constants_t {
+    #[inline]
+    fn from(value: AeronCounterConstants) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronCounterConstants> for *mut aeron_counter_constants_t {
+    #[inline]
+    fn from(value: &AeronCounterConstants) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronCounterConstants> for aeron_counter_constants_t {
+    #[inline]
+    fn from(value: AeronCounterConstants) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_counter_constants_t> for AeronCounterConstants {
+    #[inline]
+    fn from(value: *const aeron_counter_constants_t) -> Self {
+        AeronCounterConstants {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_counter_constants_t> for AeronCounterConstants {
+    #[inline]
+    fn from(mut value: aeron_counter_constants_t) -> Self {
+        AeronCounterConstants {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_counter_constants_t,
+                None,
+            )),
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronCounterConstants {
+    fn default() -> Self {
+        AeronCounterConstants::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronCounterConstants {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[derive(Clone)]
+pub struct AeronStatusMessageOptionalHeader {
+    inner: std::rc::Rc<ManagedCResource<aeron_status_message_optional_header_t>>,
+}
+impl core::fmt::Debug for AeronStatusMessageOptionalHeader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronStatusMessageOptionalHeader))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronStatusMessageOptionalHeader))
+                .field("inner", &self.inner)
+                .field(stringify!(group_tag), &self.group_tag())
+                .finish()
+        }
+    }
+}
+impl AeronStatusMessageOptionalHeader {
+    #[inline]
+    pub fn new(group_tag: i64) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_status_message_optional_header_t {
+                    group_tag: group_tag.into(),
+                };
+                let inner_ptr: *mut aeron_status_message_optional_header_t =
+                    Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_status_message_optional_header_t)
+                );
+                let inst: aeron_status_message_optional_header_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_status_message_optional_header_t =
+                    Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn group_tag(&self) -> i64 {
+        self.group_tag.into()
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_status_message_optional_header_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronStatusMessageOptionalHeader {
+    type Target = aeron_status_message_optional_header_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_status_message_optional_header_t> for AeronStatusMessageOptionalHeader {
+    #[inline]
+    fn from(value: *mut aeron_status_message_optional_header_t) -> Self {
+        AeronStatusMessageOptionalHeader {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronStatusMessageOptionalHeader> for *mut aeron_status_message_optional_header_t {
+    #[inline]
+    fn from(value: AeronStatusMessageOptionalHeader) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronStatusMessageOptionalHeader> for *mut aeron_status_message_optional_header_t {
+    #[inline]
+    fn from(value: &AeronStatusMessageOptionalHeader) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronStatusMessageOptionalHeader> for aeron_status_message_optional_header_t {
+    #[inline]
+    fn from(value: AeronStatusMessageOptionalHeader) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_status_message_optional_header_t> for AeronStatusMessageOptionalHeader {
+    #[inline]
+    fn from(value: *const aeron_status_message_optional_header_t) -> Self {
+        AeronStatusMessageOptionalHeader {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_status_message_optional_header_t> for AeronStatusMessageOptionalHeader {
+    #[inline]
+    fn from(mut value: aeron_status_message_optional_header_t) -> Self {
+        AeronStatusMessageOptionalHeader {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_status_message_optional_header_t,
+                None,
+            )),
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronStatusMessageOptionalHeader {
+    fn default() -> Self {
+        AeronStatusMessageOptionalHeader::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronStatusMessageOptionalHeader {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[derive(Clone)]
+pub struct AeronUdpChannelParams {
+    inner: std::rc::Rc<ManagedCResource<aeron_udp_channel_params_t>>,
+}
+impl core::fmt::Debug for AeronUdpChannelParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronUdpChannelParams))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronUdpChannelParams))
+                .field("inner", &self.inner)
+                .field(stringify!(additional_params), &self.additional_params())
+                .finish()
+        }
+    }
+}
+impl AeronUdpChannelParams {
+    #[inline]
+    pub fn new(
+        endpoint: &str,
+        bind_interface: &str,
+        control: &str,
+        control_mode: &str,
+        channel_tag: &str,
+        entity_tag: &str,
+        ttl: &str,
+        additional_params: AeronUriParams,
+    ) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_udp_channel_params_t {
+                    endpoint: std::ffi::CString::new(endpoint).unwrap().into_raw(),
+                    bind_interface: std::ffi::CString::new(bind_interface).unwrap().into_raw(),
+                    control: std::ffi::CString::new(control).unwrap().into_raw(),
+                    control_mode: std::ffi::CString::new(control_mode).unwrap().into_raw(),
+                    channel_tag: std::ffi::CString::new(channel_tag).unwrap().into_raw(),
+                    entity_tag: std::ffi::CString::new(entity_tag).unwrap().into_raw(),
+                    ttl: std::ffi::CString::new(ttl).unwrap().into_raw(),
+                    additional_params: additional_params.into(),
+                };
+                let inner_ptr: *mut aeron_udp_channel_params_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_udp_channel_params_t)
+                );
+                let inst: aeron_udp_channel_params_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_udp_channel_params_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn endpoint(&self) -> &str {
+        if self.endpoint.is_null() {
+            ""
+        } else {
+            unsafe { std::ffi::CStr::from_ptr(self.endpoint).to_str().unwrap() }
+        }
+    }
+    #[inline]
+    pub fn bind_interface(&self) -> &str {
+        if self.bind_interface.is_null() {
+            ""
+        } else {
+            unsafe {
+                std::ffi::CStr::from_ptr(self.bind_interface)
+                    .to_str()
+                    .unwrap()
+            }
+        }
+    }
+    #[inline]
+    pub fn control(&self) -> &str {
+        if self.control.is_null() {
+            ""
+        } else {
+            unsafe { std::ffi::CStr::from_ptr(self.control).to_str().unwrap() }
+        }
+    }
+    #[inline]
+    pub fn control_mode(&self) -> &str {
+        if self.control_mode.is_null() {
+            ""
+        } else {
+            unsafe {
+                std::ffi::CStr::from_ptr(self.control_mode)
+                    .to_str()
+                    .unwrap()
+            }
+        }
+    }
+    #[inline]
+    pub fn channel_tag(&self) -> &str {
+        if self.channel_tag.is_null() {
+            ""
+        } else {
+            unsafe { std::ffi::CStr::from_ptr(self.channel_tag).to_str().unwrap() }
+        }
+    }
+    #[inline]
+    pub fn entity_tag(&self) -> &str {
+        if self.entity_tag.is_null() {
+            ""
+        } else {
+            unsafe { std::ffi::CStr::from_ptr(self.entity_tag).to_str().unwrap() }
+        }
+    }
+    #[inline]
+    pub fn ttl(&self) -> &str {
+        if self.ttl.is_null() {
+            ""
+        } else {
+            unsafe { std::ffi::CStr::from_ptr(self.ttl).to_str().unwrap() }
+        }
+    }
+    #[inline]
+    pub fn additional_params(&self) -> AeronUriParams {
+        self.additional_params.into()
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_udp_channel_params_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronUdpChannelParams {
+    type Target = aeron_udp_channel_params_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_udp_channel_params_t> for AeronUdpChannelParams {
+    #[inline]
+    fn from(value: *mut aeron_udp_channel_params_t) -> Self {
+        AeronUdpChannelParams {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronUdpChannelParams> for *mut aeron_udp_channel_params_t {
+    #[inline]
+    fn from(value: AeronUdpChannelParams) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronUdpChannelParams> for *mut aeron_udp_channel_params_t {
+    #[inline]
+    fn from(value: &AeronUdpChannelParams) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronUdpChannelParams> for aeron_udp_channel_params_t {
+    #[inline]
+    fn from(value: AeronUdpChannelParams) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_udp_channel_params_t> for AeronUdpChannelParams {
+    #[inline]
+    fn from(value: *const aeron_udp_channel_params_t) -> Self {
+        AeronUdpChannelParams {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_udp_channel_params_t> for AeronUdpChannelParams {
+    #[inline]
+    fn from(mut value: aeron_udp_channel_params_t) -> Self {
+        AeronUdpChannelParams {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_udp_channel_params_t,
+                None,
+            )),
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronUdpChannelParams {
+    fn default() -> Self {
+        AeronUdpChannelParams::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronUdpChannelParams {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[derive(Clone)]
+pub struct AeronCountersReader {
+    inner: std::rc::Rc<ManagedCResource<aeron_counters_reader_t>>,
+}
+impl core::fmt::Debug for AeronCountersReader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronCountersReader))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronCountersReader))
+                .field("inner", &self.inner)
+                .finish()
+        }
+    }
+}
+impl AeronCountersReader {
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_counters_reader_t)
+                );
+                let inst: aeron_counters_reader_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_counters_reader_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    #[doc = "Get buffer pointers and lengths for the counters reader."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `reader` reader containing the buffers."]
+    #[doc = " \n - `buffers` output structure to return the buffers."]
+    #[doc = " \n# Return\n -1 on failure, 0 on success."]
+    pub fn get_buffers(&self, buffers: &AeronCountersReaderBuffers) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_counters_reader_get_buffers(self.get_inner(), buffers.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Iterate over the counters in the counters_reader and call the given function for each counter."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `func` to call for each counter."]
+    #[doc = " \n - `clientd` to pass for each call to func."]
+    pub fn foreach_counter<
+        AeronCountersReaderForeachCounterFuncHandlerImpl: AeronCountersReaderForeachCounterFuncCallback,
+    >(
+        &self,
+        func: Option<&Handler<AeronCountersReaderForeachCounterFuncHandlerImpl>>,
+    ) -> () {
+        unsafe {
+            let result = aeron_counters_reader_foreach_counter(
+                self.get_inner(),
+                {
+                    let callback: aeron_counters_reader_foreach_counter_func_t = if func.is_none() {
+                        None
+                    } else {
+                        Some(
+                            aeron_counters_reader_foreach_counter_func_t_callback::<
+                                AeronCountersReaderForeachCounterFuncHandlerImpl,
+                            >,
+                        )
+                    };
+                    callback
+                },
+                func.map(|m| m.as_raw())
+                    .unwrap_or_else(|| std::ptr::null_mut()),
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Iterate over the counters in the counters_reader and call the given function for each counter."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `func` to call for each counter."]
+    #[doc = " \n - `clientd` to pass for each call to func."]
+    #[doc = r""]
+    #[doc = r""]
+    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
+    #[doc = r"  use with care_"]
+    pub fn foreach_counter_once<
+        AeronCountersReaderForeachCounterFuncHandlerImpl: FnMut(i64, i32, i32, &[u8], &str) -> (),
+    >(
+        &self,
+        mut func: AeronCountersReaderForeachCounterFuncHandlerImpl,
+    ) -> () {
+        unsafe {
+            let result = aeron_counters_reader_foreach_counter(
+                self.get_inner(),
+                Some(
+                    aeron_counters_reader_foreach_counter_func_t_callback_for_once_closure::<
+                        AeronCountersReaderForeachCounterFuncHandlerImpl,
+                    >,
+                ),
+                &mut func as *mut _ as *mut std::os::raw::c_void,
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Iterate over allocated counters and find the first matching a given type id and registration id."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `type_id` to find."]
+    #[doc = " \n - `registration_id` to find."]
+    #[doc = " \n# Return\n the counter id if found otherwise AERON_NULL_COUNTER_ID."]
+    pub fn find_by_type_id_and_registration_id(&self, type_id: i32, registration_id: i64) -> i32 {
+        unsafe {
+            let result = aeron_counters_reader_find_by_type_id_and_registration_id(
+                self.get_inner(),
+                type_id.into(),
+                registration_id.into(),
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Get the current max counter id."]
+    #[doc = ""]
+    #[doc = " \n# Return\n -1 on failure, max counter id on success."]
+    pub fn max_counter_id(&self) -> i32 {
+        unsafe {
+            let result = aeron_counters_reader_max_counter_id(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Get the address for a counter."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `counter_id` to find"]
+    #[doc = " \n# Return\n address of the counter value"]
+    pub fn addr(&self, counter_id: i32) -> &mut i64 {
+        unsafe {
+            let result = aeron_counters_reader_addr(self.get_inner(), counter_id.into());
+            unsafe { &mut *result }
+        }
+    }
+    #[inline]
+    #[doc = "Get the registration id assigned to a counter."]
+    #[doc = ""]
+    #[doc = "\n \n # Parameters
+- `counter_id`      for which the registration id is requested."]
+    #[doc = " \n - `registration_id` pointer for value to be set on success."]
+    pub fn counter_registration_id(&self, counter_id: i32) -> Result<i64, AeronCError> {
+        unsafe {
+            let mut mut_result: i64 = Default::default();
+            let err_code = aeron_counters_reader_counter_registration_id(
+                self.get_inner(),
+                counter_id.into(),
+                &mut mut_result,
+            );
+            if err_code < 0 {
+                return Err(AeronCError::from_code(err_code));
+            } else {
+                return Ok(mut_result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Get the owner id assigned to a counter which will typically be the client id."]
+    #[doc = ""]
+    #[doc = "\n \n # Parameters
+- `counter_id`      for which the owner id is requested."]
+    #[doc = " \n - `owner_id`        pointer for value to be set on success."]
+    pub fn counter_owner_id(&self, counter_id: i32) -> Result<i64, AeronCError> {
+        unsafe {
+            let mut mut_result: i64 = Default::default();
+            let err_code = aeron_counters_reader_counter_owner_id(
+                self.get_inner(),
+                counter_id.into(),
+                &mut mut_result,
+            );
+            if err_code < 0 {
+                return Err(AeronCError::from_code(err_code));
+            } else {
+                return Ok(mut_result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Get the reference id assigned to a counter which will typically be the registration id of an associated Image,"]
+    #[doc = " Subscription, Publication, etc."]
+    #[doc = ""]
+    #[doc = "\n \n # Parameters
+- `counter_id`      for which the reference id is requested."]
+    #[doc = " \n - `reference_id`    pointer for value to be set on success."]
+    pub fn counter_reference_id(&self, counter_id: i32) -> Result<i64, AeronCError> {
+        unsafe {
+            let mut mut_result: i64 = Default::default();
+            let err_code = aeron_counters_reader_counter_reference_id(
+                self.get_inner(),
+                counter_id.into(),
+                &mut mut_result,
+            );
+            if err_code < 0 {
+                return Err(AeronCError::from_code(err_code));
+            } else {
+                return Ok(mut_result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Get the state for a counter."]
+    #[doc = ""]
+    #[doc = "\n \n # Parameters
+- `counter_id` to find"]
+    #[doc = " \n - `state` out pointer for the current state to be stored in."]
+    pub fn counter_state(&self, counter_id: i32) -> Result<i32, AeronCError> {
+        unsafe {
+            let mut mut_result: i32 = Default::default();
+            let err_code = aeron_counters_reader_counter_state(
+                self.get_inner(),
+                counter_id.into(),
+                &mut mut_result,
+            );
+            if err_code < 0 {
+                return Err(AeronCError::from_code(err_code));
+            } else {
+                return Ok(mut_result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Get the type id for a counter."]
+    #[doc = ""]
+    #[doc = "\n \n # Parameters
+- `counter_id` to find"]
+    pub fn counter_type_id(&self, counter_id: i32) -> Result<i32, AeronCError> {
+        unsafe {
+            let mut mut_result: i32 = Default::default();
+            let err_code = aeron_counters_reader_counter_type_id(
+                self.get_inner(),
+                counter_id.into(),
+                &mut mut_result,
+            );
+            if err_code < 0 {
+                return Err(AeronCError::from_code(err_code));
+            } else {
+                return Ok(mut_result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Get the label for a counter."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `counter_id` to find"]
+    #[doc = " \n - `buffer` to store the counter in."]
+    #[doc = " \n - `buffer_length` length of the output buffer"]
+    #[doc = " \n# Return\n -1 on failure, number of characters copied to buffer on success."]
+    pub fn counter_label(
+        &self,
+        counter_id: i32,
+        buffer: *mut ::std::os::raw::c_char,
+        buffer_length: usize,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_counters_reader_counter_label(
+                self.get_inner(),
+                counter_id.into(),
+                buffer.into(),
+                buffer_length.into(),
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Get the free for reuse deadline (ms) for a counter."]
+    #[doc = ""]
+    #[doc = "\n \n # Parameters
+- `counter_id` to find."]
+    #[doc = " \n - `deadline_ms` output value to store the deadline."]
+    pub fn free_for_reuse_deadline_ms(&self, counter_id: i32) -> Result<i64, AeronCError> {
+        unsafe {
+            let mut mut_result: i64 = Default::default();
+            let err_code = aeron_counters_reader_free_for_reuse_deadline_ms(
+                self.get_inner(),
+                counter_id.into(),
+                &mut mut_result,
+            );
+            if err_code < 0 {
+                return Err(AeronCError::from_code(err_code));
+            } else {
+                return Ok(mut_result);
+            }
+        }
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_counters_reader_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronCountersReader {
+    type Target = aeron_counters_reader_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_counters_reader_t> for AeronCountersReader {
+    #[inline]
+    fn from(value: *mut aeron_counters_reader_t) -> Self {
+        AeronCountersReader {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronCountersReader> for *mut aeron_counters_reader_t {
+    #[inline]
+    fn from(value: AeronCountersReader) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronCountersReader> for *mut aeron_counters_reader_t {
+    #[inline]
+    fn from(value: &AeronCountersReader) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronCountersReader> for aeron_counters_reader_t {
+    #[inline]
+    fn from(value: AeronCountersReader) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_counters_reader_t> for AeronCountersReader {
+    #[inline]
+    fn from(value: *const aeron_counters_reader_t) -> Self {
+        AeronCountersReader {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_counters_reader_t> for AeronCountersReader {
+    #[inline]
+    fn from(mut value: aeron_counters_reader_t) -> Self {
+        AeronCountersReader {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_counters_reader_t,
+                None,
+            )),
+        }
+    }
+}
+#[derive(Clone)]
+pub struct AeronCountersReaderBuffers {
+    inner: std::rc::Rc<ManagedCResource<aeron_counters_reader_buffers_t>>,
+}
+impl core::fmt::Debug for AeronCountersReaderBuffers {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronCountersReaderBuffers))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronCountersReaderBuffers))
+                .field("inner", &self.inner)
+                .field(stringify!(values_length), &self.values_length())
+                .field(stringify!(metadata_length), &self.metadata_length())
+                .finish()
+        }
+    }
+}
+impl AeronCountersReaderBuffers {
+    #[inline]
+    pub fn new(
+        values: *mut u8,
+        metadata: *mut u8,
+        values_length: usize,
+        metadata_length: usize,
+    ) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_counters_reader_buffers_t {
+                    values: values.into(),
+                    metadata: metadata.into(),
+                    values_length: values_length.into(),
+                    metadata_length: metadata_length.into(),
+                };
+                let inner_ptr: *mut aeron_counters_reader_buffers_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_counters_reader_buffers_t)
+                );
+                let inst: aeron_counters_reader_buffers_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_counters_reader_buffers_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn values(&self) -> *mut u8 {
+        self.values.into()
+    }
+    #[inline]
+    pub fn metadata(&self) -> *mut u8 {
+        self.metadata.into()
+    }
+    #[inline]
+    pub fn values_length(&self) -> usize {
+        self.values_length.into()
+    }
+    #[inline]
+    pub fn metadata_length(&self) -> usize {
+        self.metadata_length.into()
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_counters_reader_buffers_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronCountersReaderBuffers {
+    type Target = aeron_counters_reader_buffers_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_counters_reader_buffers_t> for AeronCountersReaderBuffers {
+    #[inline]
+    fn from(value: *mut aeron_counters_reader_buffers_t) -> Self {
+        AeronCountersReaderBuffers {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronCountersReaderBuffers> for *mut aeron_counters_reader_buffers_t {
+    #[inline]
+    fn from(value: AeronCountersReaderBuffers) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronCountersReaderBuffers> for *mut aeron_counters_reader_buffers_t {
+    #[inline]
+    fn from(value: &AeronCountersReaderBuffers) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronCountersReaderBuffers> for aeron_counters_reader_buffers_t {
+    #[inline]
+    fn from(value: AeronCountersReaderBuffers) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_counters_reader_buffers_t> for AeronCountersReaderBuffers {
+    #[inline]
+    fn from(value: *const aeron_counters_reader_buffers_t) -> Self {
+        AeronCountersReaderBuffers {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_counters_reader_buffers_t> for AeronCountersReaderBuffers {
+    #[inline]
+    fn from(mut value: aeron_counters_reader_buffers_t) -> Self {
+        AeronCountersReaderBuffers {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_counters_reader_buffers_t,
+                None,
+            )),
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronCountersReaderBuffers {
+    fn default() -> Self {
+        AeronCountersReaderBuffers::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronCountersReaderBuffers {
     #[doc = r" Regular clone just increases the reference count of underlying count."]
     #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
     #[doc = r""]
@@ -6471,39 +11707,537 @@ impl AeronAsyncAddCounter {
     }
 }
 #[derive(Clone)]
-pub struct AeronIpcChannelParams {
-    inner: std::rc::Rc<ManagedCResource<aeron_ipc_channel_params_t>>,
+pub struct AeronExclusivePublication {
+    inner: std::rc::Rc<ManagedCResource<aeron_exclusive_publication_t>>,
 }
-impl core::fmt::Debug for AeronIpcChannelParams {
+impl core::fmt::Debug for AeronExclusivePublication {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronIpcChannelParams))
+            f.debug_struct(stringify!(AeronExclusivePublication))
                 .field("inner", &"null")
                 .finish()
         } else {
-            f.debug_struct(stringify!(AeronIpcChannelParams))
+            f.debug_struct(stringify!(AeronExclusivePublication))
                 .field("inner", &self.inner)
-                .field(stringify!(additional_params), &self.additional_params())
                 .finish()
         }
     }
 }
-impl AeronIpcChannelParams {
+impl AeronExclusivePublication {
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_exclusive_publication_t)
+                );
+                let inst: aeron_exclusive_publication_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_exclusive_publication_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            Some(Box::new(|c| unsafe {
+                aeron_exclusive_publication_is_closed(c)
+            })),
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    #[doc = "Non-blocking publish of a buffer containing a message."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `buffer` to publish."]
+    #[doc = " \n - `length` of the buffer."]
+    #[doc = " \n - `reserved_value_supplier` to use for setting the reserved value field or NULL."]
+    #[doc = " \n - `clientd` to pass to the reserved_value_supplier."]
+    #[doc = " \n# Return\n the new stream position otherwise a negative error value."]
+    pub fn offer<AeronReservedValueSupplierHandlerImpl: AeronReservedValueSupplierCallback>(
+        &self,
+        buffer: &[u8],
+        reserved_value_supplier: Option<&Handler<AeronReservedValueSupplierHandlerImpl>>,
+    ) -> i64 {
+        unsafe {
+            let result = aeron_exclusive_publication_offer(
+                self.get_inner(),
+                buffer.as_ptr() as *mut _,
+                buffer.len(),
+                {
+                    let callback: aeron_reserved_value_supplier_t =
+                        if reserved_value_supplier.is_none() {
+                            None
+                        } else {
+                            Some(
+                                aeron_reserved_value_supplier_t_callback::<
+                                    AeronReservedValueSupplierHandlerImpl,
+                                >,
+                            )
+                        };
+                    callback
+                },
+                reserved_value_supplier
+                    .map(|m| m.as_raw())
+                    .unwrap_or_else(|| std::ptr::null_mut()),
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Non-blocking publish of a buffer containing a message."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `buffer` to publish."]
+    #[doc = " \n - `length` of the buffer."]
+    #[doc = " \n - `reserved_value_supplier` to use for setting the reserved value field or NULL."]
+    #[doc = " \n - `clientd` to pass to the reserved_value_supplier."]
+    #[doc = " \n# Return\n the new stream position otherwise a negative error value."]
+    #[doc = r""]
+    #[doc = r""]
+    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
+    #[doc = r"  use with care_"]
+    pub fn offer_once<AeronReservedValueSupplierHandlerImpl: FnMut(*mut u8, usize) -> i64>(
+        &self,
+        buffer: &[u8],
+        mut reserved_value_supplier: AeronReservedValueSupplierHandlerImpl,
+    ) -> i64 {
+        unsafe {
+            let result = aeron_exclusive_publication_offer(
+                self.get_inner(),
+                buffer.as_ptr() as *mut _,
+                buffer.len(),
+                Some(
+                    aeron_reserved_value_supplier_t_callback_for_once_closure::<
+                        AeronReservedValueSupplierHandlerImpl,
+                    >,
+                ),
+                &mut reserved_value_supplier as *mut _ as *mut std::os::raw::c_void,
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Non-blocking publish by gathering buffer vectors into a message."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `iov` array for the vectors"]
+    #[doc = " \n - `iovcnt` of the number of vectors"]
+    #[doc = " \n - `reserved_value_supplier` to use for setting the reserved value field or NULL."]
+    #[doc = " \n - `clientd` to pass to the reserved_value_supplier."]
+    #[doc = " \n# Return\n the new stream position otherwise a negative error value."]
+    pub fn offerv<AeronReservedValueSupplierHandlerImpl: AeronReservedValueSupplierCallback>(
+        &self,
+        iov: &AeronIovec,
+        iovcnt: usize,
+        reserved_value_supplier: Option<&Handler<AeronReservedValueSupplierHandlerImpl>>,
+    ) -> i64 {
+        unsafe {
+            let result = aeron_exclusive_publication_offerv(
+                self.get_inner(),
+                iov.get_inner(),
+                iovcnt.into(),
+                {
+                    let callback: aeron_reserved_value_supplier_t =
+                        if reserved_value_supplier.is_none() {
+                            None
+                        } else {
+                            Some(
+                                aeron_reserved_value_supplier_t_callback::<
+                                    AeronReservedValueSupplierHandlerImpl,
+                                >,
+                            )
+                        };
+                    callback
+                },
+                reserved_value_supplier
+                    .map(|m| m.as_raw())
+                    .unwrap_or_else(|| std::ptr::null_mut()),
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Non-blocking publish by gathering buffer vectors into a message."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `iov` array for the vectors"]
+    #[doc = " \n - `iovcnt` of the number of vectors"]
+    #[doc = " \n - `reserved_value_supplier` to use for setting the reserved value field or NULL."]
+    #[doc = " \n - `clientd` to pass to the reserved_value_supplier."]
+    #[doc = " \n# Return\n the new stream position otherwise a negative error value."]
+    #[doc = r""]
+    #[doc = r""]
+    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
+    #[doc = r"  use with care_"]
+    pub fn offerv_once<AeronReservedValueSupplierHandlerImpl: FnMut(*mut u8, usize) -> i64>(
+        &self,
+        iov: &AeronIovec,
+        iovcnt: usize,
+        mut reserved_value_supplier: AeronReservedValueSupplierHandlerImpl,
+    ) -> i64 {
+        unsafe {
+            let result = aeron_exclusive_publication_offerv(
+                self.get_inner(),
+                iov.get_inner(),
+                iovcnt.into(),
+                Some(
+                    aeron_reserved_value_supplier_t_callback_for_once_closure::<
+                        AeronReservedValueSupplierHandlerImpl,
+                    >,
+                ),
+                &mut reserved_value_supplier as *mut _ as *mut std::os::raw::c_void,
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Try to claim a range in the publication log into which a message can be written with zero copy semantics."]
+    #[doc = " Once the message has been written then aeron_buffer_claim_commit should be called thus making it available."]
+    #[doc = " A claim length cannot be greater than max payload length."]
+    #[doc = " \n"]
+    #[doc = " <b>Note:</b> This method can only be used for message lengths less than MTU length minus header."]
+    #[doc = ""]
+    #[doc = " @code"]
+    #[doc = " `AeronBufferClaim` buffer_claim;"]
+    #[doc = ""]
+    #[doc = " if (`AeronExclusivePublication`ry_claim(publication, length, &buffer_claim) > 0L)"]
+    #[doc = " {"]
+    #[doc = "     // work with buffer_claim->data directly."]
+    #[doc = "     aeron_buffer_claim_commit(&buffer_claim);"]
+    #[doc = " }"]
+    #[doc = " @endcode"]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `length` of the message."]
+    #[doc = " \n - `buffer_claim` to be populated if the claim succeeds."]
+    #[doc = " \n# Return\n the new stream position otherwise a negative error value."]
+    pub fn try_claim(&self, length: usize, buffer_claim: &AeronBufferClaim) -> i64 {
+        unsafe {
+            let result = aeron_exclusive_publication_try_claim(
+                self.get_inner(),
+                length.into(),
+                buffer_claim.get_inner(),
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Append a padding record log of a given length to make up the log to a position."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `length` of the range to claim, in bytes."]
+    #[doc = " \n# Return\n the new stream position otherwise a negative error value."]
+    pub fn append_padding(&self, length: usize) -> i64 {
+        unsafe {
+            let result =
+                aeron_exclusive_publication_append_padding(self.get_inner(), length.into());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Offer a block of pre-formatted message fragments directly into the current term."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `buffer` containing the pre-formatted block of message fragments."]
+    #[doc = " \n - `offset` offset in the buffer at which the first fragment begins."]
+    #[doc = " \n# Return\n the new stream position otherwise a negative error value."]
+    pub fn offer_block(&self, buffer: &[u8]) -> i64 {
+        unsafe {
+            let result = aeron_exclusive_publication_offer_block(
+                self.get_inner(),
+                buffer.as_ptr() as *mut _,
+                buffer.len(),
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Get the status of the media channel for this publication."]
+    #[doc = " \n"]
+    #[doc = " The status will be ERRORED (-1) if a socket exception occurs on setup and ACTIVE (1) if all is well."]
+    #[doc = ""]
+    #[doc = " \n# Return\n 1 for ACTIVE, -1 for ERRORED"]
+    pub fn channel_status(&self) -> i64 {
+        unsafe {
+            let result = aeron_exclusive_publication_channel_status(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Fill in a structure with the constants in use by a publication."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `publication` to get the constants for."]
+    #[doc = " \n - `constants` structure to fill in with the constants"]
+    #[doc = " \n# Return\n 0 for success and -1 for error."]
+    pub fn constants(&self, constants: &AeronPublicationConstants) -> Result<i32, AeronCError> {
+        unsafe {
+            let result =
+                aeron_exclusive_publication_constants(self.get_inner(), constants.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Fill in a structure with the constants in use by a publication."]
+    #[doc = ""]
+    pub fn get_constants(&self) -> Result<AeronPublicationConstants, AeronCError> {
+        let result = AeronPublicationConstants::default();
+        self.constants(&result)?;
+        Ok(result)
+    }
+    #[inline]
+    #[doc = "Get the current position to which the publication has advanced for this stream."]
+    #[doc = ""]
+    #[doc = " \n# Return\n the current position to which the publication has advanced for this stream or a negative error value."]
+    pub fn position(&self) -> i64 {
+        unsafe {
+            let result = aeron_exclusive_publication_position(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Get the position limit beyond which this publication will be back pressured."]
+    #[doc = ""]
+    #[doc = " This should only be used as a guide to determine when back pressure is likely to be applied."]
+    #[doc = ""]
+    #[doc = " \n# Return\n the position limit beyond which this publication will be back pressured or a negative error value."]
+    pub fn position_limit(&self) -> i64 {
+        unsafe {
+            let result = aeron_exclusive_publication_position_limit(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Asynchronously close the publication."]
+    #[doc = ""]
+    #[doc = " \n# Return\n 0 for success or -1 for error."]
+    pub fn close<AeronNotificationHandlerImpl: AeronNotificationCallback>(
+        &self,
+        on_close_complete: Option<&Handler<AeronNotificationHandlerImpl>>,
+    ) -> Result<i32, AeronCError> {
+        self.inner.close_already_called.set(true);
+        unsafe {
+            let result = aeron_exclusive_publication_close(
+                self.get_inner(),
+                {
+                    let callback: aeron_notification_t = if on_close_complete.is_none() {
+                        None
+                    } else {
+                        Some(aeron_notification_t_callback::<AeronNotificationHandlerImpl>)
+                    };
+                    callback
+                },
+                on_close_complete
+                    .map(|m| m.as_raw())
+                    .unwrap_or_else(|| std::ptr::null_mut()),
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Asynchronously close the publication."]
+    #[doc = ""]
+    #[doc = " \n# Return\n 0 for success or -1 for error."]
+    #[doc = r""]
+    #[doc = r""]
+    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
+    #[doc = r"  use with care_"]
+    pub fn close_once<AeronNotificationHandlerImpl: FnMut() -> ()>(
+        &self,
+        mut on_close_complete: AeronNotificationHandlerImpl,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_exclusive_publication_close(
+                self.get_inner(),
+                Some(
+                    aeron_notification_t_callback_for_once_closure::<AeronNotificationHandlerImpl>,
+                ),
+                &mut on_close_complete as *mut _ as *mut std::os::raw::c_void,
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Has the exclusive publication closed?"]
+    #[doc = ""]
+    #[doc = " \n# Return\n true if this publication is closed."]
+    pub fn is_closed(&self) -> bool {
+        unsafe {
+            let result = aeron_exclusive_publication_is_closed(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Has the exclusive publication seen an active Subscriber recently?"]
+    #[doc = ""]
+    #[doc = " \n# Return\n true if this publication has recently seen an active subscriber otherwise false."]
+    pub fn is_connected(&self) -> bool {
+        unsafe {
+            let result = aeron_exclusive_publication_is_connected(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Get all of the local socket addresses for this exclusive publication. Typically only one representing the control"]
+    #[doc = " address."]
+    #[doc = ""]
+    #[doc = " @see aeron_subscription_local_sockaddrs"]
+    #[doc = "# Parameters\n \n - `address_vec` to hold the received addresses"]
+    #[doc = " \n - `address_vec_len` available length of the vector to hold the addresses"]
+    #[doc = " \n# Return\n number of addresses found or -1 if there is an error."]
+    pub fn local_sockaddrs(
+        &self,
+        address_vec: &AeronIovec,
+        address_vec_len: usize,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_exclusive_publication_local_sockaddrs(
+                self.get_inner(),
+                address_vec.get_inner(),
+                address_vec_len.into(),
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_exclusive_publication_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronExclusivePublication {
+    type Target = aeron_exclusive_publication_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_exclusive_publication_t> for AeronExclusivePublication {
+    #[inline]
+    fn from(value: *mut aeron_exclusive_publication_t) -> Self {
+        AeronExclusivePublication {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                value,
+                Some(Box::new(|c| unsafe {
+                    aeron_exclusive_publication_is_closed(c)
+                })),
+            )),
+        }
+    }
+}
+impl From<AeronExclusivePublication> for *mut aeron_exclusive_publication_t {
+    #[inline]
+    fn from(value: AeronExclusivePublication) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronExclusivePublication> for *mut aeron_exclusive_publication_t {
+    #[inline]
+    fn from(value: &AeronExclusivePublication) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronExclusivePublication> for aeron_exclusive_publication_t {
+    #[inline]
+    fn from(value: AeronExclusivePublication) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_exclusive_publication_t> for AeronExclusivePublication {
+    #[inline]
+    fn from(value: *const aeron_exclusive_publication_t) -> Self {
+        AeronExclusivePublication {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                value,
+                Some(Box::new(|c| unsafe {
+                    aeron_exclusive_publication_is_closed(c)
+                })),
+            )),
+        }
+    }
+}
+impl From<aeron_exclusive_publication_t> for AeronExclusivePublication {
+    #[inline]
+    fn from(mut value: aeron_exclusive_publication_t) -> Self {
+        AeronExclusivePublication {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_exclusive_publication_t,
+                Some(Box::new(|c| unsafe {
+                    aeron_exclusive_publication_is_closed(c)
+                })),
+            )),
+        }
+    }
+}
+impl Drop for AeronExclusivePublication {
+    fn drop(&mut self) {
+        if (self.inner.borrowed || self.inner.cleanup.is_none())
+            && std::rc::Rc::strong_count(&self.inner) == 1
+            && !self.inner.is_closed_already_called()
+        {
+            if self.inner.auto_close.get() {
+                let result = self.close_with_no_args();
+                log::info!(
+                    "auto closing {} {:?}",
+                    stringify!(AeronExclusivePublication),
+                    result
+                );
+            } else {
+                log::warn!("{} not closed", stringify!(AeronExclusivePublication));
+            }
+        }
+    }
+}
+#[derive(Clone)]
+pub struct AeronResponseSetupHeader {
+    inner: std::rc::Rc<ManagedCResource<aeron_response_setup_header_t>>,
+}
+impl core::fmt::Debug for AeronResponseSetupHeader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronResponseSetupHeader))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronResponseSetupHeader))
+                .field("inner", &self.inner)
+                .field(stringify!(frame_header), &self.frame_header())
+                .field(stringify!(session_id), &self.session_id())
+                .field(stringify!(stream_id), &self.stream_id())
+                .field(stringify!(response_session_id), &self.response_session_id())
+                .finish()
+        }
+    }
+}
+impl AeronResponseSetupHeader {
     #[inline]
     pub fn new(
-        channel_tag: &str,
-        entity_tag: &str,
-        additional_params: AeronUriParams,
+        frame_header: AeronFrameHeader,
+        session_id: i32,
+        stream_id: i32,
+        response_session_id: i32,
     ) -> Result<Self, AeronCError> {
         let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
         let r_constructor = ManagedCResource::new(
             move |ctx_field| {
-                let inst = aeron_ipc_channel_params_t {
-                    channel_tag: std::ffi::CString::new(channel_tag).unwrap().into_raw(),
-                    entity_tag: std::ffi::CString::new(entity_tag).unwrap().into_raw(),
-                    additional_params: additional_params.into(),
+                let inst = aeron_response_setup_header_t {
+                    frame_header: frame_header.into(),
+                    session_id: session_id.into(),
+                    stream_id: stream_id.into(),
+                    response_session_id: response_session_id.into(),
                 };
-                let inner_ptr: *mut aeron_ipc_channel_params_t = Box::into_raw(Box::new(inst));
+                let inner_ptr: *mut aeron_response_setup_header_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -6528,10 +12262,10 @@ impl AeronIpcChannelParams {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_ipc_channel_params_t)
+                    stringify!(aeron_response_setup_header_t)
                 );
-                let inst: aeron_ipc_channel_params_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_ipc_channel_params_t = Box::into_raw(Box::new(inst));
+                let inst: aeron_response_setup_header_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_response_setup_header_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -6544,88 +12278,2081 @@ impl AeronIpcChannelParams {
         })
     }
     #[inline]
-    pub fn channel_tag(&self) -> &str {
-        if self.channel_tag.is_null() {
-            ""
-        } else {
-            unsafe { std::ffi::CStr::from_ptr(self.channel_tag).to_str().unwrap() }
-        }
+    pub fn frame_header(&self) -> AeronFrameHeader {
+        self.frame_header.into()
     }
     #[inline]
-    pub fn entity_tag(&self) -> &str {
-        if self.entity_tag.is_null() {
-            ""
-        } else {
-            unsafe { std::ffi::CStr::from_ptr(self.entity_tag).to_str().unwrap() }
-        }
+    pub fn session_id(&self) -> i32 {
+        self.session_id.into()
     }
     #[inline]
-    pub fn additional_params(&self) -> AeronUriParams {
-        self.additional_params.into()
+    pub fn stream_id(&self) -> i32 {
+        self.stream_id.into()
+    }
+    #[inline]
+    pub fn response_session_id(&self) -> i32 {
+        self.response_session_id.into()
     }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_ipc_channel_params_t {
+    pub fn get_inner(&self) -> *mut aeron_response_setup_header_t {
         self.inner.get()
     }
 }
-impl std::ops::Deref for AeronIpcChannelParams {
-    type Target = aeron_ipc_channel_params_t;
+impl std::ops::Deref for AeronResponseSetupHeader {
+    type Target = aeron_response_setup_header_t;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.inner.get() }
     }
 }
-impl From<*mut aeron_ipc_channel_params_t> for AeronIpcChannelParams {
+impl From<*mut aeron_response_setup_header_t> for AeronResponseSetupHeader {
     #[inline]
-    fn from(value: *mut aeron_ipc_channel_params_t) -> Self {
-        AeronIpcChannelParams {
+    fn from(value: *mut aeron_response_setup_header_t) -> Self {
+        AeronResponseSetupHeader {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<AeronIpcChannelParams> for *mut aeron_ipc_channel_params_t {
+impl From<AeronResponseSetupHeader> for *mut aeron_response_setup_header_t {
     #[inline]
-    fn from(value: AeronIpcChannelParams) -> Self {
+    fn from(value: AeronResponseSetupHeader) -> Self {
         value.get_inner()
     }
 }
-impl From<&AeronIpcChannelParams> for *mut aeron_ipc_channel_params_t {
+impl From<&AeronResponseSetupHeader> for *mut aeron_response_setup_header_t {
     #[inline]
-    fn from(value: &AeronIpcChannelParams) -> Self {
+    fn from(value: &AeronResponseSetupHeader) -> Self {
         value.get_inner()
     }
 }
-impl From<AeronIpcChannelParams> for aeron_ipc_channel_params_t {
+impl From<AeronResponseSetupHeader> for aeron_response_setup_header_t {
     #[inline]
-    fn from(value: AeronIpcChannelParams) -> Self {
+    fn from(value: AeronResponseSetupHeader) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const aeron_ipc_channel_params_t> for AeronIpcChannelParams {
+impl From<*const aeron_response_setup_header_t> for AeronResponseSetupHeader {
     #[inline]
-    fn from(value: *const aeron_ipc_channel_params_t) -> Self {
-        AeronIpcChannelParams {
+    fn from(value: *const aeron_response_setup_header_t) -> Self {
+        AeronResponseSetupHeader {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<aeron_ipc_channel_params_t> for AeronIpcChannelParams {
+impl From<aeron_response_setup_header_t> for AeronResponseSetupHeader {
     #[inline]
-    fn from(mut value: aeron_ipc_channel_params_t) -> Self {
-        AeronIpcChannelParams {
+    fn from(mut value: aeron_response_setup_header_t) -> Self {
+        AeronResponseSetupHeader {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_ipc_channel_params_t,
+                &mut value as *mut aeron_response_setup_header_t,
                 None,
             )),
         }
     }
 }
 #[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronIpcChannelParams {
+impl Default for AeronResponseSetupHeader {
     fn default() -> Self {
-        AeronIpcChannelParams::new_zeroed().expect("failed to create struct")
+        AeronResponseSetupHeader::new_zeroed().expect("failed to create struct")
     }
 }
-impl AeronIpcChannelParams {
+impl AeronResponseSetupHeader {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[derive(Clone)]
+pub struct AeronDataHeader {
+    inner: std::rc::Rc<ManagedCResource<aeron_data_header_t>>,
+}
+impl core::fmt::Debug for AeronDataHeader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronDataHeader))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronDataHeader))
+                .field("inner", &self.inner)
+                .field(stringify!(frame_header), &self.frame_header())
+                .field(stringify!(term_offset), &self.term_offset())
+                .field(stringify!(session_id), &self.session_id())
+                .field(stringify!(stream_id), &self.stream_id())
+                .field(stringify!(term_id), &self.term_id())
+                .field(stringify!(reserved_value), &self.reserved_value())
+                .finish()
+        }
+    }
+}
+impl AeronDataHeader {
+    #[inline]
+    pub fn new(
+        frame_header: AeronFrameHeader,
+        term_offset: i32,
+        session_id: i32,
+        stream_id: i32,
+        term_id: i32,
+        reserved_value: i64,
+    ) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_data_header_t {
+                    frame_header: frame_header.into(),
+                    term_offset: term_offset.into(),
+                    session_id: session_id.into(),
+                    stream_id: stream_id.into(),
+                    term_id: term_id.into(),
+                    reserved_value: reserved_value.into(),
+                };
+                let inner_ptr: *mut aeron_data_header_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_data_header_t)
+                );
+                let inst: aeron_data_header_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_data_header_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn frame_header(&self) -> AeronFrameHeader {
+        self.frame_header.into()
+    }
+    #[inline]
+    pub fn term_offset(&self) -> i32 {
+        self.term_offset.into()
+    }
+    #[inline]
+    pub fn session_id(&self) -> i32 {
+        self.session_id.into()
+    }
+    #[inline]
+    pub fn stream_id(&self) -> i32 {
+        self.stream_id.into()
+    }
+    #[inline]
+    pub fn term_id(&self) -> i32 {
+        self.term_id.into()
+    }
+    #[inline]
+    pub fn reserved_value(&self) -> i64 {
+        self.reserved_value.into()
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_data_header_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronDataHeader {
+    type Target = aeron_data_header_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_data_header_t> for AeronDataHeader {
+    #[inline]
+    fn from(value: *mut aeron_data_header_t) -> Self {
+        AeronDataHeader {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronDataHeader> for *mut aeron_data_header_t {
+    #[inline]
+    fn from(value: AeronDataHeader) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronDataHeader> for *mut aeron_data_header_t {
+    #[inline]
+    fn from(value: &AeronDataHeader) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronDataHeader> for aeron_data_header_t {
+    #[inline]
+    fn from(value: AeronDataHeader) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_data_header_t> for AeronDataHeader {
+    #[inline]
+    fn from(value: *const aeron_data_header_t) -> Self {
+        AeronDataHeader {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_data_header_t> for AeronDataHeader {
+    #[inline]
+    fn from(mut value: aeron_data_header_t) -> Self {
+        AeronDataHeader {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_data_header_t,
+                None,
+            )),
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronDataHeader {
+    fn default() -> Self {
+        AeronDataHeader::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronDataHeader {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[derive(Clone)]
+pub struct AeronHeaderValues {
+    inner: std::rc::Rc<ManagedCResource<aeron_header_values_t>>,
+}
+impl core::fmt::Debug for AeronHeaderValues {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronHeaderValues))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronHeaderValues))
+                .field("inner", &self.inner)
+                .field(stringify!(frame), &self.frame())
+                .field(stringify!(initial_term_id), &self.initial_term_id())
+                .field(
+                    stringify!(position_bits_to_shift),
+                    &self.position_bits_to_shift(),
+                )
+                .finish()
+        }
+    }
+}
+impl AeronHeaderValues {
+    #[inline]
+    pub fn new(
+        frame: AeronHeaderValuesFrame,
+        initial_term_id: i32,
+        position_bits_to_shift: usize,
+    ) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_header_values_t {
+                    frame: frame.into(),
+                    initial_term_id: initial_term_id.into(),
+                    position_bits_to_shift: position_bits_to_shift.into(),
+                };
+                let inner_ptr: *mut aeron_header_values_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_header_values_t)
+                );
+                let inst: aeron_header_values_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_header_values_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn frame(&self) -> AeronHeaderValuesFrame {
+        self.frame.into()
+    }
+    #[inline]
+    pub fn initial_term_id(&self) -> i32 {
+        self.initial_term_id.into()
+    }
+    #[inline]
+    pub fn position_bits_to_shift(&self) -> usize {
+        self.position_bits_to_shift.into()
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_header_values_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronHeaderValues {
+    type Target = aeron_header_values_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_header_values_t> for AeronHeaderValues {
+    #[inline]
+    fn from(value: *mut aeron_header_values_t) -> Self {
+        AeronHeaderValues {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronHeaderValues> for *mut aeron_header_values_t {
+    #[inline]
+    fn from(value: AeronHeaderValues) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronHeaderValues> for *mut aeron_header_values_t {
+    #[inline]
+    fn from(value: &AeronHeaderValues) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronHeaderValues> for aeron_header_values_t {
+    #[inline]
+    fn from(value: AeronHeaderValues) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_header_values_t> for AeronHeaderValues {
+    #[inline]
+    fn from(value: *const aeron_header_values_t) -> Self {
+        AeronHeaderValues {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_header_values_t> for AeronHeaderValues {
+    #[inline]
+    fn from(mut value: aeron_header_values_t) -> Self {
+        AeronHeaderValues {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_header_values_t,
+                None,
+            )),
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronHeaderValues {
+    fn default() -> Self {
+        AeronHeaderValues::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronHeaderValues {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[derive(Clone)]
+pub struct AeronAsyncDestination {
+    inner: std::rc::Rc<ManagedCResource<aeron_async_destination_t>>,
+}
+impl core::fmt::Debug for AeronAsyncDestination {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronAsyncDestination))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronAsyncDestination))
+                .field("inner", &self.inner)
+                .finish()
+        }
+    }
+}
+impl AeronAsyncDestination {
+    #[doc = "Add a destination manually to a multi-destination-cast publication."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `publication` to add destination to."]
+    #[doc = " \n - `uri` for the destination to add."]
+    #[doc = " \n# Return\n 0 for success and -1 for error."]
+    pub fn aeron_publication_async_add_destination(
+        client: &Aeron,
+        publication: &AeronPublication,
+        uri: &str,
+    ) -> Result<Self, AeronCError> {
+        let client_copy = client.clone();
+        let client: *mut aeron_t = client.into();
+        let publication_copy = publication.clone();
+        let publication: *mut aeron_publication_t = publication.into();
+        let uri: *const ::std::os::raw::c_char = std::ffi::CString::new(uri).unwrap().into_raw();
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {
+            drop(client_copy);
+            drop(publication_copy)
+        })));
+        let resource_constructor = ManagedCResource::new(
+            move |ctx_field| unsafe {
+                aeron_publication_async_add_destination(ctx_field, client, publication, uri)
+            },
+            Some(Box::new(move |ctx_field| {
+                let result = unsafe {
+                    aeron_publication_async_remove_destination(
+                        ctx_field,
+                        client.into(),
+                        publication.into(),
+                        uri.into(),
+                    )
+                };
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                result
+            })),
+            false,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource_constructor),
+        })
+    }
+    #[doc = "Add a destination manually to a multi-destination-cast exclusive publication."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `publication` to add destination to."]
+    #[doc = " \n - `uri` for the destination to add."]
+    #[doc = " \n# Return\n 0 for success and -1 for error."]
+    pub fn aeron_exclusive_publication_async_add_destination(
+        client: &Aeron,
+        publication: &AeronExclusivePublication,
+        uri: &str,
+    ) -> Result<Self, AeronCError> {
+        let client_copy = client.clone();
+        let client: *mut aeron_t = client.into();
+        let publication_copy = publication.clone();
+        let publication: *mut aeron_exclusive_publication_t = publication.into();
+        let uri: *const ::std::os::raw::c_char = std::ffi::CString::new(uri).unwrap().into_raw();
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {
+            drop(client_copy);
+            drop(publication_copy)
+        })));
+        let resource_constructor = ManagedCResource::new(
+            move |ctx_field| unsafe {
+                aeron_exclusive_publication_async_add_destination(
+                    ctx_field,
+                    client,
+                    publication,
+                    uri,
+                )
+            },
+            Some(Box::new(move |ctx_field| {
+                let result = unsafe {
+                    aeron_exclusive_publication_async_remove_destination(
+                        ctx_field,
+                        client.into(),
+                        publication.into(),
+                        uri.into(),
+                    )
+                };
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                result
+            })),
+            false,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource_constructor),
+        })
+    }
+    #[doc = "Add a destination manually to a multi-destination-subscription."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `subscription` to add destination to."]
+    #[doc = " \n - `uri` for the destination to add."]
+    #[doc = " \n# Return\n 0 for success and -1 for error."]
+    pub fn aeron_subscription_async_add_destination(
+        client: &Aeron,
+        subscription: &AeronSubscription,
+        uri: &str,
+    ) -> Result<Self, AeronCError> {
+        let client_copy = client.clone();
+        let client: *mut aeron_t = client.into();
+        let subscription_copy = subscription.clone();
+        let subscription: *mut aeron_subscription_t = subscription.into();
+        let uri: *const ::std::os::raw::c_char = std::ffi::CString::new(uri).unwrap().into_raw();
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {
+            drop(client_copy);
+            drop(subscription_copy)
+        })));
+        let resource_constructor = ManagedCResource::new(
+            move |ctx_field| unsafe {
+                aeron_subscription_async_add_destination(ctx_field, client, subscription, uri)
+            },
+            Some(Box::new(move |ctx_field| {
+                let result = unsafe {
+                    aeron_subscription_async_remove_destination(
+                        ctx_field,
+                        client.into(),
+                        subscription.into(),
+                        uri.into(),
+                    )
+                };
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                result
+            })),
+            false,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource_constructor),
+        })
+    }
+    #[inline]
+    #[doc = "Poll the completion of the add/remove of a destination to/from a publication."]
+    #[doc = ""]
+    #[doc = " \n# Return\n 0 for not complete (try again), 1 for completed successfully, or -1 for an error."]
+    pub fn aeron_publication_async_destination_poll(&self) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_publication_async_destination_poll(self.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Poll the completion of the add/remove of a destination to/from an exclusive publication."]
+    #[doc = ""]
+    #[doc = " \n# Return\n 0 for not complete (try again), 1 for completed successfully, or -1 for an error."]
+    pub fn aeron_exclusive_publication_async_destination_poll(&self) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_exclusive_publication_async_destination_poll(self.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Poll the completion of add/remove of a destination to/from a subscription."]
+    #[doc = ""]
+    #[doc = " \n# Return\n 0 for not complete (try again), 1 for completed successfully, or -1 for an error."]
+    pub fn aeron_subscription_async_destination_poll(&self) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_subscription_async_destination_poll(self.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Gets the registration_id for the destination command supplied. Note that this is the correlation_id used for"]
+    #[doc = " the specified destination command, not the registration_id for the original parent resource (publication,"]
+    #[doc = " subscription)."]
+    #[doc = ""]
+    #[doc = " \n# Return\n correlation_id sent to driver."]
+    pub fn get_registration_id(&self) -> i64 {
+        unsafe {
+            let result = aeron_async_destination_get_registration_id(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_async_destination_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronAsyncDestination {
+    type Target = aeron_async_destination_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_async_destination_t> for AeronAsyncDestination {
+    #[inline]
+    fn from(value: *mut aeron_async_destination_t) -> Self {
+        AeronAsyncDestination {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronAsyncDestination> for *mut aeron_async_destination_t {
+    #[inline]
+    fn from(value: AeronAsyncDestination) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronAsyncDestination> for *mut aeron_async_destination_t {
+    #[inline]
+    fn from(value: &AeronAsyncDestination) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronAsyncDestination> for aeron_async_destination_t {
+    #[inline]
+    fn from(value: AeronAsyncDestination) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_async_destination_t> for AeronAsyncDestination {
+    #[inline]
+    fn from(value: *const aeron_async_destination_t) -> Self {
+        AeronAsyncDestination {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_async_destination_t> for AeronAsyncDestination {
+    #[inline]
+    fn from(mut value: aeron_async_destination_t) -> Self {
+        AeronAsyncDestination {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_async_destination_t,
+                None,
+            )),
+        }
+    }
+}
+#[derive(Clone)]
+pub struct AeronAsyncAddExclusivePublication {
+    inner: std::rc::Rc<ManagedCResource<aeron_async_add_exclusive_publication_t>>,
+}
+impl core::fmt::Debug for AeronAsyncAddExclusivePublication {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronAsyncAddExclusivePublication))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronAsyncAddExclusivePublication))
+                .field("inner", &self.inner)
+                .finish()
+        }
+    }
+}
+impl AeronAsyncAddExclusivePublication {
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_async_add_exclusive_publication_t)
+                );
+                let inst: aeron_async_add_exclusive_publication_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_async_add_exclusive_publication_t =
+                    Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    #[doc = "Gets the registration id for addition of the exclusive_publication. Note that using this after a call to poll the"]
+    #[doc = " succeeds or errors is undefined behaviour. As the async_add_exclusive_publication_t may have been freed."]
+    #[doc = ""]
+    #[doc = " \n# Return\n registration id for the exclusive_publication."]
+    pub fn aeron_async_add_exclusive_exclusive_publication_get_registration_id(&self) -> i64 {
+        unsafe {
+            let result = aeron_async_add_exclusive_exclusive_publication_get_registration_id(
+                self.get_inner(),
+            );
+            result.into()
+        }
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_async_add_exclusive_publication_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronAsyncAddExclusivePublication {
+    type Target = aeron_async_add_exclusive_publication_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_async_add_exclusive_publication_t> for AeronAsyncAddExclusivePublication {
+    #[inline]
+    fn from(value: *mut aeron_async_add_exclusive_publication_t) -> Self {
+        AeronAsyncAddExclusivePublication {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronAsyncAddExclusivePublication> for *mut aeron_async_add_exclusive_publication_t {
+    #[inline]
+    fn from(value: AeronAsyncAddExclusivePublication) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronAsyncAddExclusivePublication> for *mut aeron_async_add_exclusive_publication_t {
+    #[inline]
+    fn from(value: &AeronAsyncAddExclusivePublication) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronAsyncAddExclusivePublication> for aeron_async_add_exclusive_publication_t {
+    #[inline]
+    fn from(value: AeronAsyncAddExclusivePublication) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_async_add_exclusive_publication_t> for AeronAsyncAddExclusivePublication {
+    #[inline]
+    fn from(value: *const aeron_async_add_exclusive_publication_t) -> Self {
+        AeronAsyncAddExclusivePublication {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_async_add_exclusive_publication_t> for AeronAsyncAddExclusivePublication {
+    #[inline]
+    fn from(mut value: aeron_async_add_exclusive_publication_t) -> Self {
+        AeronAsyncAddExclusivePublication {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_async_add_exclusive_publication_t,
+                None,
+            )),
+        }
+    }
+}
+impl AeronExclusivePublication {
+    #[inline]
+    pub fn new(async_: &AeronAsyncAddExclusivePublication) -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| unsafe {
+                aeron_async_add_exclusive_publication_poll(ctx_field, async_.into())
+            },
+            None,
+            false,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+}
+impl Aeron {
+    #[inline]
+    pub fn async_add_exclusive_publication(
+        &self,
+        uri: &str,
+        stream_id: i32,
+    ) -> Result<AeronAsyncAddExclusivePublication, AeronCError> {
+        let result = AeronAsyncAddExclusivePublication::new(self, uri, stream_id);
+        if let Ok(result) = &result {
+            result.inner.add_dependency(self.clone());
+        }
+        result
+    }
+}
+impl Aeron {
+    #[inline]
+    pub fn add_exclusive_publication(
+        &self,
+        uri: &str,
+        stream_id: i32,
+        timeout: std::time::Duration,
+    ) -> Result<AeronExclusivePublication, AeronCError> {
+        let start = std::time::Instant::now();
+        loop {
+            if let Ok(poller) = AeronAsyncAddExclusivePublication::new(self, uri, stream_id) {
+                while start.elapsed() <= timeout {
+                    if let Some(result) = poller.poll()? {
+                        return Ok(result);
+                    }
+                    #[cfg(debug_assertions)]
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+            }
+            if start.elapsed() > timeout {
+                log::error!("failed async poll for {:?}", self);
+                return Err(AeronErrorType::TimedOut.into());
+            }
+            #[cfg(debug_assertions)]
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+}
+impl AeronAsyncAddExclusivePublication {
+    #[inline]
+    pub fn new(client: &Aeron, uri: &str, stream_id: i32) -> Result<Self, AeronCError> {
+        let resource_async = ManagedCResource::new(
+            move |ctx_field| unsafe {
+                aeron_async_add_exclusive_publication(
+                    ctx_field,
+                    client.into(),
+                    std::ffi::CString::new(uri).unwrap().into_raw(),
+                    stream_id.into(),
+                )
+            },
+            None,
+            false,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource_async),
+        })
+    }
+    pub fn poll(&self) -> Result<Option<AeronExclusivePublication>, AeronCError> {
+        let result = AeronExclusivePublication::new(self);
+        if let Ok(result) = &result {
+            unsafe {
+                for d in (&*self.inner.dependencies.get()).iter() {
+                    result.inner.add_dependency(d.clone());
+                }
+                result.inner.auto_close.set(true);
+            }
+        }
+        match result {
+            Ok(result) => Ok(Some(result)),
+            Err(AeronCError { code }) if code == 0 => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+    pub fn poll_blocking(
+        &self,
+        timeout: std::time::Duration,
+    ) -> Result<AeronExclusivePublication, AeronCError> {
+        if let Some(result) = self.poll()? {
+            return Ok(result);
+        }
+        let time = std::time::Instant::now();
+        while time.elapsed() < timeout {
+            if let Some(result) = self.poll()? {
+                return Ok(result);
+            }
+            #[cfg(debug_assertions)]
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        log::error!("failed async poll for {:?}", self);
+        Err(AeronErrorType::TimedOut.into())
+    }
+}
+#[derive(Clone)]
+pub struct AeronPerThreadError {
+    inner: std::rc::Rc<ManagedCResource<aeron_per_thread_error_t>>,
+}
+impl core::fmt::Debug for AeronPerThreadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronPerThreadError))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronPerThreadError))
+                .field("inner", &self.inner)
+                .field(stringify!(offset), &self.offset())
+                .finish()
+        }
+    }
+}
+impl AeronPerThreadError {
+    #[inline]
+    pub fn new(
+        errcode: ::std::os::raw::c_int,
+        offset: usize,
+        errmsg: [::std::os::raw::c_char; 8192usize],
+    ) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_per_thread_error_t {
+                    errcode: errcode.into(),
+                    offset: offset.into(),
+                    errmsg: errmsg.into(),
+                };
+                let inner_ptr: *mut aeron_per_thread_error_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_per_thread_error_t)
+                );
+                let inst: aeron_per_thread_error_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_per_thread_error_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn errcode(&self) -> ::std::os::raw::c_int {
+        self.errcode.into()
+    }
+    #[inline]
+    pub fn offset(&self) -> usize {
+        self.offset.into()
+    }
+    #[inline]
+    pub fn errmsg(&self) -> [::std::os::raw::c_char; 8192usize] {
+        self.errmsg.into()
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_per_thread_error_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronPerThreadError {
+    type Target = aeron_per_thread_error_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_per_thread_error_t> for AeronPerThreadError {
+    #[inline]
+    fn from(value: *mut aeron_per_thread_error_t) -> Self {
+        AeronPerThreadError {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronPerThreadError> for *mut aeron_per_thread_error_t {
+    #[inline]
+    fn from(value: AeronPerThreadError) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronPerThreadError> for *mut aeron_per_thread_error_t {
+    #[inline]
+    fn from(value: &AeronPerThreadError) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronPerThreadError> for aeron_per_thread_error_t {
+    #[inline]
+    fn from(value: AeronPerThreadError) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_per_thread_error_t> for AeronPerThreadError {
+    #[inline]
+    fn from(value: *const aeron_per_thread_error_t) -> Self {
+        AeronPerThreadError {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_per_thread_error_t> for AeronPerThreadError {
+    #[inline]
+    fn from(mut value: aeron_per_thread_error_t) -> Self {
+        AeronPerThreadError {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_per_thread_error_t,
+                None,
+            )),
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronPerThreadError {
+    fn default() -> Self {
+        AeronPerThreadError::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronPerThreadError {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[derive(Clone)]
+pub struct AeronClientRegisteringResource {
+    inner: std::rc::Rc<ManagedCResource<aeron_client_registering_resource_t>>,
+}
+impl core::fmt::Debug for AeronClientRegisteringResource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronClientRegisteringResource))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronClientRegisteringResource))
+                .field("inner", &self.inner)
+                .finish()
+        }
+    }
+}
+impl AeronClientRegisteringResource {
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_client_registering_resource_t)
+                );
+                let inst: aeron_client_registering_resource_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_client_registering_resource_t =
+                    Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_client_registering_resource_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronClientRegisteringResource {
+    type Target = aeron_client_registering_resource_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_client_registering_resource_t> for AeronClientRegisteringResource {
+    #[inline]
+    fn from(value: *mut aeron_client_registering_resource_t) -> Self {
+        AeronClientRegisteringResource {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronClientRegisteringResource> for *mut aeron_client_registering_resource_t {
+    #[inline]
+    fn from(value: AeronClientRegisteringResource) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronClientRegisteringResource> for *mut aeron_client_registering_resource_t {
+    #[inline]
+    fn from(value: &AeronClientRegisteringResource) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronClientRegisteringResource> for aeron_client_registering_resource_t {
+    #[inline]
+    fn from(value: AeronClientRegisteringResource) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_client_registering_resource_t> for AeronClientRegisteringResource {
+    #[inline]
+    fn from(value: *const aeron_client_registering_resource_t) -> Self {
+        AeronClientRegisteringResource {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_client_registering_resource_t> for AeronClientRegisteringResource {
+    #[inline]
+    fn from(mut value: aeron_client_registering_resource_t) -> Self {
+        AeronClientRegisteringResource {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_client_registering_resource_t,
+                None,
+            )),
+        }
+    }
+}
+#[derive(Clone)]
+pub struct AeronSubscription {
+    inner: std::rc::Rc<ManagedCResource<aeron_subscription_t>>,
+}
+impl core::fmt::Debug for AeronSubscription {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronSubscription))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronSubscription))
+                .field("inner", &self.inner)
+                .finish()
+        }
+    }
+}
+impl AeronSubscription {
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_subscription_t)
+                );
+                let inst: aeron_subscription_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_subscription_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            Some(Box::new(|c| unsafe { aeron_subscription_is_closed(c) })),
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    #[doc = "Poll the images under the subscription for available message fragments."]
+    #[doc = " \n"]
+    #[doc = " Each fragment read will be a whole message if it is under MTU length. If larger than MTU then it will come"]
+    #[doc = " as a series of fragments ordered within a session."]
+    #[doc = " \n"]
+    #[doc = " To assemble messages that span multiple fragments then use `AeronFragmentAssembler`."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `handler` for handling each message fragment as it is read."]
+    #[doc = " \n - `fragment_limit` number of message fragments to limit when polling across multiple images."]
+    #[doc = " \n# Return\n the number of fragments received or -1 for error."]
+    pub fn poll<AeronFragmentHandlerHandlerImpl: AeronFragmentHandlerCallback>(
+        &self,
+        handler: Option<&Handler<AeronFragmentHandlerHandlerImpl>>,
+        fragment_limit: usize,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_subscription_poll(
+                self.get_inner(),
+                {
+                    let callback: aeron_fragment_handler_t = if handler.is_none() {
+                        None
+                    } else {
+                        Some(aeron_fragment_handler_t_callback::<AeronFragmentHandlerHandlerImpl>)
+                    };
+                    callback
+                },
+                handler
+                    .map(|m| m.as_raw())
+                    .unwrap_or_else(|| std::ptr::null_mut()),
+                fragment_limit.into(),
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Poll the images under the subscription for available message fragments."]
+    #[doc = " \n"]
+    #[doc = " Each fragment read will be a whole message if it is under MTU length. If larger than MTU then it will come"]
+    #[doc = " as a series of fragments ordered within a session."]
+    #[doc = " \n"]
+    #[doc = " To assemble messages that span multiple fragments then use `AeronFragmentAssembler`."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `handler` for handling each message fragment as it is read."]
+    #[doc = " \n - `fragment_limit` number of message fragments to limit when polling across multiple images."]
+    #[doc = " \n# Return\n the number of fragments received or -1 for error."]
+    #[doc = r""]
+    #[doc = r""]
+    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
+    #[doc = r"  use with care_"]
+    pub fn poll_once<AeronFragmentHandlerHandlerImpl: FnMut(&[u8], AeronHeader) -> ()>(
+        &self,
+        mut handler: AeronFragmentHandlerHandlerImpl,
+        fragment_limit: usize,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_subscription_poll(
+                self.get_inner(),
+                Some(
+                    aeron_fragment_handler_t_callback_for_once_closure::<
+                        AeronFragmentHandlerHandlerImpl,
+                    >,
+                ),
+                &mut handler as *mut _ as *mut std::os::raw::c_void,
+                fragment_limit.into(),
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Poll in a controlled manner the images under the subscription for available message fragments."]
+    #[doc = " Control is applied to fragments in the stream. If more fragments can be read on another stream"]
+    #[doc = " they will even if BREAK or ABORT is returned from the fragment handler."]
+    #[doc = " \n"]
+    #[doc = " Each fragment read will be a whole message if it is under MTU length. If larger than MTU then it will come"]
+    #[doc = " as a series of fragments ordered within a session."]
+    #[doc = " \n"]
+    #[doc = " To assemble messages that span multiple fragments then use `AeronControlledFragmentAssembler`."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `handler` for handling each message fragment as it is read."]
+    #[doc = " \n - `fragment_limit` number of message fragments to limit when polling across multiple images."]
+    #[doc = " \n# Return\n the number of fragments received or -1 for error."]
+    pub fn controlled_poll<
+        AeronControlledFragmentHandlerHandlerImpl: AeronControlledFragmentHandlerCallback,
+    >(
+        &self,
+        handler: Option<&Handler<AeronControlledFragmentHandlerHandlerImpl>>,
+        fragment_limit: usize,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_subscription_controlled_poll(
+                self.get_inner(),
+                {
+                    let callback: aeron_controlled_fragment_handler_t = if handler.is_none() {
+                        None
+                    } else {
+                        Some(
+                            aeron_controlled_fragment_handler_t_callback::<
+                                AeronControlledFragmentHandlerHandlerImpl,
+                            >,
+                        )
+                    };
+                    callback
+                },
+                handler
+                    .map(|m| m.as_raw())
+                    .unwrap_or_else(|| std::ptr::null_mut()),
+                fragment_limit.into(),
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Poll in a controlled manner the images under the subscription for available message fragments."]
+    #[doc = " Control is applied to fragments in the stream. If more fragments can be read on another stream"]
+    #[doc = " they will even if BREAK or ABORT is returned from the fragment handler."]
+    #[doc = " \n"]
+    #[doc = " Each fragment read will be a whole message if it is under MTU length. If larger than MTU then it will come"]
+    #[doc = " as a series of fragments ordered within a session."]
+    #[doc = " \n"]
+    #[doc = " To assemble messages that span multiple fragments then use `AeronControlledFragmentAssembler`."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `handler` for handling each message fragment as it is read."]
+    #[doc = " \n - `fragment_limit` number of message fragments to limit when polling across multiple images."]
+    #[doc = " \n# Return\n the number of fragments received or -1 for error."]
+    #[doc = r""]
+    #[doc = r""]
+    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
+    #[doc = r"  use with care_"]
+    pub fn controlled_poll_once<
+        AeronControlledFragmentHandlerHandlerImpl: FnMut(&[u8], AeronHeader) -> aeron_controlled_fragment_handler_action_t,
+    >(
+        &self,
+        mut handler: AeronControlledFragmentHandlerHandlerImpl,
+        fragment_limit: usize,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_subscription_controlled_poll(
+                self.get_inner(),
+                Some(
+                    aeron_controlled_fragment_handler_t_callback_for_once_closure::<
+                        AeronControlledFragmentHandlerHandlerImpl,
+                    >,
+                ),
+                &mut handler as *mut _ as *mut std::os::raw::c_void,
+                fragment_limit.into(),
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Poll the images under the subscription for available message fragments in blocks."]
+    #[doc = " \n"]
+    #[doc = " This method is useful for operations like bulk archiving and messaging indexing."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `handler` to receive a block of fragments from each image."]
+    #[doc = " \n - `block_length_limit` for each image polled."]
+    #[doc = " \n# Return\n the number of bytes consumed or -1 for error."]
+    pub fn block_poll<AeronBlockHandlerHandlerImpl: AeronBlockHandlerCallback>(
+        &self,
+        handler: Option<&Handler<AeronBlockHandlerHandlerImpl>>,
+        block_length_limit: usize,
+    ) -> ::std::os::raw::c_long {
+        unsafe {
+            let result = aeron_subscription_block_poll(
+                self.get_inner(),
+                {
+                    let callback: aeron_block_handler_t = if handler.is_none() {
+                        None
+                    } else {
+                        Some(aeron_block_handler_t_callback::<AeronBlockHandlerHandlerImpl>)
+                    };
+                    callback
+                },
+                handler
+                    .map(|m| m.as_raw())
+                    .unwrap_or_else(|| std::ptr::null_mut()),
+                block_length_limit.into(),
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Poll the images under the subscription for available message fragments in blocks."]
+    #[doc = " \n"]
+    #[doc = " This method is useful for operations like bulk archiving and messaging indexing."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `handler` to receive a block of fragments from each image."]
+    #[doc = " \n - `block_length_limit` for each image polled."]
+    #[doc = " \n# Return\n the number of bytes consumed or -1 for error."]
+    #[doc = r""]
+    #[doc = r""]
+    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
+    #[doc = r"  use with care_"]
+    pub fn block_poll_once<AeronBlockHandlerHandlerImpl: FnMut(&[u8], i32, i32) -> ()>(
+        &self,
+        mut handler: AeronBlockHandlerHandlerImpl,
+        block_length_limit: usize,
+    ) -> ::std::os::raw::c_long {
+        unsafe {
+            let result = aeron_subscription_block_poll(
+                self.get_inner(),
+                Some(
+                    aeron_block_handler_t_callback_for_once_closure::<AeronBlockHandlerHandlerImpl>,
+                ),
+                &mut handler as *mut _ as *mut std::os::raw::c_void,
+                block_length_limit.into(),
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Is this subscription connected by having at least one open publication image."]
+    #[doc = ""]
+    #[doc = " \n# Return\n true if this subscription connected by having at least one open publication image."]
+    pub fn is_connected(&self) -> bool {
+        unsafe {
+            let result = aeron_subscription_is_connected(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Fill in a structure with the constants in use by a subscription."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `subscription` to get the constants for."]
+    #[doc = " \n - `constants` structure to fill in with the constants"]
+    #[doc = " \n# Return\n 0 for success and -1 for error."]
+    pub fn constants(&self, constants: &AeronSubscriptionConstants) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_subscription_constants(self.get_inner(), constants.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Fill in a structure with the constants in use by a subscription."]
+    #[doc = ""]
+    pub fn get_constants(&self) -> Result<AeronSubscriptionConstants, AeronCError> {
+        let result = AeronSubscriptionConstants::default();
+        self.constants(&result)?;
+        Ok(result)
+    }
+    #[inline]
+    #[doc = "Count of images associated to this subscription."]
+    #[doc = ""]
+    #[doc = " \n# Return\n count of count associated to this subscription or -1 for error."]
+    pub fn image_count(&self) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_subscription_image_count(self.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Return the image associated with the given session_id under the given subscription."]
+    #[doc = ""]
+    #[doc = " Note: the returned image is considered retained by the application and thus must be released via"]
+    #[doc = " aeron_image_release when finished or if the image becomes unavailable."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `session_id` associated with the image."]
+    #[doc = " \n# Return\n image associated with the given session_id or NULL if no image exists."]
+    pub fn image_by_session_id(&self, session_id: i32) -> AeronImage {
+        unsafe {
+            let result =
+                aeron_subscription_image_by_session_id(self.get_inner(), session_id.into());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Return the image at the given index."]
+    #[doc = ""]
+    #[doc = " Note: the returned image is considered retained by the application and thus must be released via"]
+    #[doc = " aeron_image_release when finished or if the image becomes unavailable."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `index` for the image."]
+    #[doc = " \n# Return\n image at the given index or NULL if no image exists."]
+    pub fn image_at_index(&self, index: usize) -> AeronImage {
+        unsafe {
+            let result = aeron_subscription_image_at_index(self.get_inner(), index.into());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Iterate over the images for this subscription calling the given function."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `handler` to be called for each image."]
+    #[doc = " \n - `clientd` to be passed to the handler."]
+    pub fn for_each_image(
+        &self,
+        handler: ::std::option::Option<
+            unsafe extern "C" fn(image: *mut aeron_image_t, clientd: *mut ::std::os::raw::c_void),
+        >,
+        clientd: *mut ::std::os::raw::c_void,
+    ) -> () {
+        unsafe {
+            let result =
+                aeron_subscription_for_each_image(self.get_inner(), handler.into(), clientd.into());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Retain the given image for access in the application."]
+    #[doc = ""]
+    #[doc = " Note: A retain call must have a corresponding release call."]
+    #[doc = " Note: Subscriptions are not threadsafe and should not be shared between subscribers."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `subscription` that image is part of."]
+    #[doc = " \n - `image` to retain"]
+    #[doc = " \n# Return\n 0 for success and -1 for error."]
+    pub fn image_retain(&self, image: &AeronImage) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_subscription_image_retain(self.get_inner(), image.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Release the given image and relinquish desire to use the image directly."]
+    #[doc = ""]
+    #[doc = " Note: Subscriptions are not threadsafe and should not be shared between subscribers."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `subscription` that image is part of."]
+    #[doc = " \n - `image` to release"]
+    #[doc = " \n# Return\n 0 for success and -1 for error."]
+    pub fn image_release(&self, image: &AeronImage) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_subscription_image_release(self.get_inner(), image.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Is the subscription closed."]
+    #[doc = ""]
+    #[doc = " \n# Return\n true if it has been closed otherwise false."]
+    pub fn is_closed(&self) -> bool {
+        unsafe {
+            let result = aeron_subscription_is_closed(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Get the status of the media channel for this subscription."]
+    #[doc = " \n"]
+    #[doc = " The status will be ERRORED (-1) if a socket exception occurs on setup and ACTIVE (1) if all is well."]
+    #[doc = ""]
+    #[doc = " \n# Return\n 1 for ACTIVE, -1 for ERRORED"]
+    pub fn channel_status(&self) -> i64 {
+        unsafe {
+            let result = aeron_subscription_channel_status(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Asynchronously close the subscription. Will callback on the on_complete notification when the subscription is"]
+    #[doc = " closed. The callback is optional, use NULL for the on_complete callback if not required."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `on_close_complete` optional callback to execute once the subscription has been closed and freed. This may"]
+    #[doc = " happen on a separate thread, so the caller should ensure that clientd has the appropriate lifetime."]
+    #[doc = " \n - `on_close_complete_clientd` parameter to pass to the on_complete callback."]
+    #[doc = " \n# Return\n 0 for success or -1 for error."]
+    pub fn close<AeronNotificationHandlerImpl: AeronNotificationCallback>(
+        &self,
+        on_close_complete: Option<&Handler<AeronNotificationHandlerImpl>>,
+    ) -> Result<i32, AeronCError> {
+        self.inner.close_already_called.set(true);
+        unsafe {
+            let result = aeron_subscription_close(
+                self.get_inner(),
+                {
+                    let callback: aeron_notification_t = if on_close_complete.is_none() {
+                        None
+                    } else {
+                        Some(aeron_notification_t_callback::<AeronNotificationHandlerImpl>)
+                    };
+                    callback
+                },
+                on_close_complete
+                    .map(|m| m.as_raw())
+                    .unwrap_or_else(|| std::ptr::null_mut()),
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Asynchronously close the subscription. Will callback on the on_complete notification when the subscription is"]
+    #[doc = " closed. The callback is optional, use NULL for the on_complete callback if not required."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `on_close_complete` optional callback to execute once the subscription has been closed and freed. This may"]
+    #[doc = " happen on a separate thread, so the caller should ensure that clientd has the appropriate lifetime."]
+    #[doc = " \n - `on_close_complete_clientd` parameter to pass to the on_complete callback."]
+    #[doc = " \n# Return\n 0 for success or -1 for error."]
+    #[doc = r""]
+    #[doc = r""]
+    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
+    #[doc = r"  use with care_"]
+    pub fn close_once<AeronNotificationHandlerImpl: FnMut() -> ()>(
+        &self,
+        mut on_close_complete: AeronNotificationHandlerImpl,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_subscription_close(
+                self.get_inner(),
+                Some(
+                    aeron_notification_t_callback_for_once_closure::<AeronNotificationHandlerImpl>,
+                ),
+                &mut on_close_complete as *mut _ as *mut std::os::raw::c_void,
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Get all of the local socket addresses for this subscription. Multiple addresses can occur if this is a"]
+    #[doc = " multi-destination subscription. Addresses will a string representation in numeric form. IPv6 addresses will be"]
+    #[doc = " surrounded by '[' and ']' so that the ':' that separate the parts are distinguishable from the port delimiter."]
+    #[doc = " E.g. [fe80::7552:c06e:6bf4:4160]:12345. As of writing the maximum length for a formatted address is 54 bytes"]
+    #[doc = " including the NULL terminator. AERON_CLIENT_MAX_LOCAL_ADDRESS_STR_LEN is defined to provide enough space to fit the"]
+    #[doc = " returned string. Returned strings will be NULL terminated. If the buffer to hold the address can not hold enough"]
+    #[doc = " of the message it will be truncated and the last character will be null."]
+    #[doc = ""]
+    #[doc = " If the address_vec_len is less the total number of addresses available then the first addresses found up to that"]
+    #[doc = " length will be placed into the address_vec. However the function will return the total number of addresses available"]
+    #[doc = " so if if that is larger than the input array then the client code may wish to re-query with a larger array to get"]
+    #[doc = " them all."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `address_vec` to hold the received addresses"]
+    #[doc = " \n - `address_vec_len` available length of the vector to hold the addresses"]
+    #[doc = " \n# Return\n number of addresses found or -1 if there is an error."]
+    pub fn local_sockaddrs(
+        &self,
+        address_vec: &AeronIovec,
+        address_vec_len: usize,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_subscription_local_sockaddrs(
+                self.get_inner(),
+                address_vec.get_inner(),
+                address_vec_len.into(),
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Retrieves the first local socket address for this subscription. If this is not MDS then it will be the one"]
+    #[doc = " representing endpoint for this subscription."]
+    #[doc = ""]
+    #[doc = " @see aeron_subscription_local_sockaddrs"]
+    #[doc = "# Parameters\n \n - `address` for the received address"]
+    #[doc = " \n - `address_len` available length for the copied address."]
+    #[doc = " \n# Return\n -1 on error, 0 if address not found, 1 if address is found."]
+    pub fn resolved_endpoint(&self, address: &str, address_len: usize) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_subscription_resolved_endpoint(
+                self.get_inner(),
+                std::ffi::CString::new(address).unwrap().into_raw(),
+                address_len.into(),
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Retrieves the channel URI for this subscription with any wildcard ports filled in. If the channel is not UDP or"]
+    #[doc = " does not have a wildcard port (<code>0</code>), then it will return the original URI."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `uri` buffer to hold the resolved uri"]
+    #[doc = " \n - `uri_len` length of the buffer"]
+    #[doc = " \n# Return\n -1 on failure or the number of bytes written to the buffer (excluding the NULL terminator). Writing is done"]
+    #[doc = " on a per key basis, so if the buffer was truncated before writing completed, it will only include the byte count up"]
+    #[doc = " to the key that overflowed. However, the invariant that if the number returned >= uri_len, then output will have been"]
+    #[doc = " truncated."]
+    pub fn try_resolve_channel_endpoint_port(
+        &self,
+        uri: *mut ::std::os::raw::c_char,
+        uri_len: usize,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_subscription_try_resolve_channel_endpoint_port(
+                self.get_inner(),
+                uri.into(),
+                uri_len.into(),
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Retrieves the channel URI for this subscription with any wildcard ports filled in. If the channel is not UDP or"]
+    #[doc = " does not have a wildcard port (<code>0</code>), then it will return the original URI."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `uri` buffer to hold the resolved uri"]
+    #[doc = " \n - `uri_len` length of the buffer"]
+    #[doc = " \n# Return\n -1 on failure or the number of bytes written to the buffer (excluding the NULL terminator). Writing is done"]
+    #[doc = " on a per key basis, so if the buffer was truncated before writing completed, it will only include the byte count up"]
+    #[doc = " to the key that overflowed. However, the invariant that if the number returned >= uri_len, then output will have been"]
+    #[doc = " truncated."]
+    pub fn try_resolve_channel_endpoint_port_as_string(
+        &self,
+        max_length: usize,
+    ) -> Result<String, AeronCError> {
+        let mut result = String::with_capacity(max_length);
+        self.try_resolve_channel_endpoint_port_into(&mut result)?;
+        Ok(result)
+    }
+    #[inline]
+    #[doc = "Retrieves the channel URI for this subscription with any wildcard ports filled in. If the channel is not UDP or"]
+    #[doc = " does not have a wildcard port (<code>0</code>), then it will return the original URI."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `uri` buffer to hold the resolved uri"]
+    #[doc = " \n - `uri_len` length of the buffer"]
+    #[doc = " \n# Return\n -1 on failure or the number of bytes written to the buffer (excluding the NULL terminator). Writing is done"]
+    #[doc = " on a per key basis, so if the buffer was truncated before writing completed, it will only include the byte count up"]
+    #[doc = " to the key that overflowed. However, the invariant that if the number returned >= uri_len, then output will have been"]
+    #[doc = " truncated."]
+    #[doc = "NOTE: allocation friendly method, the string capacity must be set as it will truncate string to capacity it will never grow the string. So if you pass String::new() it will write 0 chars"]
+    pub fn try_resolve_channel_endpoint_port_into(
+        &self,
+        dst_truncate_to_capacity: &mut String,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let capacity = dst_truncate_to_capacity.capacity();
+            let vec = dst_truncate_to_capacity.as_mut_vec();
+            vec.set_len(capacity);
+            let result =
+                self.try_resolve_channel_endpoint_port(vec.as_mut_ptr() as *mut _, capacity)?;
+            let mut len = 0;
+            loop {
+                if len == capacity {
+                    break;
+                }
+                let val = vec[len];
+                if val == 0 {
+                    break;
+                }
+                len += 1;
+            }
+            vec.set_len(len);
+            Ok(result)
+        }
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_subscription_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronSubscription {
+    type Target = aeron_subscription_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_subscription_t> for AeronSubscription {
+    #[inline]
+    fn from(value: *mut aeron_subscription_t) -> Self {
+        AeronSubscription {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                value,
+                Some(Box::new(|c| unsafe { aeron_subscription_is_closed(c) })),
+            )),
+        }
+    }
+}
+impl From<AeronSubscription> for *mut aeron_subscription_t {
+    #[inline]
+    fn from(value: AeronSubscription) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronSubscription> for *mut aeron_subscription_t {
+    #[inline]
+    fn from(value: &AeronSubscription) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronSubscription> for aeron_subscription_t {
+    #[inline]
+    fn from(value: AeronSubscription) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_subscription_t> for AeronSubscription {
+    #[inline]
+    fn from(value: *const aeron_subscription_t) -> Self {
+        AeronSubscription {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                value,
+                Some(Box::new(|c| unsafe { aeron_subscription_is_closed(c) })),
+            )),
+        }
+    }
+}
+impl From<aeron_subscription_t> for AeronSubscription {
+    #[inline]
+    fn from(mut value: aeron_subscription_t) -> Self {
+        AeronSubscription {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_subscription_t,
+                Some(Box::new(|c| unsafe { aeron_subscription_is_closed(c) })),
+            )),
+        }
+    }
+}
+impl Drop for AeronSubscription {
+    fn drop(&mut self) {
+        if (self.inner.borrowed || self.inner.cleanup.is_none())
+            && std::rc::Rc::strong_count(&self.inner) == 1
+            && !self.inner.is_closed_already_called()
+        {
+            if self.inner.auto_close.get() {
+                let result = self.close_with_no_args();
+                log::info!(
+                    "auto closing {} {:?}",
+                    stringify!(AeronSubscription),
+                    result
+                );
+            } else {
+                log::warn!("{} not closed", stringify!(AeronSubscription));
+            }
+        }
+    }
+}
+#[derive(Clone)]
+pub struct AeronCounterMetadataDescriptor {
+    inner: std::rc::Rc<ManagedCResource<aeron_counter_metadata_descriptor_t>>,
+}
+impl core::fmt::Debug for AeronCounterMetadataDescriptor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronCounterMetadataDescriptor))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronCounterMetadataDescriptor))
+                .field("inner", &self.inner)
+                .field(stringify!(state), &self.state())
+                .field(stringify!(type_id), &self.type_id())
+                .field(
+                    stringify!(free_for_reuse_deadline_ms),
+                    &self.free_for_reuse_deadline_ms(),
+                )
+                .field(stringify!(label_length), &self.label_length())
+                .finish()
+        }
+    }
+}
+impl AeronCounterMetadataDescriptor {
+    #[inline]
+    pub fn new(
+        state: i32,
+        type_id: i32,
+        free_for_reuse_deadline_ms: i64,
+        key: [u8; 112usize],
+        label_length: i32,
+        label: [u8; 380usize],
+    ) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_counter_metadata_descriptor_t {
+                    state: state.into(),
+                    type_id: type_id.into(),
+                    free_for_reuse_deadline_ms: free_for_reuse_deadline_ms.into(),
+                    key: key.into(),
+                    label_length: label_length.into(),
+                    label: label.into(),
+                };
+                let inner_ptr: *mut aeron_counter_metadata_descriptor_t =
+                    Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_counter_metadata_descriptor_t)
+                );
+                let inst: aeron_counter_metadata_descriptor_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_counter_metadata_descriptor_t =
+                    Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn state(&self) -> i32 {
+        self.state.into()
+    }
+    #[inline]
+    pub fn type_id(&self) -> i32 {
+        self.type_id.into()
+    }
+    #[inline]
+    pub fn free_for_reuse_deadline_ms(&self) -> i64 {
+        self.free_for_reuse_deadline_ms.into()
+    }
+    #[inline]
+    pub fn key(&self) -> [u8; 112usize] {
+        self.key.into()
+    }
+    #[inline]
+    pub fn label_length(&self) -> i32 {
+        self.label_length.into()
+    }
+    #[inline]
+    pub fn label(&self) -> [u8; 380usize] {
+        self.label.into()
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_counter_metadata_descriptor_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronCounterMetadataDescriptor {
+    type Target = aeron_counter_metadata_descriptor_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_counter_metadata_descriptor_t> for AeronCounterMetadataDescriptor {
+    #[inline]
+    fn from(value: *mut aeron_counter_metadata_descriptor_t) -> Self {
+        AeronCounterMetadataDescriptor {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronCounterMetadataDescriptor> for *mut aeron_counter_metadata_descriptor_t {
+    #[inline]
+    fn from(value: AeronCounterMetadataDescriptor) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronCounterMetadataDescriptor> for *mut aeron_counter_metadata_descriptor_t {
+    #[inline]
+    fn from(value: &AeronCounterMetadataDescriptor) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronCounterMetadataDescriptor> for aeron_counter_metadata_descriptor_t {
+    #[inline]
+    fn from(value: AeronCounterMetadataDescriptor) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_counter_metadata_descriptor_t> for AeronCounterMetadataDescriptor {
+    #[inline]
+    fn from(value: *const aeron_counter_metadata_descriptor_t) -> Self {
+        AeronCounterMetadataDescriptor {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_counter_metadata_descriptor_t> for AeronCounterMetadataDescriptor {
+    #[inline]
+    fn from(mut value: aeron_counter_metadata_descriptor_t) -> Self {
+        AeronCounterMetadataDescriptor {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_counter_metadata_descriptor_t,
+                None,
+            )),
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronCounterMetadataDescriptor {
+    fn default() -> Self {
+        AeronCounterMetadataDescriptor::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronCounterMetadataDescriptor {
     #[doc = r" Regular clone just increases the reference count of underlying count."]
     #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
     #[doc = r""]
@@ -7575,170 +15302,37 @@ impl From<aeron_context_t> for AeronContext {
     }
 }
 #[derive(Clone)]
-pub struct AeronLogbufferMetadata {
-    inner: std::rc::Rc<ManagedCResource<aeron_logbuffer_metadata_t>>,
+pub struct AeronFrameHeader {
+    inner: std::rc::Rc<ManagedCResource<aeron_frame_header_t>>,
 }
-impl core::fmt::Debug for AeronLogbufferMetadata {
+impl core::fmt::Debug for AeronFrameHeader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronLogbufferMetadata))
+            f.debug_struct(stringify!(AeronFrameHeader))
                 .field("inner", &"null")
                 .finish()
         } else {
-            f.debug_struct(stringify!(AeronLogbufferMetadata))
+            f.debug_struct(stringify!(AeronFrameHeader))
                 .field("inner", &self.inner)
-                .field(stringify!(active_term_count), &self.active_term_count())
-                .field(
-                    stringify!(end_of_stream_position),
-                    &self.end_of_stream_position(),
-                )
-                .field(stringify!(is_connected), &self.is_connected())
-                .field(
-                    stringify!(active_transport_count),
-                    &self.active_transport_count(),
-                )
-                .field(stringify!(correlation_id), &self.correlation_id())
-                .field(stringify!(initial_term_id), &self.initial_term_id())
-                .field(
-                    stringify!(default_frame_header_length),
-                    &self.default_frame_header_length(),
-                )
-                .field(stringify!(mtu_length), &self.mtu_length())
-                .field(stringify!(term_length), &self.term_length())
-                .field(stringify!(page_size), &self.page_size())
-                .field(
-                    stringify!(publication_window_length),
-                    &self.publication_window_length(),
-                )
-                .field(
-                    stringify!(receiver_window_length),
-                    &self.receiver_window_length(),
-                )
-                .field(
-                    stringify!(socket_sndbuf_length),
-                    &self.socket_sndbuf_length(),
-                )
-                .field(
-                    stringify!(os_default_socket_sndbuf_length),
-                    &self.os_default_socket_sndbuf_length(),
-                )
-                .field(
-                    stringify!(os_max_socket_sndbuf_length),
-                    &self.os_max_socket_sndbuf_length(),
-                )
-                .field(
-                    stringify!(socket_rcvbuf_length),
-                    &self.socket_rcvbuf_length(),
-                )
-                .field(
-                    stringify!(os_default_socket_rcvbuf_length),
-                    &self.os_default_socket_rcvbuf_length(),
-                )
-                .field(
-                    stringify!(os_max_socket_rcvbuf_length),
-                    &self.os_max_socket_rcvbuf_length(),
-                )
-                .field(stringify!(max_resend), &self.max_resend())
-                .field(stringify!(entity_tag), &self.entity_tag())
-                .field(
-                    stringify!(response_correlation_id),
-                    &self.response_correlation_id(),
-                )
-                .field(stringify!(linger_timeout_ns), &self.linger_timeout_ns())
-                .field(
-                    stringify!(untethered_window_limit_timeout_ns),
-                    &self.untethered_window_limit_timeout_ns(),
-                )
-                .field(
-                    stringify!(untethered_resting_timeout_ns),
-                    &self.untethered_resting_timeout_ns(),
-                )
+                .field(stringify!(frame_length), &self.frame_length())
+                .field(stringify!(type_), &self.type_())
                 .finish()
         }
     }
 }
-impl AeronLogbufferMetadata {
+impl AeronFrameHeader {
     #[inline]
-    pub fn new(
-        term_tail_counters: [i64; 3usize],
-        active_term_count: i32,
-        pad1: [u8; 100usize],
-        end_of_stream_position: i64,
-        is_connected: i32,
-        active_transport_count: i32,
-        pad2: [u8; 112usize],
-        correlation_id: i64,
-        initial_term_id: i32,
-        default_frame_header_length: i32,
-        mtu_length: i32,
-        term_length: i32,
-        page_size: i32,
-        publication_window_length: i32,
-        receiver_window_length: i32,
-        socket_sndbuf_length: i32,
-        os_default_socket_sndbuf_length: i32,
-        os_max_socket_sndbuf_length: i32,
-        socket_rcvbuf_length: i32,
-        os_default_socket_rcvbuf_length: i32,
-        os_max_socket_rcvbuf_length: i32,
-        max_resend: i32,
-        default_header: [u8; 128usize],
-        entity_tag: i64,
-        response_correlation_id: i64,
-        linger_timeout_ns: i64,
-        untethered_window_limit_timeout_ns: i64,
-        untethered_resting_timeout_ns: i64,
-        group: u8,
-        is_response: u8,
-        rejoin: u8,
-        reliable: u8,
-        sparse: u8,
-        signal_eos: u8,
-        spies_simulate_connection: u8,
-        tether: u8,
-    ) -> Result<Self, AeronCError> {
+    pub fn new(frame_length: i32, version: i8, flags: u8, type_: i16) -> Result<Self, AeronCError> {
         let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
         let r_constructor = ManagedCResource::new(
             move |ctx_field| {
-                let inst = aeron_logbuffer_metadata_t {
-                    term_tail_counters: term_tail_counters.into(),
-                    active_term_count: active_term_count.into(),
-                    pad1: pad1.into(),
-                    end_of_stream_position: end_of_stream_position.into(),
-                    is_connected: is_connected.into(),
-                    active_transport_count: active_transport_count.into(),
-                    pad2: pad2.into(),
-                    correlation_id: correlation_id.into(),
-                    initial_term_id: initial_term_id.into(),
-                    default_frame_header_length: default_frame_header_length.into(),
-                    mtu_length: mtu_length.into(),
-                    term_length: term_length.into(),
-                    page_size: page_size.into(),
-                    publication_window_length: publication_window_length.into(),
-                    receiver_window_length: receiver_window_length.into(),
-                    socket_sndbuf_length: socket_sndbuf_length.into(),
-                    os_default_socket_sndbuf_length: os_default_socket_sndbuf_length.into(),
-                    os_max_socket_sndbuf_length: os_max_socket_sndbuf_length.into(),
-                    socket_rcvbuf_length: socket_rcvbuf_length.into(),
-                    os_default_socket_rcvbuf_length: os_default_socket_rcvbuf_length.into(),
-                    os_max_socket_rcvbuf_length: os_max_socket_rcvbuf_length.into(),
-                    max_resend: max_resend.into(),
-                    default_header: default_header.into(),
-                    entity_tag: entity_tag.into(),
-                    response_correlation_id: response_correlation_id.into(),
-                    linger_timeout_ns: linger_timeout_ns.into(),
-                    untethered_window_limit_timeout_ns: untethered_window_limit_timeout_ns.into(),
-                    untethered_resting_timeout_ns: untethered_resting_timeout_ns.into(),
-                    group: group.into(),
-                    is_response: is_response.into(),
-                    rejoin: rejoin.into(),
-                    reliable: reliable.into(),
-                    sparse: sparse.into(),
-                    signal_eos: signal_eos.into(),
-                    spies_simulate_connection: spies_simulate_connection.into(),
-                    tether: tether.into(),
+                let inst = aeron_frame_header_t {
+                    frame_length: frame_length.into(),
+                    version: version.into(),
+                    flags: flags.into(),
+                    type_: type_.into(),
                 };
-                let inner_ptr: *mut aeron_logbuffer_metadata_t = Box::into_raw(Box::new(inst));
+                let inner_ptr: *mut aeron_frame_header_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -7763,10 +15357,10 @@ impl AeronLogbufferMetadata {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_logbuffer_metadata_t)
+                    stringify!(aeron_frame_header_t)
                 );
-                let inst: aeron_logbuffer_metadata_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_logbuffer_metadata_t = Box::into_raw(Box::new(inst));
+                let inst: aeron_frame_header_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_frame_header_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -7779,212 +15373,84 @@ impl AeronLogbufferMetadata {
         })
     }
     #[inline]
-    pub fn term_tail_counters(&self) -> [i64; 3usize] {
-        self.term_tail_counters.into()
+    pub fn frame_length(&self) -> i32 {
+        self.frame_length.into()
     }
     #[inline]
-    pub fn active_term_count(&self) -> i32 {
-        self.active_term_count.into()
+    pub fn version(&self) -> i8 {
+        self.version.into()
     }
     #[inline]
-    pub fn pad1(&self) -> [u8; 100usize] {
-        self.pad1.into()
+    pub fn flags(&self) -> u8 {
+        self.flags.into()
     }
     #[inline]
-    pub fn end_of_stream_position(&self) -> i64 {
-        self.end_of_stream_position.into()
-    }
-    #[inline]
-    pub fn is_connected(&self) -> i32 {
-        self.is_connected.into()
-    }
-    #[inline]
-    pub fn active_transport_count(&self) -> i32 {
-        self.active_transport_count.into()
-    }
-    #[inline]
-    pub fn pad2(&self) -> [u8; 112usize] {
-        self.pad2.into()
-    }
-    #[inline]
-    pub fn correlation_id(&self) -> i64 {
-        self.correlation_id.into()
-    }
-    #[inline]
-    pub fn initial_term_id(&self) -> i32 {
-        self.initial_term_id.into()
-    }
-    #[inline]
-    pub fn default_frame_header_length(&self) -> i32 {
-        self.default_frame_header_length.into()
-    }
-    #[inline]
-    pub fn mtu_length(&self) -> i32 {
-        self.mtu_length.into()
-    }
-    #[inline]
-    pub fn term_length(&self) -> i32 {
-        self.term_length.into()
-    }
-    #[inline]
-    pub fn page_size(&self) -> i32 {
-        self.page_size.into()
-    }
-    #[inline]
-    pub fn publication_window_length(&self) -> i32 {
-        self.publication_window_length.into()
-    }
-    #[inline]
-    pub fn receiver_window_length(&self) -> i32 {
-        self.receiver_window_length.into()
-    }
-    #[inline]
-    pub fn socket_sndbuf_length(&self) -> i32 {
-        self.socket_sndbuf_length.into()
-    }
-    #[inline]
-    pub fn os_default_socket_sndbuf_length(&self) -> i32 {
-        self.os_default_socket_sndbuf_length.into()
-    }
-    #[inline]
-    pub fn os_max_socket_sndbuf_length(&self) -> i32 {
-        self.os_max_socket_sndbuf_length.into()
-    }
-    #[inline]
-    pub fn socket_rcvbuf_length(&self) -> i32 {
-        self.socket_rcvbuf_length.into()
-    }
-    #[inline]
-    pub fn os_default_socket_rcvbuf_length(&self) -> i32 {
-        self.os_default_socket_rcvbuf_length.into()
-    }
-    #[inline]
-    pub fn os_max_socket_rcvbuf_length(&self) -> i32 {
-        self.os_max_socket_rcvbuf_length.into()
-    }
-    #[inline]
-    pub fn max_resend(&self) -> i32 {
-        self.max_resend.into()
-    }
-    #[inline]
-    pub fn default_header(&self) -> [u8; 128usize] {
-        self.default_header.into()
-    }
-    #[inline]
-    pub fn entity_tag(&self) -> i64 {
-        self.entity_tag.into()
-    }
-    #[inline]
-    pub fn response_correlation_id(&self) -> i64 {
-        self.response_correlation_id.into()
-    }
-    #[inline]
-    pub fn linger_timeout_ns(&self) -> i64 {
-        self.linger_timeout_ns.into()
-    }
-    #[inline]
-    pub fn untethered_window_limit_timeout_ns(&self) -> i64 {
-        self.untethered_window_limit_timeout_ns.into()
-    }
-    #[inline]
-    pub fn untethered_resting_timeout_ns(&self) -> i64 {
-        self.untethered_resting_timeout_ns.into()
-    }
-    #[inline]
-    pub fn group(&self) -> u8 {
-        self.group.into()
-    }
-    #[inline]
-    pub fn is_response(&self) -> u8 {
-        self.is_response.into()
-    }
-    #[inline]
-    pub fn rejoin(&self) -> u8 {
-        self.rejoin.into()
-    }
-    #[inline]
-    pub fn reliable(&self) -> u8 {
-        self.reliable.into()
-    }
-    #[inline]
-    pub fn sparse(&self) -> u8 {
-        self.sparse.into()
-    }
-    #[inline]
-    pub fn signal_eos(&self) -> u8 {
-        self.signal_eos.into()
-    }
-    #[inline]
-    pub fn spies_simulate_connection(&self) -> u8 {
-        self.spies_simulate_connection.into()
-    }
-    #[inline]
-    pub fn tether(&self) -> u8 {
-        self.tether.into()
+    pub fn type_(&self) -> i16 {
+        self.type_.into()
     }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_logbuffer_metadata_t {
+    pub fn get_inner(&self) -> *mut aeron_frame_header_t {
         self.inner.get()
     }
 }
-impl std::ops::Deref for AeronLogbufferMetadata {
-    type Target = aeron_logbuffer_metadata_t;
+impl std::ops::Deref for AeronFrameHeader {
+    type Target = aeron_frame_header_t;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.inner.get() }
     }
 }
-impl From<*mut aeron_logbuffer_metadata_t> for AeronLogbufferMetadata {
+impl From<*mut aeron_frame_header_t> for AeronFrameHeader {
     #[inline]
-    fn from(value: *mut aeron_logbuffer_metadata_t) -> Self {
-        AeronLogbufferMetadata {
+    fn from(value: *mut aeron_frame_header_t) -> Self {
+        AeronFrameHeader {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<AeronLogbufferMetadata> for *mut aeron_logbuffer_metadata_t {
+impl From<AeronFrameHeader> for *mut aeron_frame_header_t {
     #[inline]
-    fn from(value: AeronLogbufferMetadata) -> Self {
+    fn from(value: AeronFrameHeader) -> Self {
         value.get_inner()
     }
 }
-impl From<&AeronLogbufferMetadata> for *mut aeron_logbuffer_metadata_t {
+impl From<&AeronFrameHeader> for *mut aeron_frame_header_t {
     #[inline]
-    fn from(value: &AeronLogbufferMetadata) -> Self {
+    fn from(value: &AeronFrameHeader) -> Self {
         value.get_inner()
     }
 }
-impl From<AeronLogbufferMetadata> for aeron_logbuffer_metadata_t {
+impl From<AeronFrameHeader> for aeron_frame_header_t {
     #[inline]
-    fn from(value: AeronLogbufferMetadata) -> Self {
+    fn from(value: AeronFrameHeader) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const aeron_logbuffer_metadata_t> for AeronLogbufferMetadata {
+impl From<*const aeron_frame_header_t> for AeronFrameHeader {
     #[inline]
-    fn from(value: *const aeron_logbuffer_metadata_t) -> Self {
-        AeronLogbufferMetadata {
+    fn from(value: *const aeron_frame_header_t) -> Self {
+        AeronFrameHeader {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<aeron_logbuffer_metadata_t> for AeronLogbufferMetadata {
+impl From<aeron_frame_header_t> for AeronFrameHeader {
     #[inline]
-    fn from(mut value: aeron_logbuffer_metadata_t) -> Self {
-        AeronLogbufferMetadata {
+    fn from(mut value: aeron_frame_header_t) -> Self {
+        AeronFrameHeader {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_logbuffer_metadata_t,
+                &mut value as *mut aeron_frame_header_t,
                 None,
             )),
         }
     }
 }
 #[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronLogbufferMetadata {
+impl Default for AeronFrameHeader {
     fn default() -> Self {
-        AeronLogbufferMetadata::new_zeroed().expect("failed to create struct")
+        AeronFrameHeader::new_zeroed().expect("failed to create struct")
     }
 }
-impl AeronLogbufferMetadata {
+impl AeronFrameHeader {
     #[doc = r" Regular clone just increases the reference count of underlying count."]
     #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
     #[doc = r""]
@@ -8000,58 +15466,179 @@ impl AeronLogbufferMetadata {
     }
 }
 #[derive(Clone)]
-pub struct AeronCountersReaderBuffers {
-    inner: std::rc::Rc<ManagedCResource<aeron_counters_reader_buffers_t>>,
+pub struct AeronControlledFragmentAssembler {
+    inner: std::rc::Rc<ManagedCResource<aeron_controlled_fragment_assembler_t>>,
 }
-impl core::fmt::Debug for AeronCountersReaderBuffers {
+impl core::fmt::Debug for AeronControlledFragmentAssembler {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronCountersReaderBuffers))
+            f.debug_struct(stringify!(AeronControlledFragmentAssembler))
                 .field("inner", &"null")
                 .finish()
         } else {
-            f.debug_struct(stringify!(AeronCountersReaderBuffers))
+            f.debug_struct(stringify!(AeronControlledFragmentAssembler))
                 .field("inner", &self.inner)
-                .field(stringify!(values_length), &self.values_length())
-                .field(stringify!(metadata_length), &self.metadata_length())
                 .finish()
         }
     }
 }
-impl AeronCountersReaderBuffers {
-    #[inline]
-    pub fn new(
-        values: *mut u8,
-        metadata: *mut u8,
-        values_length: usize,
-        metadata_length: usize,
+impl AeronControlledFragmentAssembler {
+    #[doc = "Create a controlled fragment assembler for use with a subscription."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `delegate` to call on completed"]
+    #[doc = " \n - `delegate_clientd` to pass to delegate handler."]
+    #[doc = " \n# Return\n 0 for success and -1 for error."]
+    pub fn new<
+        AeronControlledFragmentHandlerHandlerImpl: AeronControlledFragmentHandlerCallback,
+    >(
+        delegate: Option<&Handler<AeronControlledFragmentHandlerHandlerImpl>>,
     ) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_counters_reader_buffers_t {
-                    values: values.into(),
-                    metadata: metadata.into(),
-                    values_length: values_length.into(),
-                    metadata_length: metadata_length.into(),
+        let (delegate, delegate_clientd) = (
+            {
+                let callback: aeron_controlled_fragment_handler_t = if delegate.is_none() {
+                    None
+                } else {
+                    Some(
+                        aeron_controlled_fragment_handler_t_callback::<
+                            AeronControlledFragmentHandlerHandlerImpl,
+                        >,
+                    )
                 };
-                let inner_ptr: *mut aeron_counters_reader_buffers_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
+                callback
             },
-            Some(Box::new(move |_ctx_field| {
+            delegate
+                .map(|m| m.as_raw())
+                .unwrap_or_else(|| std::ptr::null_mut()),
+        );
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let resource_constructor = ManagedCResource::new(
+            move |ctx_field| unsafe {
+                aeron_controlled_fragment_assembler_create(ctx_field, delegate, delegate_clientd)
+            },
+            Some(Box::new(move |ctx_field| {
+                let result = unsafe { aeron_controlled_fragment_assembler_delete(*ctx_field) };
                 if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
                     drop_closure();
                 }
-                0
+                result
             })),
-            true,
+            false,
             None,
         )?;
         Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
+            inner: std::rc::Rc::new(resource_constructor),
         })
     }
+    #[inline]
+    #[doc = "Delete a controlled fragment assembler."]
+    #[doc = ""]
+    #[doc = " \n# Return\n 0 for success or -1 for error."]
+    pub fn delete(&self) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_controlled_fragment_assembler_delete(self.get_inner());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    #[doc = "Handler function to be passed for handling fragment assembly."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `clientd` passed in the poll call (must be a `AeronControlledFragmentAssembler`)"]
+    #[doc = " \n - `buffer` containing the data."]
+    #[doc = " \n - `header` representing the meta data for the data."]
+    #[doc = " \n# Return\n The action to be taken with regard to the stream position after the callback."]
+    pub fn handler(
+        clientd: *mut ::std::os::raw::c_void,
+        buffer: &[u8],
+        header: &AeronHeader,
+    ) -> aeron_controlled_fragment_handler_action_t {
+        unsafe {
+            let result = aeron_controlled_fragment_assembler_handler(
+                clientd.into(),
+                buffer.as_ptr() as *mut _,
+                buffer.len(),
+                header.get_inner(),
+            );
+            result.into()
+        }
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_controlled_fragment_assembler_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronControlledFragmentAssembler {
+    type Target = aeron_controlled_fragment_assembler_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_controlled_fragment_assembler_t> for AeronControlledFragmentAssembler {
+    #[inline]
+    fn from(value: *mut aeron_controlled_fragment_assembler_t) -> Self {
+        AeronControlledFragmentAssembler {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronControlledFragmentAssembler> for *mut aeron_controlled_fragment_assembler_t {
+    #[inline]
+    fn from(value: AeronControlledFragmentAssembler) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronControlledFragmentAssembler> for *mut aeron_controlled_fragment_assembler_t {
+    #[inline]
+    fn from(value: &AeronControlledFragmentAssembler) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronControlledFragmentAssembler> for aeron_controlled_fragment_assembler_t {
+    #[inline]
+    fn from(value: AeronControlledFragmentAssembler) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_controlled_fragment_assembler_t> for AeronControlledFragmentAssembler {
+    #[inline]
+    fn from(value: *const aeron_controlled_fragment_assembler_t) -> Self {
+        AeronControlledFragmentAssembler {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_controlled_fragment_assembler_t> for AeronControlledFragmentAssembler {
+    #[inline]
+    fn from(mut value: aeron_controlled_fragment_assembler_t) -> Self {
+        AeronControlledFragmentAssembler {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_controlled_fragment_assembler_t,
+                None,
+            )),
+        }
+    }
+}
+#[derive(Clone)]
+pub struct AeronAsyncAddSubscription {
+    inner: std::rc::Rc<ManagedCResource<aeron_async_add_subscription_t>>,
+}
+impl core::fmt::Debug for AeronAsyncAddSubscription {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronAsyncAddSubscription))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronAsyncAddSubscription))
+                .field("inner", &self.inner)
+                .finish()
+        }
+    }
+}
+impl AeronAsyncAddSubscription {
     #[inline]
     #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
     pub fn new_zeroed() -> Result<Self, AeronCError> {
@@ -8060,10 +15647,10 @@ impl AeronCountersReaderBuffers {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_counters_reader_buffers_t)
+                    stringify!(aeron_async_add_subscription_t)
                 );
-                let inst: aeron_counters_reader_buffers_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_counters_reader_buffers_t = Box::into_raw(Box::new(inst));
+                let inst: aeron_async_add_subscription_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_async_add_subscription_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -8076,142 +15663,280 @@ impl AeronCountersReaderBuffers {
         })
     }
     #[inline]
-    pub fn values(&self) -> *mut u8 {
-        self.values.into()
-    }
-    #[inline]
-    pub fn metadata(&self) -> *mut u8 {
-        self.metadata.into()
-    }
-    #[inline]
-    pub fn values_length(&self) -> usize {
-        self.values_length.into()
-    }
-    #[inline]
-    pub fn metadata_length(&self) -> usize {
-        self.metadata_length.into()
+    #[doc = "Gets the registration id for addition of the subscription. Note that using this after a call to poll the succeeds or"]
+    #[doc = " errors is undefined behaviour. As the async_add_subscription_t may have been freed."]
+    #[doc = ""]
+    #[doc = " \n# Return\n registration id for the subscription."]
+    pub fn get_registration_id(&self) -> i64 {
+        unsafe {
+            let result = aeron_async_add_subscription_get_registration_id(self.get_inner());
+            result.into()
+        }
     }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_counters_reader_buffers_t {
+    pub fn get_inner(&self) -> *mut aeron_async_add_subscription_t {
         self.inner.get()
     }
 }
-impl std::ops::Deref for AeronCountersReaderBuffers {
-    type Target = aeron_counters_reader_buffers_t;
+impl std::ops::Deref for AeronAsyncAddSubscription {
+    type Target = aeron_async_add_subscription_t;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.inner.get() }
     }
 }
-impl From<*mut aeron_counters_reader_buffers_t> for AeronCountersReaderBuffers {
+impl From<*mut aeron_async_add_subscription_t> for AeronAsyncAddSubscription {
     #[inline]
-    fn from(value: *mut aeron_counters_reader_buffers_t) -> Self {
-        AeronCountersReaderBuffers {
+    fn from(value: *mut aeron_async_add_subscription_t) -> Self {
+        AeronAsyncAddSubscription {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<AeronCountersReaderBuffers> for *mut aeron_counters_reader_buffers_t {
+impl From<AeronAsyncAddSubscription> for *mut aeron_async_add_subscription_t {
     #[inline]
-    fn from(value: AeronCountersReaderBuffers) -> Self {
+    fn from(value: AeronAsyncAddSubscription) -> Self {
         value.get_inner()
     }
 }
-impl From<&AeronCountersReaderBuffers> for *mut aeron_counters_reader_buffers_t {
+impl From<&AeronAsyncAddSubscription> for *mut aeron_async_add_subscription_t {
     #[inline]
-    fn from(value: &AeronCountersReaderBuffers) -> Self {
+    fn from(value: &AeronAsyncAddSubscription) -> Self {
         value.get_inner()
     }
 }
-impl From<AeronCountersReaderBuffers> for aeron_counters_reader_buffers_t {
+impl From<AeronAsyncAddSubscription> for aeron_async_add_subscription_t {
     #[inline]
-    fn from(value: AeronCountersReaderBuffers) -> Self {
+    fn from(value: AeronAsyncAddSubscription) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const aeron_counters_reader_buffers_t> for AeronCountersReaderBuffers {
+impl From<*const aeron_async_add_subscription_t> for AeronAsyncAddSubscription {
     #[inline]
-    fn from(value: *const aeron_counters_reader_buffers_t) -> Self {
-        AeronCountersReaderBuffers {
+    fn from(value: *const aeron_async_add_subscription_t) -> Self {
+        AeronAsyncAddSubscription {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<aeron_counters_reader_buffers_t> for AeronCountersReaderBuffers {
+impl From<aeron_async_add_subscription_t> for AeronAsyncAddSubscription {
     #[inline]
-    fn from(mut value: aeron_counters_reader_buffers_t) -> Self {
-        AeronCountersReaderBuffers {
+    fn from(mut value: aeron_async_add_subscription_t) -> Self {
+        AeronAsyncAddSubscription {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_counters_reader_buffers_t,
+                &mut value as *mut aeron_async_add_subscription_t,
                 None,
             )),
         }
     }
 }
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronCountersReaderBuffers {
-    fn default() -> Self {
-        AeronCountersReaderBuffers::new_zeroed().expect("failed to create struct")
+impl AeronSubscription {
+    #[inline]
+    pub fn new(async_: &AeronAsyncAddSubscription) -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| unsafe { aeron_async_add_subscription_poll(ctx_field, async_.into()) },
+            None,
+            false,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
     }
 }
-impl AeronCountersReaderBuffers {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
+impl Aeron {
+    #[inline]
+    pub fn async_add_subscription<
+        AeronAvailableImageHandlerImpl: AeronAvailableImageCallback,
+        AeronUnavailableImageHandlerImpl: AeronUnavailableImageCallback,
+    >(
+        &self,
+        uri: &str,
+        stream_id: i32,
+        on_available_image_handler: Option<&Handler<AeronAvailableImageHandlerImpl>>,
+        on_unavailable_image_handler: Option<&Handler<AeronUnavailableImageHandlerImpl>>,
+    ) -> Result<AeronAsyncAddSubscription, AeronCError> {
+        let result = AeronAsyncAddSubscription::new(
+            self,
+            uri,
+            stream_id,
+            on_available_image_handler,
+            on_unavailable_image_handler,
+        );
+        if let Ok(result) = &result {
+            result.inner.add_dependency(self.clone());
+        }
+        result
     }
 }
-#[derive(Clone)]
-pub struct AeronUnavailableCounterPair {
-    inner: std::rc::Rc<ManagedCResource<aeron_on_unavailable_counter_pair_t>>,
-}
-impl core::fmt::Debug for AeronUnavailableCounterPair {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronUnavailableCounterPair))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronUnavailableCounterPair))
-                .field("inner", &self.inner)
-                .finish()
+impl Aeron {
+    #[inline]
+    pub fn add_subscription<
+        AeronAvailableImageHandlerImpl: AeronAvailableImageCallback,
+        AeronUnavailableImageHandlerImpl: AeronUnavailableImageCallback,
+    >(
+        &self,
+        uri: &str,
+        stream_id: i32,
+        on_available_image_handler: Option<&Handler<AeronAvailableImageHandlerImpl>>,
+        on_unavailable_image_handler: Option<&Handler<AeronUnavailableImageHandlerImpl>>,
+        timeout: std::time::Duration,
+    ) -> Result<AeronSubscription, AeronCError> {
+        let start = std::time::Instant::now();
+        loop {
+            if let Ok(poller) = AeronAsyncAddSubscription::new(
+                self,
+                uri,
+                stream_id,
+                on_available_image_handler,
+                on_unavailable_image_handler,
+            ) {
+                while start.elapsed() <= timeout {
+                    if let Some(result) = poller.poll()? {
+                        return Ok(result);
+                    }
+                    #[cfg(debug_assertions)]
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+            }
+            if start.elapsed() > timeout {
+                log::error!("failed async poll for {:?}", self);
+                return Err(AeronErrorType::TimedOut.into());
+            }
+            #[cfg(debug_assertions)]
+            std::thread::sleep(std::time::Duration::from_millis(10));
         }
     }
 }
-impl AeronUnavailableCounterPair {
+impl AeronAsyncAddSubscription {
     #[inline]
-    pub fn new<AeronUnavailableCounterHandlerImpl: AeronUnavailableCounterCallback>(
-        handler: Option<&Handler<AeronUnavailableCounterHandlerImpl>>,
+    pub fn new<
+        AeronAvailableImageHandlerImpl: AeronAvailableImageCallback,
+        AeronUnavailableImageHandlerImpl: AeronUnavailableImageCallback,
+    >(
+        client: &Aeron,
+        uri: &str,
+        stream_id: i32,
+        on_available_image_handler: Option<&Handler<AeronAvailableImageHandlerImpl>>,
+        on_unavailable_image_handler: Option<&Handler<AeronUnavailableImageHandlerImpl>>,
     ) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_on_unavailable_counter_pair_t {
-                    handler: {
-                        let callback: aeron_on_unavailable_counter_t = if handler.is_none() {
+        let resource_async = ManagedCResource::new(
+            move |ctx_field| unsafe {
+                aeron_async_add_subscription(
+                    ctx_field,
+                    client.into(),
+                    std::ffi::CString::new(uri).unwrap().into_raw(),
+                    stream_id.into(),
+                    {
+                        let callback: aeron_on_available_image_t = if on_available_image_handler
+                            .is_none()
+                        {
                             None
                         } else {
                             Some(
-                                aeron_on_unavailable_counter_t_callback::<
-                                    AeronUnavailableCounterHandlerImpl,
-                                >,
+                                aeron_on_available_image_t_callback::<AeronAvailableImageHandlerImpl>,
                             )
                         };
                         callback
                     },
-                    clientd: handler
+                    on_available_image_handler
                         .map(|m| m.as_raw())
                         .unwrap_or_else(|| std::ptr::null_mut()),
+                    {
+                        let callback: aeron_on_unavailable_image_t =
+                            if on_unavailable_image_handler.is_none() {
+                                None
+                            } else {
+                                Some(
+                                    aeron_on_unavailable_image_t_callback::<
+                                        AeronUnavailableImageHandlerImpl,
+                                    >,
+                                )
+                            };
+                        callback
+                    },
+                    on_unavailable_image_handler
+                        .map(|m| m.as_raw())
+                        .unwrap_or_else(|| std::ptr::null_mut()),
+                )
+            },
+            None,
+            false,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource_async),
+        })
+    }
+    pub fn poll(&self) -> Result<Option<AeronSubscription>, AeronCError> {
+        let result = AeronSubscription::new(self);
+        if let Ok(result) = &result {
+            unsafe {
+                for d in (&*self.inner.dependencies.get()).iter() {
+                    result.inner.add_dependency(d.clone());
+                }
+                result.inner.auto_close.set(true);
+            }
+        }
+        match result {
+            Ok(result) => Ok(Some(result)),
+            Err(AeronCError { code }) if code == 0 => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+    pub fn poll_blocking(
+        &self,
+        timeout: std::time::Duration,
+    ) -> Result<AeronSubscription, AeronCError> {
+        if let Some(result) = self.poll()? {
+            return Ok(result);
+        }
+        let time = std::time::Instant::now();
+        while time.elapsed() < timeout {
+            if let Some(result) = self.poll()? {
+                return Ok(result);
+            }
+            #[cfg(debug_assertions)]
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        log::error!("failed async poll for {:?}", self);
+        Err(AeronErrorType::TimedOut.into())
+    }
+}
+#[derive(Clone)]
+pub struct AeronLossReporter {
+    inner: std::rc::Rc<ManagedCResource<aeron_loss_reporter_t>>,
+}
+impl core::fmt::Debug for AeronLossReporter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronLossReporter))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronLossReporter))
+                .field("inner", &self.inner)
+                .field(stringify!(next_record_offset), &self.next_record_offset())
+                .field(stringify!(capacity), &self.capacity())
+                .finish()
+        }
+    }
+}
+impl AeronLossReporter {
+    #[inline]
+    pub fn new(
+        buffer: *mut u8,
+        next_record_offset: usize,
+        capacity: usize,
+    ) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_loss_reporter_t {
+                    buffer: buffer.into(),
+                    next_record_offset: next_record_offset.into(),
+                    capacity: capacity.into(),
                 };
-                let inner_ptr: *mut aeron_on_unavailable_counter_pair_t =
-                    Box::into_raw(Box::new(inst));
+                let inner_ptr: *mut aeron_loss_reporter_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -8236,11 +15961,10 @@ impl AeronUnavailableCounterPair {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_on_unavailable_counter_pair_t)
+                    stringify!(aeron_loss_reporter_t)
                 );
-                let inst: aeron_on_unavailable_counter_pair_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_on_unavailable_counter_pair_t =
-                    Box::into_raw(Box::new(inst));
+                let inst: aeron_loss_reporter_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_loss_reporter_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -8253,76 +15977,218 @@ impl AeronUnavailableCounterPair {
         })
     }
     #[inline]
-    pub fn handler(&self) -> aeron_on_unavailable_counter_t {
-        self.handler.into()
+    pub fn buffer(&self) -> *mut u8 {
+        self.buffer.into()
     }
     #[inline]
-    pub fn clientd(&self) -> *mut ::std::os::raw::c_void {
-        self.clientd.into()
+    pub fn next_record_offset(&self) -> usize {
+        self.next_record_offset.into()
+    }
+    #[inline]
+    pub fn capacity(&self) -> usize {
+        self.capacity.into()
+    }
+    #[inline]
+    pub fn init(&self, buffer: &mut [u8]) -> Result<i32, AeronCError> {
+        unsafe {
+            let result =
+                aeron_loss_reporter_init(self.get_inner(), buffer.as_ptr() as *mut _, buffer.len());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    pub fn create_entry(
+        &self,
+        initial_bytes_lost: i64,
+        timestamp_ms: i64,
+        session_id: i32,
+        stream_id: i32,
+        channel: &str,
+        source: &str,
+    ) -> aeron_loss_reporter_entry_offset_t {
+        unsafe {
+            let result = aeron_loss_reporter_create_entry(
+                self.get_inner(),
+                initial_bytes_lost.into(),
+                timestamp_ms.into(),
+                session_id.into(),
+                stream_id.into(),
+                {
+                    std::ffi::CString::new(channel)
+                        .expect("CString::new failed")
+                        .into_raw()
+                },
+                channel.len(),
+                {
+                    std::ffi::CString::new(source)
+                        .expect("CString::new failed")
+                        .into_raw()
+                },
+                source.len(),
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn record_observation(
+        &self,
+        offset: aeron_loss_reporter_entry_offset_t,
+        bytes_lost: i64,
+        timestamp_ms: i64,
+    ) -> () {
+        unsafe {
+            let result = aeron_loss_reporter_record_observation(
+                self.get_inner(),
+                offset.into(),
+                bytes_lost.into(),
+                timestamp_ms.into(),
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn resolve_filename(
+        directory: &str,
+        filename_buffer: *mut ::std::os::raw::c_char,
+        filename_buffer_length: usize,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_loss_reporter_resolve_filename(
+                std::ffi::CString::new(directory).unwrap().into_raw(),
+                filename_buffer.into(),
+                filename_buffer_length.into(),
+            );
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    pub fn read<
+        AeronLossReporterReadEntryFuncHandlerImpl: AeronLossReporterReadEntryFuncCallback,
+    >(
+        buffer: *const u8,
+        capacity: usize,
+        entry_func: Option<&Handler<AeronLossReporterReadEntryFuncHandlerImpl>>,
+    ) -> usize {
+        unsafe {
+            let result = aeron_loss_reporter_read(
+                buffer.into(),
+                capacity.into(),
+                {
+                    let callback: aeron_loss_reporter_read_entry_func_t = if entry_func.is_none() {
+                        None
+                    } else {
+                        Some(
+                            aeron_loss_reporter_read_entry_func_t_callback::<
+                                AeronLossReporterReadEntryFuncHandlerImpl,
+                            >,
+                        )
+                    };
+                    callback
+                },
+                entry_func
+                    .map(|m| m.as_raw())
+                    .unwrap_or_else(|| std::ptr::null_mut()),
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = r""]
+    #[doc = r""]
+    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
+    #[doc = r"  use with care_"]
+    pub fn read_once<
+        AeronLossReporterReadEntryFuncHandlerImpl: FnMut(i64, i64, i64, i64, i32, i32, &str, &str) -> (),
+    >(
+        buffer: *const u8,
+        capacity: usize,
+        mut entry_func: AeronLossReporterReadEntryFuncHandlerImpl,
+    ) -> usize {
+        unsafe {
+            let result = aeron_loss_reporter_read(
+                buffer.into(),
+                capacity.into(),
+                Some(
+                    aeron_loss_reporter_read_entry_func_t_callback_for_once_closure::<
+                        AeronLossReporterReadEntryFuncHandlerImpl,
+                    >,
+                ),
+                &mut entry_func as *mut _ as *mut std::os::raw::c_void,
+            );
+            result.into()
+        }
     }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_on_unavailable_counter_pair_t {
+    pub fn get_inner(&self) -> *mut aeron_loss_reporter_t {
         self.inner.get()
     }
 }
-impl std::ops::Deref for AeronUnavailableCounterPair {
-    type Target = aeron_on_unavailable_counter_pair_t;
+impl std::ops::Deref for AeronLossReporter {
+    type Target = aeron_loss_reporter_t;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.inner.get() }
     }
 }
-impl From<*mut aeron_on_unavailable_counter_pair_t> for AeronUnavailableCounterPair {
+impl From<*mut aeron_loss_reporter_t> for AeronLossReporter {
     #[inline]
-    fn from(value: *mut aeron_on_unavailable_counter_pair_t) -> Self {
-        AeronUnavailableCounterPair {
+    fn from(value: *mut aeron_loss_reporter_t) -> Self {
+        AeronLossReporter {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<AeronUnavailableCounterPair> for *mut aeron_on_unavailable_counter_pair_t {
+impl From<AeronLossReporter> for *mut aeron_loss_reporter_t {
     #[inline]
-    fn from(value: AeronUnavailableCounterPair) -> Self {
+    fn from(value: AeronLossReporter) -> Self {
         value.get_inner()
     }
 }
-impl From<&AeronUnavailableCounterPair> for *mut aeron_on_unavailable_counter_pair_t {
+impl From<&AeronLossReporter> for *mut aeron_loss_reporter_t {
     #[inline]
-    fn from(value: &AeronUnavailableCounterPair) -> Self {
+    fn from(value: &AeronLossReporter) -> Self {
         value.get_inner()
     }
 }
-impl From<AeronUnavailableCounterPair> for aeron_on_unavailable_counter_pair_t {
+impl From<AeronLossReporter> for aeron_loss_reporter_t {
     #[inline]
-    fn from(value: AeronUnavailableCounterPair) -> Self {
+    fn from(value: AeronLossReporter) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const aeron_on_unavailable_counter_pair_t> for AeronUnavailableCounterPair {
+impl From<*const aeron_loss_reporter_t> for AeronLossReporter {
     #[inline]
-    fn from(value: *const aeron_on_unavailable_counter_pair_t) -> Self {
-        AeronUnavailableCounterPair {
+    fn from(value: *const aeron_loss_reporter_t) -> Self {
+        AeronLossReporter {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<aeron_on_unavailable_counter_pair_t> for AeronUnavailableCounterPair {
+impl From<aeron_loss_reporter_t> for AeronLossReporter {
     #[inline]
-    fn from(mut value: aeron_on_unavailable_counter_pair_t) -> Self {
-        AeronUnavailableCounterPair {
+    fn from(mut value: aeron_loss_reporter_t) -> Self {
+        AeronLossReporter {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_on_unavailable_counter_pair_t,
+                &mut value as *mut aeron_loss_reporter_t,
                 None,
             )),
         }
     }
 }
 #[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronUnavailableCounterPair {
+impl Default for AeronLossReporter {
     fn default() -> Self {
-        AeronUnavailableCounterPair::new_zeroed().expect("failed to create struct")
+        AeronLossReporter::new_zeroed().expect("failed to create struct")
     }
 }
-impl AeronUnavailableCounterPair {
+impl AeronLossReporter {
     #[doc = r" Regular clone just increases the reference count of underlying count."]
     #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
     #[doc = r""]
@@ -8658,77 +16524,39 @@ impl From<aeron_cnc_t> for AeronCnc {
     }
 }
 #[derive(Clone)]
-pub struct AeronCncMetadata {
-    inner: std::rc::Rc<ManagedCResource<aeron_cnc_metadata_t>>,
+pub struct AeronIpcChannelParams {
+    inner: std::rc::Rc<ManagedCResource<aeron_ipc_channel_params_t>>,
 }
-impl core::fmt::Debug for AeronCncMetadata {
+impl core::fmt::Debug for AeronIpcChannelParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronCncMetadata))
+            f.debug_struct(stringify!(AeronIpcChannelParams))
                 .field("inner", &"null")
                 .finish()
         } else {
-            f.debug_struct(stringify!(AeronCncMetadata))
+            f.debug_struct(stringify!(AeronIpcChannelParams))
                 .field("inner", &self.inner)
-                .field(stringify!(cnc_version), &self.cnc_version())
-                .field(
-                    stringify!(to_driver_buffer_length),
-                    &self.to_driver_buffer_length(),
-                )
-                .field(
-                    stringify!(to_clients_buffer_length),
-                    &self.to_clients_buffer_length(),
-                )
-                .field(
-                    stringify!(counter_metadata_buffer_length),
-                    &self.counter_metadata_buffer_length(),
-                )
-                .field(
-                    stringify!(counter_values_buffer_length),
-                    &self.counter_values_buffer_length(),
-                )
-                .field(
-                    stringify!(error_log_buffer_length),
-                    &self.error_log_buffer_length(),
-                )
-                .field(
-                    stringify!(client_liveness_timeout),
-                    &self.client_liveness_timeout(),
-                )
-                .field(stringify!(start_timestamp), &self.start_timestamp())
-                .field(stringify!(pid), &self.pid())
+                .field(stringify!(additional_params), &self.additional_params())
                 .finish()
         }
     }
 }
-impl AeronCncMetadata {
+impl AeronIpcChannelParams {
     #[inline]
     pub fn new(
-        cnc_version: i32,
-        to_driver_buffer_length: i32,
-        to_clients_buffer_length: i32,
-        counter_metadata_buffer_length: i32,
-        counter_values_buffer_length: i32,
-        error_log_buffer_length: i32,
-        client_liveness_timeout: i64,
-        start_timestamp: i64,
-        pid: i64,
+        channel_tag: &str,
+        entity_tag: &str,
+        additional_params: AeronUriParams,
     ) -> Result<Self, AeronCError> {
         let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
         let r_constructor = ManagedCResource::new(
             move |ctx_field| {
-                let inst = aeron_cnc_metadata_t {
-                    cnc_version: cnc_version.into(),
-                    to_driver_buffer_length: to_driver_buffer_length.into(),
-                    to_clients_buffer_length: to_clients_buffer_length.into(),
-                    counter_metadata_buffer_length: counter_metadata_buffer_length.into(),
-                    counter_values_buffer_length: counter_values_buffer_length.into(),
-                    error_log_buffer_length: error_log_buffer_length.into(),
-                    client_liveness_timeout: client_liveness_timeout.into(),
-                    start_timestamp: start_timestamp.into(),
-                    pid: pid.into(),
+                let inst = aeron_ipc_channel_params_t {
+                    channel_tag: std::ffi::CString::new(channel_tag).unwrap().into_raw(),
+                    entity_tag: std::ffi::CString::new(entity_tag).unwrap().into_raw(),
+                    additional_params: additional_params.into(),
                 };
-                let inner_ptr: *mut aeron_cnc_metadata_t = Box::into_raw(Box::new(inst));
+                let inner_ptr: *mut aeron_ipc_channel_params_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -8753,10 +16581,10 @@ impl AeronCncMetadata {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_cnc_metadata_t)
+                    stringify!(aeron_ipc_channel_params_t)
                 );
-                let inst: aeron_cnc_metadata_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_cnc_metadata_t = Box::into_raw(Box::new(inst));
+                let inst: aeron_ipc_channel_params_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_ipc_channel_params_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -8769,264 +16597,88 @@ impl AeronCncMetadata {
         })
     }
     #[inline]
-    pub fn cnc_version(&self) -> i32 {
-        self.cnc_version.into()
-    }
-    #[inline]
-    pub fn to_driver_buffer_length(&self) -> i32 {
-        self.to_driver_buffer_length.into()
-    }
-    #[inline]
-    pub fn to_clients_buffer_length(&self) -> i32 {
-        self.to_clients_buffer_length.into()
-    }
-    #[inline]
-    pub fn counter_metadata_buffer_length(&self) -> i32 {
-        self.counter_metadata_buffer_length.into()
-    }
-    #[inline]
-    pub fn counter_values_buffer_length(&self) -> i32 {
-        self.counter_values_buffer_length.into()
-    }
-    #[inline]
-    pub fn error_log_buffer_length(&self) -> i32 {
-        self.error_log_buffer_length.into()
-    }
-    #[inline]
-    pub fn client_liveness_timeout(&self) -> i64 {
-        self.client_liveness_timeout.into()
-    }
-    #[inline]
-    pub fn start_timestamp(&self) -> i64 {
-        self.start_timestamp.into()
-    }
-    #[inline]
-    pub fn pid(&self) -> i64 {
-        self.pid.into()
-    }
-    #[inline]
-    pub fn aeron_cnc_version_volatile(&self) -> i32 {
-        unsafe {
-            let result = aeron_cnc_version_volatile(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_cnc_metadata_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronCncMetadata {
-    type Target = aeron_cnc_metadata_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_cnc_metadata_t> for AeronCncMetadata {
-    #[inline]
-    fn from(value: *mut aeron_cnc_metadata_t) -> Self {
-        AeronCncMetadata {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronCncMetadata> for *mut aeron_cnc_metadata_t {
-    #[inline]
-    fn from(value: AeronCncMetadata) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronCncMetadata> for *mut aeron_cnc_metadata_t {
-    #[inline]
-    fn from(value: &AeronCncMetadata) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronCncMetadata> for aeron_cnc_metadata_t {
-    #[inline]
-    fn from(value: AeronCncMetadata) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_cnc_metadata_t> for AeronCncMetadata {
-    #[inline]
-    fn from(value: *const aeron_cnc_metadata_t) -> Self {
-        AeronCncMetadata {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_cnc_metadata_t> for AeronCncMetadata {
-    #[inline]
-    fn from(mut value: aeron_cnc_metadata_t) -> Self {
-        AeronCncMetadata {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_cnc_metadata_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronCncMetadata {
-    fn default() -> Self {
-        AeronCncMetadata::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronCncMetadata {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[derive(Clone)]
-pub struct AeronIovec {
-    inner: std::rc::Rc<ManagedCResource<aeron_iovec_t>>,
-}
-impl core::fmt::Debug for AeronIovec {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronIovec))
-                .field("inner", &"null")
-                .finish()
+    pub fn channel_tag(&self) -> &str {
+        if self.channel_tag.is_null() {
+            ""
         } else {
-            f.debug_struct(stringify!(AeronIovec))
-                .field("inner", &self.inner)
-                .field(stringify!(iov_len), &self.iov_len())
-                .finish()
+            unsafe { std::ffi::CStr::from_ptr(self.channel_tag).to_str().unwrap() }
         }
     }
-}
-impl AeronIovec {
     #[inline]
-    pub fn new(iov_base: *mut u8, iov_len: usize) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_iovec_t {
-                    iov_base: iov_base.into(),
-                    iov_len: iov_len.into(),
-                };
-                let inner_ptr: *mut aeron_iovec_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
+    pub fn entity_tag(&self) -> &str {
+        if self.entity_tag.is_null() {
+            ""
+        } else {
+            unsafe { std::ffi::CStr::from_ptr(self.entity_tag).to_str().unwrap() }
+        }
     }
     #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_iovec_t)
-                );
-                let inst: aeron_iovec_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_iovec_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn iov_base(&self) -> *mut u8 {
-        self.iov_base.into()
-    }
-    #[inline]
-    pub fn iov_len(&self) -> usize {
-        self.iov_len.into()
+    pub fn additional_params(&self) -> AeronUriParams {
+        self.additional_params.into()
     }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_iovec_t {
+    pub fn get_inner(&self) -> *mut aeron_ipc_channel_params_t {
         self.inner.get()
     }
 }
-impl std::ops::Deref for AeronIovec {
-    type Target = aeron_iovec_t;
+impl std::ops::Deref for AeronIpcChannelParams {
+    type Target = aeron_ipc_channel_params_t;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.inner.get() }
     }
 }
-impl From<*mut aeron_iovec_t> for AeronIovec {
+impl From<*mut aeron_ipc_channel_params_t> for AeronIpcChannelParams {
     #[inline]
-    fn from(value: *mut aeron_iovec_t) -> Self {
-        AeronIovec {
+    fn from(value: *mut aeron_ipc_channel_params_t) -> Self {
+        AeronIpcChannelParams {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<AeronIovec> for *mut aeron_iovec_t {
+impl From<AeronIpcChannelParams> for *mut aeron_ipc_channel_params_t {
     #[inline]
-    fn from(value: AeronIovec) -> Self {
+    fn from(value: AeronIpcChannelParams) -> Self {
         value.get_inner()
     }
 }
-impl From<&AeronIovec> for *mut aeron_iovec_t {
+impl From<&AeronIpcChannelParams> for *mut aeron_ipc_channel_params_t {
     #[inline]
-    fn from(value: &AeronIovec) -> Self {
+    fn from(value: &AeronIpcChannelParams) -> Self {
         value.get_inner()
     }
 }
-impl From<AeronIovec> for aeron_iovec_t {
+impl From<AeronIpcChannelParams> for aeron_ipc_channel_params_t {
     #[inline]
-    fn from(value: AeronIovec) -> Self {
+    fn from(value: AeronIpcChannelParams) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const aeron_iovec_t> for AeronIovec {
+impl From<*const aeron_ipc_channel_params_t> for AeronIpcChannelParams {
     #[inline]
-    fn from(value: *const aeron_iovec_t) -> Self {
-        AeronIovec {
+    fn from(value: *const aeron_ipc_channel_params_t) -> Self {
+        AeronIpcChannelParams {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<aeron_iovec_t> for AeronIovec {
+impl From<aeron_ipc_channel_params_t> for AeronIpcChannelParams {
     #[inline]
-    fn from(mut value: aeron_iovec_t) -> Self {
-        AeronIovec {
+    fn from(mut value: aeron_ipc_channel_params_t) -> Self {
+        AeronIpcChannelParams {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_iovec_t,
+                &mut value as *mut aeron_ipc_channel_params_t,
                 None,
             )),
         }
     }
 }
 #[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronIovec {
+impl Default for AeronIpcChannelParams {
     fn default() -> Self {
-        AeronIovec::new_zeroed().expect("failed to create struct")
+        AeronIpcChannelParams::new_zeroed().expect("failed to create struct")
     }
 }
-impl AeronIovec {
+impl AeronIpcChannelParams {
     #[doc = r" Regular clone just increases the reference count of underlying count."]
     #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
     #[doc = r""]
@@ -9205,7658 +16857,6 @@ impl From<aeron_image_controlled_fragment_assembler_t> for AeronImageControlledF
         AeronImageControlledFragmentAssembler {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
                 &mut value as *mut aeron_image_controlled_fragment_assembler_t,
-                None,
-            )),
-        }
-    }
-}
-#[derive(Clone)]
-pub struct AeronPublication {
-    inner: std::rc::Rc<ManagedCResource<aeron_publication_t>>,
-}
-impl core::fmt::Debug for AeronPublication {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronPublication))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronPublication))
-                .field("inner", &self.inner)
-                .finish()
-        }
-    }
-}
-impl AeronPublication {
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_publication_t)
-                );
-                let inst: aeron_publication_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_publication_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            Some(Box::new(|c| unsafe { aeron_publication_is_closed(c) })),
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    #[doc = "Non-blocking publish of a buffer containing a message."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `buffer` to publish."]
-    #[doc = " \n - `length` of the buffer."]
-    #[doc = " \n - `reserved_value_supplier` to use for setting the reserved value field or NULL."]
-    #[doc = " \n - `clientd` to pass to the reserved_value_supplier."]
-    #[doc = " \n# Return\n the new stream position otherwise a negative error value."]
-    pub fn offer<AeronReservedValueSupplierHandlerImpl: AeronReservedValueSupplierCallback>(
-        &self,
-        buffer: &[u8],
-        reserved_value_supplier: Option<&Handler<AeronReservedValueSupplierHandlerImpl>>,
-    ) -> i64 {
-        unsafe {
-            let result = aeron_publication_offer(
-                self.get_inner(),
-                buffer.as_ptr() as *mut _,
-                buffer.len(),
-                {
-                    let callback: aeron_reserved_value_supplier_t =
-                        if reserved_value_supplier.is_none() {
-                            None
-                        } else {
-                            Some(
-                                aeron_reserved_value_supplier_t_callback::<
-                                    AeronReservedValueSupplierHandlerImpl,
-                                >,
-                            )
-                        };
-                    callback
-                },
-                reserved_value_supplier
-                    .map(|m| m.as_raw())
-                    .unwrap_or_else(|| std::ptr::null_mut()),
-            );
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Non-blocking publish of a buffer containing a message."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `buffer` to publish."]
-    #[doc = " \n - `length` of the buffer."]
-    #[doc = " \n - `reserved_value_supplier` to use for setting the reserved value field or NULL."]
-    #[doc = " \n - `clientd` to pass to the reserved_value_supplier."]
-    #[doc = " \n# Return\n the new stream position otherwise a negative error value."]
-    #[doc = r""]
-    #[doc = r""]
-    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
-    #[doc = r"  use with care_"]
-    pub fn offer_once<AeronReservedValueSupplierHandlerImpl: FnMut(*mut u8, usize) -> i64>(
-        &self,
-        buffer: &[u8],
-        mut reserved_value_supplier: AeronReservedValueSupplierHandlerImpl,
-    ) -> i64 {
-        unsafe {
-            let result = aeron_publication_offer(
-                self.get_inner(),
-                buffer.as_ptr() as *mut _,
-                buffer.len(),
-                Some(
-                    aeron_reserved_value_supplier_t_callback_for_once_closure::<
-                        AeronReservedValueSupplierHandlerImpl,
-                    >,
-                ),
-                &mut reserved_value_supplier as *mut _ as *mut std::os::raw::c_void,
-            );
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Non-blocking publish by gathering buffer vectors into a message."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `iov` array for the vectors"]
-    #[doc = " \n - `iovcnt` of the number of vectors"]
-    #[doc = " \n - `reserved_value_supplier` to use for setting the reserved value field or NULL."]
-    #[doc = " \n - `clientd` to pass to the reserved_value_supplier."]
-    #[doc = " \n# Return\n the new stream position otherwise a negative error value."]
-    pub fn offerv<AeronReservedValueSupplierHandlerImpl: AeronReservedValueSupplierCallback>(
-        &self,
-        iov: &AeronIovec,
-        iovcnt: usize,
-        reserved_value_supplier: Option<&Handler<AeronReservedValueSupplierHandlerImpl>>,
-    ) -> i64 {
-        unsafe {
-            let result = aeron_publication_offerv(
-                self.get_inner(),
-                iov.get_inner(),
-                iovcnt.into(),
-                {
-                    let callback: aeron_reserved_value_supplier_t =
-                        if reserved_value_supplier.is_none() {
-                            None
-                        } else {
-                            Some(
-                                aeron_reserved_value_supplier_t_callback::<
-                                    AeronReservedValueSupplierHandlerImpl,
-                                >,
-                            )
-                        };
-                    callback
-                },
-                reserved_value_supplier
-                    .map(|m| m.as_raw())
-                    .unwrap_or_else(|| std::ptr::null_mut()),
-            );
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Non-blocking publish by gathering buffer vectors into a message."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `iov` array for the vectors"]
-    #[doc = " \n - `iovcnt` of the number of vectors"]
-    #[doc = " \n - `reserved_value_supplier` to use for setting the reserved value field or NULL."]
-    #[doc = " \n - `clientd` to pass to the reserved_value_supplier."]
-    #[doc = " \n# Return\n the new stream position otherwise a negative error value."]
-    #[doc = r""]
-    #[doc = r""]
-    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
-    #[doc = r"  use with care_"]
-    pub fn offerv_once<AeronReservedValueSupplierHandlerImpl: FnMut(*mut u8, usize) -> i64>(
-        &self,
-        iov: &AeronIovec,
-        iovcnt: usize,
-        mut reserved_value_supplier: AeronReservedValueSupplierHandlerImpl,
-    ) -> i64 {
-        unsafe {
-            let result = aeron_publication_offerv(
-                self.get_inner(),
-                iov.get_inner(),
-                iovcnt.into(),
-                Some(
-                    aeron_reserved_value_supplier_t_callback_for_once_closure::<
-                        AeronReservedValueSupplierHandlerImpl,
-                    >,
-                ),
-                &mut reserved_value_supplier as *mut _ as *mut std::os::raw::c_void,
-            );
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Try to claim a range in the publication log into which a message can be written with zero copy semantics."]
-    #[doc = " Once the message has been written then aeron_buffer_claim_commit should be called thus making it available."]
-    #[doc = " A claim length cannot be greater than max payload length."]
-    #[doc = " \n"]
-    #[doc = " <b>Note:</b> This method can only be used for message lengths less than MTU length minus header."]
-    #[doc = " If the claim is held for more than the aeron.publication.unblock.timeout system property then the driver will"]
-    #[doc = " assume the publication thread is dead and will unblock the claim thus allowing other threads to make progress"]
-    #[doc = " and other claims to be sent to reach end-of-stream (EOS)."]
-    #[doc = ""]
-    #[doc = " @code"]
-    #[doc = " `AeronBufferClaim` buffer_claim;"]
-    #[doc = ""]
-    #[doc = " if (`AeronPublication`ry_claim(publication, length, &buffer_claim) > 0L)"]
-    #[doc = " {"]
-    #[doc = "     // work with buffer_claim->data directly."]
-    #[doc = "     aeron_buffer_claim_commit(&buffer_claim);"]
-    #[doc = " }"]
-    #[doc = " @endcode"]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `length` of the message."]
-    #[doc = " \n - `buffer_claim` to be populated if the claim succeeds."]
-    #[doc = " \n# Return\n the new stream position otherwise a negative error value."]
-    pub fn try_claim(&self, length: usize, buffer_claim: &AeronBufferClaim) -> i64 {
-        unsafe {
-            let result = aeron_publication_try_claim(
-                self.get_inner(),
-                length.into(),
-                buffer_claim.get_inner(),
-            );
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Get the status of the media channel for this publication."]
-    #[doc = " \n"]
-    #[doc = " The status will be ERRORED (-1) if a socket exception occurs on setup and ACTIVE (1) if all is well."]
-    #[doc = ""]
-    #[doc = " \n# Return\n 1 for ACTIVE, -1 for ERRORED"]
-    pub fn channel_status(&self) -> i64 {
-        unsafe {
-            let result = aeron_publication_channel_status(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Has the publication closed?"]
-    #[doc = ""]
-    #[doc = " \n# Return\n true if this publication is closed."]
-    pub fn is_closed(&self) -> bool {
-        unsafe {
-            let result = aeron_publication_is_closed(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Has the publication seen an active Subscriber recently?"]
-    #[doc = ""]
-    #[doc = " \n# Return\n true if this publication has recently seen an active subscriber otherwise false."]
-    pub fn is_connected(&self) -> bool {
-        unsafe {
-            let result = aeron_publication_is_connected(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Fill in a structure with the constants in use by a publication."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `publication` to get the constants for."]
-    #[doc = " \n - `constants` structure to fill in with the constants"]
-    #[doc = " \n# Return\n 0 for success and -1 for error."]
-    pub fn constants(&self, constants: &AeronPublicationConstants) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_publication_constants(self.get_inner(), constants.get_inner());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Fill in a structure with the constants in use by a publication."]
-    #[doc = ""]
-    pub fn get_constants(&self) -> Result<AeronPublicationConstants, AeronCError> {
-        let result = AeronPublicationConstants::default();
-        self.constants(&result)?;
-        Ok(result)
-    }
-    #[inline]
-    #[doc = "Get the current position to which the publication has advanced for this stream."]
-    #[doc = ""]
-    #[doc = " \n# Return\n the current position to which the publication has advanced for this stream or a negative error value."]
-    pub fn position(&self) -> i64 {
-        unsafe {
-            let result = aeron_publication_position(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Get the position limit beyond which this publication will be back pressured."]
-    #[doc = ""]
-    #[doc = " This should only be used as a guide to determine when back pressure is likely to be applied."]
-    #[doc = ""]
-    #[doc = " \n# Return\n the position limit beyond which this publication will be back pressured or a negative error value."]
-    pub fn position_limit(&self) -> i64 {
-        unsafe {
-            let result = aeron_publication_position_limit(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Asynchronously close the publication. Will callback on the on_complete notification when the subscription is closed."]
-    #[doc = " The callback is optional, use NULL for the on_complete callback if not required."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `on_close_complete` optional callback to execute once the subscription has been closed and freed. This may"]
-    #[doc = " happen on a separate thread, so the caller should ensure that clientd has the appropriate lifetime."]
-    #[doc = " \n - `on_close_complete_clientd` parameter to pass to the on_complete callback."]
-    #[doc = " \n# Return\n 0 for success or -1 for error."]
-    pub fn close<AeronNotificationHandlerImpl: AeronNotificationCallback>(
-        &self,
-        on_close_complete: Option<&Handler<AeronNotificationHandlerImpl>>,
-    ) -> Result<i32, AeronCError> {
-        self.inner.close_already_called.set(true);
-        unsafe {
-            let result = aeron_publication_close(
-                self.get_inner(),
-                {
-                    let callback: aeron_notification_t = if on_close_complete.is_none() {
-                        None
-                    } else {
-                        Some(aeron_notification_t_callback::<AeronNotificationHandlerImpl>)
-                    };
-                    callback
-                },
-                on_close_complete
-                    .map(|m| m.as_raw())
-                    .unwrap_or_else(|| std::ptr::null_mut()),
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Asynchronously close the publication. Will callback on the on_complete notification when the subscription is closed."]
-    #[doc = " The callback is optional, use NULL for the on_complete callback if not required."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `on_close_complete` optional callback to execute once the subscription has been closed and freed. This may"]
-    #[doc = " happen on a separate thread, so the caller should ensure that clientd has the appropriate lifetime."]
-    #[doc = " \n - `on_close_complete_clientd` parameter to pass to the on_complete callback."]
-    #[doc = " \n# Return\n 0 for success or -1 for error."]
-    #[doc = r""]
-    #[doc = r""]
-    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
-    #[doc = r"  use with care_"]
-    pub fn close_once<AeronNotificationHandlerImpl: FnMut() -> ()>(
-        &self,
-        mut on_close_complete: AeronNotificationHandlerImpl,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_publication_close(
-                self.get_inner(),
-                Some(
-                    aeron_notification_t_callback_for_once_closure::<AeronNotificationHandlerImpl>,
-                ),
-                &mut on_close_complete as *mut _ as *mut std::os::raw::c_void,
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Get the publication's channel"]
-    #[doc = ""]
-    #[doc = " \n# Return\n channel uri string"]
-    pub fn channel(&self) -> &str {
-        unsafe {
-            let result = aeron_publication_channel(self.get_inner());
-            if result.is_null() {
-                ""
-            } else {
-                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap() }
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Get the publication's stream id"]
-    #[doc = ""]
-    #[doc = " \n# Return\n stream id"]
-    pub fn stream_id(&self) -> i32 {
-        unsafe {
-            let result = aeron_publication_stream_id(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Get the publication's session id"]
-    #[doc = " \n# Return\n session id"]
-    pub fn session_id(&self) -> i32 {
-        unsafe {
-            let result = aeron_publication_session_id(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Get all of the local socket addresses for this publication. Typically only one representing the control address."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `address_vec` to hold the received addresses"]
-    #[doc = " \n - `address_vec_len` available length of the vector to hold the addresses"]
-    #[doc = " \n# Return\n number of addresses found or -1 if there is an error."]
-    #[doc = " @see aeron_subscription_local_sockaddrs"]
-    pub fn local_sockaddrs(
-        &self,
-        address_vec: &AeronIovec,
-        address_vec_len: usize,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_publication_local_sockaddrs(
-                self.get_inner(),
-                address_vec.get_inner(),
-                address_vec_len.into(),
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    pub fn image_location(
-        dst: *mut ::std::os::raw::c_char,
-        length: usize,
-        aeron_dir: &str,
-        correlation_id: i64,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_publication_image_location(
-                dst.into(),
-                length.into(),
-                std::ffi::CString::new(aeron_dir).unwrap().into_raw(),
-                correlation_id.into(),
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_publication_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronPublication {
-    type Target = aeron_publication_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_publication_t> for AeronPublication {
-    #[inline]
-    fn from(value: *mut aeron_publication_t) -> Self {
-        AeronPublication {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                value,
-                Some(Box::new(|c| unsafe { aeron_publication_is_closed(c) })),
-            )),
-        }
-    }
-}
-impl From<AeronPublication> for *mut aeron_publication_t {
-    #[inline]
-    fn from(value: AeronPublication) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronPublication> for *mut aeron_publication_t {
-    #[inline]
-    fn from(value: &AeronPublication) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronPublication> for aeron_publication_t {
-    #[inline]
-    fn from(value: AeronPublication) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_publication_t> for AeronPublication {
-    #[inline]
-    fn from(value: *const aeron_publication_t) -> Self {
-        AeronPublication {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                value,
-                Some(Box::new(|c| unsafe { aeron_publication_is_closed(c) })),
-            )),
-        }
-    }
-}
-impl From<aeron_publication_t> for AeronPublication {
-    #[inline]
-    fn from(mut value: aeron_publication_t) -> Self {
-        AeronPublication {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_publication_t,
-                Some(Box::new(|c| unsafe { aeron_publication_is_closed(c) })),
-            )),
-        }
-    }
-}
-impl Drop for AeronPublication {
-    fn drop(&mut self) {
-        if (self.inner.borrowed || self.inner.cleanup.is_none())
-            && std::rc::Rc::strong_count(&self.inner) == 1
-            && !self.inner.is_closed_already_called()
-        {
-            if self.inner.auto_close.get() {
-                let result = self.close_with_no_args();
-                log::info!("auto closing {} {:?}", stringify!(AeronPublication), result);
-            } else {
-                log::warn!("{} not closed", stringify!(AeronPublication));
-            }
-        }
-    }
-}
-#[derive(Clone)]
-pub struct AeronMappedFile {
-    inner: std::rc::Rc<ManagedCResource<aeron_mapped_file_t>>,
-}
-impl core::fmt::Debug for AeronMappedFile {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronMappedFile))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronMappedFile))
-                .field("inner", &self.inner)
-                .field(stringify!(length), &self.length())
-                .finish()
-        }
-    }
-}
-impl AeronMappedFile {
-    #[inline]
-    pub fn new(addr: *mut ::std::os::raw::c_void, length: usize) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_mapped_file_t {
-                    addr: addr.into(),
-                    length: length.into(),
-                };
-                let inner_ptr: *mut aeron_mapped_file_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_mapped_file_t)
-                );
-                let inst: aeron_mapped_file_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_mapped_file_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn addr(&self) -> *mut ::std::os::raw::c_void {
-        self.addr.into()
-    }
-    #[inline]
-    pub fn length(&self) -> usize {
-        self.length.into()
-    }
-    #[inline]
-    pub fn aeron_map_new_file(
-        &self,
-        path: &str,
-        fill_with_zeroes: bool,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_map_new_file(
-                self.get_inner(),
-                std::ffi::CString::new(path).unwrap().into_raw(),
-                fill_with_zeroes.into(),
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    pub fn aeron_map_existing_file(&self, path: &str) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_map_existing_file(
-                self.get_inner(),
-                std::ffi::CString::new(path).unwrap().into_raw(),
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    pub fn aeron_unmap(&self) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_unmap(self.get_inner());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_mapped_file_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronMappedFile {
-    type Target = aeron_mapped_file_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_mapped_file_t> for AeronMappedFile {
-    #[inline]
-    fn from(value: *mut aeron_mapped_file_t) -> Self {
-        AeronMappedFile {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronMappedFile> for *mut aeron_mapped_file_t {
-    #[inline]
-    fn from(value: AeronMappedFile) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronMappedFile> for *mut aeron_mapped_file_t {
-    #[inline]
-    fn from(value: &AeronMappedFile) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronMappedFile> for aeron_mapped_file_t {
-    #[inline]
-    fn from(value: AeronMappedFile) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_mapped_file_t> for AeronMappedFile {
-    #[inline]
-    fn from(value: *const aeron_mapped_file_t) -> Self {
-        AeronMappedFile {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_mapped_file_t> for AeronMappedFile {
-    #[inline]
-    fn from(mut value: aeron_mapped_file_t) -> Self {
-        AeronMappedFile {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_mapped_file_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronMappedFile {
-    fn default() -> Self {
-        AeronMappedFile::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronMappedFile {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[derive(Clone)]
-pub struct AeronImageFragmentAssembler {
-    inner: std::rc::Rc<ManagedCResource<aeron_image_fragment_assembler_t>>,
-}
-impl core::fmt::Debug for AeronImageFragmentAssembler {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronImageFragmentAssembler))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronImageFragmentAssembler))
-                .field("inner", &self.inner)
-                .finish()
-        }
-    }
-}
-impl AeronImageFragmentAssembler {
-    #[doc = "Create an image fragment assembler for use with a single image."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `delegate` to call on completed."]
-    #[doc = " \n - `delegate_clientd` to pass to delegate handler."]
-    #[doc = " \n# Return\n 0 for success and -1 for error."]
-    pub fn new<AeronFragmentHandlerHandlerImpl: AeronFragmentHandlerCallback>(
-        delegate: Option<&Handler<AeronFragmentHandlerHandlerImpl>>,
-    ) -> Result<Self, AeronCError> {
-        let (delegate, delegate_clientd) = (
-            {
-                let callback: aeron_fragment_handler_t = if delegate.is_none() {
-                    None
-                } else {
-                    Some(aeron_fragment_handler_t_callback::<AeronFragmentHandlerHandlerImpl>)
-                };
-                callback
-            },
-            delegate
-                .map(|m| m.as_raw())
-                .unwrap_or_else(|| std::ptr::null_mut()),
-        );
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let resource_constructor = ManagedCResource::new(
-            move |ctx_field| unsafe {
-                aeron_image_fragment_assembler_create(ctx_field, delegate, delegate_clientd)
-            },
-            Some(Box::new(move |ctx_field| {
-                let result = unsafe { aeron_image_fragment_assembler_delete(*ctx_field) };
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                result
-            })),
-            false,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource_constructor),
-        })
-    }
-    #[inline]
-    #[doc = "Delete an image fragment assembler."]
-    #[doc = ""]
-    #[doc = " \n# Return\n 0 for success or -1 for error."]
-    pub fn delete(&self) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_image_fragment_assembler_delete(self.get_inner());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Handler function to be passed for handling fragment assembly."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `clientd` passed in the poll call (must be a `AeronImageFragmentAssembler`)"]
-    #[doc = " \n - `buffer` containing the data."]
-    #[doc = " \n - `header` representing the meta data for the data."]
-    pub fn handler(
-        clientd: *mut ::std::os::raw::c_void,
-        buffer: &[u8],
-        header: &AeronHeader,
-    ) -> () {
-        unsafe {
-            let result = aeron_image_fragment_assembler_handler(
-                clientd.into(),
-                buffer.as_ptr() as *mut _,
-                buffer.len(),
-                header.get_inner(),
-            );
-            result.into()
-        }
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_image_fragment_assembler_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronImageFragmentAssembler {
-    type Target = aeron_image_fragment_assembler_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_image_fragment_assembler_t> for AeronImageFragmentAssembler {
-    #[inline]
-    fn from(value: *mut aeron_image_fragment_assembler_t) -> Self {
-        AeronImageFragmentAssembler {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronImageFragmentAssembler> for *mut aeron_image_fragment_assembler_t {
-    #[inline]
-    fn from(value: AeronImageFragmentAssembler) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronImageFragmentAssembler> for *mut aeron_image_fragment_assembler_t {
-    #[inline]
-    fn from(value: &AeronImageFragmentAssembler) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronImageFragmentAssembler> for aeron_image_fragment_assembler_t {
-    #[inline]
-    fn from(value: AeronImageFragmentAssembler) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_image_fragment_assembler_t> for AeronImageFragmentAssembler {
-    #[inline]
-    fn from(value: *const aeron_image_fragment_assembler_t) -> Self {
-        AeronImageFragmentAssembler {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_image_fragment_assembler_t> for AeronImageFragmentAssembler {
-    #[inline]
-    fn from(mut value: aeron_image_fragment_assembler_t) -> Self {
-        AeronImageFragmentAssembler {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_image_fragment_assembler_t,
-                None,
-            )),
-        }
-    }
-}
-#[derive(Clone)]
-pub struct AeronStatusMessageHeader {
-    inner: std::rc::Rc<ManagedCResource<aeron_status_message_header_t>>,
-}
-impl core::fmt::Debug for AeronStatusMessageHeader {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronStatusMessageHeader))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronStatusMessageHeader))
-                .field("inner", &self.inner)
-                .field(stringify!(frame_header), &self.frame_header())
-                .field(stringify!(session_id), &self.session_id())
-                .field(stringify!(stream_id), &self.stream_id())
-                .field(stringify!(consumption_term_id), &self.consumption_term_id())
-                .field(
-                    stringify!(consumption_term_offset),
-                    &self.consumption_term_offset(),
-                )
-                .field(stringify!(receiver_window), &self.receiver_window())
-                .field(stringify!(receiver_id), &self.receiver_id())
-                .finish()
-        }
-    }
-}
-impl AeronStatusMessageHeader {
-    #[inline]
-    pub fn new(
-        frame_header: AeronFrameHeader,
-        session_id: i32,
-        stream_id: i32,
-        consumption_term_id: i32,
-        consumption_term_offset: i32,
-        receiver_window: i32,
-        receiver_id: i64,
-    ) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_status_message_header_t {
-                    frame_header: frame_header.into(),
-                    session_id: session_id.into(),
-                    stream_id: stream_id.into(),
-                    consumption_term_id: consumption_term_id.into(),
-                    consumption_term_offset: consumption_term_offset.into(),
-                    receiver_window: receiver_window.into(),
-                    receiver_id: receiver_id.into(),
-                };
-                let inner_ptr: *mut aeron_status_message_header_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_status_message_header_t)
-                );
-                let inst: aeron_status_message_header_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_status_message_header_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn frame_header(&self) -> AeronFrameHeader {
-        self.frame_header.into()
-    }
-    #[inline]
-    pub fn session_id(&self) -> i32 {
-        self.session_id.into()
-    }
-    #[inline]
-    pub fn stream_id(&self) -> i32 {
-        self.stream_id.into()
-    }
-    #[inline]
-    pub fn consumption_term_id(&self) -> i32 {
-        self.consumption_term_id.into()
-    }
-    #[inline]
-    pub fn consumption_term_offset(&self) -> i32 {
-        self.consumption_term_offset.into()
-    }
-    #[inline]
-    pub fn receiver_window(&self) -> i32 {
-        self.receiver_window.into()
-    }
-    #[inline]
-    pub fn receiver_id(&self) -> i64 {
-        self.receiver_id.into()
-    }
-    #[inline]
-    pub fn aeron_udp_protocol_group_tag(&self) -> Result<i64, AeronCError> {
-        unsafe {
-            let mut mut_result: i64 = Default::default();
-            let err_code = aeron_udp_protocol_group_tag(self.get_inner(), &mut mut_result);
-            if err_code < 0 {
-                return Err(AeronCError::from_code(err_code));
-            } else {
-                return Ok(mut_result);
-            }
-        }
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_status_message_header_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronStatusMessageHeader {
-    type Target = aeron_status_message_header_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_status_message_header_t> for AeronStatusMessageHeader {
-    #[inline]
-    fn from(value: *mut aeron_status_message_header_t) -> Self {
-        AeronStatusMessageHeader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronStatusMessageHeader> for *mut aeron_status_message_header_t {
-    #[inline]
-    fn from(value: AeronStatusMessageHeader) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronStatusMessageHeader> for *mut aeron_status_message_header_t {
-    #[inline]
-    fn from(value: &AeronStatusMessageHeader) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronStatusMessageHeader> for aeron_status_message_header_t {
-    #[inline]
-    fn from(value: AeronStatusMessageHeader) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_status_message_header_t> for AeronStatusMessageHeader {
-    #[inline]
-    fn from(value: *const aeron_status_message_header_t) -> Self {
-        AeronStatusMessageHeader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_status_message_header_t> for AeronStatusMessageHeader {
-    #[inline]
-    fn from(mut value: aeron_status_message_header_t) -> Self {
-        AeronStatusMessageHeader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_status_message_header_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronStatusMessageHeader {
-    fn default() -> Self {
-        AeronStatusMessageHeader::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronStatusMessageHeader {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[derive(Clone)]
-pub struct AeronUriParam {
-    inner: std::rc::Rc<ManagedCResource<aeron_uri_param_t>>,
-}
-impl core::fmt::Debug for AeronUriParam {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronUriParam))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronUriParam))
-                .field("inner", &self.inner)
-                .finish()
-        }
-    }
-}
-impl AeronUriParam {
-    #[inline]
-    pub fn new(key: &str, value: &str) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_uri_param_t {
-                    key: std::ffi::CString::new(key).unwrap().into_raw(),
-                    value: std::ffi::CString::new(value).unwrap().into_raw(),
-                };
-                let inner_ptr: *mut aeron_uri_param_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_uri_param_t)
-                );
-                let inst: aeron_uri_param_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_uri_param_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn key(&self) -> &str {
-        if self.key.is_null() {
-            ""
-        } else {
-            unsafe { std::ffi::CStr::from_ptr(self.key).to_str().unwrap() }
-        }
-    }
-    #[inline]
-    pub fn value(&self) -> &str {
-        if self.value.is_null() {
-            ""
-        } else {
-            unsafe { std::ffi::CStr::from_ptr(self.value).to_str().unwrap() }
-        }
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_uri_param_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronUriParam {
-    type Target = aeron_uri_param_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_uri_param_t> for AeronUriParam {
-    #[inline]
-    fn from(value: *mut aeron_uri_param_t) -> Self {
-        AeronUriParam {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronUriParam> for *mut aeron_uri_param_t {
-    #[inline]
-    fn from(value: AeronUriParam) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronUriParam> for *mut aeron_uri_param_t {
-    #[inline]
-    fn from(value: &AeronUriParam) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronUriParam> for aeron_uri_param_t {
-    #[inline]
-    fn from(value: AeronUriParam) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_uri_param_t> for AeronUriParam {
-    #[inline]
-    fn from(value: *const aeron_uri_param_t) -> Self {
-        AeronUriParam {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_uri_param_t> for AeronUriParam {
-    #[inline]
-    fn from(mut value: aeron_uri_param_t) -> Self {
-        AeronUriParam {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_uri_param_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronUriParam {
-    fn default() -> Self {
-        AeronUriParam::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronUriParam {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[derive(Clone)]
-pub struct AeronCncConstants {
-    inner: std::rc::Rc<ManagedCResource<aeron_cnc_constants_t>>,
-}
-impl core::fmt::Debug for AeronCncConstants {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronCncConstants))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronCncConstants))
-                .field("inner", &self.inner)
-                .field(stringify!(cnc_version), &self.cnc_version())
-                .field(
-                    stringify!(to_driver_buffer_length),
-                    &self.to_driver_buffer_length(),
-                )
-                .field(
-                    stringify!(to_clients_buffer_length),
-                    &self.to_clients_buffer_length(),
-                )
-                .field(
-                    stringify!(counter_metadata_buffer_length),
-                    &self.counter_metadata_buffer_length(),
-                )
-                .field(
-                    stringify!(counter_values_buffer_length),
-                    &self.counter_values_buffer_length(),
-                )
-                .field(
-                    stringify!(error_log_buffer_length),
-                    &self.error_log_buffer_length(),
-                )
-                .field(
-                    stringify!(client_liveness_timeout),
-                    &self.client_liveness_timeout(),
-                )
-                .field(stringify!(start_timestamp), &self.start_timestamp())
-                .field(stringify!(pid), &self.pid())
-                .finish()
-        }
-    }
-}
-impl AeronCncConstants {
-    #[inline]
-    pub fn new(
-        cnc_version: i32,
-        to_driver_buffer_length: i32,
-        to_clients_buffer_length: i32,
-        counter_metadata_buffer_length: i32,
-        counter_values_buffer_length: i32,
-        error_log_buffer_length: i32,
-        client_liveness_timeout: i64,
-        start_timestamp: i64,
-        pid: i64,
-    ) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_cnc_constants_t {
-                    cnc_version: cnc_version.into(),
-                    to_driver_buffer_length: to_driver_buffer_length.into(),
-                    to_clients_buffer_length: to_clients_buffer_length.into(),
-                    counter_metadata_buffer_length: counter_metadata_buffer_length.into(),
-                    counter_values_buffer_length: counter_values_buffer_length.into(),
-                    error_log_buffer_length: error_log_buffer_length.into(),
-                    client_liveness_timeout: client_liveness_timeout.into(),
-                    start_timestamp: start_timestamp.into(),
-                    pid: pid.into(),
-                };
-                let inner_ptr: *mut aeron_cnc_constants_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_cnc_constants_t)
-                );
-                let inst: aeron_cnc_constants_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_cnc_constants_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn cnc_version(&self) -> i32 {
-        self.cnc_version.into()
-    }
-    #[inline]
-    pub fn to_driver_buffer_length(&self) -> i32 {
-        self.to_driver_buffer_length.into()
-    }
-    #[inline]
-    pub fn to_clients_buffer_length(&self) -> i32 {
-        self.to_clients_buffer_length.into()
-    }
-    #[inline]
-    pub fn counter_metadata_buffer_length(&self) -> i32 {
-        self.counter_metadata_buffer_length.into()
-    }
-    #[inline]
-    pub fn counter_values_buffer_length(&self) -> i32 {
-        self.counter_values_buffer_length.into()
-    }
-    #[inline]
-    pub fn error_log_buffer_length(&self) -> i32 {
-        self.error_log_buffer_length.into()
-    }
-    #[inline]
-    pub fn client_liveness_timeout(&self) -> i64 {
-        self.client_liveness_timeout.into()
-    }
-    #[inline]
-    pub fn start_timestamp(&self) -> i64 {
-        self.start_timestamp.into()
-    }
-    #[inline]
-    pub fn pid(&self) -> i64 {
-        self.pid.into()
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_cnc_constants_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronCncConstants {
-    type Target = aeron_cnc_constants_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_cnc_constants_t> for AeronCncConstants {
-    #[inline]
-    fn from(value: *mut aeron_cnc_constants_t) -> Self {
-        AeronCncConstants {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronCncConstants> for *mut aeron_cnc_constants_t {
-    #[inline]
-    fn from(value: AeronCncConstants) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronCncConstants> for *mut aeron_cnc_constants_t {
-    #[inline]
-    fn from(value: &AeronCncConstants) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronCncConstants> for aeron_cnc_constants_t {
-    #[inline]
-    fn from(value: AeronCncConstants) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_cnc_constants_t> for AeronCncConstants {
-    #[inline]
-    fn from(value: *const aeron_cnc_constants_t) -> Self {
-        AeronCncConstants {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_cnc_constants_t> for AeronCncConstants {
-    #[inline]
-    fn from(mut value: aeron_cnc_constants_t) -> Self {
-        AeronCncConstants {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_cnc_constants_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronCncConstants {
-    fn default() -> Self {
-        AeronCncConstants::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronCncConstants {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[derive(Clone)]
-pub struct AeronAsyncDestinationById {
-    inner: std::rc::Rc<ManagedCResource<aeron_async_destination_by_id_t>>,
-}
-impl core::fmt::Debug for AeronAsyncDestinationById {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronAsyncDestinationById))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronAsyncDestinationById))
-                .field("inner", &self.inner)
-                .finish()
-        }
-    }
-}
-impl AeronAsyncDestinationById {
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_async_destination_by_id_t)
-                );
-                let inst: aeron_async_destination_by_id_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_async_destination_by_id_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_async_destination_by_id_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronAsyncDestinationById {
-    type Target = aeron_async_destination_by_id_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_async_destination_by_id_t> for AeronAsyncDestinationById {
-    #[inline]
-    fn from(value: *mut aeron_async_destination_by_id_t) -> Self {
-        AeronAsyncDestinationById {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronAsyncDestinationById> for *mut aeron_async_destination_by_id_t {
-    #[inline]
-    fn from(value: AeronAsyncDestinationById) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronAsyncDestinationById> for *mut aeron_async_destination_by_id_t {
-    #[inline]
-    fn from(value: &AeronAsyncDestinationById) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronAsyncDestinationById> for aeron_async_destination_by_id_t {
-    #[inline]
-    fn from(value: AeronAsyncDestinationById) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_async_destination_by_id_t> for AeronAsyncDestinationById {
-    #[inline]
-    fn from(value: *const aeron_async_destination_by_id_t) -> Self {
-        AeronAsyncDestinationById {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_async_destination_by_id_t> for AeronAsyncDestinationById {
-    #[inline]
-    fn from(mut value: aeron_async_destination_by_id_t) -> Self {
-        AeronAsyncDestinationById {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_async_destination_by_id_t,
-                None,
-            )),
-        }
-    }
-}
-#[derive(Clone)]
-pub struct AeronCounter {
-    inner: std::rc::Rc<ManagedCResource<aeron_counter_t>>,
-}
-impl core::fmt::Debug for AeronCounter {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronCounter))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronCounter))
-                .field("inner", &self.inner)
-                .finish()
-        }
-    }
-}
-impl AeronCounter {
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_counter_t)
-                );
-                let inst: aeron_counter_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_counter_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            Some(Box::new(|c| unsafe { aeron_counter_is_closed(c) })),
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    #[doc = "Return a pointer to the counter value."]
-    #[doc = ""]
-    #[doc = " \n# Return\n pointer to the counter value."]
-    pub fn addr(&self) -> &mut i64 {
-        unsafe {
-            let result = aeron_counter_addr(self.get_inner());
-            unsafe { &mut *result }
-        }
-    }
-    #[inline]
-    #[doc = "Fill in a structure with the constants in use by a counter."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `counter` to get the constants for."]
-    #[doc = " \n - `constants` structure to fill in with the constants."]
-    #[doc = " \n# Return\n 0 for success and -1 for error."]
-    pub fn constants(&self, constants: &AeronCounterConstants) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_counter_constants(self.get_inner(), constants.get_inner());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Fill in a structure with the constants in use by a counter."]
-    #[doc = ""]
-    pub fn get_constants(&self) -> Result<AeronCounterConstants, AeronCError> {
-        let result = AeronCounterConstants::default();
-        self.constants(&result)?;
-        Ok(result)
-    }
-    #[inline]
-    #[doc = "Asynchronously close the counter."]
-    #[doc = ""]
-    #[doc = " \n# Return\n 0 for success or -1 for error."]
-    pub fn close<AeronNotificationHandlerImpl: AeronNotificationCallback>(
-        &self,
-        on_close_complete: Option<&Handler<AeronNotificationHandlerImpl>>,
-    ) -> Result<i32, AeronCError> {
-        self.inner.close_already_called.set(true);
-        unsafe {
-            let result = aeron_counter_close(
-                self.get_inner(),
-                {
-                    let callback: aeron_notification_t = if on_close_complete.is_none() {
-                        None
-                    } else {
-                        Some(aeron_notification_t_callback::<AeronNotificationHandlerImpl>)
-                    };
-                    callback
-                },
-                on_close_complete
-                    .map(|m| m.as_raw())
-                    .unwrap_or_else(|| std::ptr::null_mut()),
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Asynchronously close the counter."]
-    #[doc = ""]
-    #[doc = " \n# Return\n 0 for success or -1 for error."]
-    #[doc = r""]
-    #[doc = r""]
-    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
-    #[doc = r"  use with care_"]
-    pub fn close_once<AeronNotificationHandlerImpl: FnMut() -> ()>(
-        &self,
-        mut on_close_complete: AeronNotificationHandlerImpl,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_counter_close(
-                self.get_inner(),
-                Some(
-                    aeron_notification_t_callback_for_once_closure::<AeronNotificationHandlerImpl>,
-                ),
-                &mut on_close_complete as *mut _ as *mut std::os::raw::c_void,
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Check if the counter is closed"]
-    #[doc = " \n# Return\n true if closed, false otherwise."]
-    pub fn is_closed(&self) -> bool {
-        unsafe {
-            let result = aeron_counter_is_closed(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_counter_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronCounter {
-    type Target = aeron_counter_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_counter_t> for AeronCounter {
-    #[inline]
-    fn from(value: *mut aeron_counter_t) -> Self {
-        AeronCounter {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                value,
-                Some(Box::new(|c| unsafe { aeron_counter_is_closed(c) })),
-            )),
-        }
-    }
-}
-impl From<AeronCounter> for *mut aeron_counter_t {
-    #[inline]
-    fn from(value: AeronCounter) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronCounter> for *mut aeron_counter_t {
-    #[inline]
-    fn from(value: &AeronCounter) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronCounter> for aeron_counter_t {
-    #[inline]
-    fn from(value: AeronCounter) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_counter_t> for AeronCounter {
-    #[inline]
-    fn from(value: *const aeron_counter_t) -> Self {
-        AeronCounter {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                value,
-                Some(Box::new(|c| unsafe { aeron_counter_is_closed(c) })),
-            )),
-        }
-    }
-}
-impl From<aeron_counter_t> for AeronCounter {
-    #[inline]
-    fn from(mut value: aeron_counter_t) -> Self {
-        AeronCounter {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_counter_t,
-                Some(Box::new(|c| unsafe { aeron_counter_is_closed(c) })),
-            )),
-        }
-    }
-}
-impl Drop for AeronCounter {
-    fn drop(&mut self) {
-        if (self.inner.borrowed || self.inner.cleanup.is_none())
-            && std::rc::Rc::strong_count(&self.inner) == 1
-            && !self.inner.is_closed_already_called()
-        {
-            if self.inner.auto_close.get() {
-                let result = self.close_with_no_args();
-                log::info!("auto closing {} {:?}", stringify!(AeronCounter), result);
-            } else {
-                log::warn!("{} not closed", stringify!(AeronCounter));
-            }
-        }
-    }
-}
-#[derive(Clone)]
-pub struct AeronPublicationErrorValues {
-    inner: std::rc::Rc<ManagedCResource<aeron_publication_error_values_t>>,
-}
-impl core::fmt::Debug for AeronPublicationErrorValues {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronPublicationErrorValues))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronPublicationErrorValues))
-                .field("inner", &self.inner)
-                .field(stringify!(registration_id), &self.registration_id())
-                .field(
-                    stringify!(destination_registration_id),
-                    &self.destination_registration_id(),
-                )
-                .field(stringify!(session_id), &self.session_id())
-                .field(stringify!(stream_id), &self.stream_id())
-                .field(stringify!(receiver_id), &self.receiver_id())
-                .field(stringify!(group_tag), &self.group_tag())
-                .field(stringify!(address_type), &self.address_type())
-                .field(stringify!(source_port), &self.source_port())
-                .field(stringify!(error_code), &self.error_code())
-                .field(
-                    stringify!(error_message_length),
-                    &self.error_message_length(),
-                )
-                .finish()
-        }
-    }
-}
-impl AeronPublicationErrorValues {
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_publication_error_values_t)
-                );
-                let inst: aeron_publication_error_values_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_publication_error_values_t =
-                    Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn registration_id(&self) -> i64 {
-        self.registration_id.into()
-    }
-    #[inline]
-    pub fn destination_registration_id(&self) -> i64 {
-        self.destination_registration_id.into()
-    }
-    #[inline]
-    pub fn session_id(&self) -> i32 {
-        self.session_id.into()
-    }
-    #[inline]
-    pub fn stream_id(&self) -> i32 {
-        self.stream_id.into()
-    }
-    #[inline]
-    pub fn receiver_id(&self) -> i64 {
-        self.receiver_id.into()
-    }
-    #[inline]
-    pub fn group_tag(&self) -> i64 {
-        self.group_tag.into()
-    }
-    #[inline]
-    pub fn address_type(&self) -> i16 {
-        self.address_type.into()
-    }
-    #[inline]
-    pub fn source_port(&self) -> u16 {
-        self.source_port.into()
-    }
-    #[inline]
-    pub fn source_address(&self) -> [u8; 16usize] {
-        self.source_address.into()
-    }
-    #[inline]
-    pub fn error_code(&self) -> i32 {
-        self.error_code.into()
-    }
-    #[inline]
-    pub fn error_message_length(&self) -> i32 {
-        self.error_message_length.into()
-    }
-    #[inline]
-    pub fn error_message(&self) -> [u8; 1usize] {
-        self.error_message.into()
-    }
-    #[inline]
-    #[doc = "Delete a instance of `AeronPublicationErrorValues` that was created when making a copy"]
-    #[doc = " (aeron_publication_error_values_copy). This should not be use on the pointer received via the aeron_frame_handler_t."]
-    pub fn delete(&self) -> () {
-        unsafe {
-            let result = aeron_publication_error_values_delete(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_publication_error_values_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronPublicationErrorValues {
-    type Target = aeron_publication_error_values_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_publication_error_values_t> for AeronPublicationErrorValues {
-    #[inline]
-    fn from(value: *mut aeron_publication_error_values_t) -> Self {
-        AeronPublicationErrorValues {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronPublicationErrorValues> for *mut aeron_publication_error_values_t {
-    #[inline]
-    fn from(value: AeronPublicationErrorValues) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronPublicationErrorValues> for *mut aeron_publication_error_values_t {
-    #[inline]
-    fn from(value: &AeronPublicationErrorValues) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronPublicationErrorValues> for aeron_publication_error_values_t {
-    #[inline]
-    fn from(value: AeronPublicationErrorValues) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_publication_error_values_t> for AeronPublicationErrorValues {
-    #[inline]
-    fn from(value: *const aeron_publication_error_values_t) -> Self {
-        AeronPublicationErrorValues {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_publication_error_values_t> for AeronPublicationErrorValues {
-    #[inline]
-    fn from(mut value: aeron_publication_error_values_t) -> Self {
-        AeronPublicationErrorValues {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_publication_error_values_t,
-                None,
-            )),
-        }
-    }
-}
-#[derive(Clone)]
-pub struct Aeron {
-    inner: std::rc::Rc<ManagedCResource<aeron_t>>,
-}
-impl core::fmt::Debug for Aeron {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(Aeron))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(Aeron))
-                .field("inner", &self.inner)
-                .finish()
-        }
-    }
-}
-impl Aeron {
-    #[doc = "Create a `Aeron` client struct and initialize from the `AeronContext` struct."]
-    #[doc = ""]
-    #[doc = " The given `AeronContext` struct will be used exclusively by the client. Do not reuse between clients."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `context` to use for initialization."]
-    #[doc = " \n# Return\n 0 for success and -1 for error."]
-    pub fn new(context: &AeronContext) -> Result<Self, AeronCError> {
-        let context_copy = context.clone();
-        let context: *mut aeron_context_t = context.into();
-        let drop_copies_closure =
-            std::rc::Rc::new(std::cell::RefCell::new(Some(|| drop(context_copy))));
-        let resource_constructor = ManagedCResource::new(
-            move |ctx_field| unsafe { aeron_init(ctx_field, context) },
-            Some(Box::new(move |ctx_field| {
-                let result = unsafe { aeron_close(*ctx_field) };
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                result
-            })),
-            false,
-            Some(Box::new(|c| unsafe { aeron_is_closed(c) })),
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource_constructor),
-        })
-    }
-    #[inline]
-    #[doc = "Start an `Aeron`. This may spawn a thread for the Client Conductor."]
-    #[doc = ""]
-    #[doc = " \n# Return\n 0 for success and -1 for error."]
-    pub fn start(&self) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_start(self.get_inner());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Call the Conductor main do_work duty cycle once."]
-    #[doc = ""]
-    #[doc = " Client must have been created with use conductor invoker set to true."]
-    #[doc = ""]
-    #[doc = " \n# Return\n 0 for success and -1 for error."]
-    pub fn main_do_work(&self) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_main_do_work(self.get_inner());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Call the Conductor Idle Strategy."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `work_count` to pass to idle strategy."]
-    pub fn main_idle_strategy(&self, work_count: ::std::os::raw::c_int) -> () {
-        unsafe {
-            let result = aeron_main_idle_strategy(self.get_inner(), work_count.into());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Close and delete `Aeron` struct."]
-    #[doc = ""]
-    #[doc = " \n# Return\n 0 for success and -1 for error."]
-    pub fn close(&self) -> Result<i32, AeronCError> {
-        self.inner.close_already_called.set(true);
-        unsafe {
-            let result = aeron_close(self.get_inner());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Determines if the client has been closed, e.g. via a driver timeout. Don't call this method after calling"]
-    #[doc = " aeron_close as that will have already freed the associated memory."]
-    #[doc = ""]
-    #[doc = " \n# Return\n true if it has been closed, false otherwise."]
-    pub fn is_closed(&self) -> bool {
-        unsafe {
-            let result = aeron_is_closed(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Call stream_out to print the counter labels and values."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `stream_out` to call for each label and value."]
-    pub fn print_counters(
-        &self,
-        stream_out: ::std::option::Option<
-            unsafe extern "C" fn(arg1: *const ::std::os::raw::c_char),
-        >,
-    ) -> () {
-        unsafe {
-            let result = aeron_print_counters(self.get_inner(), stream_out.into());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Return the `AeronContext` that is in use by the given client."]
-    #[doc = ""]
-    #[doc = " \n# Return\n the `AeronContext` for the given client or NULL for an error."]
-    pub fn context(&self) -> AeronContext {
-        unsafe {
-            let result = aeron_context(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Return the client id in use by the client."]
-    #[doc = ""]
-    #[doc = " \n# Return\n id value or -1 for an error."]
-    pub fn client_id(&self) -> i64 {
-        unsafe {
-            let result = aeron_client_id(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Return a unique correlation id from the driver."]
-    #[doc = ""]
-    #[doc = " \n# Return\n unique correlation id or -1 for an error."]
-    pub fn next_correlation_id(&self) -> i64 {
-        unsafe {
-            let result = aeron_next_correlation_id(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Return a reference to the counters reader of the given client."]
-    #[doc = ""]
-    #[doc = " The `AeronCountersReader` is maintained by the client. And should not be freed."]
-    #[doc = ""]
-    #[doc = " \n# Return\n `AeronCountersReader` or NULL for error."]
-    pub fn counters_reader(&self) -> AeronCountersReader {
-        unsafe {
-            let result = aeron_counters_reader(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Add a handler to be called when a new counter becomes available."]
-    #[doc = ""]
-    #[doc = " NOTE: This function blocks until the handler is added by the client conductor thread."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `pair` holding the handler to call and a clientd to pass when called."]
-    #[doc = " \n# Return\n 0 for success and -1 for error"]
-    pub fn add_available_counter_handler(
-        &self,
-        pair: &AeronAvailableCounterPair,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_add_available_counter_handler(self.get_inner(), pair.get_inner());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Remove a previously added handler to be called when a new counter becomes available."]
-    #[doc = ""]
-    #[doc = " NOTE: This function blocks until the handler is removed by the client conductor thread."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `pair` holding the handler to call and a clientd to pass when called."]
-    #[doc = " \n# Return\n 0 for success and -1 for error"]
-    pub fn remove_available_counter_handler(
-        &self,
-        pair: &AeronAvailableCounterPair,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_remove_available_counter_handler(self.get_inner(), pair.get_inner());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Add a handler to be called when a new counter becomes unavailable or goes away."]
-    #[doc = ""]
-    #[doc = " NOTE: This function blocks until the handler is added by the client conductor thread."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `pair` holding the handler to call and a clientd to pass when called."]
-    #[doc = " \n# Return\n 0 for success and -1 for error"]
-    pub fn add_unavailable_counter_handler(
-        &self,
-        pair: &AeronUnavailableCounterPair,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_add_unavailable_counter_handler(self.get_inner(), pair.get_inner());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Remove a previously added handler to be called when a new counter becomes unavailable or goes away."]
-    #[doc = ""]
-    #[doc = " NOTE: This function blocks until the handler is removed by the client conductor thread."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `pair` holding the handler to call and a clientd to pass when called."]
-    #[doc = " \n# Return\n 0 for success and -1 for error"]
-    pub fn remove_unavailable_counter_handler(
-        &self,
-        pair: &AeronUnavailableCounterPair,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result =
-                aeron_remove_unavailable_counter_handler(self.get_inner(), pair.get_inner());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Add a handler to be called when client is closed."]
-    #[doc = ""]
-    #[doc = " NOTE: This function blocks until the handler is added by the client conductor thread."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `pair` holding the handler to call and a clientd to pass when called."]
-    #[doc = " \n# Return\n 0 for success and -1 for error"]
-    pub fn add_close_handler(&self, pair: &AeronCloseClientPair) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_add_close_handler(self.get_inner(), pair.get_inner());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Remove a previously added handler to be called when client is closed."]
-    #[doc = ""]
-    #[doc = " NOTE: This function blocks until the handler is removed by the client conductor thread."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `pair` holding the handler to call and a clientd to pass when called."]
-    #[doc = " \n# Return\n 0 for success and -1 for error"]
-    pub fn remove_close_handler(&self, pair: &AeronCloseClientPair) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_remove_close_handler(self.get_inner(), pair.get_inner());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Return full version and build string."]
-    #[doc = ""]
-    #[doc = " \n# Return\n full version and build string."]
-    pub fn version_full(&self) -> &str {
-        unsafe {
-            let result = aeron_version_full();
-            if result.is_null() {
-                ""
-            } else {
-                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap() }
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Return version text."]
-    #[doc = ""]
-    #[doc = " \n# Return\n version text."]
-    pub fn version_text(&self) -> &str {
-        unsafe {
-            let result = aeron_version_text();
-            if result.is_null() {
-                ""
-            } else {
-                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap() }
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Return major version number."]
-    #[doc = ""]
-    #[doc = " \n# Return\n major version number."]
-    pub fn version_major() -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_version_major();
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Return minor version number."]
-    #[doc = ""]
-    #[doc = " \n# Return\n minor version number."]
-    pub fn version_minor() -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_version_minor();
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Return patch version number."]
-    #[doc = ""]
-    #[doc = " \n# Return\n patch version number."]
-    pub fn version_patch() -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_version_patch();
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Return the git sha for the current build."]
-    #[doc = ""]
-    #[doc = " \n# Return\n git version"]
-    pub fn version_gitsha(&self) -> &str {
-        unsafe {
-            let result = aeron_version_gitsha();
-            if result.is_null() {
-                ""
-            } else {
-                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap() }
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Return time in nanoseconds for machine. Is not wall clock time."]
-    #[doc = ""]
-    #[doc = " \n# Return\n nanoseconds since epoch for machine."]
-    pub fn nano_clock() -> i64 {
-        unsafe {
-            let result = aeron_nano_clock();
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Return time in milliseconds since epoch. Is wall clock time."]
-    #[doc = ""]
-    #[doc = " \n# Return\n milliseconds since epoch."]
-    pub fn epoch_clock() -> i64 {
-        unsafe {
-            let result = aeron_epoch_clock();
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Determine if an aeron driver is using a given aeron directory."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `dirname`  for aeron directory"]
-    #[doc = " \n - `timeout_ms`  to use to determine activity for aeron directory"]
-    #[doc = " \n - `log_func` to call during activity check to log diagnostic information."]
-    #[doc = " \n# Return\n true for active driver or false for no active driver."]
-    pub fn is_driver_active(dirname: &str, timeout_ms: i64, log_func: aeron_log_func_t) -> bool {
-        unsafe {
-            let result = aeron_is_driver_active(
-                std::ffi::CString::new(dirname).unwrap().into_raw(),
-                timeout_ms.into(),
-                log_func.into(),
-            );
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Load properties from a string containing name=value pairs and set appropriate environment variables for the"]
-    #[doc = " process so that subsequent calls to aeron_driver_context_init will use those values."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `buffer` containing properties and values."]
-    #[doc = " \n# Return\n 0 for success and -1 for error."]
-    pub fn properties_buffer_load(buffer: &str) -> Result<i32, AeronCError> {
-        unsafe {
-            let result =
-                aeron_properties_buffer_load(std::ffi::CString::new(buffer).unwrap().into_raw());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Load properties file and set appropriate environment variables for the process so that subsequent"]
-    #[doc = " calls to aeron_driver_context_init will use those values."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `filename` to load."]
-    #[doc = " \n# Return\n 0 for success and -1 for error."]
-    pub fn properties_file_load(filename: &str) -> Result<i32, AeronCError> {
-        unsafe {
-            let result =
-                aeron_properties_file_load(std::ffi::CString::new(filename).unwrap().into_raw());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Load properties from HTTP URL and set environment variables for the process so that subsequent"]
-    #[doc = " calls to aeron_driver_context_init will use those values."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `url` to attempt to retrieve and load."]
-    #[doc = " \n# Return\n 0 for success and -1 for error."]
-    pub fn properties_http_load(url: &str) -> Result<i32, AeronCError> {
-        unsafe {
-            let result =
-                aeron_properties_http_load(std::ffi::CString::new(url).unwrap().into_raw());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Load properties based on URL or filename. If string contains file or http URL, it will attempt"]
-    #[doc = " to load properties from a file or http as indicated. If not a URL, then it will try to load the string"]
-    #[doc = " as a filename."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `url_or_filename` to load properties from."]
-    #[doc = " \n# Return\n 0 for success and -1 for error."]
-    pub fn properties_load(url_or_filename: &str) -> Result<i32, AeronCError> {
-        unsafe {
-            let result =
-                aeron_properties_load(std::ffi::CString::new(url_or_filename).unwrap().into_raw());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Return current aeron error code (errno) for calling thread."]
-    #[doc = ""]
-    #[doc = " \n# Return\n aeron error code for calling thread."]
-    pub fn errcode() -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_errcode();
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Return the current aeron error message for calling thread."]
-    #[doc = ""]
-    #[doc = " \n# Return\n aeron error message for calling thread."]
-    pub fn errmsg(&self) -> &str {
-        unsafe {
-            let result = aeron_errmsg();
-            if result.is_null() {
-                ""
-            } else {
-                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap() }
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Get the default path used by the Aeron media driver."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `path` buffer to store the path."]
-    #[doc = " \n - `path_length` space available in the buffer"]
-    #[doc = " \n# Return\n -1 if there is an issue or the number of bytes written to path excluding the terminator <code>\\0</code>. If this"]
-    #[doc = " is equal to or greater than the path_length then the path has been truncated."]
-    pub fn default_path(
-        path: *mut ::std::os::raw::c_char,
-        path_length: usize,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_default_path(path.into(), path_length.into());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    pub fn semantic_version_compose(major: u8, minor: u8, patch: u8) -> i32 {
-        unsafe {
-            let result = aeron_semantic_version_compose(major.into(), minor.into(), patch.into());
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn semantic_version_major(version: i32) -> u8 {
-        unsafe {
-            let result = aeron_semantic_version_major(version.into());
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn semantic_version_minor(version: i32) -> u8 {
-        unsafe {
-            let result = aeron_semantic_version_minor(version.into());
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn semantic_version_patch(version: i32) -> u8 {
-        unsafe {
-            let result = aeron_semantic_version_patch(version.into());
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn randomised_int32() -> i32 {
-        unsafe {
-            let result = aeron_randomised_int32();
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn format_date(str_: *mut ::std::os::raw::c_char, count: usize, timestamp: i64) -> () {
-        unsafe {
-            let result = aeron_format_date(str_.into(), count.into(), timestamp.into());
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn format_number_to_locale(
-        value: ::std::os::raw::c_longlong,
-        buffer: *mut ::std::os::raw::c_char,
-        buffer_len: usize,
-    ) -> *mut ::std::os::raw::c_char {
-        unsafe {
-            let result =
-                aeron_format_number_to_locale(value.into(), buffer.into(), buffer_len.into());
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn format_to_hex(
-        str_: *mut ::std::os::raw::c_char,
-        str_length: usize,
-        data: *const u8,
-        data_len: usize,
-    ) -> () {
-        unsafe {
-            let result =
-                aeron_format_to_hex(str_.into(), str_length.into(), data.into(), data_len.into());
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn set_errno(errcode: ::std::os::raw::c_int) -> () {
-        unsafe {
-            let result = aeron_set_errno(errcode.into());
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn error_code_str(&self, errcode: ::std::os::raw::c_int) -> &str {
-        unsafe {
-            let result = aeron_error_code_str(errcode.into());
-            if result.is_null() {
-                ""
-            } else {
-                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap() }
-            }
-        }
-    }
-    #[inline]
-    pub fn err_set(
-        errcode: ::std::os::raw::c_int,
-        function: &str,
-        filename: &str,
-        line_number: ::std::os::raw::c_int,
-        format: &str,
-    ) -> () {
-        unsafe {
-            let result = aeron_err_set(
-                errcode.into(),
-                std::ffi::CString::new(function).unwrap().into_raw(),
-                std::ffi::CString::new(filename).unwrap().into_raw(),
-                line_number.into(),
-                std::ffi::CString::new(format).unwrap().into_raw(),
-            );
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn err_append(
-        function: &str,
-        filename: &str,
-        line_number: ::std::os::raw::c_int,
-        format: &str,
-    ) -> () {
-        unsafe {
-            let result = aeron_err_append(
-                std::ffi::CString::new(function).unwrap().into_raw(),
-                std::ffi::CString::new(filename).unwrap().into_raw(),
-                line_number.into(),
-                std::ffi::CString::new(format).unwrap().into_raw(),
-            );
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn err_clear() -> () {
-        unsafe {
-            let result = aeron_err_clear();
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn free(ptr: *mut ::std::os::raw::c_void) -> () {
-        unsafe {
-            let result = aeron_free(ptr.into());
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn res_header_entry_length(
-        res: *mut ::std::os::raw::c_void,
-        remaining: usize,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_res_header_entry_length(res.into(), remaining.into());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    pub fn logbuffer_check_term_length(term_length: u64) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_logbuffer_check_term_length(term_length.into());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    pub fn logbuffer_check_page_size(page_size: u64) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_logbuffer_check_page_size(page_size.into());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    pub fn is_directory(path: &str) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_is_directory(std::ffi::CString::new(path).unwrap().into_raw());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    pub fn delete_directory(directory: &str) -> Result<i32, AeronCError> {
-        unsafe {
-            let result =
-                aeron_delete_directory(std::ffi::CString::new(directory).unwrap().into_raw());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    pub fn mkdir_recursive(
-        pathname: &str,
-        permission: ::std::os::raw::c_int,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_mkdir_recursive(
-                std::ffi::CString::new(pathname).unwrap().into_raw(),
-                permission.into(),
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    pub fn msync(addr: *mut ::std::os::raw::c_void, length: usize) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_msync(addr.into(), length.into());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    pub fn delete_file(path: &str) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_delete_file(std::ffi::CString::new(path).unwrap().into_raw());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    pub fn file_length(path: &str) -> i64 {
-        unsafe {
-            let result = aeron_file_length(std::ffi::CString::new(path).unwrap().into_raw());
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn usable_fs_space(path: &str) -> u64 {
-        unsafe {
-            let result = aeron_usable_fs_space(std::ffi::CString::new(path).unwrap().into_raw());
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn usable_fs_space_disabled(path: &str) -> u64 {
-        unsafe {
-            let result =
-                aeron_usable_fs_space_disabled(std::ffi::CString::new(path).unwrap().into_raw());
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn ipc_publication_location(
-        dst: *mut ::std::os::raw::c_char,
-        length: usize,
-        aeron_dir: &str,
-        correlation_id: i64,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_ipc_publication_location(
-                dst.into(),
-                length.into(),
-                std::ffi::CString::new(aeron_dir).unwrap().into_raw(),
-                correlation_id.into(),
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    pub fn network_publication_location(
-        dst: *mut ::std::os::raw::c_char,
-        length: usize,
-        aeron_dir: &str,
-        correlation_id: i64,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_network_publication_location(
-                dst.into(),
-                length.into(),
-                std::ffi::CString::new(aeron_dir).unwrap().into_raw(),
-                correlation_id.into(),
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    pub fn temp_filename(filename: *mut ::std::os::raw::c_char, length: usize) -> usize {
-        unsafe {
-            let result = aeron_temp_filename(filename.into(), length.into());
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn file_resolve(
-        parent: &str,
-        child: &str,
-        buffer: *mut ::std::os::raw::c_char,
-        buffer_len: usize,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_file_resolve(
-                std::ffi::CString::new(parent).unwrap().into_raw(),
-                std::ffi::CString::new(child).unwrap().into_raw(),
-                buffer.into(),
-                buffer_len.into(),
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for Aeron {
-    type Target = aeron_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_t> for Aeron {
-    #[inline]
-    fn from(value: *mut aeron_t) -> Self {
-        Aeron {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                value,
-                Some(Box::new(|c| unsafe { aeron_is_closed(c) })),
-            )),
-        }
-    }
-}
-impl From<Aeron> for *mut aeron_t {
-    #[inline]
-    fn from(value: Aeron) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&Aeron> for *mut aeron_t {
-    #[inline]
-    fn from(value: &Aeron) -> Self {
-        value.get_inner()
-    }
-}
-impl From<Aeron> for aeron_t {
-    #[inline]
-    fn from(value: Aeron) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_t> for Aeron {
-    #[inline]
-    fn from(value: *const aeron_t) -> Self {
-        Aeron {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                value,
-                Some(Box::new(|c| unsafe { aeron_is_closed(c) })),
-            )),
-        }
-    }
-}
-impl From<aeron_t> for Aeron {
-    #[inline]
-    fn from(mut value: aeron_t) -> Self {
-        Aeron {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_t,
-                Some(Box::new(|c| unsafe { aeron_is_closed(c) })),
-            )),
-        }
-    }
-}
-#[derive(Clone)]
-pub struct AeronFrameHeader {
-    inner: std::rc::Rc<ManagedCResource<aeron_frame_header_t>>,
-}
-impl core::fmt::Debug for AeronFrameHeader {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronFrameHeader))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronFrameHeader))
-                .field("inner", &self.inner)
-                .field(stringify!(frame_length), &self.frame_length())
-                .field(stringify!(type_), &self.type_())
-                .finish()
-        }
-    }
-}
-impl AeronFrameHeader {
-    #[inline]
-    pub fn new(frame_length: i32, version: i8, flags: u8, type_: i16) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_frame_header_t {
-                    frame_length: frame_length.into(),
-                    version: version.into(),
-                    flags: flags.into(),
-                    type_: type_.into(),
-                };
-                let inner_ptr: *mut aeron_frame_header_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_frame_header_t)
-                );
-                let inst: aeron_frame_header_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_frame_header_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn frame_length(&self) -> i32 {
-        self.frame_length.into()
-    }
-    #[inline]
-    pub fn version(&self) -> i8 {
-        self.version.into()
-    }
-    #[inline]
-    pub fn flags(&self) -> u8 {
-        self.flags.into()
-    }
-    #[inline]
-    pub fn type_(&self) -> i16 {
-        self.type_.into()
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_frame_header_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronFrameHeader {
-    type Target = aeron_frame_header_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_frame_header_t> for AeronFrameHeader {
-    #[inline]
-    fn from(value: *mut aeron_frame_header_t) -> Self {
-        AeronFrameHeader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronFrameHeader> for *mut aeron_frame_header_t {
-    #[inline]
-    fn from(value: AeronFrameHeader) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronFrameHeader> for *mut aeron_frame_header_t {
-    #[inline]
-    fn from(value: &AeronFrameHeader) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronFrameHeader> for aeron_frame_header_t {
-    #[inline]
-    fn from(value: AeronFrameHeader) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_frame_header_t> for AeronFrameHeader {
-    #[inline]
-    fn from(value: *const aeron_frame_header_t) -> Self {
-        AeronFrameHeader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_frame_header_t> for AeronFrameHeader {
-    #[inline]
-    fn from(mut value: aeron_frame_header_t) -> Self {
-        AeronFrameHeader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_frame_header_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronFrameHeader {
-    fn default() -> Self {
-        AeronFrameHeader::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronFrameHeader {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[derive(Clone)]
-pub struct AeronResolutionHeader {
-    inner: std::rc::Rc<ManagedCResource<aeron_resolution_header_t>>,
-}
-impl core::fmt::Debug for AeronResolutionHeader {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronResolutionHeader))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronResolutionHeader))
-                .field("inner", &self.inner)
-                .field(stringify!(udp_port), &self.udp_port())
-                .field(stringify!(age_in_ms), &self.age_in_ms())
-                .finish()
-        }
-    }
-}
-impl AeronResolutionHeader {
-    #[inline]
-    pub fn new(
-        res_type: i8,
-        res_flags: u8,
-        udp_port: u16,
-        age_in_ms: i32,
-    ) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_resolution_header_t {
-                    res_type: res_type.into(),
-                    res_flags: res_flags.into(),
-                    udp_port: udp_port.into(),
-                    age_in_ms: age_in_ms.into(),
-                };
-                let inner_ptr: *mut aeron_resolution_header_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_resolution_header_t)
-                );
-                let inst: aeron_resolution_header_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_resolution_header_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn res_type(&self) -> i8 {
-        self.res_type.into()
-    }
-    #[inline]
-    pub fn res_flags(&self) -> u8 {
-        self.res_flags.into()
-    }
-    #[inline]
-    pub fn udp_port(&self) -> u16 {
-        self.udp_port.into()
-    }
-    #[inline]
-    pub fn age_in_ms(&self) -> i32 {
-        self.age_in_ms.into()
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_resolution_header_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronResolutionHeader {
-    type Target = aeron_resolution_header_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_resolution_header_t> for AeronResolutionHeader {
-    #[inline]
-    fn from(value: *mut aeron_resolution_header_t) -> Self {
-        AeronResolutionHeader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronResolutionHeader> for *mut aeron_resolution_header_t {
-    #[inline]
-    fn from(value: AeronResolutionHeader) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronResolutionHeader> for *mut aeron_resolution_header_t {
-    #[inline]
-    fn from(value: &AeronResolutionHeader) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronResolutionHeader> for aeron_resolution_header_t {
-    #[inline]
-    fn from(value: AeronResolutionHeader) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_resolution_header_t> for AeronResolutionHeader {
-    #[inline]
-    fn from(value: *const aeron_resolution_header_t) -> Self {
-        AeronResolutionHeader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_resolution_header_t> for AeronResolutionHeader {
-    #[inline]
-    fn from(mut value: aeron_resolution_header_t) -> Self {
-        AeronResolutionHeader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_resolution_header_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronResolutionHeader {
-    fn default() -> Self {
-        AeronResolutionHeader::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronResolutionHeader {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[derive(Clone)]
-pub struct AeronResolutionHeaderIpv4 {
-    inner: std::rc::Rc<ManagedCResource<aeron_resolution_header_ipv4_t>>,
-}
-impl core::fmt::Debug for AeronResolutionHeaderIpv4 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronResolutionHeaderIpv4))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronResolutionHeaderIpv4))
-                .field("inner", &self.inner)
-                .field(stringify!(resolution_header), &self.resolution_header())
-                .field(stringify!(name_length), &self.name_length())
-                .finish()
-        }
-    }
-}
-impl AeronResolutionHeaderIpv4 {
-    #[inline]
-    pub fn new(
-        resolution_header: AeronResolutionHeader,
-        addr: [u8; 4usize],
-        name_length: i16,
-    ) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_resolution_header_ipv4_t {
-                    resolution_header: resolution_header.into(),
-                    addr: addr.into(),
-                    name_length: name_length.into(),
-                };
-                let inner_ptr: *mut aeron_resolution_header_ipv4_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_resolution_header_ipv4_t)
-                );
-                let inst: aeron_resolution_header_ipv4_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_resolution_header_ipv4_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn resolution_header(&self) -> AeronResolutionHeader {
-        self.resolution_header.into()
-    }
-    #[inline]
-    pub fn addr(&self) -> [u8; 4usize] {
-        self.addr.into()
-    }
-    #[inline]
-    pub fn name_length(&self) -> i16 {
-        self.name_length.into()
-    }
-    #[inline]
-    pub fn aeron_res_header_entry_length_ipv4(&self) -> usize {
-        unsafe {
-            let result = aeron_res_header_entry_length_ipv4(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_resolution_header_ipv4_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronResolutionHeaderIpv4 {
-    type Target = aeron_resolution_header_ipv4_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_resolution_header_ipv4_t> for AeronResolutionHeaderIpv4 {
-    #[inline]
-    fn from(value: *mut aeron_resolution_header_ipv4_t) -> Self {
-        AeronResolutionHeaderIpv4 {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronResolutionHeaderIpv4> for *mut aeron_resolution_header_ipv4_t {
-    #[inline]
-    fn from(value: AeronResolutionHeaderIpv4) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronResolutionHeaderIpv4> for *mut aeron_resolution_header_ipv4_t {
-    #[inline]
-    fn from(value: &AeronResolutionHeaderIpv4) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronResolutionHeaderIpv4> for aeron_resolution_header_ipv4_t {
-    #[inline]
-    fn from(value: AeronResolutionHeaderIpv4) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_resolution_header_ipv4_t> for AeronResolutionHeaderIpv4 {
-    #[inline]
-    fn from(value: *const aeron_resolution_header_ipv4_t) -> Self {
-        AeronResolutionHeaderIpv4 {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_resolution_header_ipv4_t> for AeronResolutionHeaderIpv4 {
-    #[inline]
-    fn from(mut value: aeron_resolution_header_ipv4_t) -> Self {
-        AeronResolutionHeaderIpv4 {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_resolution_header_ipv4_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronResolutionHeaderIpv4 {
-    fn default() -> Self {
-        AeronResolutionHeaderIpv4::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronResolutionHeaderIpv4 {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[derive(Clone)]
-pub struct AeronAvailableCounterPair {
-    inner: std::rc::Rc<ManagedCResource<aeron_on_available_counter_pair_t>>,
-}
-impl core::fmt::Debug for AeronAvailableCounterPair {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronAvailableCounterPair))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronAvailableCounterPair))
-                .field("inner", &self.inner)
-                .finish()
-        }
-    }
-}
-impl AeronAvailableCounterPair {
-    #[inline]
-    pub fn new<AeronAvailableCounterHandlerImpl: AeronAvailableCounterCallback>(
-        handler: Option<&Handler<AeronAvailableCounterHandlerImpl>>,
-    ) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_on_available_counter_pair_t {
-                    handler: {
-                        let callback: aeron_on_available_counter_t = if handler.is_none() {
-                            None
-                        } else {
-                            Some(
-                                aeron_on_available_counter_t_callback::<
-                                    AeronAvailableCounterHandlerImpl,
-                                >,
-                            )
-                        };
-                        callback
-                    },
-                    clientd: handler
-                        .map(|m| m.as_raw())
-                        .unwrap_or_else(|| std::ptr::null_mut()),
-                };
-                let inner_ptr: *mut aeron_on_available_counter_pair_t =
-                    Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_on_available_counter_pair_t)
-                );
-                let inst: aeron_on_available_counter_pair_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_on_available_counter_pair_t =
-                    Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn handler(&self) -> aeron_on_available_counter_t {
-        self.handler.into()
-    }
-    #[inline]
-    pub fn clientd(&self) -> *mut ::std::os::raw::c_void {
-        self.clientd.into()
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_on_available_counter_pair_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronAvailableCounterPair {
-    type Target = aeron_on_available_counter_pair_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_on_available_counter_pair_t> for AeronAvailableCounterPair {
-    #[inline]
-    fn from(value: *mut aeron_on_available_counter_pair_t) -> Self {
-        AeronAvailableCounterPair {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronAvailableCounterPair> for *mut aeron_on_available_counter_pair_t {
-    #[inline]
-    fn from(value: AeronAvailableCounterPair) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronAvailableCounterPair> for *mut aeron_on_available_counter_pair_t {
-    #[inline]
-    fn from(value: &AeronAvailableCounterPair) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronAvailableCounterPair> for aeron_on_available_counter_pair_t {
-    #[inline]
-    fn from(value: AeronAvailableCounterPair) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_on_available_counter_pair_t> for AeronAvailableCounterPair {
-    #[inline]
-    fn from(value: *const aeron_on_available_counter_pair_t) -> Self {
-        AeronAvailableCounterPair {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_on_available_counter_pair_t> for AeronAvailableCounterPair {
-    #[inline]
-    fn from(mut value: aeron_on_available_counter_pair_t) -> Self {
-        AeronAvailableCounterPair {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_on_available_counter_pair_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronAvailableCounterPair {
-    fn default() -> Self {
-        AeronAvailableCounterPair::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronAvailableCounterPair {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[derive(Clone)]
-pub struct AeronPerThreadError {
-    inner: std::rc::Rc<ManagedCResource<aeron_per_thread_error_t>>,
-}
-impl core::fmt::Debug for AeronPerThreadError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronPerThreadError))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronPerThreadError))
-                .field("inner", &self.inner)
-                .field(stringify!(offset), &self.offset())
-                .finish()
-        }
-    }
-}
-impl AeronPerThreadError {
-    #[inline]
-    pub fn new(
-        errcode: ::std::os::raw::c_int,
-        offset: usize,
-        errmsg: [::std::os::raw::c_char; 8192usize],
-    ) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_per_thread_error_t {
-                    errcode: errcode.into(),
-                    offset: offset.into(),
-                    errmsg: errmsg.into(),
-                };
-                let inner_ptr: *mut aeron_per_thread_error_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_per_thread_error_t)
-                );
-                let inst: aeron_per_thread_error_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_per_thread_error_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn errcode(&self) -> ::std::os::raw::c_int {
-        self.errcode.into()
-    }
-    #[inline]
-    pub fn offset(&self) -> usize {
-        self.offset.into()
-    }
-    #[inline]
-    pub fn errmsg(&self) -> [::std::os::raw::c_char; 8192usize] {
-        self.errmsg.into()
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_per_thread_error_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronPerThreadError {
-    type Target = aeron_per_thread_error_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_per_thread_error_t> for AeronPerThreadError {
-    #[inline]
-    fn from(value: *mut aeron_per_thread_error_t) -> Self {
-        AeronPerThreadError {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronPerThreadError> for *mut aeron_per_thread_error_t {
-    #[inline]
-    fn from(value: AeronPerThreadError) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronPerThreadError> for *mut aeron_per_thread_error_t {
-    #[inline]
-    fn from(value: &AeronPerThreadError) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronPerThreadError> for aeron_per_thread_error_t {
-    #[inline]
-    fn from(value: AeronPerThreadError) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_per_thread_error_t> for AeronPerThreadError {
-    #[inline]
-    fn from(value: *const aeron_per_thread_error_t) -> Self {
-        AeronPerThreadError {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_per_thread_error_t> for AeronPerThreadError {
-    #[inline]
-    fn from(mut value: aeron_per_thread_error_t) -> Self {
-        AeronPerThreadError {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_per_thread_error_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronPerThreadError {
-    fn default() -> Self {
-        AeronPerThreadError::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronPerThreadError {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[derive(Clone)]
-pub struct AeronCounterMetadataDescriptor {
-    inner: std::rc::Rc<ManagedCResource<aeron_counter_metadata_descriptor_t>>,
-}
-impl core::fmt::Debug for AeronCounterMetadataDescriptor {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronCounterMetadataDescriptor))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronCounterMetadataDescriptor))
-                .field("inner", &self.inner)
-                .field(stringify!(state), &self.state())
-                .field(stringify!(type_id), &self.type_id())
-                .field(
-                    stringify!(free_for_reuse_deadline_ms),
-                    &self.free_for_reuse_deadline_ms(),
-                )
-                .field(stringify!(label_length), &self.label_length())
-                .finish()
-        }
-    }
-}
-impl AeronCounterMetadataDescriptor {
-    #[inline]
-    pub fn new(
-        state: i32,
-        type_id: i32,
-        free_for_reuse_deadline_ms: i64,
-        key: [u8; 112usize],
-        label_length: i32,
-        label: [u8; 380usize],
-    ) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_counter_metadata_descriptor_t {
-                    state: state.into(),
-                    type_id: type_id.into(),
-                    free_for_reuse_deadline_ms: free_for_reuse_deadline_ms.into(),
-                    key: key.into(),
-                    label_length: label_length.into(),
-                    label: label.into(),
-                };
-                let inner_ptr: *mut aeron_counter_metadata_descriptor_t =
-                    Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_counter_metadata_descriptor_t)
-                );
-                let inst: aeron_counter_metadata_descriptor_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_counter_metadata_descriptor_t =
-                    Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn state(&self) -> i32 {
-        self.state.into()
-    }
-    #[inline]
-    pub fn type_id(&self) -> i32 {
-        self.type_id.into()
-    }
-    #[inline]
-    pub fn free_for_reuse_deadline_ms(&self) -> i64 {
-        self.free_for_reuse_deadline_ms.into()
-    }
-    #[inline]
-    pub fn key(&self) -> [u8; 112usize] {
-        self.key.into()
-    }
-    #[inline]
-    pub fn label_length(&self) -> i32 {
-        self.label_length.into()
-    }
-    #[inline]
-    pub fn label(&self) -> [u8; 380usize] {
-        self.label.into()
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_counter_metadata_descriptor_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronCounterMetadataDescriptor {
-    type Target = aeron_counter_metadata_descriptor_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_counter_metadata_descriptor_t> for AeronCounterMetadataDescriptor {
-    #[inline]
-    fn from(value: *mut aeron_counter_metadata_descriptor_t) -> Self {
-        AeronCounterMetadataDescriptor {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronCounterMetadataDescriptor> for *mut aeron_counter_metadata_descriptor_t {
-    #[inline]
-    fn from(value: AeronCounterMetadataDescriptor) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronCounterMetadataDescriptor> for *mut aeron_counter_metadata_descriptor_t {
-    #[inline]
-    fn from(value: &AeronCounterMetadataDescriptor) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronCounterMetadataDescriptor> for aeron_counter_metadata_descriptor_t {
-    #[inline]
-    fn from(value: AeronCounterMetadataDescriptor) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_counter_metadata_descriptor_t> for AeronCounterMetadataDescriptor {
-    #[inline]
-    fn from(value: *const aeron_counter_metadata_descriptor_t) -> Self {
-        AeronCounterMetadataDescriptor {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_counter_metadata_descriptor_t> for AeronCounterMetadataDescriptor {
-    #[inline]
-    fn from(mut value: aeron_counter_metadata_descriptor_t) -> Self {
-        AeronCounterMetadataDescriptor {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_counter_metadata_descriptor_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronCounterMetadataDescriptor {
-    fn default() -> Self {
-        AeronCounterMetadataDescriptor::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronCounterMetadataDescriptor {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[derive(Clone)]
-pub struct AeronLossReporter {
-    inner: std::rc::Rc<ManagedCResource<aeron_loss_reporter_t>>,
-}
-impl core::fmt::Debug for AeronLossReporter {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronLossReporter))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronLossReporter))
-                .field("inner", &self.inner)
-                .field(stringify!(next_record_offset), &self.next_record_offset())
-                .field(stringify!(capacity), &self.capacity())
-                .finish()
-        }
-    }
-}
-impl AeronLossReporter {
-    #[inline]
-    pub fn new(
-        buffer: *mut u8,
-        next_record_offset: usize,
-        capacity: usize,
-    ) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_loss_reporter_t {
-                    buffer: buffer.into(),
-                    next_record_offset: next_record_offset.into(),
-                    capacity: capacity.into(),
-                };
-                let inner_ptr: *mut aeron_loss_reporter_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_loss_reporter_t)
-                );
-                let inst: aeron_loss_reporter_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_loss_reporter_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn buffer(&self) -> *mut u8 {
-        self.buffer.into()
-    }
-    #[inline]
-    pub fn next_record_offset(&self) -> usize {
-        self.next_record_offset.into()
-    }
-    #[inline]
-    pub fn capacity(&self) -> usize {
-        self.capacity.into()
-    }
-    #[inline]
-    pub fn init(&self, buffer: &mut [u8]) -> Result<i32, AeronCError> {
-        unsafe {
-            let result =
-                aeron_loss_reporter_init(self.get_inner(), buffer.as_ptr() as *mut _, buffer.len());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    pub fn create_entry(
-        &self,
-        initial_bytes_lost: i64,
-        timestamp_ms: i64,
-        session_id: i32,
-        stream_id: i32,
-        channel: &str,
-        source: &str,
-    ) -> aeron_loss_reporter_entry_offset_t {
-        unsafe {
-            let result = aeron_loss_reporter_create_entry(
-                self.get_inner(),
-                initial_bytes_lost.into(),
-                timestamp_ms.into(),
-                session_id.into(),
-                stream_id.into(),
-                {
-                    std::ffi::CString::new(channel)
-                        .expect("CString::new failed")
-                        .into_raw()
-                },
-                channel.len(),
-                {
-                    std::ffi::CString::new(source)
-                        .expect("CString::new failed")
-                        .into_raw()
-                },
-                source.len(),
-            );
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn record_observation(
-        &self,
-        offset: aeron_loss_reporter_entry_offset_t,
-        bytes_lost: i64,
-        timestamp_ms: i64,
-    ) -> () {
-        unsafe {
-            let result = aeron_loss_reporter_record_observation(
-                self.get_inner(),
-                offset.into(),
-                bytes_lost.into(),
-                timestamp_ms.into(),
-            );
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn resolve_filename(
-        directory: &str,
-        filename_buffer: *mut ::std::os::raw::c_char,
-        filename_buffer_length: usize,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_loss_reporter_resolve_filename(
-                std::ffi::CString::new(directory).unwrap().into_raw(),
-                filename_buffer.into(),
-                filename_buffer_length.into(),
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    pub fn read<
-        AeronLossReporterReadEntryFuncHandlerImpl: AeronLossReporterReadEntryFuncCallback,
-    >(
-        buffer: *const u8,
-        capacity: usize,
-        entry_func: Option<&Handler<AeronLossReporterReadEntryFuncHandlerImpl>>,
-    ) -> usize {
-        unsafe {
-            let result = aeron_loss_reporter_read(
-                buffer.into(),
-                capacity.into(),
-                {
-                    let callback: aeron_loss_reporter_read_entry_func_t = if entry_func.is_none() {
-                        None
-                    } else {
-                        Some(
-                            aeron_loss_reporter_read_entry_func_t_callback::<
-                                AeronLossReporterReadEntryFuncHandlerImpl,
-                            >,
-                        )
-                    };
-                    callback
-                },
-                entry_func
-                    .map(|m| m.as_raw())
-                    .unwrap_or_else(|| std::ptr::null_mut()),
-            );
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = r""]
-    #[doc = r""]
-    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
-    #[doc = r"  use with care_"]
-    pub fn read_once<
-        AeronLossReporterReadEntryFuncHandlerImpl: FnMut(i64, i64, i64, i64, i32, i32, &str, &str) -> (),
-    >(
-        buffer: *const u8,
-        capacity: usize,
-        mut entry_func: AeronLossReporterReadEntryFuncHandlerImpl,
-    ) -> usize {
-        unsafe {
-            let result = aeron_loss_reporter_read(
-                buffer.into(),
-                capacity.into(),
-                Some(
-                    aeron_loss_reporter_read_entry_func_t_callback_for_once_closure::<
-                        AeronLossReporterReadEntryFuncHandlerImpl,
-                    >,
-                ),
-                &mut entry_func as *mut _ as *mut std::os::raw::c_void,
-            );
-            result.into()
-        }
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_loss_reporter_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronLossReporter {
-    type Target = aeron_loss_reporter_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_loss_reporter_t> for AeronLossReporter {
-    #[inline]
-    fn from(value: *mut aeron_loss_reporter_t) -> Self {
-        AeronLossReporter {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronLossReporter> for *mut aeron_loss_reporter_t {
-    #[inline]
-    fn from(value: AeronLossReporter) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronLossReporter> for *mut aeron_loss_reporter_t {
-    #[inline]
-    fn from(value: &AeronLossReporter) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronLossReporter> for aeron_loss_reporter_t {
-    #[inline]
-    fn from(value: AeronLossReporter) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_loss_reporter_t> for AeronLossReporter {
-    #[inline]
-    fn from(value: *const aeron_loss_reporter_t) -> Self {
-        AeronLossReporter {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_loss_reporter_t> for AeronLossReporter {
-    #[inline]
-    fn from(mut value: aeron_loss_reporter_t) -> Self {
-        AeronLossReporter {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_loss_reporter_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronLossReporter {
-    fn default() -> Self {
-        AeronLossReporter::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronLossReporter {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[derive(Clone)]
-pub struct AeronSubscription {
-    inner: std::rc::Rc<ManagedCResource<aeron_subscription_t>>,
-}
-impl core::fmt::Debug for AeronSubscription {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronSubscription))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronSubscription))
-                .field("inner", &self.inner)
-                .finish()
-        }
-    }
-}
-impl AeronSubscription {
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_subscription_t)
-                );
-                let inst: aeron_subscription_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_subscription_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            Some(Box::new(|c| unsafe { aeron_subscription_is_closed(c) })),
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    #[doc = "Poll the images under the subscription for available message fragments."]
-    #[doc = " \n"]
-    #[doc = " Each fragment read will be a whole message if it is under MTU length. If larger than MTU then it will come"]
-    #[doc = " as a series of fragments ordered within a session."]
-    #[doc = " \n"]
-    #[doc = " To assemble messages that span multiple fragments then use `AeronFragmentAssembler`."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `handler` for handling each message fragment as it is read."]
-    #[doc = " \n - `fragment_limit` number of message fragments to limit when polling across multiple images."]
-    #[doc = " \n# Return\n the number of fragments received or -1 for error."]
-    pub fn poll<AeronFragmentHandlerHandlerImpl: AeronFragmentHandlerCallback>(
-        &self,
-        handler: Option<&Handler<AeronFragmentHandlerHandlerImpl>>,
-        fragment_limit: usize,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_subscription_poll(
-                self.get_inner(),
-                {
-                    let callback: aeron_fragment_handler_t = if handler.is_none() {
-                        None
-                    } else {
-                        Some(aeron_fragment_handler_t_callback::<AeronFragmentHandlerHandlerImpl>)
-                    };
-                    callback
-                },
-                handler
-                    .map(|m| m.as_raw())
-                    .unwrap_or_else(|| std::ptr::null_mut()),
-                fragment_limit.into(),
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Poll the images under the subscription for available message fragments."]
-    #[doc = " \n"]
-    #[doc = " Each fragment read will be a whole message if it is under MTU length. If larger than MTU then it will come"]
-    #[doc = " as a series of fragments ordered within a session."]
-    #[doc = " \n"]
-    #[doc = " To assemble messages that span multiple fragments then use `AeronFragmentAssembler`."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `handler` for handling each message fragment as it is read."]
-    #[doc = " \n - `fragment_limit` number of message fragments to limit when polling across multiple images."]
-    #[doc = " \n# Return\n the number of fragments received or -1 for error."]
-    #[doc = r""]
-    #[doc = r""]
-    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
-    #[doc = r"  use with care_"]
-    pub fn poll_once<AeronFragmentHandlerHandlerImpl: FnMut(&[u8], AeronHeader) -> ()>(
-        &self,
-        mut handler: AeronFragmentHandlerHandlerImpl,
-        fragment_limit: usize,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_subscription_poll(
-                self.get_inner(),
-                Some(
-                    aeron_fragment_handler_t_callback_for_once_closure::<
-                        AeronFragmentHandlerHandlerImpl,
-                    >,
-                ),
-                &mut handler as *mut _ as *mut std::os::raw::c_void,
-                fragment_limit.into(),
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Poll in a controlled manner the images under the subscription for available message fragments."]
-    #[doc = " Control is applied to fragments in the stream. If more fragments can be read on another stream"]
-    #[doc = " they will even if BREAK or ABORT is returned from the fragment handler."]
-    #[doc = " \n"]
-    #[doc = " Each fragment read will be a whole message if it is under MTU length. If larger than MTU then it will come"]
-    #[doc = " as a series of fragments ordered within a session."]
-    #[doc = " \n"]
-    #[doc = " To assemble messages that span multiple fragments then use `AeronControlledFragmentAssembler`."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `handler` for handling each message fragment as it is read."]
-    #[doc = " \n - `fragment_limit` number of message fragments to limit when polling across multiple images."]
-    #[doc = " \n# Return\n the number of fragments received or -1 for error."]
-    pub fn controlled_poll<
-        AeronControlledFragmentHandlerHandlerImpl: AeronControlledFragmentHandlerCallback,
-    >(
-        &self,
-        handler: Option<&Handler<AeronControlledFragmentHandlerHandlerImpl>>,
-        fragment_limit: usize,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_subscription_controlled_poll(
-                self.get_inner(),
-                {
-                    let callback: aeron_controlled_fragment_handler_t = if handler.is_none() {
-                        None
-                    } else {
-                        Some(
-                            aeron_controlled_fragment_handler_t_callback::<
-                                AeronControlledFragmentHandlerHandlerImpl,
-                            >,
-                        )
-                    };
-                    callback
-                },
-                handler
-                    .map(|m| m.as_raw())
-                    .unwrap_or_else(|| std::ptr::null_mut()),
-                fragment_limit.into(),
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Poll in a controlled manner the images under the subscription for available message fragments."]
-    #[doc = " Control is applied to fragments in the stream. If more fragments can be read on another stream"]
-    #[doc = " they will even if BREAK or ABORT is returned from the fragment handler."]
-    #[doc = " \n"]
-    #[doc = " Each fragment read will be a whole message if it is under MTU length. If larger than MTU then it will come"]
-    #[doc = " as a series of fragments ordered within a session."]
-    #[doc = " \n"]
-    #[doc = " To assemble messages that span multiple fragments then use `AeronControlledFragmentAssembler`."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `handler` for handling each message fragment as it is read."]
-    #[doc = " \n - `fragment_limit` number of message fragments to limit when polling across multiple images."]
-    #[doc = " \n# Return\n the number of fragments received or -1 for error."]
-    #[doc = r""]
-    #[doc = r""]
-    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
-    #[doc = r"  use with care_"]
-    pub fn controlled_poll_once<
-        AeronControlledFragmentHandlerHandlerImpl: FnMut(&[u8], AeronHeader) -> aeron_controlled_fragment_handler_action_t,
-    >(
-        &self,
-        mut handler: AeronControlledFragmentHandlerHandlerImpl,
-        fragment_limit: usize,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_subscription_controlled_poll(
-                self.get_inner(),
-                Some(
-                    aeron_controlled_fragment_handler_t_callback_for_once_closure::<
-                        AeronControlledFragmentHandlerHandlerImpl,
-                    >,
-                ),
-                &mut handler as *mut _ as *mut std::os::raw::c_void,
-                fragment_limit.into(),
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Poll the images under the subscription for available message fragments in blocks."]
-    #[doc = " \n"]
-    #[doc = " This method is useful for operations like bulk archiving and messaging indexing."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `handler` to receive a block of fragments from each image."]
-    #[doc = " \n - `block_length_limit` for each image polled."]
-    #[doc = " \n# Return\n the number of bytes consumed or -1 for error."]
-    pub fn block_poll<AeronBlockHandlerHandlerImpl: AeronBlockHandlerCallback>(
-        &self,
-        handler: Option<&Handler<AeronBlockHandlerHandlerImpl>>,
-        block_length_limit: usize,
-    ) -> ::std::os::raw::c_long {
-        unsafe {
-            let result = aeron_subscription_block_poll(
-                self.get_inner(),
-                {
-                    let callback: aeron_block_handler_t = if handler.is_none() {
-                        None
-                    } else {
-                        Some(aeron_block_handler_t_callback::<AeronBlockHandlerHandlerImpl>)
-                    };
-                    callback
-                },
-                handler
-                    .map(|m| m.as_raw())
-                    .unwrap_or_else(|| std::ptr::null_mut()),
-                block_length_limit.into(),
-            );
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Poll the images under the subscription for available message fragments in blocks."]
-    #[doc = " \n"]
-    #[doc = " This method is useful for operations like bulk archiving and messaging indexing."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `handler` to receive a block of fragments from each image."]
-    #[doc = " \n - `block_length_limit` for each image polled."]
-    #[doc = " \n# Return\n the number of bytes consumed or -1 for error."]
-    #[doc = r""]
-    #[doc = r""]
-    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
-    #[doc = r"  use with care_"]
-    pub fn block_poll_once<AeronBlockHandlerHandlerImpl: FnMut(&[u8], i32, i32) -> ()>(
-        &self,
-        mut handler: AeronBlockHandlerHandlerImpl,
-        block_length_limit: usize,
-    ) -> ::std::os::raw::c_long {
-        unsafe {
-            let result = aeron_subscription_block_poll(
-                self.get_inner(),
-                Some(
-                    aeron_block_handler_t_callback_for_once_closure::<AeronBlockHandlerHandlerImpl>,
-                ),
-                &mut handler as *mut _ as *mut std::os::raw::c_void,
-                block_length_limit.into(),
-            );
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Is this subscription connected by having at least one open publication image."]
-    #[doc = ""]
-    #[doc = " \n# Return\n true if this subscription connected by having at least one open publication image."]
-    pub fn is_connected(&self) -> bool {
-        unsafe {
-            let result = aeron_subscription_is_connected(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Fill in a structure with the constants in use by a subscription."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `subscription` to get the constants for."]
-    #[doc = " \n - `constants` structure to fill in with the constants"]
-    #[doc = " \n# Return\n 0 for success and -1 for error."]
-    pub fn constants(&self, constants: &AeronSubscriptionConstants) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_subscription_constants(self.get_inner(), constants.get_inner());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Fill in a structure with the constants in use by a subscription."]
-    #[doc = ""]
-    pub fn get_constants(&self) -> Result<AeronSubscriptionConstants, AeronCError> {
-        let result = AeronSubscriptionConstants::default();
-        self.constants(&result)?;
-        Ok(result)
-    }
-    #[inline]
-    #[doc = "Count of images associated to this subscription."]
-    #[doc = ""]
-    #[doc = " \n# Return\n count of count associated to this subscription or -1 for error."]
-    pub fn image_count(&self) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_subscription_image_count(self.get_inner());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Return the image associated with the given session_id under the given subscription."]
-    #[doc = ""]
-    #[doc = " Note: the returned image is considered retained by the application and thus must be released via"]
-    #[doc = " aeron_image_release when finished or if the image becomes unavailable."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `session_id` associated with the image."]
-    #[doc = " \n# Return\n image associated with the given session_id or NULL if no image exists."]
-    pub fn image_by_session_id(&self, session_id: i32) -> AeronImage {
-        unsafe {
-            let result =
-                aeron_subscription_image_by_session_id(self.get_inner(), session_id.into());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Return the image at the given index."]
-    #[doc = ""]
-    #[doc = " Note: the returned image is considered retained by the application and thus must be released via"]
-    #[doc = " aeron_image_release when finished or if the image becomes unavailable."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `index` for the image."]
-    #[doc = " \n# Return\n image at the given index or NULL if no image exists."]
-    pub fn image_at_index(&self, index: usize) -> AeronImage {
-        unsafe {
-            let result = aeron_subscription_image_at_index(self.get_inner(), index.into());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Iterate over the images for this subscription calling the given function."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `handler` to be called for each image."]
-    #[doc = " \n - `clientd` to be passed to the handler."]
-    pub fn for_each_image(
-        &self,
-        handler: ::std::option::Option<
-            unsafe extern "C" fn(image: *mut aeron_image_t, clientd: *mut ::std::os::raw::c_void),
-        >,
-        clientd: *mut ::std::os::raw::c_void,
-    ) -> () {
-        unsafe {
-            let result =
-                aeron_subscription_for_each_image(self.get_inner(), handler.into(), clientd.into());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Retain the given image for access in the application."]
-    #[doc = ""]
-    #[doc = " Note: A retain call must have a corresponding release call."]
-    #[doc = " Note: Subscriptions are not threadsafe and should not be shared between subscribers."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `subscription` that image is part of."]
-    #[doc = " \n - `image` to retain"]
-    #[doc = " \n# Return\n 0 for success and -1 for error."]
-    pub fn image_retain(&self, image: &AeronImage) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_subscription_image_retain(self.get_inner(), image.get_inner());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Release the given image and relinquish desire to use the image directly."]
-    #[doc = ""]
-    #[doc = " Note: Subscriptions are not threadsafe and should not be shared between subscribers."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `subscription` that image is part of."]
-    #[doc = " \n - `image` to release"]
-    #[doc = " \n# Return\n 0 for success and -1 for error."]
-    pub fn image_release(&self, image: &AeronImage) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_subscription_image_release(self.get_inner(), image.get_inner());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Is the subscription closed."]
-    #[doc = ""]
-    #[doc = " \n# Return\n true if it has been closed otherwise false."]
-    pub fn is_closed(&self) -> bool {
-        unsafe {
-            let result = aeron_subscription_is_closed(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Get the status of the media channel for this subscription."]
-    #[doc = " \n"]
-    #[doc = " The status will be ERRORED (-1) if a socket exception occurs on setup and ACTIVE (1) if all is well."]
-    #[doc = ""]
-    #[doc = " \n# Return\n 1 for ACTIVE, -1 for ERRORED"]
-    pub fn channel_status(&self) -> i64 {
-        unsafe {
-            let result = aeron_subscription_channel_status(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Asynchronously close the subscription. Will callback on the on_complete notification when the subscription is"]
-    #[doc = " closed. The callback is optional, use NULL for the on_complete callback if not required."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `on_close_complete` optional callback to execute once the subscription has been closed and freed. This may"]
-    #[doc = " happen on a separate thread, so the caller should ensure that clientd has the appropriate lifetime."]
-    #[doc = " \n - `on_close_complete_clientd` parameter to pass to the on_complete callback."]
-    #[doc = " \n# Return\n 0 for success or -1 for error."]
-    pub fn close<AeronNotificationHandlerImpl: AeronNotificationCallback>(
-        &self,
-        on_close_complete: Option<&Handler<AeronNotificationHandlerImpl>>,
-    ) -> Result<i32, AeronCError> {
-        self.inner.close_already_called.set(true);
-        unsafe {
-            let result = aeron_subscription_close(
-                self.get_inner(),
-                {
-                    let callback: aeron_notification_t = if on_close_complete.is_none() {
-                        None
-                    } else {
-                        Some(aeron_notification_t_callback::<AeronNotificationHandlerImpl>)
-                    };
-                    callback
-                },
-                on_close_complete
-                    .map(|m| m.as_raw())
-                    .unwrap_or_else(|| std::ptr::null_mut()),
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Asynchronously close the subscription. Will callback on the on_complete notification when the subscription is"]
-    #[doc = " closed. The callback is optional, use NULL for the on_complete callback if not required."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `on_close_complete` optional callback to execute once the subscription has been closed and freed. This may"]
-    #[doc = " happen on a separate thread, so the caller should ensure that clientd has the appropriate lifetime."]
-    #[doc = " \n - `on_close_complete_clientd` parameter to pass to the on_complete callback."]
-    #[doc = " \n# Return\n 0 for success or -1 for error."]
-    #[doc = r""]
-    #[doc = r""]
-    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
-    #[doc = r"  use with care_"]
-    pub fn close_once<AeronNotificationHandlerImpl: FnMut() -> ()>(
-        &self,
-        mut on_close_complete: AeronNotificationHandlerImpl,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_subscription_close(
-                self.get_inner(),
-                Some(
-                    aeron_notification_t_callback_for_once_closure::<AeronNotificationHandlerImpl>,
-                ),
-                &mut on_close_complete as *mut _ as *mut std::os::raw::c_void,
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Get all of the local socket addresses for this subscription. Multiple addresses can occur if this is a"]
-    #[doc = " multi-destination subscription. Addresses will a string representation in numeric form. IPv6 addresses will be"]
-    #[doc = " surrounded by '[' and ']' so that the ':' that separate the parts are distinguishable from the port delimiter."]
-    #[doc = " E.g. [fe80::7552:c06e:6bf4:4160]:12345. As of writing the maximum length for a formatted address is 54 bytes"]
-    #[doc = " including the NULL terminator. AERON_CLIENT_MAX_LOCAL_ADDRESS_STR_LEN is defined to provide enough space to fit the"]
-    #[doc = " returned string. Returned strings will be NULL terminated. If the buffer to hold the address can not hold enough"]
-    #[doc = " of the message it will be truncated and the last character will be null."]
-    #[doc = ""]
-    #[doc = " If the address_vec_len is less the total number of addresses available then the first addresses found up to that"]
-    #[doc = " length will be placed into the address_vec. However the function will return the total number of addresses available"]
-    #[doc = " so if if that is larger than the input array then the client code may wish to re-query with a larger array to get"]
-    #[doc = " them all."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `address_vec` to hold the received addresses"]
-    #[doc = " \n - `address_vec_len` available length of the vector to hold the addresses"]
-    #[doc = " \n# Return\n number of addresses found or -1 if there is an error."]
-    pub fn local_sockaddrs(
-        &self,
-        address_vec: &AeronIovec,
-        address_vec_len: usize,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_subscription_local_sockaddrs(
-                self.get_inner(),
-                address_vec.get_inner(),
-                address_vec_len.into(),
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Retrieves the first local socket address for this subscription. If this is not MDS then it will be the one"]
-    #[doc = " representing endpoint for this subscription."]
-    #[doc = ""]
-    #[doc = " @see aeron_subscription_local_sockaddrs"]
-    #[doc = "# Parameters\n \n - `address` for the received address"]
-    #[doc = " \n - `address_len` available length for the copied address."]
-    #[doc = " \n# Return\n -1 on error, 0 if address not found, 1 if address is found."]
-    pub fn resolved_endpoint(&self, address: &str, address_len: usize) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_subscription_resolved_endpoint(
-                self.get_inner(),
-                std::ffi::CString::new(address).unwrap().into_raw(),
-                address_len.into(),
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Retrieves the channel URI for this subscription with any wildcard ports filled in. If the channel is not UDP or"]
-    #[doc = " does not have a wildcard port (<code>0</code>), then it will return the original URI."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `uri` buffer to hold the resolved uri"]
-    #[doc = " \n - `uri_len` length of the buffer"]
-    #[doc = " \n# Return\n -1 on failure or the number of bytes written to the buffer (excluding the NULL terminator). Writing is done"]
-    #[doc = " on a per key basis, so if the buffer was truncated before writing completed, it will only include the byte count up"]
-    #[doc = " to the key that overflowed. However, the invariant that if the number returned >= uri_len, then output will have been"]
-    #[doc = " truncated."]
-    pub fn try_resolve_channel_endpoint_port(
-        &self,
-        uri: *mut ::std::os::raw::c_char,
-        uri_len: usize,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_subscription_try_resolve_channel_endpoint_port(
-                self.get_inner(),
-                uri.into(),
-                uri_len.into(),
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Retrieves the channel URI for this subscription with any wildcard ports filled in. If the channel is not UDP or"]
-    #[doc = " does not have a wildcard port (<code>0</code>), then it will return the original URI."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `uri` buffer to hold the resolved uri"]
-    #[doc = " \n - `uri_len` length of the buffer"]
-    #[doc = " \n# Return\n -1 on failure or the number of bytes written to the buffer (excluding the NULL terminator). Writing is done"]
-    #[doc = " on a per key basis, so if the buffer was truncated before writing completed, it will only include the byte count up"]
-    #[doc = " to the key that overflowed. However, the invariant that if the number returned >= uri_len, then output will have been"]
-    #[doc = " truncated."]
-    pub fn try_resolve_channel_endpoint_port_as_string(
-        &self,
-        max_length: usize,
-    ) -> Result<String, AeronCError> {
-        let mut result = String::with_capacity(max_length);
-        self.try_resolve_channel_endpoint_port_into(&mut result)?;
-        Ok(result)
-    }
-    #[inline]
-    #[doc = "Retrieves the channel URI for this subscription with any wildcard ports filled in. If the channel is not UDP or"]
-    #[doc = " does not have a wildcard port (<code>0</code>), then it will return the original URI."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `uri` buffer to hold the resolved uri"]
-    #[doc = " \n - `uri_len` length of the buffer"]
-    #[doc = " \n# Return\n -1 on failure or the number of bytes written to the buffer (excluding the NULL terminator). Writing is done"]
-    #[doc = " on a per key basis, so if the buffer was truncated before writing completed, it will only include the byte count up"]
-    #[doc = " to the key that overflowed. However, the invariant that if the number returned >= uri_len, then output will have been"]
-    #[doc = " truncated."]
-    #[doc = "NOTE: allocation friendly method, the string capacity must be set as it will truncate string to capacity it will never grow the string. So if you pass String::new() it will write 0 chars"]
-    pub fn try_resolve_channel_endpoint_port_into(
-        &self,
-        dst_truncate_to_capacity: &mut String,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let capacity = dst_truncate_to_capacity.capacity();
-            let vec = dst_truncate_to_capacity.as_mut_vec();
-            vec.set_len(capacity);
-            let result =
-                self.try_resolve_channel_endpoint_port(vec.as_mut_ptr() as *mut _, capacity)?;
-            let mut len = 0;
-            loop {
-                if len == capacity {
-                    break;
-                }
-                let val = vec[len];
-                if val == 0 {
-                    break;
-                }
-                len += 1;
-            }
-            vec.set_len(len);
-            Ok(result)
-        }
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_subscription_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronSubscription {
-    type Target = aeron_subscription_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_subscription_t> for AeronSubscription {
-    #[inline]
-    fn from(value: *mut aeron_subscription_t) -> Self {
-        AeronSubscription {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                value,
-                Some(Box::new(|c| unsafe { aeron_subscription_is_closed(c) })),
-            )),
-        }
-    }
-}
-impl From<AeronSubscription> for *mut aeron_subscription_t {
-    #[inline]
-    fn from(value: AeronSubscription) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronSubscription> for *mut aeron_subscription_t {
-    #[inline]
-    fn from(value: &AeronSubscription) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronSubscription> for aeron_subscription_t {
-    #[inline]
-    fn from(value: AeronSubscription) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_subscription_t> for AeronSubscription {
-    #[inline]
-    fn from(value: *const aeron_subscription_t) -> Self {
-        AeronSubscription {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                value,
-                Some(Box::new(|c| unsafe { aeron_subscription_is_closed(c) })),
-            )),
-        }
-    }
-}
-impl From<aeron_subscription_t> for AeronSubscription {
-    #[inline]
-    fn from(mut value: aeron_subscription_t) -> Self {
-        AeronSubscription {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_subscription_t,
-                Some(Box::new(|c| unsafe { aeron_subscription_is_closed(c) })),
-            )),
-        }
-    }
-}
-impl Drop for AeronSubscription {
-    fn drop(&mut self) {
-        if (self.inner.borrowed || self.inner.cleanup.is_none())
-            && std::rc::Rc::strong_count(&self.inner) == 1
-            && !self.inner.is_closed_already_called()
-        {
-            if self.inner.auto_close.get() {
-                let result = self.close_with_no_args();
-                log::info!(
-                    "auto closing {} {:?}",
-                    stringify!(AeronSubscription),
-                    result
-                );
-            } else {
-                log::warn!("{} not closed", stringify!(AeronSubscription));
-            }
-        }
-    }
-}
-#[derive(Clone)]
-pub struct AeronOptionHeader {
-    inner: std::rc::Rc<ManagedCResource<aeron_option_header_t>>,
-}
-impl core::fmt::Debug for AeronOptionHeader {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronOptionHeader))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronOptionHeader))
-                .field("inner", &self.inner)
-                .field(stringify!(option_length), &self.option_length())
-                .field(stringify!(type_), &self.type_())
-                .finish()
-        }
-    }
-}
-impl AeronOptionHeader {
-    #[inline]
-    pub fn new(option_length: u16, type_: u16) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_option_header_t {
-                    option_length: option_length.into(),
-                    type_: type_.into(),
-                };
-                let inner_ptr: *mut aeron_option_header_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_option_header_t)
-                );
-                let inst: aeron_option_header_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_option_header_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn option_length(&self) -> u16 {
-        self.option_length.into()
-    }
-    #[inline]
-    pub fn type_(&self) -> u16 {
-        self.type_.into()
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_option_header_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronOptionHeader {
-    type Target = aeron_option_header_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_option_header_t> for AeronOptionHeader {
-    #[inline]
-    fn from(value: *mut aeron_option_header_t) -> Self {
-        AeronOptionHeader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronOptionHeader> for *mut aeron_option_header_t {
-    #[inline]
-    fn from(value: AeronOptionHeader) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronOptionHeader> for *mut aeron_option_header_t {
-    #[inline]
-    fn from(value: &AeronOptionHeader) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronOptionHeader> for aeron_option_header_t {
-    #[inline]
-    fn from(value: AeronOptionHeader) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_option_header_t> for AeronOptionHeader {
-    #[inline]
-    fn from(value: *const aeron_option_header_t) -> Self {
-        AeronOptionHeader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_option_header_t> for AeronOptionHeader {
-    #[inline]
-    fn from(mut value: aeron_option_header_t) -> Self {
-        AeronOptionHeader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_option_header_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronOptionHeader {
-    fn default() -> Self {
-        AeronOptionHeader::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronOptionHeader {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[derive(Clone)]
-pub struct AeronError {
-    inner: std::rc::Rc<ManagedCResource<aeron_error_t>>,
-}
-impl core::fmt::Debug for AeronError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronError))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronError))
-                .field("inner", &self.inner)
-                .field(stringify!(frame_header), &self.frame_header())
-                .field(stringify!(session_id), &self.session_id())
-                .field(stringify!(stream_id), &self.stream_id())
-                .field(stringify!(receiver_id), &self.receiver_id())
-                .field(stringify!(group_tag), &self.group_tag())
-                .field(stringify!(error_code), &self.error_code())
-                .field(stringify!(error_length), &self.error_length())
-                .finish()
-        }
-    }
-}
-impl AeronError {
-    #[inline]
-    pub fn new(
-        frame_header: AeronFrameHeader,
-        session_id: i32,
-        stream_id: i32,
-        receiver_id: i64,
-        group_tag: i64,
-        error_code: i32,
-        error_length: i32,
-    ) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_error_t {
-                    frame_header: frame_header.into(),
-                    session_id: session_id.into(),
-                    stream_id: stream_id.into(),
-                    receiver_id: receiver_id.into(),
-                    group_tag: group_tag.into(),
-                    error_code: error_code.into(),
-                    error_length: error_length.into(),
-                };
-                let inner_ptr: *mut aeron_error_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_error_t)
-                );
-                let inst: aeron_error_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_error_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn frame_header(&self) -> AeronFrameHeader {
-        self.frame_header.into()
-    }
-    #[inline]
-    pub fn session_id(&self) -> i32 {
-        self.session_id.into()
-    }
-    #[inline]
-    pub fn stream_id(&self) -> i32 {
-        self.stream_id.into()
-    }
-    #[inline]
-    pub fn receiver_id(&self) -> i64 {
-        self.receiver_id.into()
-    }
-    #[inline]
-    pub fn group_tag(&self) -> i64 {
-        self.group_tag.into()
-    }
-    #[inline]
-    pub fn error_code(&self) -> i32 {
-        self.error_code.into()
-    }
-    #[inline]
-    pub fn error_length(&self) -> i32 {
-        self.error_length.into()
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_error_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronError {
-    type Target = aeron_error_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_error_t> for AeronError {
-    #[inline]
-    fn from(value: *mut aeron_error_t) -> Self {
-        AeronError {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronError> for *mut aeron_error_t {
-    #[inline]
-    fn from(value: AeronError) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronError> for *mut aeron_error_t {
-    #[inline]
-    fn from(value: &AeronError) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronError> for aeron_error_t {
-    #[inline]
-    fn from(value: AeronError) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_error_t> for AeronError {
-    #[inline]
-    fn from(value: *const aeron_error_t) -> Self {
-        AeronError {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_error_t> for AeronError {
-    #[inline]
-    fn from(mut value: aeron_error_t) -> Self {
-        AeronError {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_error_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronError {
-    fn default() -> Self {
-        AeronError::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronError {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[derive(Clone)]
-pub struct AeronUdpChannelParams {
-    inner: std::rc::Rc<ManagedCResource<aeron_udp_channel_params_t>>,
-}
-impl core::fmt::Debug for AeronUdpChannelParams {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronUdpChannelParams))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronUdpChannelParams))
-                .field("inner", &self.inner)
-                .field(stringify!(additional_params), &self.additional_params())
-                .finish()
-        }
-    }
-}
-impl AeronUdpChannelParams {
-    #[inline]
-    pub fn new(
-        endpoint: &str,
-        bind_interface: &str,
-        control: &str,
-        control_mode: &str,
-        channel_tag: &str,
-        entity_tag: &str,
-        ttl: &str,
-        additional_params: AeronUriParams,
-    ) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_udp_channel_params_t {
-                    endpoint: std::ffi::CString::new(endpoint).unwrap().into_raw(),
-                    bind_interface: std::ffi::CString::new(bind_interface).unwrap().into_raw(),
-                    control: std::ffi::CString::new(control).unwrap().into_raw(),
-                    control_mode: std::ffi::CString::new(control_mode).unwrap().into_raw(),
-                    channel_tag: std::ffi::CString::new(channel_tag).unwrap().into_raw(),
-                    entity_tag: std::ffi::CString::new(entity_tag).unwrap().into_raw(),
-                    ttl: std::ffi::CString::new(ttl).unwrap().into_raw(),
-                    additional_params: additional_params.into(),
-                };
-                let inner_ptr: *mut aeron_udp_channel_params_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_udp_channel_params_t)
-                );
-                let inst: aeron_udp_channel_params_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_udp_channel_params_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn endpoint(&self) -> &str {
-        if self.endpoint.is_null() {
-            ""
-        } else {
-            unsafe { std::ffi::CStr::from_ptr(self.endpoint).to_str().unwrap() }
-        }
-    }
-    #[inline]
-    pub fn bind_interface(&self) -> &str {
-        if self.bind_interface.is_null() {
-            ""
-        } else {
-            unsafe {
-                std::ffi::CStr::from_ptr(self.bind_interface)
-                    .to_str()
-                    .unwrap()
-            }
-        }
-    }
-    #[inline]
-    pub fn control(&self) -> &str {
-        if self.control.is_null() {
-            ""
-        } else {
-            unsafe { std::ffi::CStr::from_ptr(self.control).to_str().unwrap() }
-        }
-    }
-    #[inline]
-    pub fn control_mode(&self) -> &str {
-        if self.control_mode.is_null() {
-            ""
-        } else {
-            unsafe {
-                std::ffi::CStr::from_ptr(self.control_mode)
-                    .to_str()
-                    .unwrap()
-            }
-        }
-    }
-    #[inline]
-    pub fn channel_tag(&self) -> &str {
-        if self.channel_tag.is_null() {
-            ""
-        } else {
-            unsafe { std::ffi::CStr::from_ptr(self.channel_tag).to_str().unwrap() }
-        }
-    }
-    #[inline]
-    pub fn entity_tag(&self) -> &str {
-        if self.entity_tag.is_null() {
-            ""
-        } else {
-            unsafe { std::ffi::CStr::from_ptr(self.entity_tag).to_str().unwrap() }
-        }
-    }
-    #[inline]
-    pub fn ttl(&self) -> &str {
-        if self.ttl.is_null() {
-            ""
-        } else {
-            unsafe { std::ffi::CStr::from_ptr(self.ttl).to_str().unwrap() }
-        }
-    }
-    #[inline]
-    pub fn additional_params(&self) -> AeronUriParams {
-        self.additional_params.into()
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_udp_channel_params_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronUdpChannelParams {
-    type Target = aeron_udp_channel_params_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_udp_channel_params_t> for AeronUdpChannelParams {
-    #[inline]
-    fn from(value: *mut aeron_udp_channel_params_t) -> Self {
-        AeronUdpChannelParams {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronUdpChannelParams> for *mut aeron_udp_channel_params_t {
-    #[inline]
-    fn from(value: AeronUdpChannelParams) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronUdpChannelParams> for *mut aeron_udp_channel_params_t {
-    #[inline]
-    fn from(value: &AeronUdpChannelParams) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronUdpChannelParams> for aeron_udp_channel_params_t {
-    #[inline]
-    fn from(value: AeronUdpChannelParams) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_udp_channel_params_t> for AeronUdpChannelParams {
-    #[inline]
-    fn from(value: *const aeron_udp_channel_params_t) -> Self {
-        AeronUdpChannelParams {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_udp_channel_params_t> for AeronUdpChannelParams {
-    #[inline]
-    fn from(mut value: aeron_udp_channel_params_t) -> Self {
-        AeronUdpChannelParams {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_udp_channel_params_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronUdpChannelParams {
-    fn default() -> Self {
-        AeronUdpChannelParams::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronUdpChannelParams {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[derive(Clone)]
-pub struct AeronAsyncAddSubscription {
-    inner: std::rc::Rc<ManagedCResource<aeron_async_add_subscription_t>>,
-}
-impl core::fmt::Debug for AeronAsyncAddSubscription {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronAsyncAddSubscription))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronAsyncAddSubscription))
-                .field("inner", &self.inner)
-                .finish()
-        }
-    }
-}
-impl AeronAsyncAddSubscription {
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_async_add_subscription_t)
-                );
-                let inst: aeron_async_add_subscription_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_async_add_subscription_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    #[doc = "Gets the registration id for addition of the subscription. Note that using this after a call to poll the succeeds or"]
-    #[doc = " errors is undefined behaviour. As the async_add_subscription_t may have been freed."]
-    #[doc = ""]
-    #[doc = " \n# Return\n registration id for the subscription."]
-    pub fn get_registration_id(&self) -> i64 {
-        unsafe {
-            let result = aeron_async_add_subscription_get_registration_id(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_async_add_subscription_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronAsyncAddSubscription {
-    type Target = aeron_async_add_subscription_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_async_add_subscription_t> for AeronAsyncAddSubscription {
-    #[inline]
-    fn from(value: *mut aeron_async_add_subscription_t) -> Self {
-        AeronAsyncAddSubscription {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronAsyncAddSubscription> for *mut aeron_async_add_subscription_t {
-    #[inline]
-    fn from(value: AeronAsyncAddSubscription) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronAsyncAddSubscription> for *mut aeron_async_add_subscription_t {
-    #[inline]
-    fn from(value: &AeronAsyncAddSubscription) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronAsyncAddSubscription> for aeron_async_add_subscription_t {
-    #[inline]
-    fn from(value: AeronAsyncAddSubscription) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_async_add_subscription_t> for AeronAsyncAddSubscription {
-    #[inline]
-    fn from(value: *const aeron_async_add_subscription_t) -> Self {
-        AeronAsyncAddSubscription {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_async_add_subscription_t> for AeronAsyncAddSubscription {
-    #[inline]
-    fn from(mut value: aeron_async_add_subscription_t) -> Self {
-        AeronAsyncAddSubscription {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_async_add_subscription_t,
-                None,
-            )),
-        }
-    }
-}
-impl AeronSubscription {
-    #[inline]
-    pub fn new(async_: &AeronAsyncAddSubscription) -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| unsafe { aeron_async_add_subscription_poll(ctx_field, async_.into()) },
-            None,
-            false,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-}
-impl Aeron {
-    #[inline]
-    pub fn async_add_subscription<
-        AeronAvailableImageHandlerImpl: AeronAvailableImageCallback,
-        AeronUnavailableImageHandlerImpl: AeronUnavailableImageCallback,
-    >(
-        &self,
-        uri: &str,
-        stream_id: i32,
-        on_available_image_handler: Option<&Handler<AeronAvailableImageHandlerImpl>>,
-        on_unavailable_image_handler: Option<&Handler<AeronUnavailableImageHandlerImpl>>,
-    ) -> Result<AeronAsyncAddSubscription, AeronCError> {
-        let result = AeronAsyncAddSubscription::new(
-            self,
-            uri,
-            stream_id,
-            on_available_image_handler,
-            on_unavailable_image_handler,
-        );
-        if let Ok(result) = &result {
-            result.inner.add_dependency(self.clone());
-        }
-        result
-    }
-}
-impl Aeron {
-    #[inline]
-    pub fn add_subscription<
-        AeronAvailableImageHandlerImpl: AeronAvailableImageCallback,
-        AeronUnavailableImageHandlerImpl: AeronUnavailableImageCallback,
-    >(
-        &self,
-        uri: &str,
-        stream_id: i32,
-        on_available_image_handler: Option<&Handler<AeronAvailableImageHandlerImpl>>,
-        on_unavailable_image_handler: Option<&Handler<AeronUnavailableImageHandlerImpl>>,
-        timeout: std::time::Duration,
-    ) -> Result<AeronSubscription, AeronCError> {
-        let start = std::time::Instant::now();
-        loop {
-            if let Ok(poller) = AeronAsyncAddSubscription::new(
-                self,
-                uri,
-                stream_id,
-                on_available_image_handler,
-                on_unavailable_image_handler,
-            ) {
-                while start.elapsed() <= timeout {
-                    if let Some(result) = poller.poll()? {
-                        return Ok(result);
-                    }
-                    #[cfg(debug_assertions)]
-                    std::thread::sleep(std::time::Duration::from_millis(10));
-                }
-            }
-            if start.elapsed() > timeout {
-                log::error!("failed async poll for {:?}", self);
-                return Err(AeronErrorType::TimedOut.into());
-            }
-            #[cfg(debug_assertions)]
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-    }
-}
-impl AeronAsyncAddSubscription {
-    #[inline]
-    pub fn new<
-        AeronAvailableImageHandlerImpl: AeronAvailableImageCallback,
-        AeronUnavailableImageHandlerImpl: AeronUnavailableImageCallback,
-    >(
-        client: &Aeron,
-        uri: &str,
-        stream_id: i32,
-        on_available_image_handler: Option<&Handler<AeronAvailableImageHandlerImpl>>,
-        on_unavailable_image_handler: Option<&Handler<AeronUnavailableImageHandlerImpl>>,
-    ) -> Result<Self, AeronCError> {
-        let resource_async = ManagedCResource::new(
-            move |ctx_field| unsafe {
-                aeron_async_add_subscription(
-                    ctx_field,
-                    client.into(),
-                    std::ffi::CString::new(uri).unwrap().into_raw(),
-                    stream_id.into(),
-                    {
-                        let callback: aeron_on_available_image_t = if on_available_image_handler
-                            .is_none()
-                        {
-                            None
-                        } else {
-                            Some(
-                                aeron_on_available_image_t_callback::<AeronAvailableImageHandlerImpl>,
-                            )
-                        };
-                        callback
-                    },
-                    on_available_image_handler
-                        .map(|m| m.as_raw())
-                        .unwrap_or_else(|| std::ptr::null_mut()),
-                    {
-                        let callback: aeron_on_unavailable_image_t =
-                            if on_unavailable_image_handler.is_none() {
-                                None
-                            } else {
-                                Some(
-                                    aeron_on_unavailable_image_t_callback::<
-                                        AeronUnavailableImageHandlerImpl,
-                                    >,
-                                )
-                            };
-                        callback
-                    },
-                    on_unavailable_image_handler
-                        .map(|m| m.as_raw())
-                        .unwrap_or_else(|| std::ptr::null_mut()),
-                )
-            },
-            None,
-            false,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource_async),
-        })
-    }
-    pub fn poll(&self) -> Result<Option<AeronSubscription>, AeronCError> {
-        let result = AeronSubscription::new(self);
-        if let Ok(result) = &result {
-            unsafe {
-                for d in (&*self.inner.dependencies.get()).iter() {
-                    result.inner.add_dependency(d.clone());
-                }
-                result.inner.auto_close.set(true);
-            }
-        }
-        match result {
-            Ok(result) => Ok(Some(result)),
-            Err(AeronCError { code }) if code == 0 => Ok(None),
-            Err(e) => Err(e),
-        }
-    }
-    pub fn poll_blocking(
-        &self,
-        timeout: std::time::Duration,
-    ) -> Result<AeronSubscription, AeronCError> {
-        if let Some(result) = self.poll()? {
-            return Ok(result);
-        }
-        let time = std::time::Instant::now();
-        while time.elapsed() < timeout {
-            if let Some(result) = self.poll()? {
-                return Ok(result);
-            }
-            #[cfg(debug_assertions)]
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-        log::error!("failed async poll for {:?}", self);
-        Err(AeronErrorType::TimedOut.into())
-    }
-}
-#[doc = "Configuration for an image that does not change during it's lifetime."]
-#[derive(Clone)]
-pub struct AeronImageConstants {
-    inner: std::rc::Rc<ManagedCResource<aeron_image_constants_t>>,
-}
-impl core::fmt::Debug for AeronImageConstants {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronImageConstants))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronImageConstants))
-                .field("inner", &self.inner)
-                .field(stringify!(correlation_id), &self.correlation_id())
-                .field(stringify!(join_position), &self.join_position())
-                .field(
-                    stringify!(position_bits_to_shift),
-                    &self.position_bits_to_shift(),
-                )
-                .field(stringify!(term_buffer_length), &self.term_buffer_length())
-                .field(stringify!(mtu_length), &self.mtu_length())
-                .field(stringify!(session_id), &self.session_id())
-                .field(stringify!(initial_term_id), &self.initial_term_id())
-                .field(
-                    stringify!(subscriber_position_id),
-                    &self.subscriber_position_id(),
-                )
-                .finish()
-        }
-    }
-}
-impl AeronImageConstants {
-    #[inline]
-    pub fn new(
-        subscription: &AeronSubscription,
-        source_identity: &str,
-        correlation_id: i64,
-        join_position: i64,
-        position_bits_to_shift: usize,
-        term_buffer_length: usize,
-        mtu_length: usize,
-        session_id: i32,
-        initial_term_id: i32,
-        subscriber_position_id: i32,
-    ) -> Result<Self, AeronCError> {
-        let subscription_copy = subscription.clone();
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_image_constants_t {
-                    subscription: subscription.into(),
-                    source_identity: std::ffi::CString::new(source_identity).unwrap().into_raw(),
-                    correlation_id: correlation_id.into(),
-                    join_position: join_position.into(),
-                    position_bits_to_shift: position_bits_to_shift.into(),
-                    term_buffer_length: term_buffer_length.into(),
-                    mtu_length: mtu_length.into(),
-                    session_id: session_id.into(),
-                    initial_term_id: initial_term_id.into(),
-                    subscriber_position_id: subscriber_position_id.into(),
-                };
-                let inner_ptr: *mut aeron_image_constants_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_image_constants_t)
-                );
-                let inst: aeron_image_constants_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_image_constants_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn subscription(&self) -> AeronSubscription {
-        self.subscription.into()
-    }
-    #[inline]
-    pub fn source_identity(&self) -> &str {
-        if self.source_identity.is_null() {
-            ""
-        } else {
-            unsafe {
-                std::ffi::CStr::from_ptr(self.source_identity)
-                    .to_str()
-                    .unwrap()
-            }
-        }
-    }
-    #[inline]
-    pub fn correlation_id(&self) -> i64 {
-        self.correlation_id.into()
-    }
-    #[inline]
-    pub fn join_position(&self) -> i64 {
-        self.join_position.into()
-    }
-    #[inline]
-    pub fn position_bits_to_shift(&self) -> usize {
-        self.position_bits_to_shift.into()
-    }
-    #[inline]
-    pub fn term_buffer_length(&self) -> usize {
-        self.term_buffer_length.into()
-    }
-    #[inline]
-    pub fn mtu_length(&self) -> usize {
-        self.mtu_length.into()
-    }
-    #[inline]
-    pub fn session_id(&self) -> i32 {
-        self.session_id.into()
-    }
-    #[inline]
-    pub fn initial_term_id(&self) -> i32 {
-        self.initial_term_id.into()
-    }
-    #[inline]
-    pub fn subscriber_position_id(&self) -> i32 {
-        self.subscriber_position_id.into()
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_image_constants_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronImageConstants {
-    type Target = aeron_image_constants_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_image_constants_t> for AeronImageConstants {
-    #[inline]
-    fn from(value: *mut aeron_image_constants_t) -> Self {
-        AeronImageConstants {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronImageConstants> for *mut aeron_image_constants_t {
-    #[inline]
-    fn from(value: AeronImageConstants) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronImageConstants> for *mut aeron_image_constants_t {
-    #[inline]
-    fn from(value: &AeronImageConstants) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronImageConstants> for aeron_image_constants_t {
-    #[inline]
-    fn from(value: AeronImageConstants) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_image_constants_t> for AeronImageConstants {
-    #[inline]
-    fn from(value: *const aeron_image_constants_t) -> Self {
-        AeronImageConstants {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_image_constants_t> for AeronImageConstants {
-    #[inline]
-    fn from(mut value: aeron_image_constants_t) -> Self {
-        AeronImageConstants {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_image_constants_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronImageConstants {
-    fn default() -> Self {
-        AeronImageConstants::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronImageConstants {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[doc = "Configuration for a counter that does not change during it's lifetime."]
-#[derive(Clone)]
-pub struct AeronCounterConstants {
-    inner: std::rc::Rc<ManagedCResource<aeron_counter_constants_t>>,
-}
-impl core::fmt::Debug for AeronCounterConstants {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronCounterConstants))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronCounterConstants))
-                .field("inner", &self.inner)
-                .field(stringify!(registration_id), &self.registration_id())
-                .field(stringify!(counter_id), &self.counter_id())
-                .finish()
-        }
-    }
-}
-impl AeronCounterConstants {
-    #[inline]
-    pub fn new(registration_id: i64, counter_id: i32) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_counter_constants_t {
-                    registration_id: registration_id.into(),
-                    counter_id: counter_id.into(),
-                };
-                let inner_ptr: *mut aeron_counter_constants_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_counter_constants_t)
-                );
-                let inst: aeron_counter_constants_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_counter_constants_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn registration_id(&self) -> i64 {
-        self.registration_id.into()
-    }
-    #[inline]
-    pub fn counter_id(&self) -> i32 {
-        self.counter_id.into()
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_counter_constants_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronCounterConstants {
-    type Target = aeron_counter_constants_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_counter_constants_t> for AeronCounterConstants {
-    #[inline]
-    fn from(value: *mut aeron_counter_constants_t) -> Self {
-        AeronCounterConstants {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronCounterConstants> for *mut aeron_counter_constants_t {
-    #[inline]
-    fn from(value: AeronCounterConstants) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronCounterConstants> for *mut aeron_counter_constants_t {
-    #[inline]
-    fn from(value: &AeronCounterConstants) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronCounterConstants> for aeron_counter_constants_t {
-    #[inline]
-    fn from(value: AeronCounterConstants) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_counter_constants_t> for AeronCounterConstants {
-    #[inline]
-    fn from(value: *const aeron_counter_constants_t) -> Self {
-        AeronCounterConstants {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_counter_constants_t> for AeronCounterConstants {
-    #[inline]
-    fn from(mut value: aeron_counter_constants_t) -> Self {
-        AeronCounterConstants {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_counter_constants_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronCounterConstants {
-    fn default() -> Self {
-        AeronCounterConstants::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronCounterConstants {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[derive(Clone)]
-pub struct AeronAsyncAddPublication {
-    inner: std::rc::Rc<ManagedCResource<aeron_async_add_publication_t>>,
-}
-impl core::fmt::Debug for AeronAsyncAddPublication {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronAsyncAddPublication))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronAsyncAddPublication))
-                .field("inner", &self.inner)
-                .finish()
-        }
-    }
-}
-impl AeronAsyncAddPublication {
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_async_add_publication_t)
-                );
-                let inst: aeron_async_add_publication_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_async_add_publication_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    #[doc = "Gets the registration id for addition of the publication. Note that using this after a call to poll the succeeds or"]
-    #[doc = " errors is undefined behaviour. As the async_add_publication_t may have been freed."]
-    #[doc = ""]
-    #[doc = " \n# Return\n registration id for the publication."]
-    pub fn get_registration_id(&self) -> i64 {
-        unsafe {
-            let result = aeron_async_add_publication_get_registration_id(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_async_add_publication_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronAsyncAddPublication {
-    type Target = aeron_async_add_publication_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_async_add_publication_t> for AeronAsyncAddPublication {
-    #[inline]
-    fn from(value: *mut aeron_async_add_publication_t) -> Self {
-        AeronAsyncAddPublication {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronAsyncAddPublication> for *mut aeron_async_add_publication_t {
-    #[inline]
-    fn from(value: AeronAsyncAddPublication) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronAsyncAddPublication> for *mut aeron_async_add_publication_t {
-    #[inline]
-    fn from(value: &AeronAsyncAddPublication) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronAsyncAddPublication> for aeron_async_add_publication_t {
-    #[inline]
-    fn from(value: AeronAsyncAddPublication) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_async_add_publication_t> for AeronAsyncAddPublication {
-    #[inline]
-    fn from(value: *const aeron_async_add_publication_t) -> Self {
-        AeronAsyncAddPublication {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_async_add_publication_t> for AeronAsyncAddPublication {
-    #[inline]
-    fn from(mut value: aeron_async_add_publication_t) -> Self {
-        AeronAsyncAddPublication {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_async_add_publication_t,
-                None,
-            )),
-        }
-    }
-}
-impl AeronPublication {
-    #[inline]
-    pub fn new(async_: &AeronAsyncAddPublication) -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| unsafe { aeron_async_add_publication_poll(ctx_field, async_.into()) },
-            None,
-            false,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-}
-impl Aeron {
-    #[inline]
-    pub fn async_add_publication(
-        &self,
-        uri: &str,
-        stream_id: i32,
-    ) -> Result<AeronAsyncAddPublication, AeronCError> {
-        let result = AeronAsyncAddPublication::new(self, uri, stream_id);
-        if let Ok(result) = &result {
-            result.inner.add_dependency(self.clone());
-        }
-        result
-    }
-}
-impl Aeron {
-    #[inline]
-    pub fn add_publication(
-        &self,
-        uri: &str,
-        stream_id: i32,
-        timeout: std::time::Duration,
-    ) -> Result<AeronPublication, AeronCError> {
-        let start = std::time::Instant::now();
-        loop {
-            if let Ok(poller) = AeronAsyncAddPublication::new(self, uri, stream_id) {
-                while start.elapsed() <= timeout {
-                    if let Some(result) = poller.poll()? {
-                        return Ok(result);
-                    }
-                    #[cfg(debug_assertions)]
-                    std::thread::sleep(std::time::Duration::from_millis(10));
-                }
-            }
-            if start.elapsed() > timeout {
-                log::error!("failed async poll for {:?}", self);
-                return Err(AeronErrorType::TimedOut.into());
-            }
-            #[cfg(debug_assertions)]
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-    }
-}
-impl AeronAsyncAddPublication {
-    #[inline]
-    pub fn new(client: &Aeron, uri: &str, stream_id: i32) -> Result<Self, AeronCError> {
-        let resource_async = ManagedCResource::new(
-            move |ctx_field| unsafe {
-                aeron_async_add_publication(
-                    ctx_field,
-                    client.into(),
-                    std::ffi::CString::new(uri).unwrap().into_raw(),
-                    stream_id.into(),
-                )
-            },
-            None,
-            false,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource_async),
-        })
-    }
-    pub fn poll(&self) -> Result<Option<AeronPublication>, AeronCError> {
-        let result = AeronPublication::new(self);
-        if let Ok(result) = &result {
-            unsafe {
-                for d in (&*self.inner.dependencies.get()).iter() {
-                    result.inner.add_dependency(d.clone());
-                }
-                result.inner.auto_close.set(true);
-            }
-        }
-        match result {
-            Ok(result) => Ok(Some(result)),
-            Err(AeronCError { code }) if code == 0 => Ok(None),
-            Err(e) => Err(e),
-        }
-    }
-    pub fn poll_blocking(
-        &self,
-        timeout: std::time::Duration,
-    ) -> Result<AeronPublication, AeronCError> {
-        if let Some(result) = self.poll()? {
-            return Ok(result);
-        }
-        let time = std::time::Instant::now();
-        while time.elapsed() < timeout {
-            if let Some(result) = self.poll()? {
-                return Ok(result);
-            }
-            #[cfg(debug_assertions)]
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-        log::error!("failed async poll for {:?}", self);
-        Err(AeronErrorType::TimedOut.into())
-    }
-}
-#[derive(Clone)]
-pub struct AeronFragmentAssembler {
-    inner: std::rc::Rc<ManagedCResource<aeron_fragment_assembler_t>>,
-}
-impl core::fmt::Debug for AeronFragmentAssembler {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronFragmentAssembler))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronFragmentAssembler))
-                .field("inner", &self.inner)
-                .finish()
-        }
-    }
-}
-impl AeronFragmentAssembler {
-    #[doc = "Create a fragment assembler for use with a subscription."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `delegate` to call on completed"]
-    #[doc = " \n - `delegate_clientd` to pass to delegate handler."]
-    #[doc = " \n# Return\n 0 for success and -1 for error."]
-    pub fn new<AeronFragmentHandlerHandlerImpl: AeronFragmentHandlerCallback>(
-        delegate: Option<&Handler<AeronFragmentHandlerHandlerImpl>>,
-    ) -> Result<Self, AeronCError> {
-        let (delegate, delegate_clientd) = (
-            {
-                let callback: aeron_fragment_handler_t = if delegate.is_none() {
-                    None
-                } else {
-                    Some(aeron_fragment_handler_t_callback::<AeronFragmentHandlerHandlerImpl>)
-                };
-                callback
-            },
-            delegate
-                .map(|m| m.as_raw())
-                .unwrap_or_else(|| std::ptr::null_mut()),
-        );
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let resource_constructor = ManagedCResource::new(
-            move |ctx_field| unsafe {
-                aeron_fragment_assembler_create(ctx_field, delegate, delegate_clientd)
-            },
-            Some(Box::new(move |ctx_field| {
-                let result = unsafe { aeron_fragment_assembler_delete(*ctx_field) };
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                result
-            })),
-            false,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource_constructor),
-        })
-    }
-    #[inline]
-    #[doc = "Delete a fragment assembler."]
-    #[doc = ""]
-    #[doc = " \n# Return\n 0 for success or -1 for error."]
-    pub fn delete(&self) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_fragment_assembler_delete(self.get_inner());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Handler function to be passed for handling fragment assembly."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `clientd` passed in the poll call (must be a `AeronFragmentAssembler`)"]
-    #[doc = " \n - `buffer` containing the data."]
-    #[doc = " \n - `header` representing the meta data for the data."]
-    pub fn handler(
-        clientd: *mut ::std::os::raw::c_void,
-        buffer: &[u8],
-        header: &AeronHeader,
-    ) -> () {
-        unsafe {
-            let result = aeron_fragment_assembler_handler(
-                clientd.into(),
-                buffer.as_ptr() as *mut _,
-                buffer.len(),
-                header.get_inner(),
-            );
-            result.into()
-        }
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_fragment_assembler_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronFragmentAssembler {
-    type Target = aeron_fragment_assembler_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_fragment_assembler_t> for AeronFragmentAssembler {
-    #[inline]
-    fn from(value: *mut aeron_fragment_assembler_t) -> Self {
-        AeronFragmentAssembler {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronFragmentAssembler> for *mut aeron_fragment_assembler_t {
-    #[inline]
-    fn from(value: AeronFragmentAssembler) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronFragmentAssembler> for *mut aeron_fragment_assembler_t {
-    #[inline]
-    fn from(value: &AeronFragmentAssembler) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronFragmentAssembler> for aeron_fragment_assembler_t {
-    #[inline]
-    fn from(value: AeronFragmentAssembler) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_fragment_assembler_t> for AeronFragmentAssembler {
-    #[inline]
-    fn from(value: *const aeron_fragment_assembler_t) -> Self {
-        AeronFragmentAssembler {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_fragment_assembler_t> for AeronFragmentAssembler {
-    #[inline]
-    fn from(mut value: aeron_fragment_assembler_t) -> Self {
-        AeronFragmentAssembler {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_fragment_assembler_t,
-                None,
-            )),
-        }
-    }
-}
-#[derive(Clone)]
-pub struct AeronStrToPtrHashMap {
-    inner: std::rc::Rc<ManagedCResource<aeron_str_to_ptr_hash_map_t>>,
-}
-impl core::fmt::Debug for AeronStrToPtrHashMap {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronStrToPtrHashMap))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronStrToPtrHashMap))
-                .field("inner", &self.inner)
-                .field(stringify!(load_factor), &self.load_factor())
-                .field(stringify!(capacity), &self.capacity())
-                .field(stringify!(size), &self.size())
-                .field(stringify!(resize_threshold), &self.resize_threshold())
-                .finish()
-        }
-    }
-}
-impl AeronStrToPtrHashMap {
-    #[inline]
-    pub fn new(
-        keys: &AeronStrToPtrHashMapKey,
-        values: *mut *mut ::std::os::raw::c_void,
-        load_factor: f32,
-        capacity: usize,
-        size: usize,
-        resize_threshold: usize,
-    ) -> Result<Self, AeronCError> {
-        let keys_copy = keys.clone();
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_str_to_ptr_hash_map_t {
-                    keys: keys.into(),
-                    values: values.into(),
-                    load_factor: load_factor.into(),
-                    capacity: capacity.into(),
-                    size: size.into(),
-                    resize_threshold: resize_threshold.into(),
-                };
-                let inner_ptr: *mut aeron_str_to_ptr_hash_map_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_str_to_ptr_hash_map_t)
-                );
-                let inst: aeron_str_to_ptr_hash_map_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_str_to_ptr_hash_map_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn keys(&self) -> AeronStrToPtrHashMapKey {
-        self.keys.into()
-    }
-    #[inline]
-    pub fn values(&self) -> *mut *mut ::std::os::raw::c_void {
-        self.values.into()
-    }
-    #[inline]
-    pub fn load_factor(&self) -> f32 {
-        self.load_factor.into()
-    }
-    #[inline]
-    pub fn capacity(&self) -> usize {
-        self.capacity.into()
-    }
-    #[inline]
-    pub fn size(&self) -> usize {
-        self.size.into()
-    }
-    #[inline]
-    pub fn resize_threshold(&self) -> usize {
-        self.resize_threshold.into()
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_str_to_ptr_hash_map_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronStrToPtrHashMap {
-    type Target = aeron_str_to_ptr_hash_map_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_str_to_ptr_hash_map_t> for AeronStrToPtrHashMap {
-    #[inline]
-    fn from(value: *mut aeron_str_to_ptr_hash_map_t) -> Self {
-        AeronStrToPtrHashMap {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronStrToPtrHashMap> for *mut aeron_str_to_ptr_hash_map_t {
-    #[inline]
-    fn from(value: AeronStrToPtrHashMap) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronStrToPtrHashMap> for *mut aeron_str_to_ptr_hash_map_t {
-    #[inline]
-    fn from(value: &AeronStrToPtrHashMap) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronStrToPtrHashMap> for aeron_str_to_ptr_hash_map_t {
-    #[inline]
-    fn from(value: AeronStrToPtrHashMap) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_str_to_ptr_hash_map_t> for AeronStrToPtrHashMap {
-    #[inline]
-    fn from(value: *const aeron_str_to_ptr_hash_map_t) -> Self {
-        AeronStrToPtrHashMap {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_str_to_ptr_hash_map_t> for AeronStrToPtrHashMap {
-    #[inline]
-    fn from(mut value: aeron_str_to_ptr_hash_map_t) -> Self {
-        AeronStrToPtrHashMap {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_str_to_ptr_hash_map_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronStrToPtrHashMap {
-    fn default() -> Self {
-        AeronStrToPtrHashMap::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronStrToPtrHashMap {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[derive(Clone)]
-pub struct AeronResponseSetupHeader {
-    inner: std::rc::Rc<ManagedCResource<aeron_response_setup_header_t>>,
-}
-impl core::fmt::Debug for AeronResponseSetupHeader {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronResponseSetupHeader))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronResponseSetupHeader))
-                .field("inner", &self.inner)
-                .field(stringify!(frame_header), &self.frame_header())
-                .field(stringify!(session_id), &self.session_id())
-                .field(stringify!(stream_id), &self.stream_id())
-                .field(stringify!(response_session_id), &self.response_session_id())
-                .finish()
-        }
-    }
-}
-impl AeronResponseSetupHeader {
-    #[inline]
-    pub fn new(
-        frame_header: AeronFrameHeader,
-        session_id: i32,
-        stream_id: i32,
-        response_session_id: i32,
-    ) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_response_setup_header_t {
-                    frame_header: frame_header.into(),
-                    session_id: session_id.into(),
-                    stream_id: stream_id.into(),
-                    response_session_id: response_session_id.into(),
-                };
-                let inner_ptr: *mut aeron_response_setup_header_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_response_setup_header_t)
-                );
-                let inst: aeron_response_setup_header_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_response_setup_header_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn frame_header(&self) -> AeronFrameHeader {
-        self.frame_header.into()
-    }
-    #[inline]
-    pub fn session_id(&self) -> i32 {
-        self.session_id.into()
-    }
-    #[inline]
-    pub fn stream_id(&self) -> i32 {
-        self.stream_id.into()
-    }
-    #[inline]
-    pub fn response_session_id(&self) -> i32 {
-        self.response_session_id.into()
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_response_setup_header_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronResponseSetupHeader {
-    type Target = aeron_response_setup_header_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_response_setup_header_t> for AeronResponseSetupHeader {
-    #[inline]
-    fn from(value: *mut aeron_response_setup_header_t) -> Self {
-        AeronResponseSetupHeader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronResponseSetupHeader> for *mut aeron_response_setup_header_t {
-    #[inline]
-    fn from(value: AeronResponseSetupHeader) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronResponseSetupHeader> for *mut aeron_response_setup_header_t {
-    #[inline]
-    fn from(value: &AeronResponseSetupHeader) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronResponseSetupHeader> for aeron_response_setup_header_t {
-    #[inline]
-    fn from(value: AeronResponseSetupHeader) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_response_setup_header_t> for AeronResponseSetupHeader {
-    #[inline]
-    fn from(value: *const aeron_response_setup_header_t) -> Self {
-        AeronResponseSetupHeader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_response_setup_header_t> for AeronResponseSetupHeader {
-    #[inline]
-    fn from(mut value: aeron_response_setup_header_t) -> Self {
-        AeronResponseSetupHeader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_response_setup_header_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronResponseSetupHeader {
-    fn default() -> Self {
-        AeronResponseSetupHeader::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronResponseSetupHeader {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[derive(Clone)]
-pub struct AeronAsyncDestination {
-    inner: std::rc::Rc<ManagedCResource<aeron_async_destination_t>>,
-}
-impl core::fmt::Debug for AeronAsyncDestination {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronAsyncDestination))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronAsyncDestination))
-                .field("inner", &self.inner)
-                .finish()
-        }
-    }
-}
-impl AeronAsyncDestination {
-    #[doc = "Add a destination manually to a multi-destination-cast publication."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `publication` to add destination to."]
-    #[doc = " \n - `uri` for the destination to add."]
-    #[doc = " \n# Return\n 0 for success and -1 for error."]
-    pub fn aeron_publication_async_add_destination(
-        client: &Aeron,
-        publication: &AeronPublication,
-        uri: &str,
-    ) -> Result<Self, AeronCError> {
-        let client_copy = client.clone();
-        let client: *mut aeron_t = client.into();
-        let publication_copy = publication.clone();
-        let publication: *mut aeron_publication_t = publication.into();
-        let uri: *const ::std::os::raw::c_char = std::ffi::CString::new(uri).unwrap().into_raw();
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {
-            drop(client_copy);
-            drop(publication_copy)
-        })));
-        let resource_constructor = ManagedCResource::new(
-            move |ctx_field| unsafe {
-                aeron_publication_async_add_destination(ctx_field, client, publication, uri)
-            },
-            Some(Box::new(move |ctx_field| {
-                let result = unsafe {
-                    aeron_publication_async_remove_destination(
-                        ctx_field,
-                        client.into(),
-                        publication.into(),
-                        uri.into(),
-                    )
-                };
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                result
-            })),
-            false,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource_constructor),
-        })
-    }
-    #[doc = "Add a destination manually to a multi-destination-cast exclusive publication."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `publication` to add destination to."]
-    #[doc = " \n - `uri` for the destination to add."]
-    #[doc = " \n# Return\n 0 for success and -1 for error."]
-    pub fn aeron_exclusive_publication_async_add_destination(
-        client: &Aeron,
-        publication: &AeronExclusivePublication,
-        uri: &str,
-    ) -> Result<Self, AeronCError> {
-        let client_copy = client.clone();
-        let client: *mut aeron_t = client.into();
-        let publication_copy = publication.clone();
-        let publication: *mut aeron_exclusive_publication_t = publication.into();
-        let uri: *const ::std::os::raw::c_char = std::ffi::CString::new(uri).unwrap().into_raw();
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {
-            drop(client_copy);
-            drop(publication_copy)
-        })));
-        let resource_constructor = ManagedCResource::new(
-            move |ctx_field| unsafe {
-                aeron_exclusive_publication_async_add_destination(
-                    ctx_field,
-                    client,
-                    publication,
-                    uri,
-                )
-            },
-            Some(Box::new(move |ctx_field| {
-                let result = unsafe {
-                    aeron_exclusive_publication_async_remove_destination(
-                        ctx_field,
-                        client.into(),
-                        publication.into(),
-                        uri.into(),
-                    )
-                };
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                result
-            })),
-            false,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource_constructor),
-        })
-    }
-    #[doc = "Add a destination manually to a multi-destination-subscription."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `subscription` to add destination to."]
-    #[doc = " \n - `uri` for the destination to add."]
-    #[doc = " \n# Return\n 0 for success and -1 for error."]
-    pub fn aeron_subscription_async_add_destination(
-        client: &Aeron,
-        subscription: &AeronSubscription,
-        uri: &str,
-    ) -> Result<Self, AeronCError> {
-        let client_copy = client.clone();
-        let client: *mut aeron_t = client.into();
-        let subscription_copy = subscription.clone();
-        let subscription: *mut aeron_subscription_t = subscription.into();
-        let uri: *const ::std::os::raw::c_char = std::ffi::CString::new(uri).unwrap().into_raw();
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {
-            drop(client_copy);
-            drop(subscription_copy)
-        })));
-        let resource_constructor = ManagedCResource::new(
-            move |ctx_field| unsafe {
-                aeron_subscription_async_add_destination(ctx_field, client, subscription, uri)
-            },
-            Some(Box::new(move |ctx_field| {
-                let result = unsafe {
-                    aeron_subscription_async_remove_destination(
-                        ctx_field,
-                        client.into(),
-                        subscription.into(),
-                        uri.into(),
-                    )
-                };
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                result
-            })),
-            false,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource_constructor),
-        })
-    }
-    #[inline]
-    #[doc = "Poll the completion of the add/remove of a destination to/from a publication."]
-    #[doc = ""]
-    #[doc = " \n# Return\n 0 for not complete (try again), 1 for completed successfully, or -1 for an error."]
-    pub fn aeron_publication_async_destination_poll(&self) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_publication_async_destination_poll(self.get_inner());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Poll the completion of the add/remove of a destination to/from an exclusive publication."]
-    #[doc = ""]
-    #[doc = " \n# Return\n 0 for not complete (try again), 1 for completed successfully, or -1 for an error."]
-    pub fn aeron_exclusive_publication_async_destination_poll(&self) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_exclusive_publication_async_destination_poll(self.get_inner());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Poll the completion of add/remove of a destination to/from a subscription."]
-    #[doc = ""]
-    #[doc = " \n# Return\n 0 for not complete (try again), 1 for completed successfully, or -1 for an error."]
-    pub fn aeron_subscription_async_destination_poll(&self) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_subscription_async_destination_poll(self.get_inner());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Gets the registration_id for the destination command supplied. Note that this is the correlation_id used for"]
-    #[doc = " the specified destination command, not the registration_id for the original parent resource (publication,"]
-    #[doc = " subscription)."]
-    #[doc = ""]
-    #[doc = " \n# Return\n correlation_id sent to driver."]
-    pub fn get_registration_id(&self) -> i64 {
-        unsafe {
-            let result = aeron_async_destination_get_registration_id(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_async_destination_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronAsyncDestination {
-    type Target = aeron_async_destination_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_async_destination_t> for AeronAsyncDestination {
-    #[inline]
-    fn from(value: *mut aeron_async_destination_t) -> Self {
-        AeronAsyncDestination {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronAsyncDestination> for *mut aeron_async_destination_t {
-    #[inline]
-    fn from(value: AeronAsyncDestination) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronAsyncDestination> for *mut aeron_async_destination_t {
-    #[inline]
-    fn from(value: &AeronAsyncDestination) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronAsyncDestination> for aeron_async_destination_t {
-    #[inline]
-    fn from(value: AeronAsyncDestination) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_async_destination_t> for AeronAsyncDestination {
-    #[inline]
-    fn from(value: *const aeron_async_destination_t) -> Self {
-        AeronAsyncDestination {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_async_destination_t> for AeronAsyncDestination {
-    #[inline]
-    fn from(mut value: aeron_async_destination_t) -> Self {
-        AeronAsyncDestination {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_async_destination_t,
-                None,
-            )),
-        }
-    }
-}
-#[derive(Clone)]
-pub struct AeronDataHeader {
-    inner: std::rc::Rc<ManagedCResource<aeron_data_header_t>>,
-}
-impl core::fmt::Debug for AeronDataHeader {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronDataHeader))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronDataHeader))
-                .field("inner", &self.inner)
-                .field(stringify!(frame_header), &self.frame_header())
-                .field(stringify!(term_offset), &self.term_offset())
-                .field(stringify!(session_id), &self.session_id())
-                .field(stringify!(stream_id), &self.stream_id())
-                .field(stringify!(term_id), &self.term_id())
-                .field(stringify!(reserved_value), &self.reserved_value())
-                .finish()
-        }
-    }
-}
-impl AeronDataHeader {
-    #[inline]
-    pub fn new(
-        frame_header: AeronFrameHeader,
-        term_offset: i32,
-        session_id: i32,
-        stream_id: i32,
-        term_id: i32,
-        reserved_value: i64,
-    ) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = aeron_data_header_t {
-                    frame_header: frame_header.into(),
-                    term_offset: term_offset.into(),
-                    session_id: session_id.into(),
-                    stream_id: stream_id.into(),
-                    term_id: term_id.into(),
-                    reserved_value: reserved_value.into(),
-                };
-                let inner_ptr: *mut aeron_data_header_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_data_header_t)
-                );
-                let inst: aeron_data_header_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_data_header_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn frame_header(&self) -> AeronFrameHeader {
-        self.frame_header.into()
-    }
-    #[inline]
-    pub fn term_offset(&self) -> i32 {
-        self.term_offset.into()
-    }
-    #[inline]
-    pub fn session_id(&self) -> i32 {
-        self.session_id.into()
-    }
-    #[inline]
-    pub fn stream_id(&self) -> i32 {
-        self.stream_id.into()
-    }
-    #[inline]
-    pub fn term_id(&self) -> i32 {
-        self.term_id.into()
-    }
-    #[inline]
-    pub fn reserved_value(&self) -> i64 {
-        self.reserved_value.into()
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_data_header_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronDataHeader {
-    type Target = aeron_data_header_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_data_header_t> for AeronDataHeader {
-    #[inline]
-    fn from(value: *mut aeron_data_header_t) -> Self {
-        AeronDataHeader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronDataHeader> for *mut aeron_data_header_t {
-    #[inline]
-    fn from(value: AeronDataHeader) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronDataHeader> for *mut aeron_data_header_t {
-    #[inline]
-    fn from(value: &AeronDataHeader) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronDataHeader> for aeron_data_header_t {
-    #[inline]
-    fn from(value: AeronDataHeader) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_data_header_t> for AeronDataHeader {
-    #[inline]
-    fn from(value: *const aeron_data_header_t) -> Self {
-        AeronDataHeader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_data_header_t> for AeronDataHeader {
-    #[inline]
-    fn from(mut value: aeron_data_header_t) -> Self {
-        AeronDataHeader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_data_header_t,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronDataHeader {
-    fn default() -> Self {
-        AeronDataHeader::new_zeroed().expect("failed to create struct")
-    }
-}
-impl AeronDataHeader {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[derive(Clone)]
-pub struct AeronCountersReader {
-    inner: std::rc::Rc<ManagedCResource<aeron_counters_reader_t>>,
-}
-impl core::fmt::Debug for AeronCountersReader {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronCountersReader))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(AeronCountersReader))
-                .field("inner", &self.inner)
-                .finish()
-        }
-    }
-}
-impl AeronCountersReader {
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_counters_reader_t)
-                );
-                let inst: aeron_counters_reader_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_counters_reader_t = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    #[doc = "Get buffer pointers and lengths for the counters reader."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `reader` reader containing the buffers."]
-    #[doc = " \n - `buffers` output structure to return the buffers."]
-    #[doc = " \n# Return\n -1 on failure, 0 on success."]
-    pub fn get_buffers(&self, buffers: &AeronCountersReaderBuffers) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_counters_reader_get_buffers(self.get_inner(), buffers.get_inner());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Iterate over the counters in the counters_reader and call the given function for each counter."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `func` to call for each counter."]
-    #[doc = " \n - `clientd` to pass for each call to func."]
-    pub fn foreach_counter<
-        AeronCountersReaderForeachCounterFuncHandlerImpl: AeronCountersReaderForeachCounterFuncCallback,
-    >(
-        &self,
-        func: Option<&Handler<AeronCountersReaderForeachCounterFuncHandlerImpl>>,
-    ) -> () {
-        unsafe {
-            let result = aeron_counters_reader_foreach_counter(
-                self.get_inner(),
-                {
-                    let callback: aeron_counters_reader_foreach_counter_func_t = if func.is_none() {
-                        None
-                    } else {
-                        Some(
-                            aeron_counters_reader_foreach_counter_func_t_callback::<
-                                AeronCountersReaderForeachCounterFuncHandlerImpl,
-                            >,
-                        )
-                    };
-                    callback
-                },
-                func.map(|m| m.as_raw())
-                    .unwrap_or_else(|| std::ptr::null_mut()),
-            );
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Iterate over the counters in the counters_reader and call the given function for each counter."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `func` to call for each counter."]
-    #[doc = " \n - `clientd` to pass for each call to func."]
-    #[doc = r""]
-    #[doc = r""]
-    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
-    #[doc = r"  use with care_"]
-    pub fn foreach_counter_once<
-        AeronCountersReaderForeachCounterFuncHandlerImpl: FnMut(i64, i32, i32, &[u8], &str) -> (),
-    >(
-        &self,
-        mut func: AeronCountersReaderForeachCounterFuncHandlerImpl,
-    ) -> () {
-        unsafe {
-            let result = aeron_counters_reader_foreach_counter(
-                self.get_inner(),
-                Some(
-                    aeron_counters_reader_foreach_counter_func_t_callback_for_once_closure::<
-                        AeronCountersReaderForeachCounterFuncHandlerImpl,
-                    >,
-                ),
-                &mut func as *mut _ as *mut std::os::raw::c_void,
-            );
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Iterate over allocated counters and find the first matching a given type id and registration id."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `type_id` to find."]
-    #[doc = " \n - `registration_id` to find."]
-    #[doc = " \n# Return\n the counter id if found otherwise AERON_NULL_COUNTER_ID."]
-    pub fn find_by_type_id_and_registration_id(&self, type_id: i32, registration_id: i64) -> i32 {
-        unsafe {
-            let result = aeron_counters_reader_find_by_type_id_and_registration_id(
-                self.get_inner(),
-                type_id.into(),
-                registration_id.into(),
-            );
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Get the current max counter id."]
-    #[doc = ""]
-    #[doc = " \n# Return\n -1 on failure, max counter id on success."]
-    pub fn max_counter_id(&self) -> i32 {
-        unsafe {
-            let result = aeron_counters_reader_max_counter_id(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Get the address for a counter."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `counter_id` to find"]
-    #[doc = " \n# Return\n address of the counter value"]
-    pub fn addr(&self, counter_id: i32) -> &mut i64 {
-        unsafe {
-            let result = aeron_counters_reader_addr(self.get_inner(), counter_id.into());
-            unsafe { &mut *result }
-        }
-    }
-    #[inline]
-    #[doc = "Get the registration id assigned to a counter."]
-    #[doc = ""]
-    #[doc = "\n \n # Parameters
-- `counter_id`      for which the registration id is requested."]
-    #[doc = " \n - `registration_id` pointer for value to be set on success."]
-    pub fn counter_registration_id(&self, counter_id: i32) -> Result<i64, AeronCError> {
-        unsafe {
-            let mut mut_result: i64 = Default::default();
-            let err_code = aeron_counters_reader_counter_registration_id(
-                self.get_inner(),
-                counter_id.into(),
-                &mut mut_result,
-            );
-            if err_code < 0 {
-                return Err(AeronCError::from_code(err_code));
-            } else {
-                return Ok(mut_result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Get the owner id assigned to a counter which will typically be the client id."]
-    #[doc = ""]
-    #[doc = "\n \n # Parameters
-- `counter_id`      for which the owner id is requested."]
-    #[doc = " \n - `owner_id`        pointer for value to be set on success."]
-    pub fn counter_owner_id(&self, counter_id: i32) -> Result<i64, AeronCError> {
-        unsafe {
-            let mut mut_result: i64 = Default::default();
-            let err_code = aeron_counters_reader_counter_owner_id(
-                self.get_inner(),
-                counter_id.into(),
-                &mut mut_result,
-            );
-            if err_code < 0 {
-                return Err(AeronCError::from_code(err_code));
-            } else {
-                return Ok(mut_result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Get the reference id assigned to a counter which will typically be the registration id of an associated Image,"]
-    #[doc = " Subscription, Publication, etc."]
-    #[doc = ""]
-    #[doc = "\n \n # Parameters
-- `counter_id`      for which the reference id is requested."]
-    #[doc = " \n - `reference_id`    pointer for value to be set on success."]
-    pub fn counter_reference_id(&self, counter_id: i32) -> Result<i64, AeronCError> {
-        unsafe {
-            let mut mut_result: i64 = Default::default();
-            let err_code = aeron_counters_reader_counter_reference_id(
-                self.get_inner(),
-                counter_id.into(),
-                &mut mut_result,
-            );
-            if err_code < 0 {
-                return Err(AeronCError::from_code(err_code));
-            } else {
-                return Ok(mut_result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Get the state for a counter."]
-    #[doc = ""]
-    #[doc = "\n \n # Parameters
-- `counter_id` to find"]
-    #[doc = " \n - `state` out pointer for the current state to be stored in."]
-    pub fn counter_state(&self, counter_id: i32) -> Result<i32, AeronCError> {
-        unsafe {
-            let mut mut_result: i32 = Default::default();
-            let err_code = aeron_counters_reader_counter_state(
-                self.get_inner(),
-                counter_id.into(),
-                &mut mut_result,
-            );
-            if err_code < 0 {
-                return Err(AeronCError::from_code(err_code));
-            } else {
-                return Ok(mut_result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Get the type id for a counter."]
-    #[doc = ""]
-    #[doc = "\n \n # Parameters
-- `counter_id` to find"]
-    pub fn counter_type_id(&self, counter_id: i32) -> Result<i32, AeronCError> {
-        unsafe {
-            let mut mut_result: i32 = Default::default();
-            let err_code = aeron_counters_reader_counter_type_id(
-                self.get_inner(),
-                counter_id.into(),
-                &mut mut_result,
-            );
-            if err_code < 0 {
-                return Err(AeronCError::from_code(err_code));
-            } else {
-                return Ok(mut_result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Get the label for a counter."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `counter_id` to find"]
-    #[doc = " \n - `buffer` to store the counter in."]
-    #[doc = " \n - `buffer_length` length of the output buffer"]
-    #[doc = " \n# Return\n -1 on failure, number of characters copied to buffer on success."]
-    pub fn counter_label(
-        &self,
-        counter_id: i32,
-        buffer: *mut ::std::os::raw::c_char,
-        buffer_length: usize,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_counters_reader_counter_label(
-                self.get_inner(),
-                counter_id.into(),
-                buffer.into(),
-                buffer_length.into(),
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = "Get the free for reuse deadline (ms) for a counter."]
-    #[doc = ""]
-    #[doc = "\n \n # Parameters
-- `counter_id` to find."]
-    #[doc = " \n - `deadline_ms` output value to store the deadline."]
-    pub fn free_for_reuse_deadline_ms(&self, counter_id: i32) -> Result<i64, AeronCError> {
-        unsafe {
-            let mut mut_result: i64 = Default::default();
-            let err_code = aeron_counters_reader_free_for_reuse_deadline_ms(
-                self.get_inner(),
-                counter_id.into(),
-                &mut mut_result,
-            );
-            if err_code < 0 {
-                return Err(AeronCError::from_code(err_code));
-            } else {
-                return Ok(mut_result);
-            }
-        }
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_counters_reader_t {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for AeronCountersReader {
-    type Target = aeron_counters_reader_t;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut aeron_counters_reader_t> for AeronCountersReader {
-    #[inline]
-    fn from(value: *mut aeron_counters_reader_t) -> Self {
-        AeronCountersReader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<AeronCountersReader> for *mut aeron_counters_reader_t {
-    #[inline]
-    fn from(value: AeronCountersReader) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&AeronCountersReader> for *mut aeron_counters_reader_t {
-    #[inline]
-    fn from(value: &AeronCountersReader) -> Self {
-        value.get_inner()
-    }
-}
-impl From<AeronCountersReader> for aeron_counters_reader_t {
-    #[inline]
-    fn from(value: AeronCountersReader) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const aeron_counters_reader_t> for AeronCountersReader {
-    #[inline]
-    fn from(value: *const aeron_counters_reader_t) -> Self {
-        AeronCountersReader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<aeron_counters_reader_t> for AeronCountersReader {
-    #[inline]
-    fn from(mut value: aeron_counters_reader_t) -> Self {
-        AeronCountersReader {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_counters_reader_t,
                 None,
             )),
         }
