@@ -95,14 +95,57 @@ jobs:
         run: |
           cargo test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
           cargo clean
+          rm -rf rusteron-archive/artifacts rusteron-client/artifacts rusteron-media-driver/artifacts rusteron-rb/artifacts
           PUBLISH_ARTIFACTS=true cargo build --release --workspace ${{ env.feature-flags }}
 
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-${{ matrix.os }}-${{ matrix.features }}
+          retention-days: 1
+          path: |
+            rusteron-archive/artifacts
+            rusteron-client/artifacts
+            rusteron-media-driver/artifacts
+            rusteron-rb/artifacts
+
+  merge-artifacts:
+    name: Merge Artifacts and Commit
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          # Download all uploaded artifacts to a directory called merged-artifacts
+          path: ./merged-artifacts
+
+      - name: Merge Artifacts into Repository
+        run: |
+          # Remove old artifact directories (optional)
+          rm -rf rusteron-archive/artifacts rusteron-client/artifacts rusteron-media-driver/artifacts rusteron-rb/artifacts
+          mkdir -p rusteron-archive/artifacts rusteron-client/artifacts rusteron-media-driver/artifacts rusteron-rb/artifacts
+          # Copy downloaded artifacts to their proper locations.
+          # This example assumes that each matrix job placed artifacts in a folder structure like:
+          # ./merged-artifacts/<artifact-name>/rusteron-archive/artifacts etc.
+          for artifact in $(find ./merged-artifacts -mindepth 1 -maxdepth 1 -type d); do
+            cp -r "$artifact"/rusteron-archive/artifacts/* rusteron-archive/artifacts/ 2>/dev/null || true
+            cp -r "$artifact"/rusteron-client/artifacts/* rusteron-client/artifacts/ 2>/dev/null || true
+            cp -r "$artifact"/rusteron-media-driver/artifacts/* rusteron-media-driver/artifacts/ 2>/dev/null || true
+            cp -r "$artifact"/rusteron-rb/artifacts/* rusteron-rb/artifacts/ 2>/dev/null || true
+          done
+
       - name: Commit and Push Artifacts
-        if: github.ref == 'refs/heads/main'
         run: |
           git config --global user.email "mimran1980@example.com"
           git config --global user.name "Mo Imran"
+          git pull --rebase origin main
           git add rusteron-archive/artifacts rusteron-client/artifacts rusteron-media-driver/artifacts rusteron-rb/artifacts
-          git commit -m "Add prebuilt binareies from CI [skip ci]"
-          git pull --rebase origin 
-          git push origin main
+          git commit -m "Add prebuilt binaries from CI [skip ci]" || echo "No changes to commit"
+          git push --force-with-lease origin main
