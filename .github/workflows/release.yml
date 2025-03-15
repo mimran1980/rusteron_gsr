@@ -36,8 +36,8 @@ jobs:
 
       - name: build with artifacts
         run: |
-          cargo build --features precompile --workspace --release
-          cargo test --features precompile --workspace -- --nocapture
+          cargo build --features precompile --features static --workspace --release
+          cargo test --features precompile --features static --workspace -- --nocapture
 
       - name: Install cargo-release
         run: cargo install cargo-release

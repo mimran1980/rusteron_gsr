@@ -50,18 +50,16 @@ pub fn main() {
     #[cfg(feature = "precompile")]
     let artifacts_dir = get_artifact_path();
 
-    // Determine the output directory for generated files.
     #[cfg(feature = "precompile")]
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
 
-    // If the artifacts folder exists and contains files, use them.
+    // If the artifacts folder exists use that instead of doing cmake and requiring java to be installed
     #[cfg(feature = "precompile")]
     if artifacts_dir.exists() && fs::read_dir(&artifacts_dir).unwrap().next().is_some() {
         println!(
             "Artifacts found in {}. Using published artifacts.",
             artifacts_dir.display()
         );
-        // Add the artifacts folder to the linker search path.
 
         println!(
             "cargo:rustc-link-arg=-Wl,-rpath,{}",
