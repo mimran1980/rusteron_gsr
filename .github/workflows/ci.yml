@@ -101,9 +101,6 @@ jobs:
           rm -rf rusteron-media-driver/artifacts
           rm -rf rusteron-rb/artifacts
           cargo build --release --workspace ${{ env.feature-flags }}
-
-      - name: Commit and Push Artifacts
-        run: |
           git config --global user.email "mimran1980@example.com"
           git config --global user.name "Mo Imran"
           git add rusteron-archive/artifacts rusteron-client/artifacts rusteron-media-driver/artifacts rusteron-rb/artifacts
