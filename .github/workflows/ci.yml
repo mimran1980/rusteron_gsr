@@ -95,15 +95,16 @@ jobs:
           rm -rf rusteron-client/artifacts
           rm -rf rusteron-media-driver/artifacts
           rm -rf rusteron-rb/artifacts
-          cargo test --release --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
+          cargo test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
           rm -rf rusteron-archive/artifacts
           rm -rf rusteron-client/artifacts
           rm -rf rusteron-media-driver/artifacts
           rm -rf rusteron-rb/artifacts
+          cargo clean
           cargo build --release --workspace ${{ env.feature-flags }}
           find rusteron-archive/artifacts
           find rusteron-client/artifacts
-          finf rusteron-media-driver/artifacts
+          find rusteron-media-driver/artifacts
           find rusteron-rb/artifacts
           
           
