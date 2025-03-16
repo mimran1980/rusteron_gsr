@@ -50,3 +50,4 @@ debug = true
 debug-assertions = false
 overflow-checks = false
 lto = "thin"
+
