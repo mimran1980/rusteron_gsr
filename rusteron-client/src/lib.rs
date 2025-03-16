@@ -511,6 +511,289 @@ mod tests {
         Ok(())
     }
 
+    /// A simple error counter for testing error callback invocation.
+    #[derive(Default, Debug)]
+    struct TestErrorCount {
+        pub error_count: usize,
+    }
+
+    impl AeronErrorHandlerCallback for TestErrorCount {
+        fn handle_aeron_error_handler(&mut self, error_code: c_int, msg: &str) {
+            error!("Aeron error {}: {}", error_code, msg);
+            self.error_count += 1;
+        }
+    }
+
+    #[test]
+    #[serial]
+    pub fn backpressure_recovery_test() -> Result<(), Box<dyn error::Error>> {
+        let _ = env_logger::Builder::new()
+            .is_test(true)
+            .filter_level(log::LevelFilter::Info)
+            .try_init();
+
+        let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
+        media_driver_ctx.set_dir_delete_on_shutdown(true)?;
+        media_driver_ctx.set_dir_delete_on_start(true)?;
+        media_driver_ctx.set_dir(&format!(
+            "{}{}",
+            media_driver_ctx.get_dir(),
+            Aeron::epoch_clock()
+        ))?;
+        let (stop, driver_handle) =
+            rusteron_media_driver::AeronDriver::launch_embedded(media_driver_ctx.clone(), false);
+
+        let ctx = AeronContext::new()?;
+        ctx.set_dir(media_driver_ctx.get_dir())?;
+        ctx.set_error_handler(Some(&Handler::leak(TestErrorCount::default())))?;
+
+        let aeron = Aeron::new(&ctx)?;
+        aeron.start()?;
+
+        let publisher = aeron.add_publication(AERON_IPC_STREAM, 123, Duration::from_secs(5))?;
+        let subscription = aeron.add_subscription(
+            AERON_IPC_STREAM,
+            123,
+            Handlers::no_available_image_handler(),
+            Handlers::no_unavailable_image_handler(),
+            Duration::from_secs(5),
+        )?;
+
+        let count = Arc::new(AtomicUsize::new(0));
+        let start_time = Instant::now();
+
+        // Spawn a publisher thread that repeatedly sends "test" messages.
+        let publisher_thread = {
+            let stop = stop.clone();
+            std::thread::spawn(move || {
+                while !stop.load(Ordering::Acquire) {
+                    let msg = b"test";
+                    let result =
+                        publisher.offer(msg, Handlers::no_reserved_value_supplier_handler());
+                    // If backpressure is encountered, sleep a bit.
+                    if result == AeronErrorType::PublicationBackPressured.code() as i64 {
+                        sleep(Duration::from_millis(50));
+                    }
+                }
+            })
+        };
+
+        // Poll using the inline closure via poll_once until we receive at least 50 messages.
+        while count.load(Ordering::SeqCst) < 50 && start_time.elapsed() < Duration::from_secs(10) {
+            let _ = subscription.poll_once(
+                |_msg, _header| {
+                    count.fetch_add(1, Ordering::SeqCst);
+                },
+                128,
+            )?;
+        }
+
+        stop.store(true, Ordering::SeqCst);
+        publisher_thread.join().unwrap();
+        let _ = driver_handle.join().unwrap();
+
+        assert!(
+            count.load(Ordering::SeqCst) >= 50,
+            "Expected at least 50 messages received"
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    pub fn multi_subscription_test() -> Result<(), Box<dyn error::Error>> {
+        let _ = env_logger::Builder::new()
+            .is_test(true)
+            .filter_level(log::LevelFilter::Info)
+            .try_init();
+
+        let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
+        media_driver_ctx.set_dir_delete_on_shutdown(true)?;
+        media_driver_ctx.set_dir_delete_on_start(true)?;
+        media_driver_ctx.set_dir(&format!(
+            "{}{}",
+            media_driver_ctx.get_dir(),
+            Aeron::epoch_clock()
+        ))?;
+        let (_stop, driver_handle) =
+            rusteron_media_driver::AeronDriver::launch_embedded(media_driver_ctx.clone(), false);
+
+        let ctx = AeronContext::new()?;
+        ctx.set_dir(media_driver_ctx.get_dir())?;
+        ctx.set_error_handler(Some(&Handler::leak(TestErrorCount::default())))?;
+
+        let aeron = Aeron::new(&ctx)?;
+        aeron.start()?;
+        let publisher = aeron.add_publication(AERON_IPC_STREAM, 123, Duration::from_secs(5))?;
+
+        // Create two subscriptions on the same channel.
+        let subscription1 = aeron.add_subscription(
+            AERON_IPC_STREAM,
+            123,
+            Handlers::no_available_image_handler(),
+            Handlers::no_unavailable_image_handler(),
+            Duration::from_secs(5),
+        )?;
+        let subscription2 = aeron.add_subscription(
+            AERON_IPC_STREAM,
+            123,
+            Handlers::no_available_image_handler(),
+            Handlers::no_unavailable_image_handler(),
+            Duration::from_secs(5),
+        )?;
+
+        let count1 = Arc::new(AtomicUsize::new(0));
+        let count2 = Arc::new(AtomicUsize::new(0));
+
+        // Publish a single message.
+        let msg = b"hello multi-subscription";
+        let result = publisher.offer(msg, Handlers::no_reserved_value_supplier_handler());
+        assert!(
+            result >= msg.len() as i64,
+            "Message should be sent successfully"
+        );
+
+        let start_time = Instant::now();
+        // Poll both subscriptions with inline closures until each has received at least one message.
+        while (count1.load(Ordering::SeqCst) < 1 || count2.load(Ordering::SeqCst) < 1)
+            && start_time.elapsed() < Duration::from_secs(5)
+        {
+            let _ = subscription1.poll_once(
+                |_msg, _header| {
+                    count1.fetch_add(1, Ordering::SeqCst);
+                },
+                128,
+            )?;
+            let _ = subscription2.poll_once(
+                |_msg, _header| {
+                    count2.fetch_add(1, Ordering::SeqCst);
+                },
+                128,
+            )?;
+        }
+
+        assert!(
+            count1.load(Ordering::SeqCst) >= 1,
+            "Subscription 1 did not receive the message"
+        );
+        assert!(
+            count2.load(Ordering::SeqCst) >= 1,
+            "Subscription 2 did not receive the message"
+        );
+
+        _stop.store(true, Ordering::SeqCst);
+        let _ = driver_handle.join().unwrap();
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    pub fn offer_on_closed_publication_error_test() -> Result<(), Box<dyn error::Error>> {
+        let _ = env_logger::Builder::new()
+            .is_test(true)
+            .filter_level(log::LevelFilter::Info)
+            .try_init();
+
+        let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
+        media_driver_ctx.set_dir_delete_on_shutdown(true)?;
+        media_driver_ctx.set_dir_delete_on_start(true)?;
+        media_driver_ctx.set_dir(&format!(
+            "{}{}",
+            media_driver_ctx.get_dir(),
+            Aeron::epoch_clock()
+        ))?;
+        let (_stop, driver_handle) =
+            rusteron_media_driver::AeronDriver::launch_embedded(media_driver_ctx.clone(), false);
+
+        let ctx = AeronContext::new()?;
+        ctx.set_dir(media_driver_ctx.get_dir())?;
+        ctx.set_error_handler(Some(&Handler::leak(TestErrorCount::default())))?;
+
+        let aeron = Aeron::new(&ctx)?;
+        aeron.start()?;
+        let publisher = aeron.add_publication(AERON_IPC_STREAM, 123, Duration::from_secs(5))?;
+
+        // Close the publication immediately.
+        publisher.close(Handlers::no_notification_handler())?;
+
+        // Attempt to send a message after the publication is closed.
+        let result = publisher.offer(
+            b"should fail",
+            Handlers::no_reserved_value_supplier_handler(),
+        );
+        assert!(
+            result < 0,
+            "Offering on a closed publication should return a negative error code"
+        );
+
+        _stop.store(true, Ordering::SeqCst);
+        let _ = driver_handle.join().unwrap();
+        Ok(())
+    }
+
+    /// Test sending and receiving an empty (zero-length) message using inline closures with poll_once.
+    #[test]
+    #[serial]
+    pub fn empty_message_test() -> Result<(), Box<dyn error::Error>> {
+        let _ = env_logger::Builder::new()
+            .is_test(true)
+            .filter_level(log::LevelFilter::Info)
+            .try_init();
+
+        let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
+        media_driver_ctx.set_dir_delete_on_shutdown(true)?;
+        media_driver_ctx.set_dir_delete_on_start(true)?;
+        media_driver_ctx.set_dir(&format!(
+            "{}{}",
+            media_driver_ctx.get_dir(),
+            Aeron::epoch_clock()
+        ))?;
+        let (_stop, driver_handle) =
+            rusteron_media_driver::AeronDriver::launch_embedded(media_driver_ctx.clone(), false);
+
+        let ctx = AeronContext::new()?;
+        ctx.set_dir(media_driver_ctx.get_dir())?;
+        ctx.set_error_handler(Some(&Handler::leak(TestErrorCount::default())))?;
+
+        let aeron = Aeron::new(&ctx)?;
+        aeron.start()?;
+        let publisher = aeron.add_publication(AERON_IPC_STREAM, 123, Duration::from_secs(5))?;
+        let subscription = aeron.add_subscription(
+            AERON_IPC_STREAM,
+            123,
+            Handlers::no_available_image_handler(),
+            Handlers::no_unavailable_image_handler(),
+            Duration::from_secs(5),
+        )?;
+
+        let empty_received = Arc::new(AtomicBool::new(false));
+        let start_time = Instant::now();
+
+        let result = publisher.offer(b"", Handlers::no_reserved_value_supplier_handler());
+        assert!(result > 0);
+
+        while !empty_received.load(Ordering::SeqCst)
+            && start_time.elapsed() < Duration::from_secs(5)
+        {
+            let _ = subscription.poll_once(
+                |msg, _header| {
+                    if msg.is_empty() {
+                        empty_received.store(true, Ordering::SeqCst);
+                    }
+                },
+                128,
+            )?;
+        }
+
+        assert!(
+            empty_received.load(Ordering::SeqCst),
+            "Empty message was not received"
+        );
+        _stop.store(true, Ordering::SeqCst);
+        let _ = driver_handle.join().unwrap();
+        Ok(())
+    }
+
     #[doc = include_str!("../../README.md")]
     mod readme_tests {}
 }

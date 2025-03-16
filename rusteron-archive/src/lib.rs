@@ -812,4 +812,93 @@ mod tests {
         assert_eq!(11, poll.count.get());
         Ok(())
     }
+
+    #[test]
+    #[serial]
+    fn test_invalid_recording_channel() -> Result<(), Box<dyn Error>> {
+        let (aeron, archive_context, _media_driver) = start_aeron_archive()?;
+        let archive_connector =
+            AeronArchiveAsyncConnect::new_with_aeron(&archive_context.clone(), &aeron)?;
+        let archive = archive_connector
+            .poll_blocking(Duration::from_secs(30))
+            .expect("failed to connect to archive");
+
+        let invalid_channel = "invalid:channel";
+        let result =
+            archive.start_recording(invalid_channel, STREAM_ID, SOURCE_LOCATION_LOCAL, true);
+        assert!(
+            result.is_err(),
+            "Expected error when starting recording with an invalid channel"
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn test_stop_recording_on_nonexistent_channel() -> Result<(), Box<dyn Error>> {
+        let (aeron, archive_context, _media_driver) = start_aeron_archive()?;
+        let archive_connector =
+            AeronArchiveAsyncConnect::new_with_aeron(&archive_context.clone(), &aeron)?;
+        let archive = archive_connector
+            .poll_blocking(Duration::from_secs(30))
+            .expect("failed to connect to archive");
+
+        let nonexistent_channel = "aeron:udp?endpoint=localhost:9999";
+        let result = archive.stop_recording_channel_and_stream(nonexistent_channel, STREAM_ID);
+        assert!(
+            result.is_err(),
+            "Expected error when stopping recording on a non-existent channel"
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn test_replay_with_invalid_recording_id() -> Result<(), Box<dyn Error>> {
+        let (aeron, archive_context, _media_driver) = start_aeron_archive()?;
+        let archive_connector =
+            AeronArchiveAsyncConnect::new_with_aeron(&archive_context.clone(), &aeron)?;
+        let archive = archive_connector
+            .poll_blocking(Duration::from_secs(30))
+            .expect("failed to connect to archive");
+
+        let invalid_recording_id = -999;
+        let params = AeronArchiveReplayParams::new(0, i32::MAX, 0, 100, 0, 0)?;
+        let result = archive.start_replay(
+            invalid_recording_id,
+            "aeron:udp?endpoint=localhost:8888",
+            STREAM_ID,
+            &params,
+        );
+        assert!(
+            result.is_err(),
+            "Expected error when starting replay with an invalid recording id"
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn test_archive_reconnect_after_close() -> Result<(), Box<dyn std::error::Error>> {
+        let (aeron, archive_context, media_driver) = start_aeron_archive()?;
+        let archive_connector =
+            AeronArchiveAsyncConnect::new_with_aeron(&archive_context.clone(), &aeron)?;
+        let archive = archive_connector
+            .poll_blocking(Duration::from_secs(30))
+            .expect("failed to connect to archive");
+
+        drop(archive);
+
+        let archive_connector = AeronArchiveAsyncConnect::new_with_aeron(&archive_context, &aeron)?;
+        let new_archive = archive_connector
+            .poll_blocking(Duration::from_secs(30))
+            .expect("failed to reconnect to archive");
+        assert!(
+            new_archive.get_archive_id() > 0,
+            "Reconnected archive should have a valid archive id"
+        );
+
+        drop(media_driver);
+        Ok(())
+    }
 }
