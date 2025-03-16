@@ -69,16 +69,6 @@ jobs:
           path: ~/.cargo/bin/cargo-release
           key: cargo-release-${{ runner.os }}
 
-      # Optional: Use sccache for faster rebuilds
-      - name: Install sccache
-        run: |
-          curl -fsSLO https://github.com/mozilla/sccache/releases/latest/download/sccache-x86_64-unknown-linux-musl
-          chmod +x sccache-x86_64-unknown-linux-musl
-          sudo mv sccache-x86_64-unknown-linux-musl /usr/local/bin/sccache
-
-      - name: Set up sccache
-        run: echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-
       - name: Test with artifacts
         run: |
           cargo test --features precompile,static --workspace -- --nocapture
