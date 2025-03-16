@@ -1,7 +1,7 @@
 name: Docs
 on:
   workflow_run:
-    workflows: ["Release"]
+    workflows: ["CI", "Release"]
     types:
       - completed
 permissions:
