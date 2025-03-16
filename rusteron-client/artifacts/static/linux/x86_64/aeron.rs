@@ -4443,6 +4443,7 @@ impl Drop for AeronCounter {
                 let result = self.close_with_no_args();
                 log::info!("auto closing {} {:?}", stringify!(AeronCounter), result);
             } else {
+                #[cfg(feature = "extra-logging")]
                 log::warn!("{} not closed", stringify!(AeronCounter));
             }
         }
@@ -6024,6 +6025,7 @@ impl Drop for AeronExclusivePublication {
                     result
                 );
             } else {
+                #[cfg(feature = "extra-logging")]
                 log::warn!("{} not closed", stringify!(AeronExclusivePublication));
             }
         }
@@ -11976,6 +11978,7 @@ impl Drop for AeronPublication {
                 let result = self.close_with_no_args();
                 log::info!("auto closing {} {:?}", stringify!(AeronPublication), result);
             } else {
+                #[cfg(feature = "extra-logging")]
                 log::warn!("{} not closed", stringify!(AeronPublication));
             }
         }
@@ -14648,6 +14651,7 @@ impl Drop for AeronSubscription {
                     result
                 );
             } else {
+                #[cfg(feature = "extra-logging")]
                 log::warn!("{} not closed", stringify!(AeronSubscription));
             }
         }
@@ -16836,6 +16840,7 @@ impl Drop for AeronUri {
                 let result = self.close();
                 log::info!("auto closing {} {:?}", stringify!(AeronUri), result);
             } else {
+                #[cfg(feature = "extra-logging")]
                 log::warn!("{} not closed", stringify!(AeronUri));
             }
         }
