@@ -139,12 +139,13 @@ pub fn main() {
         config.profile("Release");
         config.define(
             "CMAKE_CXX_FLAGS_RELEASE",
-            "-O3 -DNDEBUG -march=native -funroll-loops -flto",
+            "-O3 -DNDEBUG -march=native -flto -funroll-loops -ffast-math -fomit-frame-pointer -fno-stack-protector -fno-plt -pipe",
         );
         config.define(
             "CMAKE_C_FLAGS_RELEASE",
-            "-O3 -DNDEBUG -march=native -funroll-loops -flto",
+            "-O3 -DNDEBUG -march=native -flto -funroll-loops -ffast-math -fomit-frame-pointer -fno-stack-protector -fno-plt -pipe",
         );
+        config.define("CMAKE_EXE_LINKER_FLAGS_RELEASE", "-Wl,--gc-sections -Wl,--strip-all -Wl,--no-plt -Wl,-O2");
     } else {
         config.profile("Debug");
     }
@@ -229,17 +230,10 @@ pub fn main() {
 
     // include custom aeron code
     let aeron_custom = out_path.join("aeron_custom.rs");
-    let rb_custom = out_path.join("rb_custom.rs");
     let _ = fs::remove_file(aeron_custom.clone());
-    let _ = fs::remove_file(rb_custom.clone());
     append_to_file(
         aeron_custom.to_str().unwrap(),
         rusteron_code_gen::CUSTOM_AERON_CODE,
-    )
-    .unwrap();
-    append_to_file(
-        rb_custom.to_str().unwrap(),
-        rusteron_code_gen::CUSTOM_RB_CODE,
     )
     .unwrap();
 
@@ -330,11 +324,7 @@ fn publish_artifacts(out_path: &Path, cmake_build_path: &Path) -> std::io::Resul
     for entry in WalkDir::new(out_path) {
         let entry = entry.unwrap();
         if entry.file_type().is_file()
-            && entry
-                .path()
-                .extension()
-                .map(|s| s == "rs" && s.to_string_lossy().to_string().contains("rb_custom"))
-                .unwrap_or(false)
+            && entry.path().extension().map(|s| s == "rs").unwrap_or(false)
         {
             let file_name = entry.path().file_name().unwrap();
             fs::copy(entry.path(), publish_dir.join(file_name))?;
