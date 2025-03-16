@@ -1,35 +1,43 @@
 
 #[derive(Clone)]
-pub struct AeronBroadcastRecordDescriptor {
-    inner: std::rc::Rc<ManagedCResource<aeron_broadcast_record_descriptor_t>>,
+pub struct AeronMpscRb {
+    inner: std::rc::Rc<ManagedCResource<aeron_mpsc_rb_t>>,
 }
-impl core::fmt::Debug for AeronBroadcastRecordDescriptor {
+impl core::fmt::Debug for AeronMpscRb {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronBroadcastRecordDescriptor))
+            f.debug_struct(stringify!(AeronMpscRb))
                 .field("inner", &"null")
                 .finish()
         } else {
-            f.debug_struct(stringify!(AeronBroadcastRecordDescriptor))
+            f.debug_struct(stringify!(AeronMpscRb))
                 .field("inner", &self.inner)
-                .field(stringify!(length), &self.length())
-                .field(stringify!(msg_type_id), &self.msg_type_id())
+                .field(stringify!(capacity), &self.capacity())
+                .field(stringify!(max_message_length), &self.max_message_length())
                 .finish()
         }
     }
 }
-impl AeronBroadcastRecordDescriptor {
+impl AeronMpscRb {
     #[inline]
-    pub fn new(length: i32, msg_type_id: i32) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+    pub fn new(
+        buffer: *mut u8,
+        descriptor: &AeronRbDescriptor,
+        capacity: usize,
+        max_message_length: usize,
+    ) -> Result<Self, AeronCError> {
+        let descriptor_copy = descriptor.clone();
+        let drop_copies_closure =
+            std::rc::Rc::new(std::cell::RefCell::new(Some(|| drop(descriptor_copy))));
         let r_constructor = ManagedCResource::new(
             move |ctx_field| {
-                let inst = aeron_broadcast_record_descriptor_t {
-                    length: length.into(),
-                    msg_type_id: msg_type_id.into(),
+                let inst = aeron_mpsc_rb_t {
+                    buffer: buffer.into(),
+                    descriptor: descriptor.into(),
+                    capacity: capacity.into(),
+                    max_message_length: max_message_length.into(),
                 };
-                let inner_ptr: *mut aeron_broadcast_record_descriptor_t =
-                    Box::into_raw(Box::new(inst));
+                let inner_ptr: *mut aeron_mpsc_rb_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -54,11 +62,10 @@ impl AeronBroadcastRecordDescriptor {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_broadcast_record_descriptor_t)
+                    stringify!(aeron_mpsc_rb_t)
                 );
-                let inst: aeron_broadcast_record_descriptor_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_broadcast_record_descriptor_t =
-                    Box::into_raw(Box::new(inst));
+                let inst: aeron_mpsc_rb_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_mpsc_rb_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -71,76 +78,278 @@ impl AeronBroadcastRecordDescriptor {
         })
     }
     #[inline]
-    pub fn length(&self) -> i32 {
-        self.length.into()
+    pub fn buffer(&self) -> *mut u8 {
+        self.buffer.into()
     }
     #[inline]
-    pub fn msg_type_id(&self) -> i32 {
-        self.msg_type_id.into()
+    pub fn descriptor(&self) -> AeronRbDescriptor {
+        self.descriptor.into()
+    }
+    #[inline]
+    pub fn capacity(&self) -> usize {
+        self.capacity.into()
+    }
+    #[inline]
+    pub fn max_message_length(&self) -> usize {
+        self.max_message_length.into()
+    }
+    #[inline]
+    pub fn init(
+        &self,
+        buffer: *mut ::std::os::raw::c_void,
+        length: usize,
+    ) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_mpsc_rb_init(self.get_inner(), buffer.into(), length.into());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    pub fn write(
+        &self,
+        msg_type_id: i32,
+        msg: *const ::std::os::raw::c_void,
+        length: usize,
+    ) -> aeron_rb_write_result_t {
+        unsafe {
+            let result = aeron_mpsc_rb_write(
+                self.get_inner(),
+                msg_type_id.into(),
+                msg.into(),
+                length.into(),
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn try_claim(&self, msg_type_id: i32, length: usize) -> i32 {
+        unsafe {
+            let result =
+                aeron_mpsc_rb_try_claim(self.get_inner(), msg_type_id.into(), length.into());
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn commit(&self, offset: i32) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_mpsc_rb_commit(self.get_inner(), offset.into());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    pub fn abort(&self, offset: i32) -> Result<i32, AeronCError> {
+        unsafe {
+            let result = aeron_mpsc_rb_abort(self.get_inner(), offset.into());
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    pub fn read<AeronRbHandlerHandlerImpl: AeronRbHandlerCallback>(
+        &self,
+        handler: Option<&Handler<AeronRbHandlerHandlerImpl>>,
+        message_count_limit: usize,
+    ) -> usize {
+        unsafe {
+            let result = aeron_mpsc_rb_read(
+                self.get_inner(),
+                {
+                    let callback: aeron_rb_handler_t = if handler.is_none() {
+                        None
+                    } else {
+                        Some(aeron_rb_handler_t_callback::<AeronRbHandlerHandlerImpl>)
+                    };
+                    callback
+                },
+                handler
+                    .map(|m| m.as_raw())
+                    .unwrap_or_else(|| std::ptr::null_mut()),
+                message_count_limit.into(),
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = r""]
+    #[doc = r""]
+    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
+    #[doc = r"  use with care_"]
+    pub fn read_once<
+        AeronRbHandlerHandlerImpl: FnMut(i32, *const ::std::os::raw::c_void, usize) -> (),
+    >(
+        &self,
+        mut handler: AeronRbHandlerHandlerImpl,
+        message_count_limit: usize,
+    ) -> usize {
+        unsafe {
+            let result = aeron_mpsc_rb_read(
+                self.get_inner(),
+                Some(aeron_rb_handler_t_callback_for_once_closure::<AeronRbHandlerHandlerImpl>),
+                &mut handler as *mut _ as *mut std::os::raw::c_void,
+                message_count_limit.into(),
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn controlled_read<
+        AeronRbControlledHandlerHandlerImpl: AeronRbControlledHandlerCallback,
+    >(
+        &self,
+        handler: Option<&Handler<AeronRbControlledHandlerHandlerImpl>>,
+        message_count_limit: usize,
+    ) -> usize {
+        unsafe {
+            let result = aeron_mpsc_rb_controlled_read(
+                self.get_inner(),
+                {
+                    let callback: aeron_rb_controlled_handler_t = if handler.is_none() {
+                        None
+                    } else {
+                        Some(
+                            aeron_rb_controlled_handler_t_callback::<
+                                AeronRbControlledHandlerHandlerImpl,
+                            >,
+                        )
+                    };
+                    callback
+                },
+                handler
+                    .map(|m| m.as_raw())
+                    .unwrap_or_else(|| std::ptr::null_mut()),
+                message_count_limit.into(),
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = r""]
+    #[doc = r""]
+    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
+    #[doc = r"  use with care_"]
+    pub fn controlled_read_once<
+        AeronRbControlledHandlerHandlerImpl: FnMut(i32, *const ::std::os::raw::c_void, usize) -> aeron_rb_read_action_t,
+    >(
+        &self,
+        mut handler: AeronRbControlledHandlerHandlerImpl,
+        message_count_limit: usize,
+    ) -> usize {
+        unsafe {
+            let result = aeron_mpsc_rb_controlled_read(
+                self.get_inner(),
+                Some(
+                    aeron_rb_controlled_handler_t_callback_for_once_closure::<
+                        AeronRbControlledHandlerHandlerImpl,
+                    >,
+                ),
+                &mut handler as *mut _ as *mut std::os::raw::c_void,
+                message_count_limit.into(),
+            );
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn next_correlation_id(&self) -> i64 {
+        unsafe {
+            let result = aeron_mpsc_rb_next_correlation_id(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn consumer_heartbeat_time(&self, now_ms: i64) -> () {
+        unsafe {
+            let result = aeron_mpsc_rb_consumer_heartbeat_time(self.get_inner(), now_ms.into());
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn consumer_heartbeat_time_value(&self) -> i64 {
+        unsafe {
+            let result = aeron_mpsc_rb_consumer_heartbeat_time_value(self.get_inner());
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn unblock(&self) -> bool {
+        unsafe {
+            let result = aeron_mpsc_rb_unblock(self.get_inner());
+            result.into()
+        }
     }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_broadcast_record_descriptor_t {
+    pub fn get_inner(&self) -> *mut aeron_mpsc_rb_t {
         self.inner.get()
     }
 }
-impl std::ops::Deref for AeronBroadcastRecordDescriptor {
-    type Target = aeron_broadcast_record_descriptor_t;
+impl std::ops::Deref for AeronMpscRb {
+    type Target = aeron_mpsc_rb_t;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.inner.get() }
     }
 }
-impl From<*mut aeron_broadcast_record_descriptor_t> for AeronBroadcastRecordDescriptor {
+impl From<*mut aeron_mpsc_rb_t> for AeronMpscRb {
     #[inline]
-    fn from(value: *mut aeron_broadcast_record_descriptor_t) -> Self {
-        AeronBroadcastRecordDescriptor {
+    fn from(value: *mut aeron_mpsc_rb_t) -> Self {
+        AeronMpscRb {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<AeronBroadcastRecordDescriptor> for *mut aeron_broadcast_record_descriptor_t {
+impl From<AeronMpscRb> for *mut aeron_mpsc_rb_t {
     #[inline]
-    fn from(value: AeronBroadcastRecordDescriptor) -> Self {
+    fn from(value: AeronMpscRb) -> Self {
         value.get_inner()
     }
 }
-impl From<&AeronBroadcastRecordDescriptor> for *mut aeron_broadcast_record_descriptor_t {
+impl From<&AeronMpscRb> for *mut aeron_mpsc_rb_t {
     #[inline]
-    fn from(value: &AeronBroadcastRecordDescriptor) -> Self {
+    fn from(value: &AeronMpscRb) -> Self {
         value.get_inner()
     }
 }
-impl From<AeronBroadcastRecordDescriptor> for aeron_broadcast_record_descriptor_t {
+impl From<AeronMpscRb> for aeron_mpsc_rb_t {
     #[inline]
-    fn from(value: AeronBroadcastRecordDescriptor) -> Self {
+    fn from(value: AeronMpscRb) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const aeron_broadcast_record_descriptor_t> for AeronBroadcastRecordDescriptor {
+impl From<*const aeron_mpsc_rb_t> for AeronMpscRb {
     #[inline]
-    fn from(value: *const aeron_broadcast_record_descriptor_t) -> Self {
-        AeronBroadcastRecordDescriptor {
+    fn from(value: *const aeron_mpsc_rb_t) -> Self {
+        AeronMpscRb {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<aeron_broadcast_record_descriptor_t> for AeronBroadcastRecordDescriptor {
+impl From<aeron_mpsc_rb_t> for AeronMpscRb {
     #[inline]
-    fn from(mut value: aeron_broadcast_record_descriptor_t) -> Self {
-        AeronBroadcastRecordDescriptor {
+    fn from(mut value: aeron_mpsc_rb_t) -> Self {
+        AeronMpscRb {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_broadcast_record_descriptor_t,
+                &mut value as *mut aeron_mpsc_rb_t,
                 None,
             )),
         }
     }
 }
 #[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronBroadcastRecordDescriptor {
+impl Default for AeronMpscRb {
     fn default() -> Self {
-        AeronBroadcastRecordDescriptor::new_zeroed().expect("failed to create struct")
+        AeronMpscRb::new_zeroed().expect("failed to create struct")
     }
 }
-impl AeronBroadcastRecordDescriptor {
+impl AeronMpscRb {
     #[doc = r" Regular clone just increases the reference count of underlying count."]
     #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
     #[doc = r""]
@@ -570,44 +779,57 @@ impl ControlMode {
     }
 }
 #[derive(Clone)]
-pub struct AeronMpscRb {
-    inner: std::rc::Rc<ManagedCResource<aeron_mpsc_rb_t>>,
+pub struct AeronBroadcastReceiver {
+    inner: std::rc::Rc<ManagedCResource<aeron_broadcast_receiver_t>>,
 }
-impl core::fmt::Debug for AeronMpscRb {
+impl core::fmt::Debug for AeronBroadcastReceiver {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronMpscRb))
+            f.debug_struct(stringify!(AeronBroadcastReceiver))
                 .field("inner", &"null")
                 .finish()
         } else {
-            f.debug_struct(stringify!(AeronMpscRb))
+            f.debug_struct(stringify!(AeronBroadcastReceiver))
                 .field("inner", &self.inner)
                 .field(stringify!(capacity), &self.capacity())
-                .field(stringify!(max_message_length), &self.max_message_length())
+                .field(stringify!(mask), &self.mask())
+                .field(stringify!(record_offset), &self.record_offset())
+                .field(stringify!(cursor), &self.cursor())
+                .field(stringify!(next_record), &self.next_record())
                 .finish()
         }
     }
 }
-impl AeronMpscRb {
+impl AeronBroadcastReceiver {
     #[inline]
     pub fn new(
+        scratch_buffer: [u8; 4096usize],
         buffer: *mut u8,
-        descriptor: &AeronRbDescriptor,
+        descriptor: &AeronBroadcastDescriptor,
         capacity: usize,
-        max_message_length: usize,
+        mask: usize,
+        record_offset: usize,
+        cursor: i64,
+        next_record: i64,
+        lapped_count: ::std::os::raw::c_long,
     ) -> Result<Self, AeronCError> {
         let descriptor_copy = descriptor.clone();
         let drop_copies_closure =
             std::rc::Rc::new(std::cell::RefCell::new(Some(|| drop(descriptor_copy))));
         let r_constructor = ManagedCResource::new(
             move |ctx_field| {
-                let inst = aeron_mpsc_rb_t {
+                let inst = aeron_broadcast_receiver_t {
+                    scratch_buffer: scratch_buffer.into(),
                     buffer: buffer.into(),
                     descriptor: descriptor.into(),
                     capacity: capacity.into(),
-                    max_message_length: max_message_length.into(),
+                    mask: mask.into(),
+                    record_offset: record_offset.into(),
+                    cursor: cursor.into(),
+                    next_record: next_record.into(),
+                    lapped_count: lapped_count.into(),
                 };
-                let inner_ptr: *mut aeron_mpsc_rb_t = Box::into_raw(Box::new(inst));
+                let inner_ptr: *mut aeron_broadcast_receiver_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -632,10 +854,10 @@ impl AeronMpscRb {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_mpsc_rb_t)
+                    stringify!(aeron_broadcast_receiver_t)
                 );
-                let inst: aeron_mpsc_rb_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_mpsc_rb_t = Box::into_raw(Box::new(inst));
+                let inst: aeron_broadcast_receiver_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_broadcast_receiver_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -648,11 +870,15 @@ impl AeronMpscRb {
         })
     }
     #[inline]
+    pub fn scratch_buffer(&self) -> [u8; 4096usize] {
+        self.scratch_buffer.into()
+    }
+    #[inline]
     pub fn buffer(&self) -> *mut u8 {
         self.buffer.into()
     }
     #[inline]
-    pub fn descriptor(&self) -> AeronRbDescriptor {
+    pub fn descriptor(&self) -> AeronBroadcastDescriptor {
         self.descriptor.into()
     }
     #[inline]
@@ -660,8 +886,24 @@ impl AeronMpscRb {
         self.capacity.into()
     }
     #[inline]
-    pub fn max_message_length(&self) -> usize {
-        self.max_message_length.into()
+    pub fn mask(&self) -> usize {
+        self.mask.into()
+    }
+    #[inline]
+    pub fn record_offset(&self) -> usize {
+        self.record_offset.into()
+    }
+    #[inline]
+    pub fn cursor(&self) -> i64 {
+        self.cursor.into()
+    }
+    #[inline]
+    pub fn next_record(&self) -> i64 {
+        self.next_record.into()
+    }
+    #[inline]
+    pub fn lapped_count(&self) -> ::std::os::raw::c_long {
+        self.lapped_count.into()
     }
     #[inline]
     pub fn init(
@@ -670,43 +912,8 @@ impl AeronMpscRb {
         length: usize,
     ) -> Result<i32, AeronCError> {
         unsafe {
-            let result = aeron_mpsc_rb_init(self.get_inner(), buffer.into(), length.into());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    pub fn write(
-        &self,
-        msg_type_id: i32,
-        msg: *const ::std::os::raw::c_void,
-        length: usize,
-    ) -> aeron_rb_write_result_t {
-        unsafe {
-            let result = aeron_mpsc_rb_write(
-                self.get_inner(),
-                msg_type_id.into(),
-                msg.into(),
-                length.into(),
-            );
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn try_claim(&self, msg_type_id: i32, length: usize) -> i32 {
-        unsafe {
             let result =
-                aeron_mpsc_rb_try_claim(self.get_inner(), msg_type_id.into(), length.into());
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn commit(&self, offset: i32) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_mpsc_rb_commit(self.get_inner(), offset.into());
+                aeron_broadcast_receiver_init(self.get_inner(), buffer.into(), length.into());
             if result < 0 {
                 return Err(AeronCError::from_code(result));
             } else {
@@ -715,81 +922,22 @@ impl AeronMpscRb {
         }
     }
     #[inline]
-    pub fn abort(&self, offset: i32) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_mpsc_rb_abort(self.get_inner(), offset.into());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    pub fn read<AeronRbHandlerHandlerImpl: AeronRbHandlerCallback>(
-        &self,
-        handler: Option<&Handler<AeronRbHandlerHandlerImpl>>,
-        message_count_limit: usize,
-    ) -> usize {
-        unsafe {
-            let result = aeron_mpsc_rb_read(
-                self.get_inner(),
-                {
-                    let callback: aeron_rb_handler_t = if handler.is_none() {
-                        None
-                    } else {
-                        Some(aeron_rb_handler_t_callback::<AeronRbHandlerHandlerImpl>)
-                    };
-                    callback
-                },
-                handler
-                    .map(|m| m.as_raw())
-                    .unwrap_or_else(|| std::ptr::null_mut()),
-                message_count_limit.into(),
-            );
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = r""]
-    #[doc = r""]
-    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
-    #[doc = r"  use with care_"]
-    pub fn read_once<
-        AeronRbHandlerHandlerImpl: FnMut(i32, *const ::std::os::raw::c_void, usize) -> (),
+    pub fn receive<
+        AeronBroadcastReceiverHandlerHandlerImpl: AeronBroadcastReceiverHandlerCallback,
     >(
         &self,
-        mut handler: AeronRbHandlerHandlerImpl,
-        message_count_limit: usize,
-    ) -> usize {
+        handler: Option<&Handler<AeronBroadcastReceiverHandlerHandlerImpl>>,
+    ) -> Result<i32, AeronCError> {
         unsafe {
-            let result = aeron_mpsc_rb_read(
-                self.get_inner(),
-                Some(aeron_rb_handler_t_callback_for_once_closure::<AeronRbHandlerHandlerImpl>),
-                &mut handler as *mut _ as *mut std::os::raw::c_void,
-                message_count_limit.into(),
-            );
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn controlled_read<
-        AeronRbControlledHandlerHandlerImpl: AeronRbControlledHandlerCallback,
-    >(
-        &self,
-        handler: Option<&Handler<AeronRbControlledHandlerHandlerImpl>>,
-        message_count_limit: usize,
-    ) -> usize {
-        unsafe {
-            let result = aeron_mpsc_rb_controlled_read(
+            let result = aeron_broadcast_receiver_receive(
                 self.get_inner(),
                 {
-                    let callback: aeron_rb_controlled_handler_t = if handler.is_none() {
+                    let callback: aeron_broadcast_receiver_handler_t = if handler.is_none() {
                         None
                     } else {
                         Some(
-                            aeron_rb_controlled_handler_t_callback::<
-                                AeronRbControlledHandlerHandlerImpl,
+                            aeron_broadcast_receiver_handler_t_callback::<
+                                AeronBroadcastReceiverHandlerHandlerImpl,
                             >,
                         )
                     };
@@ -798,9 +946,12 @@ impl AeronMpscRb {
                 handler
                     .map(|m| m.as_raw())
                     .unwrap_or_else(|| std::ptr::null_mut()),
-                message_count_limit.into(),
             );
-            result.into()
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
         }
     }
     #[inline]
@@ -808,118 +959,90 @@ impl AeronMpscRb {
     #[doc = r""]
     #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
     #[doc = r"  use with care_"]
-    pub fn controlled_read_once<
-        AeronRbControlledHandlerHandlerImpl: FnMut(i32, *const ::std::os::raw::c_void, usize) -> aeron_rb_read_action_t,
-    >(
+    pub fn receive_once<AeronBroadcastReceiverHandlerHandlerImpl: FnMut(i32, &mut [u8]) -> ()>(
         &self,
-        mut handler: AeronRbControlledHandlerHandlerImpl,
-        message_count_limit: usize,
-    ) -> usize {
+        mut handler: AeronBroadcastReceiverHandlerHandlerImpl,
+    ) -> Result<i32, AeronCError> {
         unsafe {
-            let result = aeron_mpsc_rb_controlled_read(
+            let result = aeron_broadcast_receiver_receive(
                 self.get_inner(),
                 Some(
-                    aeron_rb_controlled_handler_t_callback_for_once_closure::<
-                        AeronRbControlledHandlerHandlerImpl,
+                    aeron_broadcast_receiver_handler_t_callback_for_once_closure::<
+                        AeronBroadcastReceiverHandlerHandlerImpl,
                     >,
                 ),
                 &mut handler as *mut _ as *mut std::os::raw::c_void,
-                message_count_limit.into(),
             );
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn next_correlation_id(&self) -> i64 {
-        unsafe {
-            let result = aeron_mpsc_rb_next_correlation_id(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn consumer_heartbeat_time(&self, now_ms: i64) -> () {
-        unsafe {
-            let result = aeron_mpsc_rb_consumer_heartbeat_time(self.get_inner(), now_ms.into());
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn consumer_heartbeat_time_value(&self) -> i64 {
-        unsafe {
-            let result = aeron_mpsc_rb_consumer_heartbeat_time_value(self.get_inner());
-            result.into()
-        }
-    }
-    #[inline]
-    pub fn unblock(&self) -> bool {
-        unsafe {
-            let result = aeron_mpsc_rb_unblock(self.get_inner());
-            result.into()
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
         }
     }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_mpsc_rb_t {
+    pub fn get_inner(&self) -> *mut aeron_broadcast_receiver_t {
         self.inner.get()
     }
 }
-impl std::ops::Deref for AeronMpscRb {
-    type Target = aeron_mpsc_rb_t;
+impl std::ops::Deref for AeronBroadcastReceiver {
+    type Target = aeron_broadcast_receiver_t;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.inner.get() }
     }
 }
-impl From<*mut aeron_mpsc_rb_t> for AeronMpscRb {
+impl From<*mut aeron_broadcast_receiver_t> for AeronBroadcastReceiver {
     #[inline]
-    fn from(value: *mut aeron_mpsc_rb_t) -> Self {
-        AeronMpscRb {
+    fn from(value: *mut aeron_broadcast_receiver_t) -> Self {
+        AeronBroadcastReceiver {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<AeronMpscRb> for *mut aeron_mpsc_rb_t {
+impl From<AeronBroadcastReceiver> for *mut aeron_broadcast_receiver_t {
     #[inline]
-    fn from(value: AeronMpscRb) -> Self {
+    fn from(value: AeronBroadcastReceiver) -> Self {
         value.get_inner()
     }
 }
-impl From<&AeronMpscRb> for *mut aeron_mpsc_rb_t {
+impl From<&AeronBroadcastReceiver> for *mut aeron_broadcast_receiver_t {
     #[inline]
-    fn from(value: &AeronMpscRb) -> Self {
+    fn from(value: &AeronBroadcastReceiver) -> Self {
         value.get_inner()
     }
 }
-impl From<AeronMpscRb> for aeron_mpsc_rb_t {
+impl From<AeronBroadcastReceiver> for aeron_broadcast_receiver_t {
     #[inline]
-    fn from(value: AeronMpscRb) -> Self {
+    fn from(value: AeronBroadcastReceiver) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const aeron_mpsc_rb_t> for AeronMpscRb {
+impl From<*const aeron_broadcast_receiver_t> for AeronBroadcastReceiver {
     #[inline]
-    fn from(value: *const aeron_mpsc_rb_t) -> Self {
-        AeronMpscRb {
+    fn from(value: *const aeron_broadcast_receiver_t) -> Self {
+        AeronBroadcastReceiver {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<aeron_mpsc_rb_t> for AeronMpscRb {
+impl From<aeron_broadcast_receiver_t> for AeronBroadcastReceiver {
     #[inline]
-    fn from(mut value: aeron_mpsc_rb_t) -> Self {
-        AeronMpscRb {
+    fn from(mut value: aeron_broadcast_receiver_t) -> Self {
+        AeronBroadcastReceiver {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_mpsc_rb_t,
+                &mut value as *mut aeron_broadcast_receiver_t,
                 None,
             )),
         }
     }
 }
 #[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronMpscRb {
+impl Default for AeronBroadcastReceiver {
     fn default() -> Self {
-        AeronMpscRb::new_zeroed().expect("failed to create struct")
+        AeronBroadcastReceiver::new_zeroed().expect("failed to create struct")
     }
 }
-impl AeronMpscRb {
+impl AeronBroadcastReceiver {
     #[doc = r" Regular clone just increases the reference count of underlying count."]
     #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
     #[doc = r""]
@@ -1074,159 +1197,6 @@ impl Default for AeronRbRecordDescriptor {
     }
 }
 impl AeronRbRecordDescriptor {
-    #[doc = r" Regular clone just increases the reference count of underlying count."]
-    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
-    #[doc = r""]
-    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
-    #[doc = r""]
-    #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
-    pub fn clone_struct(&self) -> Self {
-        let copy = Self::default();
-        copy.inner.get_mut().clone_from(self.deref());
-        copy
-    }
-}
-#[derive(Clone)]
-pub struct Iovec {
-    inner: std::rc::Rc<ManagedCResource<iovec>>,
-}
-impl core::fmt::Debug for Iovec {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(Iovec))
-                .field("inner", &"null")
-                .finish()
-        } else {
-            f.debug_struct(stringify!(Iovec))
-                .field("inner", &self.inner)
-                .field(stringify!(iov_len), &self.iov_len())
-                .finish()
-        }
-    }
-}
-impl Iovec {
-    #[inline]
-    pub fn new(iov_base: *mut ::std::os::raw::c_void, iov_len: usize) -> Result<Self, AeronCError> {
-        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
-        let r_constructor = ManagedCResource::new(
-            move |ctx_field| {
-                let inst = iovec {
-                    iov_base: iov_base.into(),
-                    iov_len: iov_len.into(),
-                };
-                let inner_ptr: *mut iovec = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            Some(Box::new(move |_ctx_field| {
-                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
-                    drop_closure();
-                }
-                0
-            })),
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(r_constructor),
-        })
-    }
-    #[inline]
-    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
-    pub fn new_zeroed() -> Result<Self, AeronCError> {
-        let resource = ManagedCResource::new(
-            move |ctx_field| {
-                #[cfg(debug_assertions)]
-                log::debug!(
-                    "creating zeroed empty resource on heap {}",
-                    stringify!(iovec)
-                );
-                let inst: iovec = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut iovec = Box::into_raw(Box::new(inst));
-                unsafe { *ctx_field = inner_ptr };
-                0
-            },
-            None,
-            true,
-            None,
-        )?;
-        Ok(Self {
-            inner: std::rc::Rc::new(resource),
-        })
-    }
-    #[inline]
-    pub fn iov_base(&self) -> *mut ::std::os::raw::c_void {
-        self.iov_base.into()
-    }
-    #[inline]
-    pub fn iov_len(&self) -> usize {
-        self.iov_len.into()
-    }
-    #[inline(always)]
-    pub fn get_inner(&self) -> *mut iovec {
-        self.inner.get()
-    }
-}
-impl std::ops::Deref for Iovec {
-    type Target = iovec;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner.get() }
-    }
-}
-impl From<*mut iovec> for Iovec {
-    #[inline]
-    fn from(value: *mut iovec) -> Self {
-        Iovec {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<Iovec> for *mut iovec {
-    #[inline]
-    fn from(value: Iovec) -> Self {
-        value.get_inner()
-    }
-}
-impl From<&Iovec> for *mut iovec {
-    #[inline]
-    fn from(value: &Iovec) -> Self {
-        value.get_inner()
-    }
-}
-impl From<Iovec> for iovec {
-    #[inline]
-    fn from(value: Iovec) -> Self {
-        unsafe { *value.get_inner().clone() }
-    }
-}
-impl From<*const iovec> for Iovec {
-    #[inline]
-    fn from(value: *const iovec) -> Self {
-        Iovec {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
-        }
-    }
-}
-impl From<iovec> for Iovec {
-    #[inline]
-    fn from(mut value: iovec) -> Self {
-        Iovec {
-            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut iovec,
-                None,
-            )),
-        }
-    }
-}
-#[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for Iovec {
-    fn default() -> Self {
-        Iovec::new_zeroed().expect("failed to create struct")
-    }
-}
-impl Iovec {
     #[doc = r" Regular clone just increases the reference count of underlying count."]
     #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
     #[doc = r""]
@@ -1610,57 +1580,34 @@ impl AeronSpscRb {
     }
 }
 #[derive(Clone)]
-pub struct AeronBroadcastReceiver {
-    inner: std::rc::Rc<ManagedCResource<aeron_broadcast_receiver_t>>,
+pub struct Iovec {
+    inner: std::rc::Rc<ManagedCResource<iovec>>,
 }
-impl core::fmt::Debug for AeronBroadcastReceiver {
+impl core::fmt::Debug for Iovec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AeronBroadcastReceiver))
+            f.debug_struct(stringify!(Iovec))
                 .field("inner", &"null")
                 .finish()
         } else {
-            f.debug_struct(stringify!(AeronBroadcastReceiver))
+            f.debug_struct(stringify!(Iovec))
                 .field("inner", &self.inner)
-                .field(stringify!(capacity), &self.capacity())
-                .field(stringify!(mask), &self.mask())
-                .field(stringify!(record_offset), &self.record_offset())
-                .field(stringify!(cursor), &self.cursor())
-                .field(stringify!(next_record), &self.next_record())
+                .field(stringify!(iov_len), &self.iov_len())
                 .finish()
         }
     }
 }
-impl AeronBroadcastReceiver {
+impl Iovec {
     #[inline]
-    pub fn new(
-        scratch_buffer: [u8; 4096usize],
-        buffer: *mut u8,
-        descriptor: &AeronBroadcastDescriptor,
-        capacity: usize,
-        mask: usize,
-        record_offset: usize,
-        cursor: i64,
-        next_record: i64,
-        lapped_count: ::std::os::raw::c_long,
-    ) -> Result<Self, AeronCError> {
-        let descriptor_copy = descriptor.clone();
-        let drop_copies_closure =
-            std::rc::Rc::new(std::cell::RefCell::new(Some(|| drop(descriptor_copy))));
+    pub fn new(iov_base: *mut ::std::os::raw::c_void, iov_len: usize) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
         let r_constructor = ManagedCResource::new(
             move |ctx_field| {
-                let inst = aeron_broadcast_receiver_t {
-                    scratch_buffer: scratch_buffer.into(),
-                    buffer: buffer.into(),
-                    descriptor: descriptor.into(),
-                    capacity: capacity.into(),
-                    mask: mask.into(),
-                    record_offset: record_offset.into(),
-                    cursor: cursor.into(),
-                    next_record: next_record.into(),
-                    lapped_count: lapped_count.into(),
+                let inst = iovec {
+                    iov_base: iov_base.into(),
+                    iov_len: iov_len.into(),
                 };
-                let inner_ptr: *mut aeron_broadcast_receiver_t = Box::into_raw(Box::new(inst));
+                let inner_ptr: *mut iovec = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -1685,10 +1632,10 @@ impl AeronBroadcastReceiver {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     "creating zeroed empty resource on heap {}",
-                    stringify!(aeron_broadcast_receiver_t)
+                    stringify!(iovec)
                 );
-                let inst: aeron_broadcast_receiver_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_broadcast_receiver_t = Box::into_raw(Box::new(inst));
+                let inst: iovec = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut iovec = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -1701,179 +1648,76 @@ impl AeronBroadcastReceiver {
         })
     }
     #[inline]
-    pub fn scratch_buffer(&self) -> [u8; 4096usize] {
-        self.scratch_buffer.into()
+    pub fn iov_base(&self) -> *mut ::std::os::raw::c_void {
+        self.iov_base.into()
     }
     #[inline]
-    pub fn buffer(&self) -> *mut u8 {
-        self.buffer.into()
-    }
-    #[inline]
-    pub fn descriptor(&self) -> AeronBroadcastDescriptor {
-        self.descriptor.into()
-    }
-    #[inline]
-    pub fn capacity(&self) -> usize {
-        self.capacity.into()
-    }
-    #[inline]
-    pub fn mask(&self) -> usize {
-        self.mask.into()
-    }
-    #[inline]
-    pub fn record_offset(&self) -> usize {
-        self.record_offset.into()
-    }
-    #[inline]
-    pub fn cursor(&self) -> i64 {
-        self.cursor.into()
-    }
-    #[inline]
-    pub fn next_record(&self) -> i64 {
-        self.next_record.into()
-    }
-    #[inline]
-    pub fn lapped_count(&self) -> ::std::os::raw::c_long {
-        self.lapped_count.into()
-    }
-    #[inline]
-    pub fn init(
-        &self,
-        buffer: *mut ::std::os::raw::c_void,
-        length: usize,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result =
-                aeron_broadcast_receiver_init(self.get_inner(), buffer.into(), length.into());
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    pub fn receive<
-        AeronBroadcastReceiverHandlerHandlerImpl: AeronBroadcastReceiverHandlerCallback,
-    >(
-        &self,
-        handler: Option<&Handler<AeronBroadcastReceiverHandlerHandlerImpl>>,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_broadcast_receiver_receive(
-                self.get_inner(),
-                {
-                    let callback: aeron_broadcast_receiver_handler_t = if handler.is_none() {
-                        None
-                    } else {
-                        Some(
-                            aeron_broadcast_receiver_handler_t_callback::<
-                                AeronBroadcastReceiverHandlerHandlerImpl,
-                            >,
-                        )
-                    };
-                    callback
-                },
-                handler
-                    .map(|m| m.as_raw())
-                    .unwrap_or_else(|| std::ptr::null_mut()),
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
-    }
-    #[inline]
-    #[doc = r""]
-    #[doc = r""]
-    #[doc = r" _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,"]
-    #[doc = r"  use with care_"]
-    pub fn receive_once<AeronBroadcastReceiverHandlerHandlerImpl: FnMut(i32, &mut [u8]) -> ()>(
-        &self,
-        mut handler: AeronBroadcastReceiverHandlerHandlerImpl,
-    ) -> Result<i32, AeronCError> {
-        unsafe {
-            let result = aeron_broadcast_receiver_receive(
-                self.get_inner(),
-                Some(
-                    aeron_broadcast_receiver_handler_t_callback_for_once_closure::<
-                        AeronBroadcastReceiverHandlerHandlerImpl,
-                    >,
-                ),
-                &mut handler as *mut _ as *mut std::os::raw::c_void,
-            );
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
-        }
+    pub fn iov_len(&self) -> usize {
+        self.iov_len.into()
     }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_broadcast_receiver_t {
+    pub fn get_inner(&self) -> *mut iovec {
         self.inner.get()
     }
 }
-impl std::ops::Deref for AeronBroadcastReceiver {
-    type Target = aeron_broadcast_receiver_t;
+impl std::ops::Deref for Iovec {
+    type Target = iovec;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.inner.get() }
     }
 }
-impl From<*mut aeron_broadcast_receiver_t> for AeronBroadcastReceiver {
+impl From<*mut iovec> for Iovec {
     #[inline]
-    fn from(value: *mut aeron_broadcast_receiver_t) -> Self {
-        AeronBroadcastReceiver {
+    fn from(value: *mut iovec) -> Self {
+        Iovec {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<AeronBroadcastReceiver> for *mut aeron_broadcast_receiver_t {
+impl From<Iovec> for *mut iovec {
     #[inline]
-    fn from(value: AeronBroadcastReceiver) -> Self {
+    fn from(value: Iovec) -> Self {
         value.get_inner()
     }
 }
-impl From<&AeronBroadcastReceiver> for *mut aeron_broadcast_receiver_t {
+impl From<&Iovec> for *mut iovec {
     #[inline]
-    fn from(value: &AeronBroadcastReceiver) -> Self {
+    fn from(value: &Iovec) -> Self {
         value.get_inner()
     }
 }
-impl From<AeronBroadcastReceiver> for aeron_broadcast_receiver_t {
+impl From<Iovec> for iovec {
     #[inline]
-    fn from(value: AeronBroadcastReceiver) -> Self {
+    fn from(value: Iovec) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const aeron_broadcast_receiver_t> for AeronBroadcastReceiver {
+impl From<*const iovec> for Iovec {
     #[inline]
-    fn from(value: *const aeron_broadcast_receiver_t) -> Self {
-        AeronBroadcastReceiver {
+    fn from(value: *const iovec) -> Self {
+        Iovec {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<aeron_broadcast_receiver_t> for AeronBroadcastReceiver {
+impl From<iovec> for Iovec {
     #[inline]
-    fn from(mut value: aeron_broadcast_receiver_t) -> Self {
-        AeronBroadcastReceiver {
+    fn from(mut value: iovec) -> Self {
+        Iovec {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut aeron_broadcast_receiver_t,
+                &mut value as *mut iovec,
                 None,
             )),
         }
     }
 }
 #[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronBroadcastReceiver {
+impl Default for Iovec {
     fn default() -> Self {
-        AeronBroadcastReceiver::new_zeroed().expect("failed to create struct")
+        Iovec::new_zeroed().expect("failed to create struct")
     }
 }
-impl AeronBroadcastReceiver {
+impl Iovec {
     #[doc = r" Regular clone just increases the reference count of underlying count."]
     #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
     #[doc = r""]
@@ -2044,6 +1888,162 @@ impl Default for AeronBroadcastDescriptor {
     }
 }
 impl AeronBroadcastDescriptor {
+    #[doc = r" Regular clone just increases the reference count of underlying count."]
+    #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
+    #[doc = r""]
+    #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
+    #[doc = r""]
+    #[doc = r" Must be only used on structs which has no init/clean up methods."]
+    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    pub fn clone_struct(&self) -> Self {
+        let copy = Self::default();
+        copy.inner.get_mut().clone_from(self.deref());
+        copy
+    }
+}
+#[derive(Clone)]
+pub struct AeronBroadcastRecordDescriptor {
+    inner: std::rc::Rc<ManagedCResource<aeron_broadcast_record_descriptor_t>>,
+}
+impl core::fmt::Debug for AeronBroadcastRecordDescriptor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(AeronBroadcastRecordDescriptor))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(AeronBroadcastRecordDescriptor))
+                .field("inner", &self.inner)
+                .field(stringify!(length), &self.length())
+                .field(stringify!(msg_type_id), &self.msg_type_id())
+                .finish()
+        }
+    }
+}
+impl AeronBroadcastRecordDescriptor {
+    #[inline]
+    pub fn new(length: i32, msg_type_id: i32) -> Result<Self, AeronCError> {
+        let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst = aeron_broadcast_record_descriptor_t {
+                    length: length.into(),
+                    msg_type_id: msg_type_id.into(),
+                };
+                let inner_ptr: *mut aeron_broadcast_record_descriptor_t =
+                    Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |_ctx_field| {
+                if let Some(drop_closure) = drop_copies_closure.borrow_mut().take() {
+                    drop_closure();
+                }
+                0
+            })),
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(r_constructor),
+        })
+    }
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_broadcast_record_descriptor_t)
+                );
+                let inst: aeron_broadcast_record_descriptor_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_broadcast_record_descriptor_t =
+                    Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline]
+    pub fn length(&self) -> i32 {
+        self.length.into()
+    }
+    #[inline]
+    pub fn msg_type_id(&self) -> i32 {
+        self.msg_type_id.into()
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut aeron_broadcast_record_descriptor_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for AeronBroadcastRecordDescriptor {
+    type Target = aeron_broadcast_record_descriptor_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut aeron_broadcast_record_descriptor_t> for AeronBroadcastRecordDescriptor {
+    #[inline]
+    fn from(value: *mut aeron_broadcast_record_descriptor_t) -> Self {
+        AeronBroadcastRecordDescriptor {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<AeronBroadcastRecordDescriptor> for *mut aeron_broadcast_record_descriptor_t {
+    #[inline]
+    fn from(value: AeronBroadcastRecordDescriptor) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&AeronBroadcastRecordDescriptor> for *mut aeron_broadcast_record_descriptor_t {
+    #[inline]
+    fn from(value: &AeronBroadcastRecordDescriptor) -> Self {
+        value.get_inner()
+    }
+}
+impl From<AeronBroadcastRecordDescriptor> for aeron_broadcast_record_descriptor_t {
+    #[inline]
+    fn from(value: AeronBroadcastRecordDescriptor) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const aeron_broadcast_record_descriptor_t> for AeronBroadcastRecordDescriptor {
+    #[inline]
+    fn from(value: *const aeron_broadcast_record_descriptor_t) -> Self {
+        AeronBroadcastRecordDescriptor {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<aeron_broadcast_record_descriptor_t> for AeronBroadcastRecordDescriptor {
+    #[inline]
+    fn from(mut value: aeron_broadcast_record_descriptor_t) -> Self {
+        AeronBroadcastRecordDescriptor {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut aeron_broadcast_record_descriptor_t,
+                None,
+            )),
+        }
+    }
+}
+#[doc = r" This will create an instance where the struct is zeroed, use with care"]
+impl Default for AeronBroadcastRecordDescriptor {
+    fn default() -> Self {
+        AeronBroadcastRecordDescriptor::new_zeroed().expect("failed to create struct")
+    }
+}
+impl AeronBroadcastRecordDescriptor {
     #[doc = r" Regular clone just increases the reference count of underlying count."]
     #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
     #[doc = r""]
