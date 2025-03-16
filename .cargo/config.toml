@@ -1,7 +1,2 @@
 [build]
 rustflags = ["-C", "target-cpu=native"]
-
-[net]
-git-fetch-with-cli = true
-retry = 3
-max-packet-size = 104857600 # (100MB)
