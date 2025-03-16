@@ -313,6 +313,7 @@ pub fn main() {
     }
 }
 
+#[allow(dead_code)]
 fn get_artifact_path() -> PathBuf {
     let feature = if LinkType::detect() == LinkType::Static {
         "static"

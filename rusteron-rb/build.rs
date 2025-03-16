@@ -283,6 +283,7 @@ fn copy_binds(out: PathBuf) {
     }
 }
 
+#[allow(dead_code)]
 fn get_artifact_path() -> PathBuf {
     let feature = if LinkType::detect() == LinkType::Static {
         "static"
@@ -300,6 +301,7 @@ fn get_artifact_path() -> PathBuf {
     artifacts_dir
 }
 
+#[allow(dead_code)]
 fn publish_artifacts(out_path: &Path, cmake_build_path: &Path) -> std::io::Result<()> {
     let publish_dir = get_artifact_path();
 
