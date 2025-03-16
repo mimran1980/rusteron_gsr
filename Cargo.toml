@@ -46,6 +46,7 @@ allow_dirty = true
 no_confirm = true
 update_crates_index = true
 verify = false
+compression = "best"
 
 [profile.release]
 strip = true
