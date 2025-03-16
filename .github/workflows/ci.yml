@@ -121,6 +121,16 @@ jobs:
           restore-keys: |
             cargo-build-${{ runner.os }}-${{ runner.arch }}-${{ matrix.rust-version }}-${{ matrix.features || 'default' }}-
 
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
       - name: Cache Per-Crate Compilation
         uses: actions/cache@v4
         with:
