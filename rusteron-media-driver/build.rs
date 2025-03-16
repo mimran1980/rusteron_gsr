@@ -139,15 +139,11 @@ pub fn main() {
         config.profile("Release");
         config.define(
             "CMAKE_CXX_FLAGS_RELEASE",
-            "-O3 -DNDEBUG -march=native -flto -funroll-loops -ffast-math -fomit-frame-pointer -fno-stack-protector -fno-plt -pipe",
+            "-O3 -DNDEBUG -march=native -funroll-loops -flto",
         );
         config.define(
             "CMAKE_C_FLAGS_RELEASE",
-            "-O3 -DNDEBUG -march=native -flto -funroll-loops -ffast-math -fomit-frame-pointer -fno-stack-protector -fno-plt -pipe",
-        );
-        config.define(
-            "CMAKE_EXE_LINKER_FLAGS_RELEASE",
-            "-Wl,--gc-sections -Wl,--strip-all -Wl,--no-plt -Wl,-O2",
+            "-O3 -DNDEBUG -march=native -funroll-loops -flto",
         );
     } else {
         config.profile("Debug");
