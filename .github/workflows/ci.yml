@@ -96,12 +96,56 @@ jobs:
           distribution: 'temurin'
           java-version: '23'
 
+      # Use GitHub Actions cache for Rust dependencies
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: cargo-registry-${{ runner.os }}-${{ matrix.rust-version }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-registry-${{ runner.os }}-${{ matrix.rust-version }}-
+
+      - name: Cache Cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: cargo-index-${{ runner.os }}-${{ matrix.rust-version }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-index-${{ runner.os }}-${{ matrix.rust-version }}-
+
+      - name: Cache Cargo build (Feature-Aware)
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: cargo-build-${{ runner.os }}-${{ matrix.rust-version }}-${{ matrix.features || 'default' }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-build-${{ runner.os }}-${{ matrix.rust-version }}-${{ matrix.features || 'default' }}-
+
+      - name: Cache Per-Crate Compilation
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: cargo-build-crate-${{ runner.os }}-${{ matrix.rust-version }}-${{ matrix.features || 'default' }}-${{ hashFiles('*/Cargo.toml', '**/Cargo.lock') }}
+          restore-keys: |
+            cargo-build-crate-${{ runner.os }}-${{ matrix.rust-version }}-${{ matrix.features || 'default' }}-
+
+      - name: Install sccache
+        if: runner.os != 'Windows'
+        run: |
+          curl -fsSLO https://github.com/mozilla/sccache/releases/latest/download/sccache-${{ runner.os }}-x86_64
+          chmod +x sccache-${{ runner.os }}-x86_64
+          sudo mv sccache-${{ runner.os }}-x86_64 /usr/local/bin/sccache
+
+      - name: Set up sccache
+        if: runner.os != 'Windows'
+        run: echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+
       - name: Build and Test
         run: |
-          cargo test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
-          cargo clean
           rm -rf rusteron-archive/artifacts rusteron-client/artifacts rusteron-media-driver/artifacts rusteron-rb/artifacts
           PUBLISH_ARTIFACTS=true cargo build --release --workspace ${{ env.feature-flags }}
+          cargo test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
+
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
