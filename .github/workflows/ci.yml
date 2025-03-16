@@ -101,33 +101,33 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
-          key: cargo-registry-${{ runner.os }}-${{ matrix.rust-version }}-${{ hashFiles('**/Cargo.lock') }}
+          key: cargo-registry-${{ runner.os }}-${{ runner.arch }}-${{ matrix.rust-version }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            cargo-registry-${{ runner.os }}-${{ matrix.rust-version }}-
+            cargo-registry-${{ runner.os }}-${{ runner.arch }}-${{ matrix.rust-version }}-
 
       - name: Cache Cargo index
         uses: actions/cache@v4
         with:
           path: ~/.cargo/git
-          key: cargo-index-${{ runner.os }}-${{ matrix.rust-version }}-${{ hashFiles('**/Cargo.lock') }}
+          key: cargo-index-${{ runner.os }}-${{ runner.arch }}-${{ matrix.rust-version }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            cargo-index-${{ runner.os }}-${{ matrix.rust-version }}-
+            cargo-index-${{ runner.os }}-${{ runner.arch }}-${{ matrix.rust-version }}-
 
       - name: Cache Cargo build (Feature-Aware)
         uses: actions/cache@v4
         with:
           path: target
-          key: cargo-build-${{ runner.os }}-${{ matrix.rust-version }}-${{ matrix.features || 'default' }}-${{ hashFiles('**/Cargo.lock') }}
+          key: cargo-build-${{ runner.os }}-${{ runner.arch }}-${{ matrix.rust-version }}-${{ matrix.features || 'default' }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            cargo-build-${{ runner.os }}-${{ matrix.rust-version }}-${{ matrix.features || 'default' }}-
+            cargo-build-${{ runner.os }}-${{ runner.arch }}-${{ matrix.rust-version }}-${{ matrix.features || 'default' }}-
 
       - name: Cache Per-Crate Compilation
         uses: actions/cache@v4
         with:
           path: target
-          key: cargo-build-crate-${{ runner.os }}-${{ matrix.rust-version }}-${{ matrix.features || 'default' }}-${{ hashFiles('*/Cargo.toml', '**/Cargo.lock') }}
+          key: cargo-build-crate-${{ runner.os }}-${{ runner.arch }}-${{ matrix.rust-version }}-${{ matrix.features || 'default' }}-${{ hashFiles('*/Cargo.toml', '**/Cargo.lock') }}
           restore-keys: |
-            cargo-build-crate-${{ runner.os }}-${{ matrix.rust-version }}-${{ matrix.features || 'default' }}-
+            cargo-build-crate-${{ runner.os }}-${{ runner.arch }}-${{ matrix.rust-version }}-${{ matrix.features || 'default' }}-
 
       - name: Build and Test
         run: |
