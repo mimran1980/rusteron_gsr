@@ -9,6 +9,9 @@ members = [
 exclude = ["rusteron-docker-samples/rusteron-dummy-example"]
 resolver = "2"
 
+[workspace.package]
+compression = "best"
+
 [workspace.dependencies]
 rusteron-code-gen = { path = "rusteron-code-gen", version = "0.1.105" }
 ctrlc = "3.4"
