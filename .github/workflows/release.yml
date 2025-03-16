@@ -77,7 +77,7 @@ jobs:
           
 
       - name: Install cargo-release
-        run: cargo install cargo-release
+        run: cargo install cargo-release || true
 
       - name: Run cargo-release for specified version
         env:
