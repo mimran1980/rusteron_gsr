@@ -2,7 +2,7 @@ use crate::generator::{CBinding, CWrapper, Method};
 use crate::{Arg, ArgProcessing, CHandler};
 use itertools::Itertools;
 use quote::ToTokens;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::PathBuf;
 use syn::{Attribute, Item, ItemForeignMod, ItemStruct, ItemType, Lit, Meta, MetaNameValue};
@@ -10,7 +10,7 @@ use syn::{Attribute, Item, ItemForeignMod, ItemStruct, ItemType, Lit, Meta, Meta
 pub fn parse_bindings(out: &PathBuf) -> CBinding {
     let file_content = fs::read_to_string(out.clone()).expect("Unable to read file");
     let syntax_tree = syn::parse_file(&file_content).expect("Unable to parse file");
-    let mut wrappers = HashMap::new();
+    let mut wrappers = BTreeMap::new();
     let mut methods = Vec::new();
     let mut handlers = Vec::new();
 
@@ -85,7 +85,7 @@ pub fn parse_bindings(out: &PathBuf) -> CBinding {
 }
 
 fn process_c_method(
-    wrappers: &mut HashMap<String, CWrapper>,
+    wrappers: &mut BTreeMap<String, CWrapper>,
     methods: &mut Vec<Method>,
     fm: ItemForeignMod,
 ) {
@@ -151,7 +151,7 @@ fn process_c_method(
 }
 
 fn find_closest_wrapper_from_method_name(
-    wrappers: &mut HashMap<String, CWrapper>,
+    wrappers: &mut BTreeMap<String, CWrapper>,
     fn_name: &String,
 ) -> Option<String> {
     let type_names = get_possible_wrappers(&fn_name);
@@ -177,7 +177,7 @@ pub fn get_possible_wrappers(fn_name: &str) -> Vec<String> {
 }
 
 fn process_type(
-    wrappers: &mut HashMap<String, CWrapper>,
+    wrappers: &mut BTreeMap<String, CWrapper>,
     handlers: &mut Vec<CHandler>,
     ty: &ItemType,
 ) {
@@ -258,7 +258,7 @@ fn process_type(
     }
 }
 
-fn process_struct(wrappers: &mut HashMap<String, CWrapper>, s: &ItemStruct) {
+fn process_struct(wrappers: &mut BTreeMap<String, CWrapper>, s: &ItemStruct) {
     // Print the struct name and its doc comments
     let docs = get_doc_comments(&s.attrs);
     let type_name = s.ident.to_string().replace("_stct", "_t");
@@ -332,7 +332,7 @@ fn process_types(mut name_and_type: Vec<Arg>) -> Vec<Arg> {
 }
 
 // Helper function to extract doc comments
-fn get_doc_comments(attrs: &[Attribute]) -> HashSet<String> {
+fn get_doc_comments(attrs: &[Attribute]) -> BTreeSet<String> {
     attrs
         .iter()
         .filter_map(|attr| {

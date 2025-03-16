@@ -4,7 +4,7 @@ use crate::snake_to_pascal_case;
 use itertools::Itertools;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote, ToTokens};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Deref;
 use std::str::FromStr;
 use syn::{parse_str, Type};
@@ -17,7 +17,7 @@ pub const MEDIA_DRIVER_BINDINGS: &str = include_str!("../bindings/media-driver.r
 
 #[derive(Debug, Clone, Default)]
 pub struct CBinding {
-    pub wrappers: HashMap<String, CWrapper>,
+    pub wrappers: BTreeMap<String, CWrapper>,
     pub methods: Vec<Method>,
     pub handlers: Vec<CHandler>,
 }
@@ -28,7 +28,7 @@ pub struct Method {
     pub struct_method_name: String,
     pub return_type: Arg,
     pub arguments: Vec<Arg>,
-    pub docs: HashSet<String>,
+    pub docs: BTreeSet<String>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -137,7 +137,7 @@ pub struct CHandler {
     pub type_name: String,
     pub args: Vec<Arg>,
     pub return_type: Arg,
-    pub docs: HashSet<String>,
+    pub docs: BTreeSet<String>,
     pub fn_mut_signature: TokenStream,
     pub closure_type_name: TokenStream,
 }
@@ -145,11 +145,11 @@ pub struct CHandler {
 #[derive(Debug, Clone)]
 pub struct ReturnType {
     original: Arg,
-    wrappers: HashMap<String, CWrapper>,
+    wrappers: BTreeMap<String, CWrapper>,
 }
 
 impl ReturnType {
-    pub fn new(original_c_type: Arg, wrappers: HashMap<String, CWrapper>) -> Self {
+    pub fn new(original_c_type: Arg, wrappers: BTreeMap<String, CWrapper>) -> Self {
         ReturnType {
             original: original_c_type,
             wrappers,
@@ -452,7 +452,7 @@ pub struct CWrapper {
     pub without_name: String,
     pub fields: Vec<Arg>,
     pub methods: Vec<Method>,
-    pub docs: HashSet<String>,
+    pub docs: BTreeSet<String>,
 }
 
 impl CWrapper {
@@ -497,7 +497,7 @@ impl CWrapper {
     /// Generate methods for the struct
     fn generate_methods(
         &self,
-        wrappers: &HashMap<String, CWrapper>,
+        wrappers: &BTreeMap<String, CWrapper>,
         closure_handlers: &Vec<CHandler>,
         additional_outer_impls: &mut Vec<TokenStream>,
     ) -> Vec<TokenStream> {
@@ -822,7 +822,7 @@ impl CWrapper {
     }
 
     fn add_getter_instead_of_mut_arg_if_applicable(
-        wrappers: &HashMap<String, CWrapper>,
+        wrappers: &BTreeMap<String, CWrapper>,
         method: &Method,
         fn_name: &Ident,
         where_clause: &TokenStream,
@@ -914,7 +914,7 @@ impl CWrapper {
     /// Generate the fields / getters
     fn generate_fields(
         &self,
-        cwrappers: &HashMap<String, CWrapper>,
+        cwrappers: &BTreeMap<String, CWrapper>,
         debug_fields: &mut Vec<TokenStream>,
     ) -> Vec<TokenStream> {
         self.fields
@@ -977,7 +977,7 @@ impl CWrapper {
     }
 
     /// Generate the constructor for the struct
-    fn generate_constructor(&self, wrappers: &HashMap<String, CWrapper>) -> Vec<TokenStream> {
+    fn generate_constructor(&self, wrappers: &BTreeMap<String, CWrapper>) -> Vec<TokenStream> {
         let constructors = self
             .methods
             .iter()
@@ -1230,7 +1230,10 @@ impl CWrapper {
         }
     }
 
-    fn drop_copies(wrappers: &HashMap<String, CWrapper>, arguments: &Vec<Arg>) -> Vec<TokenStream> {
+    fn drop_copies(
+        wrappers: &BTreeMap<String, CWrapper>,
+        arguments: &Vec<Arg>,
+    ) -> Vec<TokenStream> {
         arguments
             .iter()
             .enumerate()
@@ -1256,7 +1259,7 @@ impl CWrapper {
     }
 
     fn lets_for_copying_arguments(
-        wrappers: &HashMap<String, CWrapper>,
+        wrappers: &BTreeMap<String, CWrapper>,
         arguments: &Vec<Arg>,
         include_let_statements: bool,
     ) -> Vec<TokenStream> {
@@ -1367,8 +1370,8 @@ impl CWrapper {
 }
 
 fn get_docs(
-    docs: &HashSet<String>,
-    wrappers: &HashMap<String, CWrapper>,
+    docs: &BTreeSet<String>,
+    wrappers: &BTreeMap<String, CWrapper>,
     arguments: Option<&Vec<TokenStream>>,
 ) -> Vec<TokenStream> {
     let mut first_param = true;
@@ -1674,7 +1677,7 @@ pub fn generate_handlers(handler: &mut CHandler, bindings: &CBinding) -> TokenSt
 
 pub fn generate_rust_code(
     wrapper: &CWrapper,
-    wrappers: &HashMap<String, CWrapper>,
+    wrappers: &BTreeMap<String, CWrapper>,
     include_common_code: bool,
     include_clippy: bool,
     include_aeron_client_registering_resource_t: bool,
