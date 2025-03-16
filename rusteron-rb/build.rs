@@ -259,6 +259,7 @@ pub fn main() {
         copy_binds(out);
     }
 
+    #[cfg(feature = "static")]
     if std::env::var("PUBLISH_ARTIFACTS").is_ok() {
         let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
         let cmake_lib_dir = cmake_output;
