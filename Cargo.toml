@@ -45,9 +45,10 @@ update_crates_index = true
 verify = false
 
 [profile.release]
-#opt-level = 3
-debug = true
-debug-assertions = false
-overflow-checks = false
-lto = "thin"
+strip = true
+debug = false
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+
 

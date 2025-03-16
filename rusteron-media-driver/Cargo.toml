@@ -62,13 +62,6 @@ precompile = []
 name = "media_driver"
 path = "src/bin/media_driver.rs"
 
-[profile.release]
-strip = true
-debug = false
-lto = "fat"
-codegen-units = 1
-panic = "abort"
-
 [package.metadata.docs.rs]
 features = ["static", "precompile"]
 default-target = "x86_64-apple-darwin"

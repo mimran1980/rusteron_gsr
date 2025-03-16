@@ -281,7 +281,7 @@ pub fn main() {
 
     #[cfg(feature = "static")]
     // media driver libs are too big there is 10meg limit so only do mac os
-    if std::env::var("PUBLISH_ARTIFACTS").is_ok() && !cfg!(target_os = "linux") {
+    if std::env::var("PUBLISH_ARTIFACTS").is_ok() {
         let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
         let cmake_lib_dir = cmake_output;
         publish_artifacts(&out_path, &cmake_lib_dir).expect("Failed to publish artifacts");
@@ -323,7 +323,7 @@ fn get_artifact_path() -> PathBuf {
 }
 
 #[allow(dead_code)]
-fn publish_artifacts(out_path: &Path, cmake_build_path: &Path) -> std::io::Result<()> {
+fn  publish_artifacts(out_path: &Path, cmake_build_path: &Path) -> std::io::Result<()> {
     let publish_dir = get_artifact_path();
 
     // Copy all generated Rust files (*.rs) from OUT_DIR.

@@ -41,6 +41,11 @@ clean:
 build:
   COPY_BINDINGS=true cargo build --workspace --all-targets
 
+# Build artifacts
+build-artifacts:
+  PUBLISH_ARTIFACTS=true cargo build --release --workspace --all-targets --features static,precompile
+
+
 # Build the project in release mode
 release:
   cargo build --workspace --all-targets --release
