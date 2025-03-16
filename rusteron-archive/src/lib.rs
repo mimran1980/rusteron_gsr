@@ -21,6 +21,8 @@ pub mod bindings {
 use bindings::*;
 use std::cell::Cell;
 use std::os::raw::c_int;
+use std::thread::sleep;
+use std::time::{Duration, Instant};
 
 pub mod testing;
 
@@ -62,6 +64,25 @@ impl RecordingPos {
                 recording_id,
             )
         }
+    }
+
+    /// Return the recordingId embedded in the key of the given counter
+    /// if it is indeed a "recording position" counter. Otherwise return -1.
+    pub fn get_recording_id_block(
+        counters_reader: &AeronCountersReader,
+        counter_id: i32,
+        wait: Duration,
+    ) -> Result<i64, AeronCError> {
+        let mut result = Self::get_recording_id(counters_reader, counter_id);
+        let instant = Instant::now();
+
+        while result.is_err() && instant.elapsed() < wait {
+            result = Self::get_recording_id(counters_reader, counter_id);
+            #[cfg(debug_assertions)]
+            sleep(Duration::from_millis(10));
+        }
+
+        return result;
     }
 
     /// Return the recordingId embedded in the key of the given counter
@@ -451,7 +472,11 @@ mod tests {
         // let recording_id = recording_id.get();
         // let start_position = start_position.get();
         let start_position = 0;
-        let recording_id = RecordingPos::get_recording_id(&aeron.counters_reader(), counter_id)?;
+        let recording_id = RecordingPos::get_recording_id_block(
+            &aeron.counters_reader(),
+            counter_id,
+            Duration::from_secs(5),
+        )?;
 
         let subscribe_channel = format!("aeron:udp?control-mode=manual|session-id={session_id}");
         info!("subscribe channel {}", subscribe_channel);
