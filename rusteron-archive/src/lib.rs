@@ -21,7 +21,6 @@ pub mod bindings {
 use bindings::*;
 use std::cell::Cell;
 use std::os::raw::c_int;
-use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 pub mod testing;
@@ -79,7 +78,7 @@ impl RecordingPos {
         while result.is_err() && instant.elapsed() < wait {
             result = Self::get_recording_id(counters_reader, counter_id);
             #[cfg(debug_assertions)]
-            sleep(Duration::from_millis(10));
+            std::thread::sleep(Duration::from_millis(10));
         }
 
         return result;

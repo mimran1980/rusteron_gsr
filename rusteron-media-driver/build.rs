@@ -323,14 +323,18 @@ fn get_artifact_path() -> PathBuf {
 }
 
 #[allow(dead_code)]
-fn  publish_artifacts(out_path: &Path, cmake_build_path: &Path) -> std::io::Result<()> {
+fn publish_artifacts(out_path: &Path, cmake_build_path: &Path) -> std::io::Result<()> {
     let publish_dir = get_artifact_path();
 
     // Copy all generated Rust files (*.rs) from OUT_DIR.
     for entry in WalkDir::new(out_path) {
         let entry = entry.unwrap();
         if entry.file_type().is_file()
-            && entry.path().extension().map(|s| s == "rs" && s.to_string_lossy().to_string().contains("rb_custom")).unwrap_or(false)
+            && entry
+                .path()
+                .extension()
+                .map(|s| s == "rs" && s.to_string_lossy().to_string().contains("rb_custom"))
+                .unwrap_or(false)
         {
             let file_name = entry.path().file_name().unwrap();
             fs::copy(entry.path(), publish_dir.join(file_name))?;
