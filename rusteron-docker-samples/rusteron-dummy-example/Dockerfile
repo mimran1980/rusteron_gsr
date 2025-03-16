@@ -15,7 +15,7 @@ COPY src ./src
 ARG BUILD_TYPE=release
 
 ENV RUSTFLAGS="-C target-cpu=native"
-RUN . "$HOME/.cargo/env" && cargo build --profile ${BUILD_TYPE}
+RUN . "$HOME/.cargo/env" && cargo update && cargo build --profile ${BUILD_TYPE}
 
 FROM debian:trixie-slim
 RUN apt-get update && apt-get install -y libssl-dev uuid-dev ca-certificates  \
