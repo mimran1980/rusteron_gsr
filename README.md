@@ -1,7 +1,7 @@
 # Rusteron
 
 [![Crates.io](https://img.shields.io/crates/v/rusteron-archive)](https://crates.io/crates/rusteron-archive)
-[![github-ci](https://github.com/mimran1980/rusteron/actions/workflows/ci.yml/badge.svg)](https://github.com/amoskvin/rusteron/actions/workflows/ci.yml)
+[![github-ci](https://github.com/mimran1980/rusteron/actions/workflows/ci.yml/badge.svg)](https://github.com/mimran1980/rusteron/actions/workflows/ci.yml)
 [![docsrs](https://docs.rs/rusteron-client/badge.svg)](https://docs.rs/rusteron-client/)
 [![github docs](https://custom-icon-badges.demolab.com/badge/githubdocs-blue.svg?logo=log&logoSource=feather)](https://mimran1980.github.io/rusteron)
 
