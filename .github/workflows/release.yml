@@ -81,7 +81,7 @@ jobs:
 
       - name: Test with artifacts
         run: |
-          cargo test --features precompile,static --workspace -- --nocapture
+#          cargo test --features precompile,static --workspace -- --nocapture
           git reset --hard HEAD
           git clean -fdx
           

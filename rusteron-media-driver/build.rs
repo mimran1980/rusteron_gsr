@@ -145,7 +145,10 @@ pub fn main() {
             "CMAKE_C_FLAGS_RELEASE",
             "-O3 -DNDEBUG -march=native -flto -funroll-loops -ffast-math -fomit-frame-pointer -fno-stack-protector -fno-plt -pipe",
         );
-        config.define("CMAKE_EXE_LINKER_FLAGS_RELEASE", "-Wl,--gc-sections -Wl,--strip-all -Wl,--no-plt -Wl,-O2");
+        config.define(
+            "CMAKE_EXE_LINKER_FLAGS_RELEASE",
+            "-Wl,--gc-sections -Wl,--strip-all -Wl,--no-plt -Wl,-O2",
+        );
     } else {
         config.profile("Debug");
     }
