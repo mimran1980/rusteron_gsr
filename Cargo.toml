@@ -49,8 +49,6 @@ verify = false
 compression = "best"
 
 [profile.release]
-strip = true
 debug = false
-panic = "abort"
-
+panic = "unwind"
 
