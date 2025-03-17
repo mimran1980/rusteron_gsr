@@ -102,6 +102,7 @@ pub fn main() {
         // Exit early to skip rebuild since artifacts are already published.
         return;
     }
+    let publish_binaries = std::env::var("PUBLISH_ARTIFACTS").is_ok();
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=bindings.h");
     println!("cargo:rerun-if-changed=aeron/version.txt");
@@ -138,11 +139,19 @@ pub fn main() {
         config.profile("Release");
         config.define(
             "CMAKE_CXX_FLAGS_RELEASE",
-            "-O3 -DNDEBUG -march=native -funroll-loops",
+            if publish_binaries {
+                "-O3 -DNDEBUG -march=native -funroll-loops"
+            } else {
+                "-O3 -DNDEBUG -march=native -funroll-loops -flto"
+            },
         );
         config.define(
             "CMAKE_C_FLAGS_RELEASE",
-            "-O3 -DNDEBUG -march=native -funroll-loops",
+            if publish_binaries {
+                "-O3 -DNDEBUG -march=native -funroll-loops"
+            } else {
+                "-O3 -DNDEBUG -march=native -funroll-loops -flto"
+            },
         );
     } else {
         config.profile("Debug");
@@ -260,7 +269,7 @@ pub fn main() {
     }
 
     #[cfg(feature = "static")]
-    if std::env::var("PUBLISH_ARTIFACTS").is_ok() {
+    if publish_binaries {
         let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
         let cmake_lib_dir = cmake_output;
         publish_artifacts(&out_path, &cmake_lib_dir).expect("Failed to publish artifacts");
