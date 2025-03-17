@@ -139,11 +139,11 @@ pub fn main() {
         config.profile("Release");
         config.define(
             "CMAKE_CXX_FLAGS_RELEASE",
-            "-O3 -DNDEBUG -march=native -funroll-loops -flto",
+            "-O3 -DNDEBUG -march=native -funroll-loops",
         );
         config.define(
             "CMAKE_C_FLAGS_RELEASE",
-            "-O3 -DNDEBUG -march=native -funroll-loops -flto",
+            "-O3 -DNDEBUG -march=native -funroll-loops",
         );
     } else {
         config.profile("Debug");

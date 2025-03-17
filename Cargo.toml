@@ -51,8 +51,6 @@ compression = "best"
 [profile.release]
 strip = true
 debug = false
-lto = "fat"
-codegen-units = 1
 panic = "abort"
 
 
