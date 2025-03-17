@@ -17,7 +17,7 @@ The purpose of **rusteron** is to take these C bindings and generate a Rust wrap
 
 The modules in **rusteron** aim to replicate and extend the capabilities available in the Aeron ecosystem, while simplifying their use for developers accustomed to Rust.
 
-For quick start use static lib with precompiled C libraries. This will not require cmake or java to be installed on your system.
+For quick start use static lib with precompiled C libraries if your running on a mac. This will not require cmake or java to be installed on your system.
 
 ```toml
 rusteron-archive = { version = "0.1", features= ["static", "precompile"] }
