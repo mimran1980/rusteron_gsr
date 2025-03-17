@@ -81,7 +81,7 @@ static lib
 rusteron-client = { version = "0.1", features= ["static"] }
 ```
 
-static lib with precompiled c libs
+static lib with precompiled c libs (mac os x only)
 ```toml
 [dependencies]
 rusteron-client = { version = "0.1", features= ["static", "precompile"] }

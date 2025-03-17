@@ -96,49 +96,6 @@ jobs:
           distribution: 'temurin'
           java-version: '23'
 
-      # Use GitHub Actions cache for Rust dependencies
-      - name: Cache Cargo registry
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/registry
-          key: cargo-registry-${{ runner.os }}-${{ runner.arch }}-${{ matrix.rust-version }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            cargo-registry-${{ runner.os }}-${{ runner.arch }}-${{ matrix.rust-version }}-
-
-      - name: Cache Cargo index
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: cargo-index-${{ runner.os }}-${{ runner.arch }}-${{ matrix.rust-version }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            cargo-index-${{ runner.os }}-${{ runner.arch }}-${{ matrix.rust-version }}-
-
-      - name: Cache Cargo build (Feature-Aware)
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: cargo-build-${{ runner.os }}-${{ runner.arch }}-${{ matrix.rust-version }}-${{ matrix.features || 'default' }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            cargo-build-${{ runner.os }}-${{ runner.arch }}-${{ matrix.rust-version }}-${{ matrix.features || 'default' }}-
-
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle/wrapper/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      - name: Cache Per-Crate Compilation
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: cargo-build-crate-${{ runner.os }}-${{ runner.arch }}-${{ matrix.rust-version }}-${{ matrix.features || 'default' }}-${{ hashFiles('*/Cargo.toml', '**/Cargo.lock') }}
-          restore-keys: |
-            cargo-build-crate-${{ runner.os }}-${{ runner.arch }}-${{ matrix.rust-version }}-${{ matrix.features || 'default' }}-
-
       - name: Build and Test
         run: |
           rm -rf rusteron-archive/artifacts rusteron-client/artifacts rusteron-media-driver/artifacts rusteron-rb/artifacts

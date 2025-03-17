@@ -28,7 +28,7 @@ static lib
 rusteron-media-driver = { version = "0.1", features= ["static"] }
 ```
 
-static lib with precompiled c libs
+static lib with precompiled c libs (mac os x only)
 ```toml
 [dependencies]
 rusteron-media-driver = { version = "0.1", features= ["static", "precompile"] }
