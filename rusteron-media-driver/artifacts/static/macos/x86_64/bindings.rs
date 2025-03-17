@@ -23,6 +23,7 @@ pub const AERON_COUNTER_MAX_CLIENT_NAME_LENGTH: u32 = 100;
 pub const AERON_COUNTER_RECORD_UNUSED: u32 = 0;
 pub const AERON_COUNTER_RECORD_ALLOCATED: u32 = 1;
 pub const AERON_COUNTER_RECORD_RECLAIMED: i32 = -1;
+pub const AERON_COUNTER_NOT_FREE_TO_REUSE: u64 = 9223372036854775807;
 pub const AERON_NULL_COUNTER_ID: i32 = -1;
 pub const AERON_PUBLICATION_NOT_CONNECTED: i32 = -1;
 pub const AERON_PUBLICATION_BACK_PRESSURED: i32 = -2;
@@ -34,7 +35,6 @@ pub const AERON_COMPILER_GCC: u32 = 1;
 pub const AERON_COMPILER_LLVM: u32 = 1;
 pub const AERON_CPU_X64: u32 = 1;
 pub const AERON_CACHE_LINE_LENGTH: u32 = 64;
-pub const AERON_INIT_ONCE_VALUE: u32 = 0;
 pub const AERON_MAX_PATH: u32 = 4096;
 pub const AERON_SPY_PREFIX: &[u8; 11] = b"aeron-spy:\0";
 pub const AERON_IPC_CHANNEL: &[u8; 10] = b"aeron:ipc\0";
@@ -416,56 +416,33 @@ unsafe extern "C" {
 unsafe extern "C" {
     pub fn aeron_free(ptr: *mut ::std::os::raw::c_void);
 }
-pub type __time_t = ::std::os::raw::c_long;
-pub type __syscall_slong_t = ::std::os::raw::c_long;
-pub type __socklen_t = ::std::os::raw::c_uint;
+pub type __uint8_t = ::std::os::raw::c_uchar;
+pub type __uint16_t = ::std::os::raw::c_ushort;
+pub type __uint32_t = ::std::os::raw::c_uint;
+pub type __int64_t = ::std::os::raw::c_longlong;
+pub type __darwin_socklen_t = __uint32_t;
+pub type __darwin_time_t = ::std::os::raw::c_long;
 #[repr(C)]
-#[derive(Debug, Default, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct timespec {
-    pub tv_sec: __time_t,
-    pub tv_nsec: __syscall_slong_t,
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct __darwin_pthread_handler_rec {
+    pub __routine: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
+    pub __arg: *mut ::std::os::raw::c_void,
+    pub __next: *mut __darwin_pthread_handler_rec,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of timespec"][::std::mem::size_of::<timespec>() - 16usize];
-    ["Alignment of timespec"][::std::mem::align_of::<timespec>() - 8usize];
-    ["Offset of field: timespec::tv_sec"][::std::mem::offset_of!(timespec, tv_sec) - 0usize];
-    ["Offset of field: timespec::tv_nsec"][::std::mem::offset_of!(timespec, tv_nsec) - 8usize];
+    ["Size of __darwin_pthread_handler_rec"]
+        [::std::mem::size_of::<__darwin_pthread_handler_rec>() - 24usize];
+    ["Alignment of __darwin_pthread_handler_rec"]
+        [::std::mem::align_of::<__darwin_pthread_handler_rec>() - 8usize];
+    ["Offset of field: __darwin_pthread_handler_rec::__routine"]
+        [::std::mem::offset_of!(__darwin_pthread_handler_rec, __routine) - 0usize];
+    ["Offset of field: __darwin_pthread_handler_rec::__arg"]
+        [::std::mem::offset_of!(__darwin_pthread_handler_rec, __arg) - 8usize];
+    ["Offset of field: __darwin_pthread_handler_rec::__next"]
+        [::std::mem::offset_of!(__darwin_pthread_handler_rec, __next) - 16usize];
 };
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub union __atomic_wide_counter {
-    pub __value64: ::std::os::raw::c_ulonglong,
-    pub __value32: __atomic_wide_counter__bindgen_ty_1,
-}
-#[repr(C)]
-#[derive(Debug, Default, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct __atomic_wide_counter__bindgen_ty_1 {
-    pub __low: ::std::os::raw::c_uint,
-    pub __high: ::std::os::raw::c_uint,
-}
-#[allow(clippy::unnecessary_operation, clippy::identity_op)]
-const _: () = {
-    ["Size of __atomic_wide_counter__bindgen_ty_1"]
-        [::std::mem::size_of::<__atomic_wide_counter__bindgen_ty_1>() - 8usize];
-    ["Alignment of __atomic_wide_counter__bindgen_ty_1"]
-        [::std::mem::align_of::<__atomic_wide_counter__bindgen_ty_1>() - 4usize];
-    ["Offset of field: __atomic_wide_counter__bindgen_ty_1::__low"]
-        [::std::mem::offset_of!(__atomic_wide_counter__bindgen_ty_1, __low) - 0usize];
-    ["Offset of field: __atomic_wide_counter__bindgen_ty_1::__high"]
-        [::std::mem::offset_of!(__atomic_wide_counter__bindgen_ty_1, __high) - 4usize];
-};
-#[allow(clippy::unnecessary_operation, clippy::identity_op)]
-const _: () = {
-    ["Size of __atomic_wide_counter"][::std::mem::size_of::<__atomic_wide_counter>() - 8usize];
-    ["Alignment of __atomic_wide_counter"]
-        [::std::mem::align_of::<__atomic_wide_counter>() - 8usize];
-    ["Offset of field: __atomic_wide_counter::__value64"]
-        [::std::mem::offset_of!(__atomic_wide_counter, __value64) - 0usize];
-    ["Offset of field: __atomic_wide_counter::__value32"]
-        [::std::mem::offset_of!(__atomic_wide_counter, __value32) - 0usize];
-};
-impl Default for __atomic_wide_counter {
+impl Default for __darwin_pthread_handler_rec {
     fn default() -> Self {
         let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
         unsafe {
@@ -476,21 +453,21 @@ impl Default for __atomic_wide_counter {
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct __pthread_internal_list {
-    pub __prev: *mut __pthread_internal_list,
-    pub __next: *mut __pthread_internal_list,
+pub struct _opaque_pthread_attr_t {
+    pub __sig: ::std::os::raw::c_long,
+    pub __opaque: [::std::os::raw::c_char; 56usize],
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of __pthread_internal_list"][::std::mem::size_of::<__pthread_internal_list>() - 16usize];
-    ["Alignment of __pthread_internal_list"]
-        [::std::mem::align_of::<__pthread_internal_list>() - 8usize];
-    ["Offset of field: __pthread_internal_list::__prev"]
-        [::std::mem::offset_of!(__pthread_internal_list, __prev) - 0usize];
-    ["Offset of field: __pthread_internal_list::__next"]
-        [::std::mem::offset_of!(__pthread_internal_list, __next) - 8usize];
+    ["Size of _opaque_pthread_attr_t"][::std::mem::size_of::<_opaque_pthread_attr_t>() - 64usize];
+    ["Alignment of _opaque_pthread_attr_t"]
+        [::std::mem::align_of::<_opaque_pthread_attr_t>() - 8usize];
+    ["Offset of field: _opaque_pthread_attr_t::__sig"]
+        [::std::mem::offset_of!(_opaque_pthread_attr_t, __sig) - 0usize];
+    ["Offset of field: _opaque_pthread_attr_t::__opaque"]
+        [::std::mem::offset_of!(_opaque_pthread_attr_t, __opaque) - 8usize];
 };
-impl Default for __pthread_internal_list {
+impl Default for _opaque_pthread_attr_t {
     fn default() -> Self {
         let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
         unsafe {
@@ -499,41 +476,23 @@ impl Default for __pthread_internal_list {
         }
     }
 }
-pub type __pthread_list_t = __pthread_internal_list;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct __pthread_mutex_s {
-    pub __lock: ::std::os::raw::c_int,
-    pub __count: ::std::os::raw::c_uint,
-    pub __owner: ::std::os::raw::c_int,
-    pub __nusers: ::std::os::raw::c_uint,
-    pub __kind: ::std::os::raw::c_int,
-    pub __spins: ::std::os::raw::c_short,
-    pub __elision: ::std::os::raw::c_short,
-    pub __list: __pthread_list_t,
+pub struct _opaque_pthread_cond_t {
+    pub __sig: ::std::os::raw::c_long,
+    pub __opaque: [::std::os::raw::c_char; 40usize],
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of __pthread_mutex_s"][::std::mem::size_of::<__pthread_mutex_s>() - 40usize];
-    ["Alignment of __pthread_mutex_s"][::std::mem::align_of::<__pthread_mutex_s>() - 8usize];
-    ["Offset of field: __pthread_mutex_s::__lock"]
-        [::std::mem::offset_of!(__pthread_mutex_s, __lock) - 0usize];
-    ["Offset of field: __pthread_mutex_s::__count"]
-        [::std::mem::offset_of!(__pthread_mutex_s, __count) - 4usize];
-    ["Offset of field: __pthread_mutex_s::__owner"]
-        [::std::mem::offset_of!(__pthread_mutex_s, __owner) - 8usize];
-    ["Offset of field: __pthread_mutex_s::__nusers"]
-        [::std::mem::offset_of!(__pthread_mutex_s, __nusers) - 12usize];
-    ["Offset of field: __pthread_mutex_s::__kind"]
-        [::std::mem::offset_of!(__pthread_mutex_s, __kind) - 16usize];
-    ["Offset of field: __pthread_mutex_s::__spins"]
-        [::std::mem::offset_of!(__pthread_mutex_s, __spins) - 20usize];
-    ["Offset of field: __pthread_mutex_s::__elision"]
-        [::std::mem::offset_of!(__pthread_mutex_s, __elision) - 22usize];
-    ["Offset of field: __pthread_mutex_s::__list"]
-        [::std::mem::offset_of!(__pthread_mutex_s, __list) - 24usize];
+    ["Size of _opaque_pthread_cond_t"][::std::mem::size_of::<_opaque_pthread_cond_t>() - 48usize];
+    ["Alignment of _opaque_pthread_cond_t"]
+        [::std::mem::align_of::<_opaque_pthread_cond_t>() - 8usize];
+    ["Offset of field: _opaque_pthread_cond_t::__sig"]
+        [::std::mem::offset_of!(_opaque_pthread_cond_t, __sig) - 0usize];
+    ["Offset of field: _opaque_pthread_cond_t::__opaque"]
+        [::std::mem::offset_of!(_opaque_pthread_cond_t, __opaque) - 8usize];
 };
-impl Default for __pthread_mutex_s {
+impl Default for _opaque_pthread_cond_t {
     fn default() -> Self {
         let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
         unsafe {
@@ -543,61 +502,22 @@ impl Default for __pthread_mutex_s {
     }
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
-pub struct __pthread_cond_s {
-    pub __wseq: __atomic_wide_counter,
-    pub __g1_start: __atomic_wide_counter,
-    pub __g_refs: [::std::os::raw::c_uint; 2usize],
-    pub __g_size: [::std::os::raw::c_uint; 2usize],
-    pub __g1_orig_size: ::std::os::raw::c_uint,
-    pub __wrefs: ::std::os::raw::c_uint,
-    pub __g_signals: [::std::os::raw::c_uint; 2usize],
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct _opaque_pthread_mutex_t {
+    pub __sig: ::std::os::raw::c_long,
+    pub __opaque: [::std::os::raw::c_char; 56usize],
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of __pthread_cond_s"][::std::mem::size_of::<__pthread_cond_s>() - 48usize];
-    ["Alignment of __pthread_cond_s"][::std::mem::align_of::<__pthread_cond_s>() - 8usize];
-    ["Offset of field: __pthread_cond_s::__wseq"]
-        [::std::mem::offset_of!(__pthread_cond_s, __wseq) - 0usize];
-    ["Offset of field: __pthread_cond_s::__g1_start"]
-        [::std::mem::offset_of!(__pthread_cond_s, __g1_start) - 8usize];
-    ["Offset of field: __pthread_cond_s::__g_refs"]
-        [::std::mem::offset_of!(__pthread_cond_s, __g_refs) - 16usize];
-    ["Offset of field: __pthread_cond_s::__g_size"]
-        [::std::mem::offset_of!(__pthread_cond_s, __g_size) - 24usize];
-    ["Offset of field: __pthread_cond_s::__g1_orig_size"]
-        [::std::mem::offset_of!(__pthread_cond_s, __g1_orig_size) - 32usize];
-    ["Offset of field: __pthread_cond_s::__wrefs"]
-        [::std::mem::offset_of!(__pthread_cond_s, __wrefs) - 36usize];
-    ["Offset of field: __pthread_cond_s::__g_signals"]
-        [::std::mem::offset_of!(__pthread_cond_s, __g_signals) - 40usize];
+    ["Size of _opaque_pthread_mutex_t"][::std::mem::size_of::<_opaque_pthread_mutex_t>() - 64usize];
+    ["Alignment of _opaque_pthread_mutex_t"]
+        [::std::mem::align_of::<_opaque_pthread_mutex_t>() - 8usize];
+    ["Offset of field: _opaque_pthread_mutex_t::__sig"]
+        [::std::mem::offset_of!(_opaque_pthread_mutex_t, __sig) - 0usize];
+    ["Offset of field: _opaque_pthread_mutex_t::__opaque"]
+        [::std::mem::offset_of!(_opaque_pthread_mutex_t, __opaque) - 8usize];
 };
-impl Default for __pthread_cond_s {
-    fn default() -> Self {
-        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
-        unsafe {
-            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
-            s.assume_init()
-        }
-    }
-}
-pub type pthread_t = ::std::os::raw::c_ulong;
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub union pthread_attr_t {
-    pub __size: [::std::os::raw::c_char; 56usize],
-    pub __align: ::std::os::raw::c_long,
-}
-#[allow(clippy::unnecessary_operation, clippy::identity_op)]
-const _: () = {
-    ["Size of pthread_attr_t"][::std::mem::size_of::<pthread_attr_t>() - 56usize];
-    ["Alignment of pthread_attr_t"][::std::mem::align_of::<pthread_attr_t>() - 8usize];
-    ["Offset of field: pthread_attr_t::__size"]
-        [::std::mem::offset_of!(pthread_attr_t, __size) - 0usize];
-    ["Offset of field: pthread_attr_t::__align"]
-        [::std::mem::offset_of!(pthread_attr_t, __align) - 0usize];
-};
-impl Default for pthread_attr_t {
+impl Default for _opaque_pthread_mutex_t {
     fn default() -> Self {
         let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
         unsafe {
@@ -607,24 +527,24 @@ impl Default for pthread_attr_t {
     }
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
-pub union pthread_mutex_t {
-    pub __data: __pthread_mutex_s,
-    pub __size: [::std::os::raw::c_char; 40usize],
-    pub __align: ::std::os::raw::c_long,
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct _opaque_pthread_t {
+    pub __sig: ::std::os::raw::c_long,
+    pub __cleanup_stack: *mut __darwin_pthread_handler_rec,
+    pub __opaque: [::std::os::raw::c_char; 8176usize],
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of pthread_mutex_t"][::std::mem::size_of::<pthread_mutex_t>() - 40usize];
-    ["Alignment of pthread_mutex_t"][::std::mem::align_of::<pthread_mutex_t>() - 8usize];
-    ["Offset of field: pthread_mutex_t::__data"]
-        [::std::mem::offset_of!(pthread_mutex_t, __data) - 0usize];
-    ["Offset of field: pthread_mutex_t::__size"]
-        [::std::mem::offset_of!(pthread_mutex_t, __size) - 0usize];
-    ["Offset of field: pthread_mutex_t::__align"]
-        [::std::mem::offset_of!(pthread_mutex_t, __align) - 0usize];
+    ["Size of _opaque_pthread_t"][::std::mem::size_of::<_opaque_pthread_t>() - 8192usize];
+    ["Alignment of _opaque_pthread_t"][::std::mem::align_of::<_opaque_pthread_t>() - 8usize];
+    ["Offset of field: _opaque_pthread_t::__sig"]
+        [::std::mem::offset_of!(_opaque_pthread_t, __sig) - 0usize];
+    ["Offset of field: _opaque_pthread_t::__cleanup_stack"]
+        [::std::mem::offset_of!(_opaque_pthread_t, __cleanup_stack) - 8usize];
+    ["Offset of field: _opaque_pthread_t::__opaque"]
+        [::std::mem::offset_of!(_opaque_pthread_t, __opaque) - 16usize];
 };
-impl Default for pthread_mutex_t {
+impl Default for _opaque_pthread_t {
     fn default() -> Self {
         let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
         unsafe {
@@ -633,33 +553,11 @@ impl Default for pthread_mutex_t {
         }
     }
 }
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub union pthread_cond_t {
-    pub __data: __pthread_cond_s,
-    pub __size: [::std::os::raw::c_char; 48usize],
-    pub __align: ::std::os::raw::c_longlong,
-}
-#[allow(clippy::unnecessary_operation, clippy::identity_op)]
-const _: () = {
-    ["Size of pthread_cond_t"][::std::mem::size_of::<pthread_cond_t>() - 48usize];
-    ["Alignment of pthread_cond_t"][::std::mem::align_of::<pthread_cond_t>() - 8usize];
-    ["Offset of field: pthread_cond_t::__data"]
-        [::std::mem::offset_of!(pthread_cond_t, __data) - 0usize];
-    ["Offset of field: pthread_cond_t::__size"]
-        [::std::mem::offset_of!(pthread_cond_t, __size) - 0usize];
-    ["Offset of field: pthread_cond_t::__align"]
-        [::std::mem::offset_of!(pthread_cond_t, __align) - 0usize];
-};
-impl Default for pthread_cond_t {
-    fn default() -> Self {
-        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
-        unsafe {
-            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
-            s.assume_init()
-        }
-    }
-}
+pub type __darwin_pthread_attr_t = _opaque_pthread_attr_t;
+pub type __darwin_pthread_cond_t = _opaque_pthread_cond_t;
+pub type __darwin_pthread_mutex_t = _opaque_pthread_mutex_t;
+pub type __darwin_pthread_t = *mut _opaque_pthread_t;
+pub type pthread_attr_t = __darwin_pthread_attr_t;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct aeron_context_stct {
@@ -2868,6 +2766,19 @@ unsafe extern "C" {
     #[doc = " Closes the instance of the aeron cnc and frees its resources.\n\n @param aeron_cnc to close"]
     pub fn aeron_cnc_close(aeron_cnc: *mut aeron_cnc_t);
 }
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct timespec {
+    pub tv_sec: __darwin_time_t,
+    pub tv_nsec: ::std::os::raw::c_long,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of timespec"][::std::mem::size_of::<timespec>() - 16usize];
+    ["Alignment of timespec"][::std::mem::align_of::<timespec>() - 8usize];
+    ["Offset of field: timespec::tv_sec"][::std::mem::offset_of!(timespec, tv_sec) - 0usize];
+    ["Offset of field: timespec::tv_nsec"][::std::mem::offset_of!(timespec, tv_nsec) - 8usize];
+};
 unsafe extern "C" {
     pub fn aeron_randomised_int32() -> i32;
 }
@@ -2958,6 +2869,9 @@ unsafe extern "C" {
         cpu_affinity_no: u8,
     ) -> ::std::os::raw::c_int;
 }
+pub type pthread_cond_t = __darwin_pthread_cond_t;
+pub type pthread_mutex_t = __darwin_pthread_mutex_t;
+pub type pthread_t = __darwin_pthread_t;
 pub type aeron_mutex_t = pthread_mutex_t;
 pub type aeron_thread_t = pthread_t;
 pub type aeron_thread_attr_t = pthread_attr_t;
@@ -3053,7 +2967,7 @@ impl Default for aeron_distinct_error_log_observation_list_stct {
 pub type aeron_distinct_error_log_observation_list_t =
     aeron_distinct_error_log_observation_list_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct aeron_distinct_error_log_stct {
     pub buffer: *mut u8,
     pub observation_list: *mut aeron_distinct_error_log_observation_list_t,
@@ -3065,7 +2979,7 @@ pub struct aeron_distinct_error_log_stct {
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
     ["Size of aeron_distinct_error_log_stct"]
-        [::std::mem::size_of::<aeron_distinct_error_log_stct>() - 80usize];
+        [::std::mem::size_of::<aeron_distinct_error_log_stct>() - 104usize];
     ["Alignment of aeron_distinct_error_log_stct"]
         [::std::mem::align_of::<aeron_distinct_error_log_stct>() - 8usize];
     ["Offset of field: aeron_distinct_error_log_stct::buffer"]
@@ -5262,6 +5176,9 @@ unsafe extern "C" {
 unsafe extern "C" {
     pub fn aeron_driver_uri_get_offset_info(offset: i32) -> *const ::std::os::raw::c_char;
 }
+pub type in_addr_t = __uint32_t;
+pub type sa_family_t = __uint8_t;
+pub type socklen_t = __darwin_socklen_t;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct iovec {
@@ -5284,38 +5201,44 @@ impl Default for iovec {
         }
     }
 }
-pub type socklen_t = __socklen_t;
-pub type sa_family_t = ::std::os::raw::c_ushort;
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct sockaddr {
+    pub sa_len: __uint8_t,
     pub sa_family: sa_family_t,
     pub sa_data: [::std::os::raw::c_char; 14usize],
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
     ["Size of sockaddr"][::std::mem::size_of::<sockaddr>() - 16usize];
-    ["Alignment of sockaddr"][::std::mem::align_of::<sockaddr>() - 2usize];
-    ["Offset of field: sockaddr::sa_family"][::std::mem::offset_of!(sockaddr, sa_family) - 0usize];
+    ["Alignment of sockaddr"][::std::mem::align_of::<sockaddr>() - 1usize];
+    ["Offset of field: sockaddr::sa_len"][::std::mem::offset_of!(sockaddr, sa_len) - 0usize];
+    ["Offset of field: sockaddr::sa_family"][::std::mem::offset_of!(sockaddr, sa_family) - 1usize];
     ["Offset of field: sockaddr::sa_data"][::std::mem::offset_of!(sockaddr, sa_data) - 2usize];
 };
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct sockaddr_storage {
+    pub ss_len: __uint8_t,
     pub ss_family: sa_family_t,
-    pub __ss_padding: [::std::os::raw::c_char; 118usize],
-    pub __ss_align: ::std::os::raw::c_ulong,
+    pub __ss_pad1: [::std::os::raw::c_char; 6usize],
+    pub __ss_align: __int64_t,
+    pub __ss_pad2: [::std::os::raw::c_char; 112usize],
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
     ["Size of sockaddr_storage"][::std::mem::size_of::<sockaddr_storage>() - 128usize];
     ["Alignment of sockaddr_storage"][::std::mem::align_of::<sockaddr_storage>() - 8usize];
+    ["Offset of field: sockaddr_storage::ss_len"]
+        [::std::mem::offset_of!(sockaddr_storage, ss_len) - 0usize];
     ["Offset of field: sockaddr_storage::ss_family"]
-        [::std::mem::offset_of!(sockaddr_storage, ss_family) - 0usize];
-    ["Offset of field: sockaddr_storage::__ss_padding"]
-        [::std::mem::offset_of!(sockaddr_storage, __ss_padding) - 2usize];
+        [::std::mem::offset_of!(sockaddr_storage, ss_family) - 1usize];
+    ["Offset of field: sockaddr_storage::__ss_pad1"]
+        [::std::mem::offset_of!(sockaddr_storage, __ss_pad1) - 2usize];
     ["Offset of field: sockaddr_storage::__ss_align"]
-        [::std::mem::offset_of!(sockaddr_storage, __ss_align) - 120usize];
+        [::std::mem::offset_of!(sockaddr_storage, __ss_align) - 8usize];
+    ["Offset of field: sockaddr_storage::__ss_pad2"]
+        [::std::mem::offset_of!(sockaddr_storage, __ss_pad2) - 16usize];
 };
 impl Default for sockaddr_storage {
     fn default() -> Self {
@@ -5332,14 +5255,14 @@ pub struct msghdr {
     pub msg_name: *mut ::std::os::raw::c_void,
     pub msg_namelen: socklen_t,
     pub msg_iov: *mut iovec,
-    pub msg_iovlen: usize,
+    pub msg_iovlen: ::std::os::raw::c_int,
     pub msg_control: *mut ::std::os::raw::c_void,
-    pub msg_controllen: usize,
+    pub msg_controllen: socklen_t,
     pub msg_flags: ::std::os::raw::c_int,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of msghdr"][::std::mem::size_of::<msghdr>() - 56usize];
+    ["Size of msghdr"][::std::mem::size_of::<msghdr>() - 48usize];
     ["Alignment of msghdr"][::std::mem::align_of::<msghdr>() - 8usize];
     ["Offset of field: msghdr::msg_name"][::std::mem::offset_of!(msghdr, msg_name) - 0usize];
     ["Offset of field: msghdr::msg_namelen"][::std::mem::offset_of!(msghdr, msg_namelen) - 8usize];
@@ -5348,7 +5271,7 @@ const _: () = {
     ["Offset of field: msghdr::msg_control"][::std::mem::offset_of!(msghdr, msg_control) - 32usize];
     ["Offset of field: msghdr::msg_controllen"]
         [::std::mem::offset_of!(msghdr, msg_controllen) - 40usize];
-    ["Offset of field: msghdr::msg_flags"][::std::mem::offset_of!(msghdr, msg_flags) - 48usize];
+    ["Offset of field: msghdr::msg_flags"][::std::mem::offset_of!(msghdr, msg_flags) - 44usize];
 };
 impl Default for msghdr {
     fn default() -> Self {
@@ -5359,7 +5282,6 @@ impl Default for msghdr {
         }
     }
 }
-pub type in_addr_t = u32;
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct in_addr {
@@ -5374,14 +5296,14 @@ const _: () = {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct in6_addr {
-    pub __in6_u: in6_addr__bindgen_ty_1,
+    pub __u6_addr: in6_addr__bindgen_ty_1,
 }
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union in6_addr__bindgen_ty_1 {
-    pub __u6_addr8: [u8; 16usize],
-    pub __u6_addr16: [u16; 8usize],
-    pub __u6_addr32: [u32; 4usize],
+    pub __u6_addr8: [__uint8_t; 16usize],
+    pub __u6_addr16: [__uint16_t; 8usize],
+    pub __u6_addr32: [__uint32_t; 4usize],
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
@@ -5408,7 +5330,7 @@ impl Default for in6_addr__bindgen_ty_1 {
 const _: () = {
     ["Size of in6_addr"][::std::mem::size_of::<in6_addr>() - 16usize];
     ["Alignment of in6_addr"][::std::mem::align_of::<in6_addr>() - 4usize];
-    ["Offset of field: in6_addr::__in6_u"][::std::mem::offset_of!(in6_addr, __in6_u) - 0usize];
+    ["Offset of field: in6_addr::__u6_addr"][::std::mem::offset_of!(in6_addr, __u6_addr) - 0usize];
 };
 impl Default for in6_addr {
     fn default() -> Self {
@@ -5427,8 +5349,8 @@ pub struct addrinfo {
     pub ai_socktype: ::std::os::raw::c_int,
     pub ai_protocol: ::std::os::raw::c_int,
     pub ai_addrlen: socklen_t,
-    pub ai_addr: *mut sockaddr,
     pub ai_canonname: *mut ::std::os::raw::c_char,
+    pub ai_addr: *mut sockaddr,
     pub ai_next: *mut addrinfo,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
@@ -5443,9 +5365,9 @@ const _: () = {
         [::std::mem::offset_of!(addrinfo, ai_protocol) - 12usize];
     ["Offset of field: addrinfo::ai_addrlen"]
         [::std::mem::offset_of!(addrinfo, ai_addrlen) - 16usize];
-    ["Offset of field: addrinfo::ai_addr"][::std::mem::offset_of!(addrinfo, ai_addr) - 24usize];
     ["Offset of field: addrinfo::ai_canonname"]
-        [::std::mem::offset_of!(addrinfo, ai_canonname) - 32usize];
+        [::std::mem::offset_of!(addrinfo, ai_canonname) - 24usize];
+    ["Offset of field: addrinfo::ai_addr"][::std::mem::offset_of!(addrinfo, ai_addr) - 32usize];
     ["Offset of field: addrinfo::ai_next"][::std::mem::offset_of!(addrinfo, ai_next) - 40usize];
 };
 impl Default for addrinfo {
@@ -5458,40 +5380,15 @@ impl Default for addrinfo {
     }
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct ifaddrs {
     pub ifa_next: *mut ifaddrs,
     pub ifa_name: *mut ::std::os::raw::c_char,
     pub ifa_flags: ::std::os::raw::c_uint,
     pub ifa_addr: *mut sockaddr,
     pub ifa_netmask: *mut sockaddr,
-    pub ifa_ifu: ifaddrs__bindgen_ty_1,
+    pub ifa_dstaddr: *mut sockaddr,
     pub ifa_data: *mut ::std::os::raw::c_void,
-}
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub union ifaddrs__bindgen_ty_1 {
-    pub ifu_broadaddr: *mut sockaddr,
-    pub ifu_dstaddr: *mut sockaddr,
-}
-#[allow(clippy::unnecessary_operation, clippy::identity_op)]
-const _: () = {
-    ["Size of ifaddrs__bindgen_ty_1"][::std::mem::size_of::<ifaddrs__bindgen_ty_1>() - 8usize];
-    ["Alignment of ifaddrs__bindgen_ty_1"]
-        [::std::mem::align_of::<ifaddrs__bindgen_ty_1>() - 8usize];
-    ["Offset of field: ifaddrs__bindgen_ty_1::ifu_broadaddr"]
-        [::std::mem::offset_of!(ifaddrs__bindgen_ty_1, ifu_broadaddr) - 0usize];
-    ["Offset of field: ifaddrs__bindgen_ty_1::ifu_dstaddr"]
-        [::std::mem::offset_of!(ifaddrs__bindgen_ty_1, ifu_dstaddr) - 0usize];
-};
-impl Default for ifaddrs__bindgen_ty_1 {
-    fn default() -> Self {
-        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
-        unsafe {
-            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
-            s.assume_init()
-        }
-    }
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
@@ -5503,7 +5400,8 @@ const _: () = {
     ["Offset of field: ifaddrs::ifa_addr"][::std::mem::offset_of!(ifaddrs, ifa_addr) - 24usize];
     ["Offset of field: ifaddrs::ifa_netmask"]
         [::std::mem::offset_of!(ifaddrs, ifa_netmask) - 32usize];
-    ["Offset of field: ifaddrs::ifa_ifu"][::std::mem::offset_of!(ifaddrs, ifa_ifu) - 40usize];
+    ["Offset of field: ifaddrs::ifa_dstaddr"]
+        [::std::mem::offset_of!(ifaddrs, ifa_dstaddr) - 40usize];
     ["Offset of field: ifaddrs::ifa_data"][::std::mem::offset_of!(ifaddrs, ifa_data) - 48usize];
 };
 impl Default for ifaddrs {
@@ -9909,7 +9807,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct aeron_blocking_linked_queue_stct {
     pub queue: aeron_linked_queue_t,
     pub mutex: aeron_mutex_t,
@@ -9918,7 +9816,7 @@ pub struct aeron_blocking_linked_queue_stct {
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
     ["Size of aeron_blocking_linked_queue_stct"]
-        [::std::mem::size_of::<aeron_blocking_linked_queue_stct>() - 104usize];
+        [::std::mem::size_of::<aeron_blocking_linked_queue_stct>() - 128usize];
     ["Alignment of aeron_blocking_linked_queue_stct"]
         [::std::mem::align_of::<aeron_blocking_linked_queue_stct>() - 8usize];
     ["Offset of field: aeron_blocking_linked_queue_stct::queue"]
@@ -9926,7 +9824,7 @@ const _: () = {
     ["Offset of field: aeron_blocking_linked_queue_stct::mutex"]
         [::std::mem::offset_of!(aeron_blocking_linked_queue_stct, mutex) - 16usize];
     ["Offset of field: aeron_blocking_linked_queue_stct::cv"]
-        [::std::mem::offset_of!(aeron_blocking_linked_queue_stct, cv) - 56usize];
+        [::std::mem::offset_of!(aeron_blocking_linked_queue_stct, cv) - 80usize];
 };
 impl Default for aeron_blocking_linked_queue_stct {
     fn default() -> Self {
@@ -10002,7 +9900,7 @@ pub type aeron_executor_on_execution_complete_func_t = ::std::option::Option<
     ) -> ::std::os::raw::c_int,
 >;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct aeron_executor_stct {
     pub async_: bool,
     pub on_execution_complete: aeron_executor_on_execution_complete_func_t,
@@ -10014,7 +9912,7 @@ pub struct aeron_executor_stct {
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of aeron_executor_stct"][::std::mem::size_of::<aeron_executor_stct>() - 248usize];
+    ["Size of aeron_executor_stct"][::std::mem::size_of::<aeron_executor_stct>() - 296usize];
     ["Alignment of aeron_executor_stct"][::std::mem::align_of::<aeron_executor_stct>() - 8usize];
     ["Offset of field: aeron_executor_stct::async_"]
         [::std::mem::offset_of!(aeron_executor_stct, async_) - 0usize];
@@ -10025,11 +9923,11 @@ const _: () = {
     ["Offset of field: aeron_executor_stct::queue"]
         [::std::mem::offset_of!(aeron_executor_stct, queue) - 24usize];
     ["Offset of field: aeron_executor_stct::return_queue"]
-        [::std::mem::offset_of!(aeron_executor_stct, return_queue) - 128usize];
+        [::std::mem::offset_of!(aeron_executor_stct, return_queue) - 152usize];
     ["Offset of field: aeron_executor_stct::dispatch_thread"]
-        [::std::mem::offset_of!(aeron_executor_stct, dispatch_thread) - 232usize];
+        [::std::mem::offset_of!(aeron_executor_stct, dispatch_thread) - 280usize];
     ["Offset of field: aeron_executor_stct::dispatch_thread_cpu_affinity"]
-        [::std::mem::offset_of!(aeron_executor_stct, dispatch_thread_cpu_affinity) - 240usize];
+        [::std::mem::offset_of!(aeron_executor_stct, dispatch_thread_cpu_affinity) - 288usize];
 };
 impl Default for aeron_executor_stct {
     fn default() -> Self {
@@ -15534,7 +15432,7 @@ impl Default for aeron_end_of_life_resource_stct {
 }
 pub type aeron_end_of_life_resource_t = aeron_end_of_life_resource_stct;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct aeron_driver_conductor_stct {
     pub context: *mut aeron_driver_context_t,
     pub to_driver_commands: aeron_mpsc_rb_t,
@@ -16186,7 +16084,7 @@ impl Default for aeron_driver_conductor_stct_aeron_driver_conductor_lingering_re
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
     ["Size of aeron_driver_conductor_stct"]
-        [::std::mem::size_of::<aeron_driver_conductor_stct>() - 1344usize];
+        [::std::mem::size_of::<aeron_driver_conductor_stct>() - 1416usize];
     ["Alignment of aeron_driver_conductor_stct"]
         [::std::mem::align_of::<aeron_driver_conductor_stct>() - 8usize];
     ["Offset of field: aeron_driver_conductor_stct::context"]
@@ -16198,90 +16096,92 @@ const _: () = {
     ["Offset of field: aeron_driver_conductor_stct::error_log"]
         [::std::mem::offset_of!(aeron_driver_conductor_stct, error_log) - 72usize];
     ["Offset of field: aeron_driver_conductor_stct::counters_manager"]
-        [::std::mem::offset_of!(aeron_driver_conductor_stct, counters_manager) - 152usize];
+        [::std::mem::offset_of!(aeron_driver_conductor_stct, counters_manager) - 176usize];
     ["Offset of field: aeron_driver_conductor_stct::system_counters"]
-        [::std::mem::offset_of!(aeron_driver_conductor_stct, system_counters) - 232usize];
+        [::std::mem::offset_of!(aeron_driver_conductor_stct, system_counters) - 256usize];
     ["Offset of field: aeron_driver_conductor_stct::conductor_proxy"]
-        [::std::mem::offset_of!(aeron_driver_conductor_stct, conductor_proxy) - 248usize];
+        [::std::mem::offset_of!(aeron_driver_conductor_stct, conductor_proxy) - 272usize];
     ["Offset of field: aeron_driver_conductor_stct::loss_reporter"]
-        [::std::mem::offset_of!(aeron_driver_conductor_stct, loss_reporter) - 280usize];
+        [::std::mem::offset_of!(aeron_driver_conductor_stct, loss_reporter) - 304usize];
     ["Offset of field: aeron_driver_conductor_stct::name_resolver"]
-        [::std::mem::offset_of!(aeron_driver_conductor_stct, name_resolver) - 304usize];
+        [::std::mem::offset_of!(aeron_driver_conductor_stct, name_resolver) - 328usize];
     ["Offset of field: aeron_driver_conductor_stct::executor"]
-        [::std::mem::offset_of!(aeron_driver_conductor_stct, executor) - 352usize];
+        [::std::mem::offset_of!(aeron_driver_conductor_stct, executor) - 376usize];
     ["Offset of field: aeron_driver_conductor_stct::send_channel_endpoint_by_channel_map"][::std::mem::offset_of!(
         aeron_driver_conductor_stct,
         send_channel_endpoint_by_channel_map
     )
-        - 600usize];
+        - 672usize];
     ["Offset of field: aeron_driver_conductor_stct::receive_channel_endpoint_by_channel_map"][::std::mem::offset_of!(
         aeron_driver_conductor_stct,
         receive_channel_endpoint_by_channel_map
     )
-        - 648usize];
+        - 720usize];
     ["Offset of field: aeron_driver_conductor_stct::clients"]
-        [::std::mem::offset_of!(aeron_driver_conductor_stct, clients) - 696usize];
+        [::std::mem::offset_of!(aeron_driver_conductor_stct, clients) - 768usize];
     ["Offset of field: aeron_driver_conductor_stct::ipc_subscriptions"]
-        [::std::mem::offset_of!(aeron_driver_conductor_stct, ipc_subscriptions) - 752usize];
+        [::std::mem::offset_of!(aeron_driver_conductor_stct, ipc_subscriptions) - 824usize];
     ["Offset of field: aeron_driver_conductor_stct::ipc_publications"]
-        [::std::mem::offset_of!(aeron_driver_conductor_stct, ipc_publications) - 776usize];
+        [::std::mem::offset_of!(aeron_driver_conductor_stct, ipc_publications) - 848usize];
     ["Offset of field: aeron_driver_conductor_stct::network_subscriptions"]
-        [::std::mem::offset_of!(aeron_driver_conductor_stct, network_subscriptions) - 832usize];
+        [::std::mem::offset_of!(aeron_driver_conductor_stct, network_subscriptions) - 904usize];
     ["Offset of field: aeron_driver_conductor_stct::spy_subscriptions"]
-        [::std::mem::offset_of!(aeron_driver_conductor_stct, spy_subscriptions) - 856usize];
+        [::std::mem::offset_of!(aeron_driver_conductor_stct, spy_subscriptions) - 928usize];
     ["Offset of field: aeron_driver_conductor_stct::network_publications"]
-        [::std::mem::offset_of!(aeron_driver_conductor_stct, network_publications) - 880usize];
+        [::std::mem::offset_of!(aeron_driver_conductor_stct, network_publications) - 952usize];
     ["Offset of field: aeron_driver_conductor_stct::send_channel_endpoints"]
-        [::std::mem::offset_of!(aeron_driver_conductor_stct, send_channel_endpoints) - 936usize];
-    ["Offset of field: aeron_driver_conductor_stct::receive_channel_endpoints"]
-        [::std::mem::offset_of!(aeron_driver_conductor_stct, receive_channel_endpoints) - 992usize];
+        [::std::mem::offset_of!(aeron_driver_conductor_stct, send_channel_endpoints) - 1008usize];
+    ["Offset of field: aeron_driver_conductor_stct::receive_channel_endpoints"][::std::mem::offset_of!(
+        aeron_driver_conductor_stct,
+        receive_channel_endpoints
+    ) - 1064usize];
     ["Offset of field: aeron_driver_conductor_stct::publication_images"]
-        [::std::mem::offset_of!(aeron_driver_conductor_stct, publication_images) - 1048usize];
+        [::std::mem::offset_of!(aeron_driver_conductor_stct, publication_images) - 1120usize];
     ["Offset of field: aeron_driver_conductor_stct::lingering_resources"]
-        [::std::mem::offset_of!(aeron_driver_conductor_stct, lingering_resources) - 1104usize];
+        [::std::mem::offset_of!(aeron_driver_conductor_stct, lingering_resources) - 1176usize];
     ["Offset of field: aeron_driver_conductor_stct::end_of_life_queue"]
-        [::std::mem::offset_of!(aeron_driver_conductor_stct, end_of_life_queue) - 1160usize];
+        [::std::mem::offset_of!(aeron_driver_conductor_stct, end_of_life_queue) - 1232usize];
     ["Offset of field: aeron_driver_conductor_stct::errors_counter"]
-        [::std::mem::offset_of!(aeron_driver_conductor_stct, errors_counter) - 1200usize];
+        [::std::mem::offset_of!(aeron_driver_conductor_stct, errors_counter) - 1272usize];
     ["Offset of field: aeron_driver_conductor_stct::unblocked_commands_counter"][::std::mem::offset_of!(
         aeron_driver_conductor_stct,
         unblocked_commands_counter
-    ) - 1208usize];
+    ) - 1280usize];
     ["Offset of field: aeron_driver_conductor_stct::client_timeouts_counter"]
-        [::std::mem::offset_of!(aeron_driver_conductor_stct, client_timeouts_counter) - 1216usize];
+        [::std::mem::offset_of!(aeron_driver_conductor_stct, client_timeouts_counter) - 1288usize];
     ["Offset of field: aeron_driver_conductor_stct::clock_update_deadline_ns"]
-        [::std::mem::offset_of!(aeron_driver_conductor_stct, clock_update_deadline_ns) - 1224usize];
+        [::std::mem::offset_of!(aeron_driver_conductor_stct, clock_update_deadline_ns) - 1296usize];
     ["Offset of field: aeron_driver_conductor_stct::next_session_id"]
-        [::std::mem::offset_of!(aeron_driver_conductor_stct, next_session_id) - 1232usize];
+        [::std::mem::offset_of!(aeron_driver_conductor_stct, next_session_id) - 1304usize];
     ["Offset of field: aeron_driver_conductor_stct::publication_reserved_session_id_low"][::std::mem::offset_of!(
         aeron_driver_conductor_stct,
         publication_reserved_session_id_low
     )
-        - 1236usize];
+        - 1308usize];
     ["Offset of field: aeron_driver_conductor_stct::publication_reserved_session_id_high"][::std::mem::offset_of!(
         aeron_driver_conductor_stct,
         publication_reserved_session_id_high
     )
-        - 1240usize];
+        - 1312usize];
     ["Offset of field: aeron_driver_conductor_stct::timeout_check_deadline_ns"][::std::mem::offset_of!(
         aeron_driver_conductor_stct,
         timeout_check_deadline_ns
-    ) - 1248usize];
+    ) - 1320usize];
     ["Offset of field: aeron_driver_conductor_stct::time_of_last_to_driver_position_change_ns"][::std::mem::offset_of!(
         aeron_driver_conductor_stct,
         time_of_last_to_driver_position_change_ns
     )
-        - 1256usize];
+        - 1328usize];
     ["Offset of field: aeron_driver_conductor_stct::last_command_consumer_position"][::std::mem::offset_of!(
         aeron_driver_conductor_stct,
         last_command_consumer_position
-    ) - 1264usize];
+    ) - 1336usize];
     ["Offset of field: aeron_driver_conductor_stct::async_client_command_in_flight"][::std::mem::offset_of!(
         aeron_driver_conductor_stct,
         async_client_command_in_flight
-    ) - 1272usize];
+    ) - 1344usize];
     ["Offset of field: aeron_driver_conductor_stct::padding"]
-        [::std::mem::offset_of!(aeron_driver_conductor_stct, padding) - 1273usize];
+        [::std::mem::offset_of!(aeron_driver_conductor_stct, padding) - 1345usize];
 };
 impl Default for aeron_driver_conductor_stct {
     fn default() -> Self {
@@ -17966,7 +17866,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct aeron_driver_stct {
     pub context: *mut aeron_driver_context_t,
     pub conductor: aeron_driver_conductor_t,
@@ -17976,18 +17876,18 @@ pub struct aeron_driver_stct {
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of aeron_driver_stct"][::std::mem::size_of::<aeron_driver_stct>() - 7064usize];
+    ["Size of aeron_driver_stct"][::std::mem::size_of::<aeron_driver_stct>() - 7136usize];
     ["Alignment of aeron_driver_stct"][::std::mem::align_of::<aeron_driver_stct>() - 8usize];
     ["Offset of field: aeron_driver_stct::context"]
         [::std::mem::offset_of!(aeron_driver_stct, context) - 0usize];
     ["Offset of field: aeron_driver_stct::conductor"]
         [::std::mem::offset_of!(aeron_driver_stct, conductor) - 8usize];
     ["Offset of field: aeron_driver_stct::sender"]
-        [::std::mem::offset_of!(aeron_driver_stct, sender) - 1352usize];
+        [::std::mem::offset_of!(aeron_driver_stct, sender) - 1424usize];
     ["Offset of field: aeron_driver_stct::receiver"]
-        [::std::mem::offset_of!(aeron_driver_stct, receiver) - 4144usize];
+        [::std::mem::offset_of!(aeron_driver_stct, receiver) - 4216usize];
     ["Offset of field: aeron_driver_stct::runners"]
-        [::std::mem::offset_of!(aeron_driver_stct, runners) - 6824usize];
+        [::std::mem::offset_of!(aeron_driver_stct, runners) - 6896usize];
 };
 impl Default for aeron_driver_stct {
     fn default() -> Self {

@@ -1,23 +1,23 @@
 
 type aeron_client_registering_resource_t = aeron_client_registering_resource_stct;
 #[derive(Clone)]
-pub struct AtomicWideCounterBindgenTy1 {
-    inner: std::rc::Rc<ManagedCResource<__atomic_wide_counter__bindgen_ty_1>>,
+pub struct DarwinPthreadHandlerRec {
+    inner: std::rc::Rc<ManagedCResource<__darwin_pthread_handler_rec>>,
 }
-impl core::fmt::Debug for AtomicWideCounterBindgenTy1 {
+impl core::fmt::Debug for DarwinPthreadHandlerRec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(AtomicWideCounterBindgenTy1))
+            f.debug_struct(stringify!(DarwinPthreadHandlerRec))
                 .field("inner", &"null")
                 .finish()
         } else {
-            f.debug_struct(stringify!(AtomicWideCounterBindgenTy1))
+            f.debug_struct(stringify!(DarwinPthreadHandlerRec))
                 .field("inner", &self.inner)
                 .finish()
         }
     }
 }
-impl AtomicWideCounterBindgenTy1 {
+impl DarwinPthreadHandlerRec {
     #[inline]
     #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
     pub fn new_zeroed() -> Result<Self, AeronCError> {
@@ -26,11 +26,10 @@ impl AtomicWideCounterBindgenTy1 {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     "creating zeroed empty resource on heap {}",
-                    stringify!(__atomic_wide_counter__bindgen_ty_1)
+                    stringify!(__darwin_pthread_handler_rec)
                 );
-                let inst: __atomic_wide_counter__bindgen_ty_1 = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut __atomic_wide_counter__bindgen_ty_1 =
-                    Box::into_raw(Box::new(inst));
+                let inst: __darwin_pthread_handler_rec = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut __darwin_pthread_handler_rec = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -43,56 +42,56 @@ impl AtomicWideCounterBindgenTy1 {
         })
     }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut __atomic_wide_counter__bindgen_ty_1 {
+    pub fn get_inner(&self) -> *mut __darwin_pthread_handler_rec {
         self.inner.get()
     }
 }
-impl std::ops::Deref for AtomicWideCounterBindgenTy1 {
-    type Target = __atomic_wide_counter__bindgen_ty_1;
+impl std::ops::Deref for DarwinPthreadHandlerRec {
+    type Target = __darwin_pthread_handler_rec;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.inner.get() }
     }
 }
-impl From<*mut __atomic_wide_counter__bindgen_ty_1> for AtomicWideCounterBindgenTy1 {
+impl From<*mut __darwin_pthread_handler_rec> for DarwinPthreadHandlerRec {
     #[inline]
-    fn from(value: *mut __atomic_wide_counter__bindgen_ty_1) -> Self {
-        AtomicWideCounterBindgenTy1 {
+    fn from(value: *mut __darwin_pthread_handler_rec) -> Self {
+        DarwinPthreadHandlerRec {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<AtomicWideCounterBindgenTy1> for *mut __atomic_wide_counter__bindgen_ty_1 {
+impl From<DarwinPthreadHandlerRec> for *mut __darwin_pthread_handler_rec {
     #[inline]
-    fn from(value: AtomicWideCounterBindgenTy1) -> Self {
+    fn from(value: DarwinPthreadHandlerRec) -> Self {
         value.get_inner()
     }
 }
-impl From<&AtomicWideCounterBindgenTy1> for *mut __atomic_wide_counter__bindgen_ty_1 {
+impl From<&DarwinPthreadHandlerRec> for *mut __darwin_pthread_handler_rec {
     #[inline]
-    fn from(value: &AtomicWideCounterBindgenTy1) -> Self {
+    fn from(value: &DarwinPthreadHandlerRec) -> Self {
         value.get_inner()
     }
 }
-impl From<AtomicWideCounterBindgenTy1> for __atomic_wide_counter__bindgen_ty_1 {
+impl From<DarwinPthreadHandlerRec> for __darwin_pthread_handler_rec {
     #[inline]
-    fn from(value: AtomicWideCounterBindgenTy1) -> Self {
+    fn from(value: DarwinPthreadHandlerRec) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const __atomic_wide_counter__bindgen_ty_1> for AtomicWideCounterBindgenTy1 {
+impl From<*const __darwin_pthread_handler_rec> for DarwinPthreadHandlerRec {
     #[inline]
-    fn from(value: *const __atomic_wide_counter__bindgen_ty_1) -> Self {
-        AtomicWideCounterBindgenTy1 {
+    fn from(value: *const __darwin_pthread_handler_rec) -> Self {
+        DarwinPthreadHandlerRec {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<__atomic_wide_counter__bindgen_ty_1> for AtomicWideCounterBindgenTy1 {
+impl From<__darwin_pthread_handler_rec> for DarwinPthreadHandlerRec {
     #[inline]
-    fn from(mut value: __atomic_wide_counter__bindgen_ty_1) -> Self {
-        AtomicWideCounterBindgenTy1 {
+    fn from(mut value: __darwin_pthread_handler_rec) -> Self {
+        DarwinPthreadHandlerRec {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut __atomic_wide_counter__bindgen_ty_1,
+                &mut value as *mut __darwin_pthread_handler_rec,
                 None,
             )),
         }
@@ -513,23 +512,23 @@ impl ControlMode {
     }
 }
 #[derive(Clone)]
-pub struct PthreadCondS {
-    inner: std::rc::Rc<ManagedCResource<__pthread_cond_s>>,
+pub struct OpaquePthreadAttr {
+    inner: std::rc::Rc<ManagedCResource<_opaque_pthread_attr_t>>,
 }
-impl core::fmt::Debug for PthreadCondS {
+impl core::fmt::Debug for OpaquePthreadAttr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(PthreadCondS))
+            f.debug_struct(stringify!(OpaquePthreadAttr))
                 .field("inner", &"null")
                 .finish()
         } else {
-            f.debug_struct(stringify!(PthreadCondS))
+            f.debug_struct(stringify!(OpaquePthreadAttr))
                 .field("inner", &self.inner)
                 .finish()
         }
     }
 }
-impl PthreadCondS {
+impl OpaquePthreadAttr {
     #[inline]
     #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
     pub fn new_zeroed() -> Result<Self, AeronCError> {
@@ -538,10 +537,10 @@ impl PthreadCondS {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     "creating zeroed empty resource on heap {}",
-                    stringify!(__pthread_cond_s)
+                    stringify!(_opaque_pthread_attr_t)
                 );
-                let inst: __pthread_cond_s = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut __pthread_cond_s = Box::into_raw(Box::new(inst));
+                let inst: _opaque_pthread_attr_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut _opaque_pthread_attr_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -554,79 +553,79 @@ impl PthreadCondS {
         })
     }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut __pthread_cond_s {
+    pub fn get_inner(&self) -> *mut _opaque_pthread_attr_t {
         self.inner.get()
     }
 }
-impl std::ops::Deref for PthreadCondS {
-    type Target = __pthread_cond_s;
+impl std::ops::Deref for OpaquePthreadAttr {
+    type Target = _opaque_pthread_attr_t;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.inner.get() }
     }
 }
-impl From<*mut __pthread_cond_s> for PthreadCondS {
+impl From<*mut _opaque_pthread_attr_t> for OpaquePthreadAttr {
     #[inline]
-    fn from(value: *mut __pthread_cond_s) -> Self {
-        PthreadCondS {
+    fn from(value: *mut _opaque_pthread_attr_t) -> Self {
+        OpaquePthreadAttr {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<PthreadCondS> for *mut __pthread_cond_s {
+impl From<OpaquePthreadAttr> for *mut _opaque_pthread_attr_t {
     #[inline]
-    fn from(value: PthreadCondS) -> Self {
+    fn from(value: OpaquePthreadAttr) -> Self {
         value.get_inner()
     }
 }
-impl From<&PthreadCondS> for *mut __pthread_cond_s {
+impl From<&OpaquePthreadAttr> for *mut _opaque_pthread_attr_t {
     #[inline]
-    fn from(value: &PthreadCondS) -> Self {
+    fn from(value: &OpaquePthreadAttr) -> Self {
         value.get_inner()
     }
 }
-impl From<PthreadCondS> for __pthread_cond_s {
+impl From<OpaquePthreadAttr> for _opaque_pthread_attr_t {
     #[inline]
-    fn from(value: PthreadCondS) -> Self {
+    fn from(value: OpaquePthreadAttr) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const __pthread_cond_s> for PthreadCondS {
+impl From<*const _opaque_pthread_attr_t> for OpaquePthreadAttr {
     #[inline]
-    fn from(value: *const __pthread_cond_s) -> Self {
-        PthreadCondS {
+    fn from(value: *const _opaque_pthread_attr_t) -> Self {
+        OpaquePthreadAttr {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<__pthread_cond_s> for PthreadCondS {
+impl From<_opaque_pthread_attr_t> for OpaquePthreadAttr {
     #[inline]
-    fn from(mut value: __pthread_cond_s) -> Self {
-        PthreadCondS {
+    fn from(mut value: _opaque_pthread_attr_t) -> Self {
+        OpaquePthreadAttr {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut __pthread_cond_s,
+                &mut value as *mut _opaque_pthread_attr_t,
                 None,
             )),
         }
     }
 }
 #[derive(Clone)]
-pub struct PthreadInternalList {
-    inner: std::rc::Rc<ManagedCResource<__pthread_internal_list>>,
+pub struct OpaquePthreadCond {
+    inner: std::rc::Rc<ManagedCResource<_opaque_pthread_cond_t>>,
 }
-impl core::fmt::Debug for PthreadInternalList {
+impl core::fmt::Debug for OpaquePthreadCond {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(PthreadInternalList))
+            f.debug_struct(stringify!(OpaquePthreadCond))
                 .field("inner", &"null")
                 .finish()
         } else {
-            f.debug_struct(stringify!(PthreadInternalList))
+            f.debug_struct(stringify!(OpaquePthreadCond))
                 .field("inner", &self.inner)
                 .finish()
         }
     }
 }
-impl PthreadInternalList {
+impl OpaquePthreadCond {
     #[inline]
     #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
     pub fn new_zeroed() -> Result<Self, AeronCError> {
@@ -635,10 +634,10 @@ impl PthreadInternalList {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     "creating zeroed empty resource on heap {}",
-                    stringify!(__pthread_internal_list)
+                    stringify!(_opaque_pthread_cond_t)
                 );
-                let inst: __pthread_internal_list = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut __pthread_internal_list = Box::into_raw(Box::new(inst));
+                let inst: _opaque_pthread_cond_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut _opaque_pthread_cond_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -651,79 +650,79 @@ impl PthreadInternalList {
         })
     }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut __pthread_internal_list {
+    pub fn get_inner(&self) -> *mut _opaque_pthread_cond_t {
         self.inner.get()
     }
 }
-impl std::ops::Deref for PthreadInternalList {
-    type Target = __pthread_internal_list;
+impl std::ops::Deref for OpaquePthreadCond {
+    type Target = _opaque_pthread_cond_t;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.inner.get() }
     }
 }
-impl From<*mut __pthread_internal_list> for PthreadInternalList {
+impl From<*mut _opaque_pthread_cond_t> for OpaquePthreadCond {
     #[inline]
-    fn from(value: *mut __pthread_internal_list) -> Self {
-        PthreadInternalList {
+    fn from(value: *mut _opaque_pthread_cond_t) -> Self {
+        OpaquePthreadCond {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<PthreadInternalList> for *mut __pthread_internal_list {
+impl From<OpaquePthreadCond> for *mut _opaque_pthread_cond_t {
     #[inline]
-    fn from(value: PthreadInternalList) -> Self {
+    fn from(value: OpaquePthreadCond) -> Self {
         value.get_inner()
     }
 }
-impl From<&PthreadInternalList> for *mut __pthread_internal_list {
+impl From<&OpaquePthreadCond> for *mut _opaque_pthread_cond_t {
     #[inline]
-    fn from(value: &PthreadInternalList) -> Self {
+    fn from(value: &OpaquePthreadCond) -> Self {
         value.get_inner()
     }
 }
-impl From<PthreadInternalList> for __pthread_internal_list {
+impl From<OpaquePthreadCond> for _opaque_pthread_cond_t {
     #[inline]
-    fn from(value: PthreadInternalList) -> Self {
+    fn from(value: OpaquePthreadCond) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const __pthread_internal_list> for PthreadInternalList {
+impl From<*const _opaque_pthread_cond_t> for OpaquePthreadCond {
     #[inline]
-    fn from(value: *const __pthread_internal_list) -> Self {
-        PthreadInternalList {
+    fn from(value: *const _opaque_pthread_cond_t) -> Self {
+        OpaquePthreadCond {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<__pthread_internal_list> for PthreadInternalList {
+impl From<_opaque_pthread_cond_t> for OpaquePthreadCond {
     #[inline]
-    fn from(mut value: __pthread_internal_list) -> Self {
-        PthreadInternalList {
+    fn from(mut value: _opaque_pthread_cond_t) -> Self {
+        OpaquePthreadCond {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut __pthread_internal_list,
+                &mut value as *mut _opaque_pthread_cond_t,
                 None,
             )),
         }
     }
 }
 #[derive(Clone)]
-pub struct PthreadMutexS {
-    inner: std::rc::Rc<ManagedCResource<__pthread_mutex_s>>,
+pub struct OpaquePthreadMutex {
+    inner: std::rc::Rc<ManagedCResource<_opaque_pthread_mutex_t>>,
 }
-impl core::fmt::Debug for PthreadMutexS {
+impl core::fmt::Debug for OpaquePthreadMutex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.inner.resource.is_null() {
-            f.debug_struct(stringify!(PthreadMutexS))
+            f.debug_struct(stringify!(OpaquePthreadMutex))
                 .field("inner", &"null")
                 .finish()
         } else {
-            f.debug_struct(stringify!(PthreadMutexS))
+            f.debug_struct(stringify!(OpaquePthreadMutex))
                 .field("inner", &self.inner)
                 .finish()
         }
     }
 }
-impl PthreadMutexS {
+impl OpaquePthreadMutex {
     #[inline]
     #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
     pub fn new_zeroed() -> Result<Self, AeronCError> {
@@ -732,10 +731,10 @@ impl PthreadMutexS {
                 #[cfg(debug_assertions)]
                 log::debug!(
                     "creating zeroed empty resource on heap {}",
-                    stringify!(__pthread_mutex_s)
+                    stringify!(_opaque_pthread_mutex_t)
                 );
-                let inst: __pthread_mutex_s = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut __pthread_mutex_s = Box::into_raw(Box::new(inst));
+                let inst: _opaque_pthread_mutex_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut _opaque_pthread_mutex_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -748,56 +747,153 @@ impl PthreadMutexS {
         })
     }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut __pthread_mutex_s {
+    pub fn get_inner(&self) -> *mut _opaque_pthread_mutex_t {
         self.inner.get()
     }
 }
-impl std::ops::Deref for PthreadMutexS {
-    type Target = __pthread_mutex_s;
+impl std::ops::Deref for OpaquePthreadMutex {
+    type Target = _opaque_pthread_mutex_t;
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.inner.get() }
     }
 }
-impl From<*mut __pthread_mutex_s> for PthreadMutexS {
+impl From<*mut _opaque_pthread_mutex_t> for OpaquePthreadMutex {
     #[inline]
-    fn from(value: *mut __pthread_mutex_s) -> Self {
-        PthreadMutexS {
+    fn from(value: *mut _opaque_pthread_mutex_t) -> Self {
+        OpaquePthreadMutex {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<PthreadMutexS> for *mut __pthread_mutex_s {
+impl From<OpaquePthreadMutex> for *mut _opaque_pthread_mutex_t {
     #[inline]
-    fn from(value: PthreadMutexS) -> Self {
+    fn from(value: OpaquePthreadMutex) -> Self {
         value.get_inner()
     }
 }
-impl From<&PthreadMutexS> for *mut __pthread_mutex_s {
+impl From<&OpaquePthreadMutex> for *mut _opaque_pthread_mutex_t {
     #[inline]
-    fn from(value: &PthreadMutexS) -> Self {
+    fn from(value: &OpaquePthreadMutex) -> Self {
         value.get_inner()
     }
 }
-impl From<PthreadMutexS> for __pthread_mutex_s {
+impl From<OpaquePthreadMutex> for _opaque_pthread_mutex_t {
     #[inline]
-    fn from(value: PthreadMutexS) -> Self {
+    fn from(value: OpaquePthreadMutex) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const __pthread_mutex_s> for PthreadMutexS {
+impl From<*const _opaque_pthread_mutex_t> for OpaquePthreadMutex {
     #[inline]
-    fn from(value: *const __pthread_mutex_s) -> Self {
-        PthreadMutexS {
+    fn from(value: *const _opaque_pthread_mutex_t) -> Self {
+        OpaquePthreadMutex {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
         }
     }
 }
-impl From<__pthread_mutex_s> for PthreadMutexS {
+impl From<_opaque_pthread_mutex_t> for OpaquePthreadMutex {
     #[inline]
-    fn from(mut value: __pthread_mutex_s) -> Self {
-        PthreadMutexS {
+    fn from(mut value: _opaque_pthread_mutex_t) -> Self {
+        OpaquePthreadMutex {
             inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
-                &mut value as *mut __pthread_mutex_s,
+                &mut value as *mut _opaque_pthread_mutex_t,
+                None,
+            )),
+        }
+    }
+}
+#[derive(Clone)]
+pub struct OpaquePthread {
+    inner: std::rc::Rc<ManagedCResource<_opaque_pthread_t>>,
+}
+impl core::fmt::Debug for OpaquePthread {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.inner.resource.is_null() {
+            f.debug_struct(stringify!(OpaquePthread))
+                .field("inner", &"null")
+                .finish()
+        } else {
+            f.debug_struct(stringify!(OpaquePthread))
+                .field("inner", &self.inner)
+                .finish()
+        }
+    }
+}
+impl OpaquePthread {
+    #[inline]
+    #[doc = r" creates zeroed struct where the underlying c struct is on the heap"]
+    pub fn new_zeroed() -> Result<Self, AeronCError> {
+        let resource = ManagedCResource::new(
+            move |ctx_field| {
+                #[cfg(debug_assertions)]
+                log::debug!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(_opaque_pthread_t)
+                );
+                let inst: _opaque_pthread_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut _opaque_pthread_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            None,
+            true,
+            None,
+        )?;
+        Ok(Self {
+            inner: std::rc::Rc::new(resource),
+        })
+    }
+    #[inline(always)]
+    pub fn get_inner(&self) -> *mut _opaque_pthread_t {
+        self.inner.get()
+    }
+}
+impl std::ops::Deref for OpaquePthread {
+    type Target = _opaque_pthread_t;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
+}
+impl From<*mut _opaque_pthread_t> for OpaquePthread {
+    #[inline]
+    fn from(value: *mut _opaque_pthread_t) -> Self {
+        OpaquePthread {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<OpaquePthread> for *mut _opaque_pthread_t {
+    #[inline]
+    fn from(value: OpaquePthread) -> Self {
+        value.get_inner()
+    }
+}
+impl From<&OpaquePthread> for *mut _opaque_pthread_t {
+    #[inline]
+    fn from(value: &OpaquePthread) -> Self {
+        value.get_inner()
+    }
+}
+impl From<OpaquePthread> for _opaque_pthread_t {
+    #[inline]
+    fn from(value: OpaquePthread) -> Self {
+        unsafe { *value.get_inner().clone() }
+    }
+}
+impl From<*const _opaque_pthread_t> for OpaquePthread {
+    #[inline]
+    fn from(value: *const _opaque_pthread_t) -> Self {
+        OpaquePthread {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(value, None)),
+        }
+    }
+}
+impl From<_opaque_pthread_t> for OpaquePthread {
+    #[inline]
+    fn from(mut value: _opaque_pthread_t) -> Self {
+        OpaquePthread {
+            inner: std::rc::Rc::new(ManagedCResource::new_borrowed(
+                &mut value as *mut _opaque_pthread_t,
                 None,
             )),
         }
@@ -828,8 +924,8 @@ impl Addrinfo {
         ai_socktype: ::std::os::raw::c_int,
         ai_protocol: ::std::os::raw::c_int,
         ai_addrlen: socklen_t,
-        ai_addr: &Sockaddr,
         ai_canonname: *mut ::std::os::raw::c_char,
+        ai_addr: &Sockaddr,
         ai_next: &Addrinfo,
     ) -> Result<Self, AeronCError> {
         let ai_addr_copy = ai_addr.clone();
@@ -846,8 +942,8 @@ impl Addrinfo {
                     ai_socktype: ai_socktype.into(),
                     ai_protocol: ai_protocol.into(),
                     ai_addrlen: ai_addrlen.into(),
-                    ai_addr: ai_addr.into(),
                     ai_canonname: ai_canonname.into(),
+                    ai_addr: ai_addr.into(),
                     ai_next: ai_next.into(),
                 };
                 let inner_ptr: *mut addrinfo = Box::into_raw(Box::new(inst));
@@ -911,10 +1007,6 @@ impl Addrinfo {
         self.ai_addrlen.into()
     }
     #[inline]
-    pub fn ai_addr(&self) -> Sockaddr {
-        self.ai_addr.into()
-    }
-    #[inline]
     pub fn ai_canonname(&self) -> &str {
         if self.ai_canonname.is_null() {
             ""
@@ -925,6 +1017,10 @@ impl Addrinfo {
                     .unwrap()
             }
         }
+    }
+    #[inline]
+    pub fn ai_addr(&self) -> Sockaddr {
+        self.ai_addr.into()
     }
     #[inline]
     pub fn ai_next(&self) -> Addrinfo {
@@ -48174,8 +48270,8 @@ impl Ifaddrs {
         self.ifa_netmask.into()
     }
     #[inline]
-    pub fn ifa_ifu(&self) -> ifaddrs__bindgen_ty_1 {
-        self.ifa_ifu.into()
+    pub fn ifa_dstaddr(&self) -> Sockaddr {
+        self.ifa_dstaddr.into()
     }
     #[inline]
     pub fn ifa_data(&self) -> *mut ::std::os::raw::c_void {
@@ -48619,8 +48715,6 @@ impl core::fmt::Debug for Msghdr {
         } else {
             f.debug_struct(stringify!(Msghdr))
                 .field("inner", &self.inner)
-                .field(stringify!(msg_iovlen), &self.msg_iovlen())
-                .field(stringify!(msg_controllen), &self.msg_controllen())
                 .finish()
         }
     }
@@ -48631,9 +48725,9 @@ impl Msghdr {
         msg_name: *mut ::std::os::raw::c_void,
         msg_namelen: socklen_t,
         msg_iov: &Iovec,
-        msg_iovlen: usize,
+        msg_iovlen: ::std::os::raw::c_int,
         msg_control: *mut ::std::os::raw::c_void,
-        msg_controllen: usize,
+        msg_controllen: socklen_t,
         msg_flags: ::std::os::raw::c_int,
     ) -> Result<Self, AeronCError> {
         let msg_iov_copy = msg_iov.clone();
@@ -48703,7 +48797,7 @@ impl Msghdr {
         self.msg_iov.into()
     }
     #[inline]
-    pub fn msg_iovlen(&self) -> usize {
+    pub fn msg_iovlen(&self) -> ::std::os::raw::c_int {
         self.msg_iovlen.into()
     }
     #[inline]
@@ -48711,7 +48805,7 @@ impl Msghdr {
         self.msg_control.into()
     }
     #[inline]
-    pub fn msg_controllen(&self) -> usize {
+    pub fn msg_controllen(&self) -> socklen_t {
         self.msg_controllen.into()
     }
     #[inline]
@@ -48991,6 +49085,7 @@ impl core::fmt::Debug for Sockaddr {
 impl Sockaddr {
     #[inline]
     pub fn new(
+        sa_len: __uint8_t,
         sa_family: sa_family_t,
         sa_data: [::std::os::raw::c_char; 14usize],
     ) -> Result<Self, AeronCError> {
@@ -48998,6 +49093,7 @@ impl Sockaddr {
         let r_constructor = ManagedCResource::new(
             move |ctx_field| {
                 let inst = sockaddr {
+                    sa_len: sa_len.into(),
                     sa_family: sa_family.into(),
                     sa_data: sa_data.into(),
                 };
@@ -49040,6 +49136,10 @@ impl Sockaddr {
         Ok(Self {
             inner: std::rc::Rc::new(resource),
         })
+    }
+    #[inline]
+    pub fn sa_len(&self) -> __uint8_t {
+        self.sa_len.into()
     }
     #[inline]
     pub fn sa_family(&self) -> sa_family_t {
@@ -49168,6 +49268,10 @@ impl SockaddrStorage {
         })
     }
     #[inline]
+    pub fn ss_len(&self) -> __uint8_t {
+        self.ss_len.into()
+    }
+    #[inline]
     pub fn ss_family(&self) -> sa_family_t {
         self.ss_family.into()
     }
@@ -49294,7 +49398,10 @@ impl core::fmt::Debug for Timespec {
 }
 impl Timespec {
     #[inline]
-    pub fn new(tv_sec: __time_t, tv_nsec: __syscall_slong_t) -> Result<Self, AeronCError> {
+    pub fn new(
+        tv_sec: __darwin_time_t,
+        tv_nsec: ::std::os::raw::c_long,
+    ) -> Result<Self, AeronCError> {
         let drop_copies_closure = std::rc::Rc::new(std::cell::RefCell::new(Some(|| {})));
         let r_constructor = ManagedCResource::new(
             move |ctx_field| {
@@ -49343,11 +49450,11 @@ impl Timespec {
         })
     }
     #[inline]
-    pub fn tv_sec(&self) -> __time_t {
+    pub fn tv_sec(&self) -> __darwin_time_t {
         self.tv_sec.into()
     }
     #[inline]
-    pub fn tv_nsec(&self) -> __syscall_slong_t {
+    pub fn tv_nsec(&self) -> ::std::os::raw::c_long {
         self.tv_nsec.into()
     }
     #[inline]

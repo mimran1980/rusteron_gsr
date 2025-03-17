@@ -23,6 +23,7 @@ pub const AERON_COUNTER_MAX_CLIENT_NAME_LENGTH: u32 = 100;
 pub const AERON_COUNTER_RECORD_UNUSED: u32 = 0;
 pub const AERON_COUNTER_RECORD_ALLOCATED: u32 = 1;
 pub const AERON_COUNTER_RECORD_RECLAIMED: i32 = -1;
+pub const AERON_COUNTER_NOT_FREE_TO_REUSE: u64 = 9223372036854775807;
 pub const AERON_NULL_COUNTER_ID: i32 = -1;
 pub const AERON_PUBLICATION_NOT_CONNECTED: i32 = -1;
 pub const AERON_PUBLICATION_BACK_PRESSURED: i32 = -2;
@@ -40,7 +41,6 @@ pub const AERON_ARCHIVE_RECORDING_SUBSCRIPTION_DESCRIPTOR_POLLER_FRAGMENT_LIMIT_
 pub const AERON_COMPILER_GCC: u32 = 1;
 pub const AERON_COMPILER_LLVM: u32 = 1;
 pub const AERON_CPU_X64: u32 = 1;
-pub const AERON_INIT_ONCE_VALUE: u32 = 0;
 pub const AERON_SPY_PREFIX: &[u8; 11] = b"aeron-spy:\0";
 pub const AERON_IPC_CHANNEL: &[u8; 10] = b"aeron:ipc\0";
 pub const AERON_UDP_CHANNEL_RELIABLE_KEY: &[u8; 9] = b"reliable\0";
@@ -121,39 +121,26 @@ pub const AERON_CNC_FILE: &[u8; 8] = b"cnc.dat\0";
 pub const AERON_LOSS_REPORT_FILE: &[u8; 16] = b"loss-report.dat\0";
 pub const AERON_LOSS_REPORTER_ENTRY_ALIGNMENT: u32 = 64;
 #[repr(C)]
-#[derive(Copy, Clone)]
-pub union __atomic_wide_counter {
-    pub __value64: ::std::os::raw::c_ulonglong,
-    pub __value32: __atomic_wide_counter__bindgen_ty_1,
-}
-#[repr(C)]
-#[derive(Debug, Default, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct __atomic_wide_counter__bindgen_ty_1 {
-    pub __low: ::std::os::raw::c_uint,
-    pub __high: ::std::os::raw::c_uint,
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct __darwin_pthread_handler_rec {
+    pub __routine: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
+    pub __arg: *mut ::std::os::raw::c_void,
+    pub __next: *mut __darwin_pthread_handler_rec,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of __atomic_wide_counter__bindgen_ty_1"]
-        [::std::mem::size_of::<__atomic_wide_counter__bindgen_ty_1>() - 8usize];
-    ["Alignment of __atomic_wide_counter__bindgen_ty_1"]
-        [::std::mem::align_of::<__atomic_wide_counter__bindgen_ty_1>() - 4usize];
-    ["Offset of field: __atomic_wide_counter__bindgen_ty_1::__low"]
-        [::std::mem::offset_of!(__atomic_wide_counter__bindgen_ty_1, __low) - 0usize];
-    ["Offset of field: __atomic_wide_counter__bindgen_ty_1::__high"]
-        [::std::mem::offset_of!(__atomic_wide_counter__bindgen_ty_1, __high) - 4usize];
+    ["Size of __darwin_pthread_handler_rec"]
+        [::std::mem::size_of::<__darwin_pthread_handler_rec>() - 24usize];
+    ["Alignment of __darwin_pthread_handler_rec"]
+        [::std::mem::align_of::<__darwin_pthread_handler_rec>() - 8usize];
+    ["Offset of field: __darwin_pthread_handler_rec::__routine"]
+        [::std::mem::offset_of!(__darwin_pthread_handler_rec, __routine) - 0usize];
+    ["Offset of field: __darwin_pthread_handler_rec::__arg"]
+        [::std::mem::offset_of!(__darwin_pthread_handler_rec, __arg) - 8usize];
+    ["Offset of field: __darwin_pthread_handler_rec::__next"]
+        [::std::mem::offset_of!(__darwin_pthread_handler_rec, __next) - 16usize];
 };
-#[allow(clippy::unnecessary_operation, clippy::identity_op)]
-const _: () = {
-    ["Size of __atomic_wide_counter"][::std::mem::size_of::<__atomic_wide_counter>() - 8usize];
-    ["Alignment of __atomic_wide_counter"]
-        [::std::mem::align_of::<__atomic_wide_counter>() - 8usize];
-    ["Offset of field: __atomic_wide_counter::__value64"]
-        [::std::mem::offset_of!(__atomic_wide_counter, __value64) - 0usize];
-    ["Offset of field: __atomic_wide_counter::__value32"]
-        [::std::mem::offset_of!(__atomic_wide_counter, __value32) - 0usize];
-};
-impl Default for __atomic_wide_counter {
+impl Default for __darwin_pthread_handler_rec {
     fn default() -> Self {
         let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
         unsafe {
@@ -164,21 +151,21 @@ impl Default for __atomic_wide_counter {
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct __pthread_internal_list {
-    pub __prev: *mut __pthread_internal_list,
-    pub __next: *mut __pthread_internal_list,
+pub struct _opaque_pthread_attr_t {
+    pub __sig: ::std::os::raw::c_long,
+    pub __opaque: [::std::os::raw::c_char; 56usize],
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of __pthread_internal_list"][::std::mem::size_of::<__pthread_internal_list>() - 16usize];
-    ["Alignment of __pthread_internal_list"]
-        [::std::mem::align_of::<__pthread_internal_list>() - 8usize];
-    ["Offset of field: __pthread_internal_list::__prev"]
-        [::std::mem::offset_of!(__pthread_internal_list, __prev) - 0usize];
-    ["Offset of field: __pthread_internal_list::__next"]
-        [::std::mem::offset_of!(__pthread_internal_list, __next) - 8usize];
+    ["Size of _opaque_pthread_attr_t"][::std::mem::size_of::<_opaque_pthread_attr_t>() - 64usize];
+    ["Alignment of _opaque_pthread_attr_t"]
+        [::std::mem::align_of::<_opaque_pthread_attr_t>() - 8usize];
+    ["Offset of field: _opaque_pthread_attr_t::__sig"]
+        [::std::mem::offset_of!(_opaque_pthread_attr_t, __sig) - 0usize];
+    ["Offset of field: _opaque_pthread_attr_t::__opaque"]
+        [::std::mem::offset_of!(_opaque_pthread_attr_t, __opaque) - 8usize];
 };
-impl Default for __pthread_internal_list {
+impl Default for _opaque_pthread_attr_t {
     fn default() -> Self {
         let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
         unsafe {
@@ -187,41 +174,23 @@ impl Default for __pthread_internal_list {
         }
     }
 }
-pub type __pthread_list_t = __pthread_internal_list;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct __pthread_mutex_s {
-    pub __lock: ::std::os::raw::c_int,
-    pub __count: ::std::os::raw::c_uint,
-    pub __owner: ::std::os::raw::c_int,
-    pub __nusers: ::std::os::raw::c_uint,
-    pub __kind: ::std::os::raw::c_int,
-    pub __spins: ::std::os::raw::c_short,
-    pub __elision: ::std::os::raw::c_short,
-    pub __list: __pthread_list_t,
+pub struct _opaque_pthread_cond_t {
+    pub __sig: ::std::os::raw::c_long,
+    pub __opaque: [::std::os::raw::c_char; 40usize],
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of __pthread_mutex_s"][::std::mem::size_of::<__pthread_mutex_s>() - 40usize];
-    ["Alignment of __pthread_mutex_s"][::std::mem::align_of::<__pthread_mutex_s>() - 8usize];
-    ["Offset of field: __pthread_mutex_s::__lock"]
-        [::std::mem::offset_of!(__pthread_mutex_s, __lock) - 0usize];
-    ["Offset of field: __pthread_mutex_s::__count"]
-        [::std::mem::offset_of!(__pthread_mutex_s, __count) - 4usize];
-    ["Offset of field: __pthread_mutex_s::__owner"]
-        [::std::mem::offset_of!(__pthread_mutex_s, __owner) - 8usize];
-    ["Offset of field: __pthread_mutex_s::__nusers"]
-        [::std::mem::offset_of!(__pthread_mutex_s, __nusers) - 12usize];
-    ["Offset of field: __pthread_mutex_s::__kind"]
-        [::std::mem::offset_of!(__pthread_mutex_s, __kind) - 16usize];
-    ["Offset of field: __pthread_mutex_s::__spins"]
-        [::std::mem::offset_of!(__pthread_mutex_s, __spins) - 20usize];
-    ["Offset of field: __pthread_mutex_s::__elision"]
-        [::std::mem::offset_of!(__pthread_mutex_s, __elision) - 22usize];
-    ["Offset of field: __pthread_mutex_s::__list"]
-        [::std::mem::offset_of!(__pthread_mutex_s, __list) - 24usize];
+    ["Size of _opaque_pthread_cond_t"][::std::mem::size_of::<_opaque_pthread_cond_t>() - 48usize];
+    ["Alignment of _opaque_pthread_cond_t"]
+        [::std::mem::align_of::<_opaque_pthread_cond_t>() - 8usize];
+    ["Offset of field: _opaque_pthread_cond_t::__sig"]
+        [::std::mem::offset_of!(_opaque_pthread_cond_t, __sig) - 0usize];
+    ["Offset of field: _opaque_pthread_cond_t::__opaque"]
+        [::std::mem::offset_of!(_opaque_pthread_cond_t, __opaque) - 8usize];
 };
-impl Default for __pthread_mutex_s {
+impl Default for _opaque_pthread_cond_t {
     fn default() -> Self {
         let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
         unsafe {
@@ -231,61 +200,22 @@ impl Default for __pthread_mutex_s {
     }
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
-pub struct __pthread_cond_s {
-    pub __wseq: __atomic_wide_counter,
-    pub __g1_start: __atomic_wide_counter,
-    pub __g_refs: [::std::os::raw::c_uint; 2usize],
-    pub __g_size: [::std::os::raw::c_uint; 2usize],
-    pub __g1_orig_size: ::std::os::raw::c_uint,
-    pub __wrefs: ::std::os::raw::c_uint,
-    pub __g_signals: [::std::os::raw::c_uint; 2usize],
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct _opaque_pthread_mutex_t {
+    pub __sig: ::std::os::raw::c_long,
+    pub __opaque: [::std::os::raw::c_char; 56usize],
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of __pthread_cond_s"][::std::mem::size_of::<__pthread_cond_s>() - 48usize];
-    ["Alignment of __pthread_cond_s"][::std::mem::align_of::<__pthread_cond_s>() - 8usize];
-    ["Offset of field: __pthread_cond_s::__wseq"]
-        [::std::mem::offset_of!(__pthread_cond_s, __wseq) - 0usize];
-    ["Offset of field: __pthread_cond_s::__g1_start"]
-        [::std::mem::offset_of!(__pthread_cond_s, __g1_start) - 8usize];
-    ["Offset of field: __pthread_cond_s::__g_refs"]
-        [::std::mem::offset_of!(__pthread_cond_s, __g_refs) - 16usize];
-    ["Offset of field: __pthread_cond_s::__g_size"]
-        [::std::mem::offset_of!(__pthread_cond_s, __g_size) - 24usize];
-    ["Offset of field: __pthread_cond_s::__g1_orig_size"]
-        [::std::mem::offset_of!(__pthread_cond_s, __g1_orig_size) - 32usize];
-    ["Offset of field: __pthread_cond_s::__wrefs"]
-        [::std::mem::offset_of!(__pthread_cond_s, __wrefs) - 36usize];
-    ["Offset of field: __pthread_cond_s::__g_signals"]
-        [::std::mem::offset_of!(__pthread_cond_s, __g_signals) - 40usize];
+    ["Size of _opaque_pthread_mutex_t"][::std::mem::size_of::<_opaque_pthread_mutex_t>() - 64usize];
+    ["Alignment of _opaque_pthread_mutex_t"]
+        [::std::mem::align_of::<_opaque_pthread_mutex_t>() - 8usize];
+    ["Offset of field: _opaque_pthread_mutex_t::__sig"]
+        [::std::mem::offset_of!(_opaque_pthread_mutex_t, __sig) - 0usize];
+    ["Offset of field: _opaque_pthread_mutex_t::__opaque"]
+        [::std::mem::offset_of!(_opaque_pthread_mutex_t, __opaque) - 8usize];
 };
-impl Default for __pthread_cond_s {
-    fn default() -> Self {
-        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
-        unsafe {
-            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
-            s.assume_init()
-        }
-    }
-}
-pub type pthread_t = ::std::os::raw::c_ulong;
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub union pthread_attr_t {
-    pub __size: [::std::os::raw::c_char; 56usize],
-    pub __align: ::std::os::raw::c_long,
-}
-#[allow(clippy::unnecessary_operation, clippy::identity_op)]
-const _: () = {
-    ["Size of pthread_attr_t"][::std::mem::size_of::<pthread_attr_t>() - 56usize];
-    ["Alignment of pthread_attr_t"][::std::mem::align_of::<pthread_attr_t>() - 8usize];
-    ["Offset of field: pthread_attr_t::__size"]
-        [::std::mem::offset_of!(pthread_attr_t, __size) - 0usize];
-    ["Offset of field: pthread_attr_t::__align"]
-        [::std::mem::offset_of!(pthread_attr_t, __align) - 0usize];
-};
-impl Default for pthread_attr_t {
+impl Default for _opaque_pthread_mutex_t {
     fn default() -> Self {
         let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
         unsafe {
@@ -295,24 +225,24 @@ impl Default for pthread_attr_t {
     }
 }
 #[repr(C)]
-#[derive(Copy, Clone)]
-pub union pthread_mutex_t {
-    pub __data: __pthread_mutex_s,
-    pub __size: [::std::os::raw::c_char; 40usize],
-    pub __align: ::std::os::raw::c_long,
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct _opaque_pthread_t {
+    pub __sig: ::std::os::raw::c_long,
+    pub __cleanup_stack: *mut __darwin_pthread_handler_rec,
+    pub __opaque: [::std::os::raw::c_char; 8176usize],
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of pthread_mutex_t"][::std::mem::size_of::<pthread_mutex_t>() - 40usize];
-    ["Alignment of pthread_mutex_t"][::std::mem::align_of::<pthread_mutex_t>() - 8usize];
-    ["Offset of field: pthread_mutex_t::__data"]
-        [::std::mem::offset_of!(pthread_mutex_t, __data) - 0usize];
-    ["Offset of field: pthread_mutex_t::__size"]
-        [::std::mem::offset_of!(pthread_mutex_t, __size) - 0usize];
-    ["Offset of field: pthread_mutex_t::__align"]
-        [::std::mem::offset_of!(pthread_mutex_t, __align) - 0usize];
+    ["Size of _opaque_pthread_t"][::std::mem::size_of::<_opaque_pthread_t>() - 8192usize];
+    ["Alignment of _opaque_pthread_t"][::std::mem::align_of::<_opaque_pthread_t>() - 8usize];
+    ["Offset of field: _opaque_pthread_t::__sig"]
+        [::std::mem::offset_of!(_opaque_pthread_t, __sig) - 0usize];
+    ["Offset of field: _opaque_pthread_t::__cleanup_stack"]
+        [::std::mem::offset_of!(_opaque_pthread_t, __cleanup_stack) - 8usize];
+    ["Offset of field: _opaque_pthread_t::__opaque"]
+        [::std::mem::offset_of!(_opaque_pthread_t, __opaque) - 16usize];
 };
-impl Default for pthread_mutex_t {
+impl Default for _opaque_pthread_t {
     fn default() -> Self {
         let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
         unsafe {
@@ -321,33 +251,11 @@ impl Default for pthread_mutex_t {
         }
     }
 }
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub union pthread_cond_t {
-    pub __data: __pthread_cond_s,
-    pub __size: [::std::os::raw::c_char; 48usize],
-    pub __align: ::std::os::raw::c_longlong,
-}
-#[allow(clippy::unnecessary_operation, clippy::identity_op)]
-const _: () = {
-    ["Size of pthread_cond_t"][::std::mem::size_of::<pthread_cond_t>() - 48usize];
-    ["Alignment of pthread_cond_t"][::std::mem::align_of::<pthread_cond_t>() - 8usize];
-    ["Offset of field: pthread_cond_t::__data"]
-        [::std::mem::offset_of!(pthread_cond_t, __data) - 0usize];
-    ["Offset of field: pthread_cond_t::__size"]
-        [::std::mem::offset_of!(pthread_cond_t, __size) - 0usize];
-    ["Offset of field: pthread_cond_t::__align"]
-        [::std::mem::offset_of!(pthread_cond_t, __align) - 0usize];
-};
-impl Default for pthread_cond_t {
-    fn default() -> Self {
-        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
-        unsafe {
-            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
-            s.assume_init()
-        }
-    }
-}
+pub type __darwin_pthread_attr_t = _opaque_pthread_attr_t;
+pub type __darwin_pthread_cond_t = _opaque_pthread_cond_t;
+pub type __darwin_pthread_mutex_t = _opaque_pthread_mutex_t;
+pub type __darwin_pthread_t = *mut _opaque_pthread_t;
+pub type pthread_attr_t = __darwin_pthread_attr_t;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct aeron_context_stct {
@@ -4401,12 +4309,15 @@ unsafe extern "C" {
         cpu_affinity_no: u8,
     ) -> ::std::os::raw::c_int;
 }
+pub type pthread_cond_t = __darwin_pthread_cond_t;
+pub type pthread_mutex_t = __darwin_pthread_mutex_t;
+pub type pthread_t = __darwin_pthread_t;
 pub type aeron_mutex_t = pthread_mutex_t;
 pub type aeron_thread_t = pthread_t;
 pub type aeron_thread_attr_t = pthread_attr_t;
 pub type aeron_cond_t = pthread_cond_t;
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct aeron_archive_stct {
     pub owns_ctx: bool,
     pub ctx: *mut aeron_archive_context_t,
@@ -4424,7 +4335,7 @@ pub struct aeron_archive_stct {
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of aeron_archive_stct"][::std::mem::size_of::<aeron_archive_stct>() - 128usize];
+    ["Size of aeron_archive_stct"][::std::mem::size_of::<aeron_archive_stct>() - 152usize];
     ["Alignment of aeron_archive_stct"][::std::mem::align_of::<aeron_archive_stct>() - 8usize];
     ["Offset of field: aeron_archive_stct::owns_ctx"]
         [::std::mem::offset_of!(aeron_archive_stct, owns_ctx) - 0usize];
@@ -4433,25 +4344,25 @@ const _: () = {
     ["Offset of field: aeron_archive_stct::lock"]
         [::std::mem::offset_of!(aeron_archive_stct, lock) - 16usize];
     ["Offset of field: aeron_archive_stct::archive_proxy"]
-        [::std::mem::offset_of!(aeron_archive_stct, archive_proxy) - 56usize];
+        [::std::mem::offset_of!(aeron_archive_stct, archive_proxy) - 80usize];
     ["Offset of field: aeron_archive_stct::owns_control_response_subscription"]
-        [::std::mem::offset_of!(aeron_archive_stct, owns_control_response_subscription) - 64usize];
+        [::std::mem::offset_of!(aeron_archive_stct, owns_control_response_subscription) - 88usize];
     ["Offset of field: aeron_archive_stct::subscription"]
-        [::std::mem::offset_of!(aeron_archive_stct, subscription) - 72usize];
+        [::std::mem::offset_of!(aeron_archive_stct, subscription) - 96usize];
     ["Offset of field: aeron_archive_stct::control_response_poller"]
-        [::std::mem::offset_of!(aeron_archive_stct, control_response_poller) - 80usize];
+        [::std::mem::offset_of!(aeron_archive_stct, control_response_poller) - 104usize];
     ["Offset of field: aeron_archive_stct::recording_descriptor_poller"]
-        [::std::mem::offset_of!(aeron_archive_stct, recording_descriptor_poller) - 88usize];
+        [::std::mem::offset_of!(aeron_archive_stct, recording_descriptor_poller) - 112usize];
     ["Offset of field: aeron_archive_stct::recording_subscription_descriptor_poller"][::std::mem::offset_of!(
         aeron_archive_stct,
         recording_subscription_descriptor_poller
-    ) - 96usize];
+    ) - 120usize];
     ["Offset of field: aeron_archive_stct::control_session_id"]
-        [::std::mem::offset_of!(aeron_archive_stct, control_session_id) - 104usize];
+        [::std::mem::offset_of!(aeron_archive_stct, control_session_id) - 128usize];
     ["Offset of field: aeron_archive_stct::archive_id"]
-        [::std::mem::offset_of!(aeron_archive_stct, archive_id) - 112usize];
+        [::std::mem::offset_of!(aeron_archive_stct, archive_id) - 136usize];
     ["Offset of field: aeron_archive_stct::is_in_callback"]
-        [::std::mem::offset_of!(aeron_archive_stct, is_in_callback) - 120usize];
+        [::std::mem::offset_of!(aeron_archive_stct, is_in_callback) - 144usize];
 };
 impl Default for aeron_archive_stct {
     fn default() -> Self {
