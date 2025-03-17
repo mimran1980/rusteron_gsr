@@ -102,7 +102,7 @@ pub fn main() {
         // Exit early to skip rebuild since artifacts are already published.
         return;
     }
-    let publish_binaries = std::env::var("PUBLISH_ARTIFACTS").is_ok();
+    let publish_binaries = std::env::var("PUBLISH_ARTIFACTS").is_ok() && !cfg!(target_os = "linux");
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=bindings.h");
     println!("cargo:rerun-if-changed=aeron/version.txt");

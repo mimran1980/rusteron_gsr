@@ -63,4 +63,4 @@ path = "src/bin/media_driver.rs"
 
 [package.metadata.docs.rs]
 features = ["static", "precompile"]
-default-target = "x86_64-unknown-linux-gnu"
+default-target = "x86_64-apple-darwin"

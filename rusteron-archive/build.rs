@@ -124,7 +124,7 @@ pub fn main() {
         // Exit early to skip rebuild since artifacts are already published.
         return;
     }
-    let publish_binaries = std::env::var("PUBLISH_ARTIFACTS").is_ok();
+    let publish_binaries = std::env::var("PUBLISH_ARTIFACTS").is_ok() && ;
 
     let aeron_path = canonicalize(Path::new("./aeron")).unwrap();
     let header_path = aeron_path.join("aeron-archive/src/main/c");
