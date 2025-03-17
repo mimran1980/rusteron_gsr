@@ -143,7 +143,7 @@ jobs:
         run: |
           rm -rf rusteron-archive/artifacts rusteron-client/artifacts rusteron-media-driver/artifacts rusteron-rb/artifacts
           # want to make binaries small as crates.io has 10meg limit
-          RUSTFLAGS="-C opt-level=z -C lto -C codegen-units=1 -C debuginfo=0 -C panic=abort -C link-arg=-s"  PUBLISH_ARTIFACTS=true cargo build --release --workspace ${{ env.feature-flags }}
+          RUSTFLAGS="-C opt-level=z -C lto=thin -C codegen-units=1 -C debuginfo=0 -C panic=abort -C link-arg=-s"  PUBLISH_ARTIFACTS=true cargo build --release --workspace ${{ env.feature-flags }}
           cargo test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
 
 
