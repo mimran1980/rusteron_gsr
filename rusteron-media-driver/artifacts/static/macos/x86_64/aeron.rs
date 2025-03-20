@@ -264,7 +264,7 @@ impl<T> Drop for ManagedCResource<T> {
         }
     }
 }
-#[derive(Debug)]
+#[derive(Debug, PartialOrd, Eq, PartialEq, Clone)]
 pub enum AeronErrorType {
     NullOrNotConnected,
     ClientErrorDriverTimeout,
@@ -300,6 +300,15 @@ impl AeronErrorType {
             AeronErrorType::TimedOut => -234324,
             AeronErrorType::Unknown(code) => *code,
         }
+    }
+    pub fn is_back_pressured(&self) -> bool {
+        self == &AeronErrorType::PublicationBackPressured
+    }
+    pub fn is_admin_action(&self) -> bool {
+        self == &AeronErrorType::PublicationAdminAction
+    }
+    pub fn is_back_pressured_or_admin_action(&self) -> bool {
+        self.is_back_pressured() || self.is_admin_action()
     }
     pub fn from_code(code: i32) -> Self {
         match code {
@@ -340,7 +349,7 @@ impl AeronErrorType {
 #[doc = ""]
 #[doc = " The error code is derived from Aeron C API calls."]
 #[doc = " Use `get_message()` to retrieve a human-readable message, if available."]
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Clone)]
 pub struct AeronCError {
     pub code: i32,
 }
@@ -380,6 +389,15 @@ impl AeronCError {
     }
     pub fn kind(&self) -> AeronErrorType {
         AeronErrorType::from_code(self.code)
+    }
+    pub fn is_back_pressured(&self) -> bool {
+        self.kind().is_back_pressured()
+    }
+    pub fn is_admin_action(&self) -> bool {
+        self.kind().is_admin_action()
+    }
+    pub fn is_back_pressured_or_admin_action(&self) -> bool {
+        self.kind().is_back_pressured_or_admin_action()
     }
 }
 impl std::fmt::Display for AeronCError {
