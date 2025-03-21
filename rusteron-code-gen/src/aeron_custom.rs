@@ -92,12 +92,24 @@ impl AeronPublication {
         self.close(Handlers::no_notification_handler())?;
         Ok(())
     }
+
+    /// sometimes when you first connect, is_connected = true, but you get backpressure as position is 0
+    /// this will check if both publication is connected and position > 0
+    pub fn is_ready(&self) -> bool {
+        self.is_connected() && self.position() > 0
+    }
 }
 
 impl AeronExclusivePublication {
     pub fn close_with_no_args(&self) -> Result<(), AeronCError> {
         self.close(Handlers::no_notification_handler())?;
         Ok(())
+    }
+
+    /// sometimes when you first connect, is_connected = true, but you get backpressure as position is 0
+    /// this will check if both publication is connected and position > 0
+    pub fn is_ready(&self) -> bool {
+        self.is_connected() && self.position() > 0
     }
 }
 
