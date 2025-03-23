@@ -43,6 +43,146 @@ impl AeronCnc {
     }
 }
 
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum AeronSystemCounterType {
+    /// Running total of bytes sent for data over UDP, excluding IP headers.
+    BytesSent = 0,
+    /// Running total of bytes received for data over UDP, excluding IP headers.
+    BytesReceived = 1,
+    /// Failed offers to the receiver proxy suggesting back-pressure.
+    ReceiverProxyFails = 2,
+    /// Failed offers to the sender proxy suggesting back-pressure.
+    SenderProxyFails = 3,
+    /// Failed offers to the driver conductor proxy suggesting back-pressure.
+    ConductorProxyFails = 4,
+    /// Count of NAKs sent back to senders requesting re-transmits.
+    NakMessagesSent = 5,
+    /// Count of NAKs received from receivers requesting re-transmits.
+    NakMessagesReceived = 6,
+    /// Count of status messages sent back to senders for flow control.
+    StatusMessagesSent = 7,
+    /// Count of status messages received from receivers for flow control.
+    StatusMessagesReceived = 8,
+    /// Count of heartbeat data frames sent to indicate liveness in the absence of data to send.
+    HeartbeatsSent = 9,
+    /// Count of heartbeat data frames received to indicate liveness in the absence of data to send.
+    HeartbeatsReceived = 10,
+    /// Count of data packets re-transmitted as a result of NAKs.
+    RetransmitsSent = 11,
+    /// Count of packets received which under-run the current flow control window for images.
+    FlowControlUnderRuns = 12,
+    /// Count of packets received which over-run the current flow control window for images.
+    FlowControlOverRuns = 13,
+    /// Count of invalid packets received.
+    InvalidPackets = 14,
+    /// Count of errors observed by the driver and an indication to read the distinct error log.
+    Errors = 15,
+    /// Count of socket send operations which resulted in less than the packet length being sent.
+    ShortSends = 16,
+    /// Count of attempts to free log buffers no longer required by the driver that are still held by clients.
+    FreeFails = 17,
+    /// Count of the times a sender has entered the state of being back-pressured when it could have sent faster.
+    SenderFlowControlLimits = 18,
+    /// Count of the times a publication has been unblocked after a client failed to complete an offer within a timeout.
+    UnblockedPublications = 19,
+    /// Count of the times a command has been unblocked after a client failed to complete an offer within a timeout.
+    UnblockedCommands = 20,
+    /// Count of the times the channel endpoint detected a possible TTL asymmetry between its config and a new connection.
+    PossibleTtlAsymmetry = 21,
+    /// Current status of the ControllableIdleStrategy if configured.
+    ControllableIdleStrategy = 22,
+    /// Count of the times a loss gap has been filled when NAKs have been disabled.
+    LossGapFills = 23,
+    /// Count of the Aeron clients that have timed out without a graceful close.
+    ClientTimeouts = 24,
+    /// Count of the times a connection endpoint has been re-resolved resulting in a change.
+    ResolutionChanges = 25,
+    /// The maximum time spent by the conductor between work cycles.
+    ConductorMaxCycleTime = 26,
+    /// Count of the number of times the cycle time threshold has been exceeded by the conductor in its work cycle.
+    ConductorCycleTimeThresholdExceeded = 27,
+    /// The maximum time spent by the sender between work cycles.
+    SenderMaxCycleTime = 28,
+    /// Count of the number of times the cycle time threshold has been exceeded by the sender in its work cycle.
+    SenderCycleTimeThresholdExceeded = 29,
+    /// The maximum time spent by the receiver between work cycles.
+    ReceiverMaxCycleTime = 30,
+    /// Count of the number of times the cycle time threshold has been exceeded by the receiver in its work cycle.
+    ReceiverCycleTimeThresholdExceeded = 31,
+    /// The maximum time spent by the NameResolver in one of its operations.
+    NameResolverMaxTime = 32,
+    /// Count of the number of times the time threshold has been exceeded by the NameResolver.
+    NameResolverTimeThresholdExceeded = 33,
+    /// The version of the media driver.
+    AeronVersion = 34,
+    /// The total number of bytes currently mapped in log buffers, the CnC file, and the loss report.
+    BytesCurrentlyMapped = 35,
+    /// A minimum bound on the number of bytes re-transmitted as a result of NAKs.\n///\n/// MDC retransmits are only counted once; therefore, this is a minimum bound rather than the actual number\n/// of retransmitted bytes. Note that retransmitted bytes are not included in the `BytesSent` counter value.
+    RetransmittedBytes = 36,
+    /// A count of the number of times that the retransmit pool has been overflowed.
+    RetransmitOverflow = 37,
+    /// A count of the number of error frames received by this driver.
+    ErrorFramesReceived = 38,
+    /// A count of the number of error frames sent by this driver.
+    ErrorFramesSent = 39,
+    DummyLast = 40,
+}
+
+impl std::convert::TryFrom<i32> for AeronSystemCounterType {
+    type Error = AeronCError;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        if value < 0 {
+            return Err(AeronCError::from_code(value));
+        }
+        match value as u32 {
+            0 => Ok(AeronSystemCounterType::BytesSent),
+            1 => Ok(AeronSystemCounterType::BytesReceived),
+            2 => Ok(AeronSystemCounterType::ReceiverProxyFails),
+            3 => Ok(AeronSystemCounterType::SenderProxyFails),
+            4 => Ok(AeronSystemCounterType::ConductorProxyFails),
+            5 => Ok(AeronSystemCounterType::NakMessagesSent),
+            6 => Ok(AeronSystemCounterType::NakMessagesReceived),
+            7 => Ok(AeronSystemCounterType::StatusMessagesSent),
+            8 => Ok(AeronSystemCounterType::StatusMessagesReceived),
+            9 => Ok(AeronSystemCounterType::HeartbeatsSent),
+            10 => Ok(AeronSystemCounterType::HeartbeatsReceived),
+            11 => Ok(AeronSystemCounterType::RetransmitsSent),
+            12 => Ok(AeronSystemCounterType::FlowControlUnderRuns),
+            13 => Ok(AeronSystemCounterType::FlowControlOverRuns),
+            14 => Ok(AeronSystemCounterType::InvalidPackets),
+            15 => Ok(AeronSystemCounterType::Errors),
+            16 => Ok(AeronSystemCounterType::ShortSends),
+            17 => Ok(AeronSystemCounterType::FreeFails),
+            18 => Ok(AeronSystemCounterType::SenderFlowControlLimits),
+            19 => Ok(AeronSystemCounterType::UnblockedPublications),
+            20 => Ok(AeronSystemCounterType::UnblockedCommands),
+            21 => Ok(AeronSystemCounterType::PossibleTtlAsymmetry),
+            22 => Ok(AeronSystemCounterType::ControllableIdleStrategy),
+            23 => Ok(AeronSystemCounterType::LossGapFills),
+            24 => Ok(AeronSystemCounterType::ClientTimeouts),
+            25 => Ok(AeronSystemCounterType::ResolutionChanges),
+            26 => Ok(AeronSystemCounterType::ConductorMaxCycleTime),
+            27 => Ok(AeronSystemCounterType::ConductorCycleTimeThresholdExceeded),
+            28 => Ok(AeronSystemCounterType::SenderMaxCycleTime),
+            29 => Ok(AeronSystemCounterType::SenderCycleTimeThresholdExceeded),
+            30 => Ok(AeronSystemCounterType::ReceiverMaxCycleTime),
+            31 => Ok(AeronSystemCounterType::ReceiverCycleTimeThresholdExceeded),
+            32 => Ok(AeronSystemCounterType::NameResolverMaxTime),
+            33 => Ok(AeronSystemCounterType::NameResolverTimeThresholdExceeded),
+            34 => Ok(AeronSystemCounterType::AeronVersion),
+            35 => Ok(AeronSystemCounterType::BytesCurrentlyMapped),
+            36 => Ok(AeronSystemCounterType::RetransmittedBytes),
+            37 => Ok(AeronSystemCounterType::RetransmitOverflow),
+            38 => Ok(AeronSystemCounterType::ErrorFramesReceived),
+            39 => Ok(AeronSystemCounterType::ErrorFramesSent),
+            40 => Ok(AeronSystemCounterType::DummyLast),
+            _  => Err(AeronCError::from_code(-1)),
+        }
+    }
+}
+
 impl AeronCncMetadata {
     pub fn load_from_file(aeron_dir: &str) -> Result<Self, AeronCError> {
         let aeron_dir = std::ffi::CString::new(aeron_dir).expect("CString::new failed");

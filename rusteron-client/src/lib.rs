@@ -229,7 +229,8 @@ mod tests {
         let cnc = AeronCnc::new(ctx.get_dir())?;
         cnc.counters_reader().foreach_counter_once(
             |value: i64, id: i32, type_id: i32, key: &[u8], label: &str| {
-                println!("counter reader id={id}, type_id={type_id}, key={key:?}, label={label}, value={value}");
+                println!("counter reader id={id}, type_id={type_id}, key={key:?}, label={label}, value={value} [type={:?}]",
+                AeronSystemCounterType::try_from(type_id));
             },
         );
         cnc.error_log_read_once(| observation_count: i32,
