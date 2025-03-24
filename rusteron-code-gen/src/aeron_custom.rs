@@ -249,7 +249,7 @@ impl AeronExclusivePublication {
     /// sometimes when you first connect, is_connected = true, but you get backpressure as position is 0
     /// this will check if both publication is connected and position > 0
     pub fn is_ready(&self) -> bool {
-        self.is_connected() || self.position() > 0
+        self.is_connected() && self.position() != 0
     }
 }
 
