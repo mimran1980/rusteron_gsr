@@ -272,3 +272,192 @@ mod tests {
         path.to_string()
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::ManagedCResource;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    fn make_resource(val: i32) -> *mut i32 {
+        Box::into_raw(Box::new(val))
+    }
+
+    #[test]
+    fn test_drop_calls_cleanup_non_borrowed_no_cleanup_struct() {
+        let flag = Arc::new(AtomicBool::new(false));
+        let flag_clone = flag.clone();
+        let resource_ptr = make_resource(10);
+
+        let cleanup = Some(Box::new(move |res: *mut *mut i32| -> i32 {
+            flag_clone.store(true, Ordering::SeqCst);
+            // Set the resource to null to simulate cleanup.
+            unsafe {
+                *res = std::ptr::null_mut();
+            }
+            0
+        }) as Box<dyn FnMut(*mut *mut i32) -> i32>);
+
+        {
+            let _resource = ManagedCResource::new(
+                |res: *mut *mut i32| {
+                    unsafe {
+                        *res = resource_ptr;
+                    }
+                    0
+                },
+                cleanup,
+                false,
+                None,
+            )
+            .unwrap();
+        }
+        assert!(flag.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_drop_calls_cleanup_non_borrowed_with_cleanup_struct() {
+        let flag = Arc::new(AtomicBool::new(false));
+        let flag_clone = flag.clone();
+        let resource_ptr = make_resource(20);
+
+        let cleanup = Some(Box::new(move |res: *mut *mut i32| -> i32 {
+            flag_clone.store(true, Ordering::SeqCst);
+            unsafe {
+                *res = std::ptr::null_mut();
+            }
+            0
+        }) as Box<dyn FnMut(*mut *mut i32) -> i32>);
+
+        {
+            let _resource = ManagedCResource::new(
+                |res: *mut *mut i32| {
+                    unsafe {
+                        *res = resource_ptr;
+                    }
+                    0
+                },
+                cleanup,
+                true,
+                None,
+            )
+            .unwrap();
+        }
+        assert!(flag.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_drop_does_not_call_cleanup_if_already_closed() {
+        let flag = Arc::new(AtomicBool::new(false));
+        let flag_clone = flag.clone();
+        let resource_ptr = make_resource(30);
+
+        let cleanup = Some(Box::new(move |res: *mut *mut i32| -> i32 {
+            flag_clone.store(true, Ordering::SeqCst);
+            unsafe {
+                *res = std::ptr::null_mut();
+            }
+            0
+        }) as Box<dyn FnMut(*mut *mut i32) -> i32>);
+
+        let mut resource = ManagedCResource::new(
+            |res: *mut *mut i32| {
+                unsafe {
+                    *res = resource_ptr;
+                }
+                0
+            },
+            cleanup,
+            false,
+            None,
+        )
+        .unwrap();
+
+        resource.close().unwrap();
+        // Reset the flag to ensure drop does not call cleanup a second time.
+        flag.store(false, Ordering::SeqCst);
+        drop(resource);
+        assert!(!flag.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_drop_does_not_call_cleanup_for_borrowed() {
+        let resource_ptr = make_resource(40);
+
+        let check_fn = Some(Box::new(|_res: *mut i32| -> bool {
+            panic!("check_for_is_closed should not be called for borrowed resources")
+        }) as Box<dyn Fn(*mut i32) -> bool>);
+
+        {
+            let _resource = ManagedCResource::new_borrowed(resource_ptr as *const i32, check_fn);
+        }
+    }
+
+    #[test]
+    fn test_drop_does_not_call_cleanup_if_check_for_is_closed_returns_true() {
+        let flag = Arc::new(AtomicBool::new(false));
+        let flag_clone = flag.clone();
+        let resource_ptr = make_resource(60);
+
+        let cleanup = Some(Box::new(move |res: *mut *mut i32| -> i32 {
+            flag_clone.store(true, Ordering::SeqCst);
+            unsafe {
+                *res = std::ptr::null_mut();
+            }
+            0
+        }) as Box<dyn FnMut(*mut *mut i32) -> i32>);
+
+        let check_fn =
+            Some(Box::new(|_res: *mut i32| -> bool { true }) as Box<dyn Fn(*mut i32) -> bool>);
+
+        {
+            let _resource = ManagedCResource::new(
+                |res: *mut *mut i32| {
+                    unsafe {
+                        *res = resource_ptr;
+                    }
+                    0
+                },
+                cleanup,
+                false,
+                check_fn,
+            )
+            .unwrap();
+        }
+        assert!(!flag.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_drop_does_call_cleanup_if_check_for_is_closed_returns_false() {
+        let flag = Arc::new(AtomicBool::new(false));
+        let flag_clone = flag.clone();
+        let resource_ptr = make_resource(60);
+
+        let cleanup = Some(Box::new(move |res: *mut *mut i32| -> i32 {
+            flag_clone.store(true, Ordering::SeqCst);
+            unsafe {
+                *res = std::ptr::null_mut();
+            }
+            0
+        }) as Box<dyn FnMut(*mut *mut i32) -> i32>);
+
+        let check_fn =
+            Some(Box::new(|_res: *mut i32| -> bool { false }) as Box<dyn Fn(*mut i32) -> bool>);
+
+        {
+            let _resource = ManagedCResource::new(
+                |res: *mut *mut i32| {
+                    unsafe {
+                        *res = resource_ptr;
+                    }
+                    0
+                },
+                cleanup,
+                false,
+                check_fn,
+            )
+            .unwrap();
+        }
+        assert!(flag.load(Ordering::SeqCst));
+    }
+}
