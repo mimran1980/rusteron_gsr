@@ -242,7 +242,6 @@ impl<T> Drop for ManagedCResource<T> {
                     .as_ref()
                     .map_or(false, |f| f(self.resource));
             if !self.borrowed {
-                self.close_already_called.set(true);
                 let resource = if already_closed {
                     self.resource
                 } else {
@@ -253,6 +252,7 @@ impl<T> Drop for ManagedCResource<T> {
                     log::debug!("closing c resource: {:?}", self);
                     let _ = self.close();
                 }
+                self.close_already_called.set(true);
                 if self.cleanup_struct {
                     #[cfg(feature = "extra-logging")]
                     log::debug!("closing rust struct resource: {:?}", resource);
