@@ -369,12 +369,12 @@ impl<T> ManagedCResource<T> {
 impl<T> Drop for ManagedCResource<T> {
     fn drop(&mut self) {
         if !self.resource.is_null() {
-            let already_closed = self.close_already_called.get()
-                || self
-                    .check_for_is_closed
-                    .as_ref()
-                    .map_or(false, |f| f(self.resource));
             if !self.borrowed {
+                let already_closed = self.close_already_called.get()
+                    || self
+                        .check_for_is_closed
+                        .as_ref()
+                        .map_or(false, |f| f(self.resource));
                 let resource = if already_closed {
                     self.resource
                 } else {
