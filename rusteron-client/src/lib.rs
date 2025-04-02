@@ -25,6 +25,7 @@ include!(concat!(env!("OUT_DIR"), "/aeron_custom.rs"));
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_alloc::current_allocs;
     use log::{error, info};
     use serial_test::serial;
     use std::error;
@@ -54,19 +55,27 @@ mod tests {
             .is_test(true)
             .filter_level(log::LevelFilter::Info)
             .try_init();
-        let major = unsafe { crate::aeron_version_major() };
-        let minor = unsafe { crate::aeron_version_minor() };
-        let patch = unsafe { crate::aeron_version_patch() };
 
-        let cargo_version = "1.47.4";
-        let aeron_version = format!("{}.{}.{}", major, minor, patch);
-        assert_eq!(aeron_version, cargo_version);
+        let alloc_count = current_allocs();
+        {
+            let major = unsafe { crate::aeron_version_major() };
+            let minor = unsafe { crate::aeron_version_minor() };
+            let patch = unsafe { crate::aeron_version_patch() };
 
-        let ctx = AeronContext::new()?;
-        let error_count = 1;
-        ctx.set_error_handler(Some(&Handler::leak(ErrorCount::default())))?;
+            let cargo_version = "1.47.4";
+            let aeron_version = format!("{}.{}.{}", major, minor, patch);
+            assert_eq!(aeron_version, cargo_version);
 
-        assert!(Aeron::epoch_clock() > 0);
+            let ctx = AeronContext::new()?;
+            let error_count = 1;
+            let mut handler = Handler::leak(ErrorCount::default());
+            ctx.set_error_handler(Some(&handler))?;
+
+            assert!(Aeron::epoch_clock() > 0);
+            handler.release();
+        }
+
+        assert!(current_allocs() <= alloc_count);
 
         Ok(())
     }
@@ -684,6 +693,57 @@ mod tests {
 
         _stop.store(true, Ordering::SeqCst);
         let _ = driver_handle.join().unwrap();
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    pub fn should_be_able_to_drop_after_close_manually_being_closed(
+    ) -> Result<(), Box<dyn error::Error>> {
+        let _ = env_logger::Builder::new()
+            .is_test(true)
+            .filter_level(log::LevelFilter::Info)
+            .try_init();
+
+        let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
+        media_driver_ctx.set_dir_delete_on_shutdown(true)?;
+        media_driver_ctx.set_dir_delete_on_start(true)?;
+        media_driver_ctx.set_dir(&format!(
+            "{}{}",
+            media_driver_ctx.get_dir(),
+            Aeron::epoch_clock()
+        ))?;
+        let (_stop, driver_handle) =
+            rusteron_media_driver::AeronDriver::launch_embedded(media_driver_ctx.clone(), false);
+
+        let ctx = AeronContext::new()?;
+        ctx.set_dir(media_driver_ctx.get_dir())?;
+        ctx.set_error_handler(Some(&Handler::leak(AeronErrorHandlerLogger)))?;
+
+        let aeron = Aeron::new(&ctx)?;
+        aeron.start()?;
+
+        {
+            let publisher = aeron.add_publication(AERON_IPC_STREAM, 123, Duration::from_secs(5))?;
+            info!("created publication [sessionId={}]", publisher.session_id());
+            publisher.close_with_no_args()?;
+            drop(publisher);
+        }
+
+        {
+            let publisher = aeron.add_publication(AERON_IPC_STREAM, 124, Duration::from_secs(5))?;
+            info!("created publication [sessionId={}]", publisher.session_id());
+            publisher.close(Handlers::no_notification_handler())?;
+            drop(publisher);
+        }
+
+        {
+            let publisher = aeron.add_publication(AERON_IPC_STREAM, 125, Duration::from_secs(5))?;
+            publisher.close_once(|| println!("on close"))?;
+            info!("created publication [sessionId={}]", publisher.session_id());
+            drop(publisher);
+        }
+
         Ok(())
     }
 

@@ -624,7 +624,7 @@ impl CWrapper {
                 // getter methods
                 Self::add_getter_instead_of_mut_arg_if_applicable(wrappers, method, &fn_name, &where_clause, &possible_self, &method_docs, &mut additional_methods);
 
-                Self::add_once_methods_for_handlers(closure_handlers, method, &fn_name, &return_type, &ffi_call, &where_clause, &fn_arguments, &mut arg_names, &converter, &possible_self, &method_docs, &mut additional_methods);
+                Self::add_once_methods_for_handlers(closure_handlers, method, &fn_name, &return_type, &ffi_call, &where_clause, &fn_arguments, &mut arg_names, &converter, &possible_self, &method_docs, &mut additional_methods, &set_closed);
 
                 let mut_primitivies = method.arguments.iter()
                     .filter(|a| a.is_mut_pointer() && a.is_primitive())
@@ -725,6 +725,7 @@ impl CWrapper {
         possible_self: &TokenStream,
         method_docs: &Vec<TokenStream>,
         additional_methods: &mut Vec<TokenStream>,
+        set_closed: &TokenStream,
     ) {
         if method.arguments.iter().any(|arg| {
             matches!(arg.processing, ArgProcessing::Handler(_))
@@ -812,6 +813,7 @@ impl CWrapper {
                 /// _NOTE: aeron must not store this closure and instead use it immediately. If not you will get undefined behaviour,
                 ///  use with care_
                 pub fn #fn_name #where_clause(#possible_self #(#fn_arguments),*) -> #return_type {
+                    #set_closed
                     unsafe {
                         let result = #ffi_call(#(#arg_names),*);
                         #converter
@@ -1854,6 +1856,20 @@ pub fn generate_rust_code(
                 .filter(|t| !t.is_empty())
                 .collect();
 
+            let async_dependancies = async_new_args
+                .iter()
+                .filter(|a| {
+                    a.to_string().contains(" : Aeron") || a.to_string().contains(" : & Aeron")
+                })
+                .map(|e| {
+                    let var_name =
+                        format_ident!("{}", e.to_string().split_whitespace().next().unwrap());
+                    quote! {
+                        result.inner.add_dependency(#var_name.clone());
+                    }
+                })
+                .collect_vec();
+
             let async_new_args_for_client = async_new_args.iter().skip(1).cloned().collect_vec();
 
             let async_new_args_name_only: Vec<TokenStream> = new_method
@@ -1943,9 +1959,11 @@ pub fn generate_rust_code(
                                 false,
                                 None,
                             )?;
-                            Ok(Self {
+                            let result = Self {
                                 inner: std::rc::Rc::new(resource_async),
-                            })
+                            };
+                            #(#async_dependancies)*
+                            Ok(result)
                         }
 
                         pub fn poll(&self) -> Result<Option<#main_class_name>, AeronCError> {

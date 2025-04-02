@@ -156,12 +156,61 @@ impl AeronArchive {
 
 impl AeronArchiveAsyncConnect {
     #[inline]
+    /// recommend using this method instead of standard `new` as it will link the archive to aeron so if a drop occurs archive is dropped before aeron
     pub fn new_with_aeron(ctx: &AeronArchiveContext, aeron: &Aeron) -> Result<Self, AeronCError> {
         let resource_async = Self::new(ctx)?;
         resource_async.inner.add_dependency(aeron.clone());
         Ok(resource_async)
     }
 }
+
+macro_rules! impl_archive_position_methods {
+    ($pub_type:ty) => {
+        impl $pub_type {
+            /// Retrieves the current active live archive position using the Aeron counters.
+            /// Returns an error if not found.
+            pub fn get_archive_position(&self) -> Result<i64, AeronCError> {
+                if let Some(aeron) = self.inner.get_dependency::<Aeron>() {
+                    let counter_reader = &aeron.counters_reader();
+                    self.get_archive_position_with(counter_reader)
+                } else {
+                    Err(AeronCError::from_code(-1))
+                }
+            }
+
+            /// Retrieves the current active live archive position using the provided counter reader.
+            /// Returns an error if not found.
+            pub fn get_archive_position_with(
+                &self,
+                counters: &AeronCountersReader,
+            ) -> Result<i64, AeronCError> {
+                let session_id = self.get_constants()?.session_id();
+                let counter_id = RecordingPos::find_counter_id_by_session(counters, session_id);
+                if counter_id < 0 {
+                    return Err(AeronCError::from_code(counter_id));
+                }
+                let position = counters.get_counter_value(counter_id);
+                if position < 0 {
+                    return Err(AeronCError::from_code(position as i32));
+                }
+                Ok(position)
+            }
+
+            /// Checks if the publication's current position is within a specified inclusive length
+            /// of the archive position.
+            pub fn is_archive_position_with(&self, length_inclusive: usize) -> bool {
+                let archive_position = self.get_archive_position().unwrap_or(-1);
+                if archive_position < 0 {
+                    return false;
+                }
+                self.position() - archive_position <= length_inclusive as i64
+            }
+        }
+    };
+}
+
+impl_archive_position_methods!(AeronPublication);
+impl_archive_position_methods!(AeronExclusivePublication);
 
 impl AeronArchiveContext {
     // The method below sets no credentials supplier, which is essential for the operation
@@ -274,7 +323,6 @@ mod tests {
 
     #[test]
     #[serial]
-    // #[ignore] // TODO need to fix test, doesn't receive any response back
     fn test_simple_replay_merge() -> Result<(), AeronCError> {
         let _ = env_logger::Builder::new()
             .is_test(true)
@@ -375,10 +423,9 @@ mod tests {
         }
         info!("publisher to be connected");
         let counters_reader = aeron.counters_reader();
+        let mut caught_up_count = 0;
         let publisher_thread = thread::spawn(move || {
             let mut message_count = 0;
-            let mut counter_id = -1;
-            let session_id = publication.get_constants().unwrap().session_id;
 
             while running.load(Ordering::Acquire) {
                 let message = format!("{}{}", MESSAGE_PREFIX, message_count);
@@ -399,18 +446,14 @@ mod tests {
                 }
                 // slow down publishing so can catch up
                 if message_count > 10_000 {
-                    while counter_id < 0 {
-                        counter_id =
-                            RecordingPos::find_counter_id_by_session(&counters_reader, session_id);
-                    }
-
                     // ensure archiver is caught up
-                    while counters_reader.get_counter_value(counter_id) < publication.position() {
-                        thread::sleep(Duration::from_micros(1));
+                    while !publication.is_archive_position_with(0) {
+                        thread::sleep(Duration::from_micros(300));
                     }
-                    thread::sleep(Duration::from_micros(300));
+                    caught_up_count += 1;
                 }
             }
+            assert!(caught_up_count > 0);
             info!("Publisher thread terminated");
         });
         Ok((session_id, publisher_thread))
@@ -570,25 +613,6 @@ mod tests {
         let cargo_version = "1.47.4";
         assert_eq!(aeron_version, cargo_version);
     }
-
-    // #[test]
-    // #[serial]
-    // pub fn test_failed_connect() -> Result<(), Box<dyn error::Error>> {
-    //         env_logger::Builder::new()
-    //         .is_test(true)
-    //         .filter_level(log::LevelFilter::Info)
-    //         .init();
-    //     let ctx = AeronArchiveContext::new()?;
-    //     std::env::set_var("AERON_DRIVER_TIMEOUT", "1");
-    //     let connect = AeronArchiveAsyncConnect::new(&ctx);
-    //     std::env::remove_var("AERON_DRIVER_TIMEOUT");
-    //
-    //     assert_eq!(
-    //         Some(AeronErrorType::NullOrNotConnected.into()),
-    //         connect.err()
-    //     );
-    //     Ok(())
-    // }
 
     use std::thread;
 
