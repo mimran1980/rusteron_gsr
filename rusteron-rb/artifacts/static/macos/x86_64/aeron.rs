@@ -170,7 +170,6 @@ impl AeronBroadcastDescriptor {
     }
 }
 use crate::AeronErrorType::Unknown;
-use std::any::Any;
 #[cfg(feature = "backtrace")]
 use std::backtrace::Backtrace;
 use std::cell::UnsafeCell;
@@ -191,7 +190,10 @@ pub struct ManagedCResource<T> {
     check_for_is_closed: Option<Box<dyn Fn(*mut T) -> bool>>,
     #[doc = " this will be called if closed hasn't already happened even if its borrowed"]
     auto_close: std::cell::Cell<bool>,
-    dependencies: UnsafeCell<Vec<std::rc::Rc<dyn Any>>>,
+    #[doc = " to prevent the dependencies from being dropped as you have a copy here,"]
+    #[doc = " for example, you want to have a dependency to aeron for any async jobs so aeron doesnt get dropped first"]
+    #[doc = " when you have a publication/subscription"]
+    dependencies: UnsafeCell<Vec<std::rc::Rc<dyn std::any::Any>>>,
 }
 impl<T> std::fmt::Debug for ManagedCResource<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -274,9 +276,27 @@ impl<T> ManagedCResource<T> {
     pub fn get_mut(&self) -> &mut T {
         unsafe { &mut *self.resource }
     }
-    pub fn add_dependency<D: Any>(&self, dep: D) {
+    #[inline]
+    pub fn add_dependency<D: std::any::Any>(&self, dep: D) {
+        if let Some(dep) =
+            (&dep as &dyn std::any::Any).downcast_ref::<std::rc::Rc<dyn std::any::Any>>()
+        {
+            unsafe {
+                (*self.dependencies.get()).push(dep.clone());
+            }
+        } else {
+            unsafe {
+                (*self.dependencies.get()).push(std::rc::Rc::new(dep));
+            }
+        }
+    }
+    #[inline]
+    pub fn get_dependency<V: Clone + 'static>(&self) -> Option<V> {
         unsafe {
-            (*self.dependencies.get()).push(std::rc::Rc::new(dep));
+            (*self.dependencies.get())
+                .iter()
+                .filter_map(|x| x.as_ref().downcast_ref::<V>().cloned())
+                .next()
         }
     }
     #[doc = " Closes the resource by calling the cleanup function."]
@@ -490,8 +510,11 @@ impl std::error::Error for AeronCError {}
 #[doc = ""]
 #[doc = " `Handler` is a struct that wraps a raw pointer and a drop flag."]
 #[doc = ""]
-#[doc = " **Important:** `Handler` does not get dropped automatically."]
+#[doc = " **Important:** `Handler` *MAY* not get dropped automatically. It depends if aeron takes ownership."]
+#[doc = " For example for global level handlers e.g. error handler aeron will release this handle when closing."]
+#[doc = ""]
 #[doc = " You need to call the `release` method if you want to clear the memory manually."]
+#[doc = " Its important that you test this out as aeron may do it when closing aeron client."]
 #[doc = ""]
 #[doc = " ## Example"]
 #[doc = ""]
@@ -599,6 +622,46 @@ impl ControlMode {
             ControlMode::Dynamic => "dynamic",
             ControlMode::Response => "response",
         }
+    }
+}
+#[cfg(test)]
+#[allow(dead_code)]
+pub(crate) mod test_alloc {
+    use std::alloc::{GlobalAlloc, Layout, System};
+    use std::sync::atomic::{AtomicIsize, Ordering};
+    #[doc = " A simple global allocator that tracks the net allocation count."]
+    #[doc = " For very simple examples can do allocation count before and after your test."]
+    #[doc = " This does not work well with logger, running media driver, etc. Only for the most"]
+    #[doc = " basic controlled examples"]
+    pub struct CountingAllocator {
+        allocs: AtomicIsize,
+    }
+    impl CountingAllocator {
+        pub const fn new() -> Self {
+            Self {
+                allocs: AtomicIsize::new(0),
+            }
+        }
+        #[doc = " Returns the current allocation counter value."]
+        fn current(&self) -> isize {
+            self.allocs.load(Ordering::SeqCst)
+        }
+    }
+    unsafe impl GlobalAlloc for CountingAllocator {
+        unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+            self.allocs.fetch_add(1, Ordering::SeqCst);
+            System.alloc(layout)
+        }
+        unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+            self.allocs.fetch_sub(1, Ordering::SeqCst);
+            System.dealloc(ptr, layout)
+        }
+    }
+    #[global_allocator]
+    static GLOBAL: CountingAllocator = CountingAllocator::new();
+    #[doc = " Returns the current allocation counter value."]
+    pub fn current_allocs() -> isize {
+        GLOBAL.current()
     }
 }
 #[derive(Clone)]
