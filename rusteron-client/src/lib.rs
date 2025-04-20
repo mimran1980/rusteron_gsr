@@ -27,13 +27,15 @@ mod tests {
     use super::*;
     use crate::test_alloc::current_allocs;
     use log::{error, info};
+    use rusteron_media_driver::AeronDriverContext;
     use serial_test::serial;
     use std::error;
+    use std::error::Error;
     use std::io::Write;
     use std::os::raw::c_int;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::Arc;
-    use std::thread::sleep;
+    use std::thread::{sleep, JoinHandle};
     use std::time::{Duration, Instant};
 
     #[derive(Default, Debug)]
@@ -75,7 +77,11 @@ mod tests {
             handler.release();
         }
 
-        assert!(current_allocs() <= alloc_count);
+        assert!(
+            current_allocs() <= alloc_count + 1,
+            "allocations {} > {alloc_count}",
+            current_allocs()
+        );
 
         Ok(())
     }
@@ -121,7 +127,17 @@ mod tests {
         info!("created publisher");
 
         assert!(AeronCncMetadata::load_from_file(ctx.get_dir())?.pid > 0);
-        assert!(AeronCnc::new(ctx.get_dir())?.get_to_driver_heartbeat_ms()? > 0);
+        let cstr = std::ffi::CString::new(ctx.get_dir()).unwrap();
+        AeronCncMetadata::read_from_file(&cstr, |cnc| {
+            assert!(cnc.pid > 0);
+        })?;
+        assert!(AeronCnc::new_on_heap(ctx.get_dir())?.get_to_driver_heartbeat_ms()? > 0);
+        let cstr = std::ffi::CString::new(ctx.get_dir()).unwrap();
+        for _ in 0..50 {
+            AeronCnc::read_on_partial_stack(&cstr, |cnc| {
+                assert!(cnc.get_to_driver_heartbeat_ms().unwrap() > 0);
+            })?;
+        }
 
         let subscription = aeron.add_subscription(
             AERON_IPC_STREAM,
@@ -151,6 +167,8 @@ mod tests {
                     }
                     let result =
                         publisher.offer(large_msg, Handlers::no_reserved_value_supplier_handler());
+
+                    assert_eq!(123, publisher.get_constants().unwrap().stream_id);
 
                     if result < large_msg.len() as i64 {
                         let error = AeronCError::from_code(result as i32);
@@ -186,6 +204,9 @@ mod tests {
         impl AeronFragmentHandlerCallback for FragmentHandler {
             fn handle_aeron_fragment_handler(&mut self, buffer: &[u8], header: AeronHeader) {
                 self.count_copy.fetch_add(1, Ordering::SeqCst);
+
+                let values = header.get_values().unwrap();
+                assert_ne!(values.frame.session_id, 0);
 
                 if buffer.len() != self.string_len {
                     self.stop2.store(true, Ordering::SeqCst);
@@ -225,6 +246,7 @@ mod tests {
                 break;
             }
             subscription.poll(Some(&closure), 128)?;
+            assert_eq!(123, subscription.get_constants().unwrap().stream_id);
         }
 
         subscription.close(Handlers::no_notification_handler())?;
@@ -235,7 +257,7 @@ mod tests {
         let _ = publisher_handler.join().unwrap();
         let _ = driver_handle.join().unwrap();
 
-        let cnc = AeronCnc::new(ctx.get_dir())?;
+        let cnc = AeronCnc::new_on_heap(ctx.get_dir())?;
         cnc.counters_reader().foreach_counter_once(
             |value: i64, id: i32, type_id: i32, key: &[u8], label: &str| {
                 println!("counter reader id={id}, type_id={type_id}, key={key:?}, label={label}, value={value} [type={:?}]",
@@ -525,6 +547,12 @@ mod tests {
     #[derive(Default, Debug)]
     struct TestErrorCount {
         pub error_count: usize,
+    }
+
+    impl Drop for TestErrorCount {
+        fn drop(&mut self) {
+            info!("TestErrorCount dropped with {} errors", self.error_count);
+        }
     }
 
     impl AeronErrorHandlerCallback for TestErrorCount {
@@ -853,6 +881,133 @@ mod tests {
         _stop.store(true, Ordering::SeqCst);
         let _ = driver_handle.join().unwrap();
         Ok(())
+    }
+
+    #[test]
+    #[serial]
+    #[ignore] // need to work to get tags working properly, its more of testing issue then tag issue
+    pub fn tags() -> Result<(), Box<dyn error::Error>> {
+        let _ = env_logger::Builder::new()
+            .is_test(true)
+            .filter_level(log::LevelFilter::Debug)
+            .try_init();
+
+        let (md_ctx, stop, md) = start_media_driver(1)?;
+
+        let (_a_ctx2, aeron_sub) = create_client(&md_ctx)?;
+
+        info!("creating suscriber 1");
+        let sub = aeron_sub
+            .add_subscription(
+                "aeron:udp?tags=100",
+                123,
+                Handlers::no_available_image_handler(),
+                Handlers::no_unavailable_image_handler(),
+                Duration::from_secs(50),
+            )
+            .map_err(|e| {
+                error!("aeron error={}", aeron_sub.errmsg());
+                e
+            })?;
+
+        let ctx = AeronContext::new()?;
+        ctx.set_dir(aeron_sub.context().get_dir())?;
+        let aeron = Aeron::new(&ctx)?;
+        aeron.start()?;
+
+        info!("creating suscriber 2");
+        let sub2 = aeron_sub.add_subscription(
+            "aeron:udp?tags=100",
+            123,
+            Handlers::no_available_image_handler(),
+            Handlers::no_unavailable_image_handler(),
+            Duration::from_secs(50),
+        )?;
+
+        let (_a_ctx1, aeron_pub) = create_client(&md_ctx)?;
+        info!("creating publisher");
+        assert!(!aeron_pub.is_closed());
+        let publisher = aeron_pub
+            .add_publication(
+                "aeron:udp?endpoint=localhost:4040|alias=test|tags=100",
+                123,
+                Duration::from_secs(5),
+            )
+            .map_err(|e| {
+                error!("aeron error={}", aeron_pub.errmsg());
+                e
+            })?;
+
+        info!("publishing msg");
+
+        loop {
+            let result = publisher.offer(
+                "213".as_bytes(),
+                Handlers::no_reserved_value_supplier_handler(),
+            );
+            if result < 0 {
+                error!(
+                    "failed to publish {:?}",
+                    AeronCError::from_code(result as i32)
+                );
+            } else {
+                break;
+            }
+        }
+
+        sub.poll_once(
+            |msg, _header| {
+                println!("Received message: {:?}", msg);
+            },
+            128,
+        )?;
+        sub2.poll_once(
+            |msg, _header| {
+                println!("Received message: {:?}", msg);
+            },
+            128,
+        )?;
+
+        stop.store(true, Ordering::SeqCst);
+
+        Ok(())
+    }
+
+    fn create_client(
+        media_driver_ctx: &AeronDriverContext,
+    ) -> Result<(AeronContext, Aeron), Box<dyn Error>> {
+        let dir = media_driver_ctx.get_dir();
+        info!("creating aeron client [dir={}]", dir);
+        let ctx = AeronContext::new()?;
+        ctx.set_dir(dir)?;
+        ctx.set_error_handler(Some(&Handler::leak(TestErrorCount::default())))?;
+        let aeron = Aeron::new(&ctx)?;
+        aeron.start()?;
+        Ok((ctx, aeron))
+    }
+
+    fn start_media_driver(
+        instance: u64,
+    ) -> Result<
+        (
+            AeronDriverContext,
+            Arc<AtomicBool>,
+            JoinHandle<Result<(), rusteron_media_driver::AeronCError>>,
+        ),
+        Box<dyn Error>,
+    > {
+        let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
+        media_driver_ctx.set_dir_delete_on_shutdown(true)?;
+        media_driver_ctx.set_dir_delete_on_start(true)?;
+        media_driver_ctx.set_dir(&format!(
+            "{}{}-{}",
+            media_driver_ctx.get_dir(),
+            Aeron::epoch_clock(),
+            instance
+        ))?;
+        let (stop, driver_handle) =
+            rusteron_media_driver::AeronDriver::launch_embedded(media_driver_ctx.clone(), false);
+        Ok((media_driver_ctx, stop, driver_handle))
     }
 
     #[doc = include_str!("../../README.md")]

@@ -13,16 +13,16 @@ pub struct ManagedCResource<T> {
     resource: *mut T,
     cleanup: Option<Box<dyn FnMut(*mut *mut T) -> i32>>,
     cleanup_struct: bool,
-    borrowed: bool,
     /// if someone externally rusteron calls close
     close_already_called: std::cell::Cell<bool>,
     /// if there is a c method to verify it someone has closed it, only few structs have this functionality
-    check_for_is_closed: Option<Box<dyn Fn(*mut T) -> bool>>,
+    check_for_is_closed: Option<fn(*mut T) -> bool>,
     /// this will be called if closed hasn't already happened even if its borrowed
     auto_close: std::cell::Cell<bool>,
     /// to prevent the dependencies from being dropped as you have a copy here,
     /// for example, you want to have a dependency to aeron for any async jobs so aeron doesnt get dropped first
     /// when you have a publication/subscription
+    /// Note empty vec does not allocate on heap
     dependencies: UnsafeCell<Vec<std::rc::Rc<dyn std::any::Any>>>,
 }
 
@@ -57,27 +57,33 @@ impl<T> ManagedCResource<T> {
         init: impl FnOnce(*mut *mut T) -> i32,
         cleanup: Option<Box<dyn FnMut(*mut *mut T) -> i32>>,
         cleanup_struct: bool,
-        check_for_is_closed: Option<Box<dyn Fn(*mut T) -> bool>>,
+        check_for_is_closed: Option<fn(*mut T) -> bool>,
     ) -> Result<Self, AeronCError> {
-        let mut resource: *mut T = std::ptr::null_mut();
-        let result = init(&mut resource);
-        if result < 0 || resource.is_null() {
-            return Err(AeronCError::from_code(result));
-        }
+        let resource = Self::initialise(init)?;
 
         let result = Self {
             resource,
             cleanup,
             cleanup_struct,
-            borrowed: false,
             close_already_called: std::cell::Cell::new(false),
             check_for_is_closed,
             auto_close: std::cell::Cell::new(false),
             dependencies: UnsafeCell::new(vec![]),
         };
         #[cfg(feature = "extra-logging")]
-        log::debug!("created c resource: {:?}", result);
+        log::info!("created c resource: {:?}", result);
         Ok(result)
+    }
+
+    pub fn initialise(
+        init: impl FnOnce(*mut *mut T) -> i32 + Sized,
+    ) -> Result<*mut T, AeronCError> {
+        let mut resource: *mut T = std::ptr::null_mut();
+        let result = init(&mut resource);
+        if result < 0 || resource.is_null() {
+            return Err(AeronCError::from_code(result));
+        }
+        Ok(resource)
     }
 
     pub fn is_closed_already_called(&self) -> bool {
@@ -87,22 +93,6 @@ impl<T> ManagedCResource<T> {
                 .check_for_is_closed
                 .as_ref()
                 .map_or(false, |f| f(self.resource))
-    }
-
-    pub fn new_borrowed(
-        value: *const T,
-        check_for_is_closed: Option<Box<dyn Fn(*mut T) -> bool>>,
-    ) -> Self {
-        Self {
-            resource: value as *mut _,
-            cleanup: None,
-            cleanup_struct: false,
-            borrowed: true,
-            close_already_called: std::cell::Cell::new(false),
-            check_for_is_closed,
-            auto_close: std::cell::Cell::new(false),
-            dependencies: UnsafeCell::new(vec![]),
-        }
     }
 
     /// Gets a raw pointer to the resource.
@@ -175,33 +165,31 @@ impl<T> ManagedCResource<T> {
 impl<T> Drop for ManagedCResource<T> {
     fn drop(&mut self) {
         if !self.resource.is_null() {
-            if !self.borrowed {
-                let already_closed = self.close_already_called.get()
-                    || self
-                        .check_for_is_closed
-                        .as_ref()
-                        .map_or(false, |f| f(self.resource));
+            let already_closed = self.close_already_called.get()
+                || self
+                    .check_for_is_closed
+                    .as_ref()
+                    .map_or(false, |f| f(self.resource));
 
-                let resource = if already_closed {
-                    self.resource
-                } else {
-                    self.resource.clone()
-                };
+            let resource = if already_closed {
+                self.resource
+            } else {
+                self.resource.clone()
+            };
 
-                if !already_closed {
-                    // Ensure the clean-up function is called when the resource is dropped.
-                    #[cfg(feature = "extra-logging")]
-                    log::debug!("closing c resource: {:?}", self);
-                    let _ = self.close(); // Ignore errors during an automatic drop to avoid panics.
-                }
-                self.close_already_called.set(true);
+            if !already_closed {
+                // Ensure the clean-up function is called when the resource is dropped.
+                #[cfg(feature = "extra-logging")]
+                log::info!("closing c resource: {:?}", self);
+                let _ = self.close(); // Ignore errors during an automatic drop to avoid panics.
+            }
+            self.close_already_called.set(true);
 
-                if self.cleanup_struct {
-                    #[cfg(feature = "extra-logging")]
-                    log::debug!("closing rust struct resource: {:?}", resource);
-                    unsafe {
-                        let _ = Box::from_raw(resource);
-                    }
+            if self.cleanup_struct {
+                #[cfg(feature = "extra-logging")]
+                log::info!("closing rust struct resource: {:?}", resource);
+                unsafe {
+                    let _ = Box::from_raw(resource);
                 }
             }
         }
@@ -428,7 +416,7 @@ impl<T> Handler<T> {
         if self.should_drop && !self.raw_ptr.is_null() {
             unsafe {
                 #[cfg(feature = "extra-logging")]
-                log::debug!("dropping handler {:?}", self.raw_ptr);
+                log::info!("dropping handler {:?}", self.raw_ptr);
                 let _ = Box::from_raw(self.raw_ptr as *mut Box<T>);
                 self.should_drop = false;
             }

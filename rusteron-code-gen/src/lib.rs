@@ -20,7 +20,6 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 
 pub const CUSTOM_AERON_CODE: &str = include_str!("./aeron_custom.rs");
-pub const CUSTOM_RB_CODE: &str = include_str!("./rb_custom.rs");
 pub const COMMON_CODE: &str = include_str!("./common.rs");
 
 pub fn append_to_file(file_path: &str, code: &str) -> std::io::Result<()> {
@@ -381,19 +380,6 @@ mod test {
     }
 
     #[test]
-    fn test_drop_does_not_call_cleanup_for_borrowed() {
-        let resource_ptr = make_resource(40);
-
-        let check_fn = Some(Box::new(|_res: *mut i32| -> bool {
-            panic!("check_for_is_closed should not be called for borrowed resources")
-        }) as Box<dyn Fn(*mut i32) -> bool>);
-
-        {
-            let _resource = ManagedCResource::new_borrowed(resource_ptr as *const i32, check_fn);
-        }
-    }
-
-    #[test]
     fn test_drop_does_not_call_cleanup_if_check_for_is_closed_returns_true() {
         let flag = Arc::new(AtomicBool::new(false));
         let flag_clone = flag.clone();
@@ -407,8 +393,7 @@ mod test {
             0
         }) as Box<dyn FnMut(*mut *mut i32) -> i32>);
 
-        let check_fn =
-            Some(Box::new(|_res: *mut i32| -> bool { true }) as Box<dyn Fn(*mut i32) -> bool>);
+        let check_fn = Some(|_res: *mut i32| -> bool { true } as fn(_) -> bool);
 
         {
             let _resource = ManagedCResource::new(
@@ -441,8 +426,7 @@ mod test {
             0
         }) as Box<dyn FnMut(*mut *mut i32) -> i32>);
 
-        let check_fn =
-            Some(Box::new(|_res: *mut i32| -> bool { false }) as Box<dyn Fn(*mut i32) -> bool>);
+        let check_fn = Some(|_res: *mut i32| -> bool { false } as fn(*mut i32) -> bool);
 
         {
             let _resource = ManagedCResource::new(
