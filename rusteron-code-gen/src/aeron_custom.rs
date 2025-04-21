@@ -32,6 +32,13 @@ impl AeronCnc {
         Ok(())
     }
 
+    /// **Deprecated**: allocate on the heap. Use `new_on_heap` instead.
+    #[deprecated(since = "0.1.122", note = "Use `new_on_heap` instead")]
+    #[inline]
+    pub fn new(aeron_dir: &str) -> Result<AeronCnc, AeronCError> {
+        Self::new_on_heap(aeron_dir)
+    }
+
     /// Note this allocates on the heap, cannot be stored this on stack. As Aeron will do the allocation.
     /// Try to use `read_on_partial_stack` which performs less allocations
     #[inline]
