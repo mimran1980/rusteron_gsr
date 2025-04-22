@@ -70,11 +70,19 @@ impl DarwinPthreadHandlerRec {
     pub fn get_inner(&self) -> *mut __darwin_pthread_handler_rec {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut __darwin_pthread_handler_rec {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &__darwin_pthread_handler_rec {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for DarwinPthreadHandlerRec {
     type Target = __darwin_pthread_handler_rec;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut __darwin_pthread_handler_rec> for DarwinPthreadHandlerRec {
@@ -479,6 +487,8 @@ pub struct Handlers;
 impl<T> Handler<T> {
     pub fn leak(handler: T) -> Self {
         let raw_ptr = Box::into_raw(Box::new(handler)) as *mut _;
+        #[cfg(feature = "extra-logging")]
+        log::info!("creating handler {:?}", raw_ptr);
         Self {
             raw_ptr,
             should_drop: true,
@@ -495,7 +505,7 @@ impl<T> Handler<T> {
             unsafe {
                 #[cfg(feature = "extra-logging")]
                 log::info!("dropping handler {:?}", self.raw_ptr);
-                let _ = Box::from_raw(self.raw_ptr as *mut Box<T>);
+                let _ = Box::from_raw(self.raw_ptr as *mut T);
                 self.should_drop = false;
             }
         }
@@ -678,11 +688,19 @@ impl OpaquePthreadAttr {
     pub fn get_inner(&self) -> *mut _opaque_pthread_attr_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut _opaque_pthread_attr_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &_opaque_pthread_attr_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for OpaquePthreadAttr {
     type Target = _opaque_pthread_attr_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut _opaque_pthread_attr_t> for OpaquePthreadAttr {
@@ -803,11 +821,19 @@ impl OpaquePthreadCond {
     pub fn get_inner(&self) -> *mut _opaque_pthread_cond_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut _opaque_pthread_cond_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &_opaque_pthread_cond_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for OpaquePthreadCond {
     type Target = _opaque_pthread_cond_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut _opaque_pthread_cond_t> for OpaquePthreadCond {
@@ -928,11 +954,19 @@ impl OpaquePthreadMutex {
     pub fn get_inner(&self) -> *mut _opaque_pthread_mutex_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut _opaque_pthread_mutex_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &_opaque_pthread_mutex_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for OpaquePthreadMutex {
     type Target = _opaque_pthread_mutex_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut _opaque_pthread_mutex_t> for OpaquePthreadMutex {
@@ -1053,11 +1087,19 @@ impl OpaquePthread {
     pub fn get_inner(&self) -> *mut _opaque_pthread_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut _opaque_pthread_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &_opaque_pthread_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for OpaquePthread {
     type Target = _opaque_pthread_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut _opaque_pthread_t> for OpaquePthread {
@@ -1263,10 +1305,18 @@ impl Addrinfo {
         }
         self.inner
     }
-}
-impl std::ops::Deref for Addrinfo {
-    type Target = addrinfo;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut addrinfo {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut Addrinfo = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &addrinfo {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut Addrinfo = self as *const _ as *mut _;
@@ -1274,6 +1324,12 @@ impl std::ops::Deref for Addrinfo {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for Addrinfo {
+    type Target = addrinfo;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut addrinfo> for Addrinfo {
@@ -1341,8 +1397,7 @@ impl Addrinfo {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -1637,11 +1692,19 @@ impl AeronAgentRunner {
     pub fn get_inner(&self) -> *mut aeron_agent_runner_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_agent_runner_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_agent_runner_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronAgentRunner {
     type Target = aeron_agent_runner_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_agent_runner_t> for AeronAgentRunner {
@@ -1709,8 +1772,7 @@ impl AeronAgentRunner {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -1795,11 +1857,19 @@ impl AeronAsyncAddCounter {
     pub fn get_inner(&self) -> *mut aeron_async_add_counter_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_async_add_counter_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_async_add_counter_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronAsyncAddCounter {
     type Target = aeron_async_add_counter_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_async_add_counter_t> for AeronAsyncAddCounter {
@@ -2074,11 +2144,19 @@ impl AeronAsyncAddExclusivePublication {
     pub fn get_inner(&self) -> *mut aeron_async_add_exclusive_publication_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_async_add_exclusive_publication_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_async_add_exclusive_publication_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronAsyncAddExclusivePublication {
     type Target = aeron_async_add_exclusive_publication_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_async_add_exclusive_publication_t> for AeronAsyncAddExclusivePublication {
@@ -2341,11 +2419,19 @@ impl AeronAsyncAddPublication {
     pub fn get_inner(&self) -> *mut aeron_async_add_publication_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_async_add_publication_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_async_add_publication_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronAsyncAddPublication {
     type Target = aeron_async_add_publication_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_async_add_publication_t> for AeronAsyncAddPublication {
@@ -2606,11 +2692,19 @@ impl AeronAsyncAddSubscription {
     pub fn get_inner(&self) -> *mut aeron_async_add_subscription_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_async_add_subscription_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_async_add_subscription_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronAsyncAddSubscription {
     type Target = aeron_async_add_subscription_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_async_add_subscription_t> for AeronAsyncAddSubscription {
@@ -2922,11 +3016,19 @@ impl AeronAsyncDestinationById {
     pub fn get_inner(&self) -> *mut aeron_async_destination_by_id_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_async_destination_by_id_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_async_destination_by_id_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronAsyncDestinationById {
     type Target = aeron_async_destination_by_id_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_async_destination_by_id_t> for AeronAsyncDestinationById {
@@ -3169,11 +3271,19 @@ impl AeronAsyncDestination {
     pub fn get_inner(&self) -> *mut aeron_async_destination_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_async_destination_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_async_destination_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronAsyncDestination {
     type Target = aeron_async_destination_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_async_destination_t> for AeronAsyncDestination {
@@ -3294,11 +3404,19 @@ impl AeronAtomicCounter {
     pub fn get_inner(&self) -> *mut aeron_atomic_counter_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_atomic_counter_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_atomic_counter_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronAtomicCounter {
     type Target = aeron_atomic_counter_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_atomic_counter_t> for AeronAtomicCounter {
@@ -3515,11 +3633,19 @@ impl AeronBlockingLinkedQueue {
     pub fn get_inner(&self) -> *mut aeron_blocking_linked_queue_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_blocking_linked_queue_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_blocking_linked_queue_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronBlockingLinkedQueue {
     type Target = aeron_blocking_linked_queue_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_blocking_linked_queue_t> for AeronBlockingLinkedQueue {
@@ -3694,10 +3820,18 @@ impl AeronBroadcastDescriptor {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronBroadcastDescriptor {
-    type Target = aeron_broadcast_descriptor_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_broadcast_descriptor_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronBroadcastDescriptor = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_broadcast_descriptor_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronBroadcastDescriptor = self as *const _ as *mut _;
@@ -3705,6 +3839,12 @@ impl std::ops::Deref for AeronBroadcastDescriptor {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronBroadcastDescriptor {
+    type Target = aeron_broadcast_descriptor_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_broadcast_descriptor_t> for AeronBroadcastDescriptor {
@@ -3772,8 +3912,7 @@ impl AeronBroadcastDescriptor {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -3887,10 +4026,18 @@ impl AeronBroadcastRecordDescriptor {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronBroadcastRecordDescriptor {
-    type Target = aeron_broadcast_record_descriptor_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_broadcast_record_descriptor_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronBroadcastRecordDescriptor = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_broadcast_record_descriptor_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronBroadcastRecordDescriptor = self as *const _ as *mut _;
@@ -3898,6 +4045,12 @@ impl std::ops::Deref for AeronBroadcastRecordDescriptor {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronBroadcastRecordDescriptor {
+    type Target = aeron_broadcast_record_descriptor_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_broadcast_record_descriptor_t> for AeronBroadcastRecordDescriptor {
@@ -3965,8 +4118,7 @@ impl AeronBroadcastRecordDescriptor {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -4125,11 +4277,19 @@ impl AeronBroadcastTransmitter {
     pub fn get_inner(&self) -> *mut aeron_broadcast_transmitter_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_broadcast_transmitter_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_broadcast_transmitter_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronBroadcastTransmitter {
     type Target = aeron_broadcast_transmitter_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_broadcast_transmitter_t> for AeronBroadcastTransmitter {
@@ -4197,8 +4357,7 @@ impl AeronBroadcastTransmitter {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -4343,11 +4502,19 @@ impl AeronBufferClaim {
     pub fn get_inner(&self) -> *mut aeron_buffer_claim_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_buffer_claim_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_buffer_claim_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronBufferClaim {
     type Target = aeron_buffer_claim_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_buffer_claim_t> for AeronBufferClaim {
@@ -4415,8 +4582,7 @@ impl AeronBufferClaim {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -4533,10 +4699,18 @@ impl AeronChannelEndpointStatusKeyLayout {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronChannelEndpointStatusKeyLayout {
-    type Target = aeron_channel_endpoint_status_key_layout_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_channel_endpoint_status_key_layout_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronChannelEndpointStatusKeyLayout = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_channel_endpoint_status_key_layout_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronChannelEndpointStatusKeyLayout = self as *const _ as *mut _;
@@ -4544,6 +4718,12 @@ impl std::ops::Deref for AeronChannelEndpointStatusKeyLayout {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronChannelEndpointStatusKeyLayout {
+    type Target = aeron_channel_endpoint_status_key_layout_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_channel_endpoint_status_key_layout_t> for AeronChannelEndpointStatusKeyLayout {
@@ -4615,8 +4795,7 @@ impl AeronChannelEndpointStatusKeyLayout {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -4691,11 +4870,19 @@ impl AeronClientRegisteringResource {
     pub fn get_inner(&self) -> *mut aeron_client_registering_resource_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_client_registering_resource_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_client_registering_resource_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronClientRegisteringResource {
     type Target = aeron_client_registering_resource_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_client_registering_resource_t> for AeronClientRegisteringResource {
@@ -4894,11 +5081,19 @@ impl AeronClient {
     pub fn get_inner(&self) -> *mut aeron_client_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_client_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_client_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronClient {
     type Target = aeron_client_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_client_t> for AeronClient {
@@ -4966,8 +5161,7 @@ impl AeronClient {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -5073,10 +5267,18 @@ impl AeronClientTimeout {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronClientTimeout {
-    type Target = aeron_client_timeout_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_client_timeout_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronClientTimeout = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_client_timeout_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronClientTimeout = self as *const _ as *mut _;
@@ -5084,6 +5286,12 @@ impl std::ops::Deref for AeronClientTimeout {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronClientTimeout {
+    type Target = aeron_client_timeout_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_client_timeout_t> for AeronClientTimeout {
@@ -5151,8 +5359,7 @@ impl AeronClientTimeout {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -5299,11 +5506,19 @@ impl AeronClockCache {
     pub fn get_inner(&self) -> *mut aeron_clock_cache_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_clock_cache_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_clock_cache_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronClockCache {
     type Target = aeron_clock_cache_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_clock_cache_t> for AeronClockCache {
@@ -5532,10 +5747,18 @@ impl AeronCncConstants {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronCncConstants {
-    type Target = aeron_cnc_constants_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_cnc_constants_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronCncConstants = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_cnc_constants_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronCncConstants = self as *const _ as *mut _;
@@ -5543,6 +5766,12 @@ impl std::ops::Deref for AeronCncConstants {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronCncConstants {
+    type Target = aeron_cnc_constants_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_cnc_constants_t> for AeronCncConstants {
@@ -5610,8 +5839,7 @@ impl AeronCncConstants {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -5794,11 +6022,19 @@ impl AeronCncMetadata {
     pub fn get_inner(&self) -> *mut aeron_cnc_metadata_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_cnc_metadata_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_cnc_metadata_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronCncMetadata {
     type Target = aeron_cnc_metadata_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_cnc_metadata_t> for AeronCncMetadata {
@@ -5866,8 +6102,7 @@ impl AeronCncMetadata {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -6169,11 +6404,19 @@ impl AeronCnc {
     pub fn get_inner(&self) -> *mut aeron_cnc_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_cnc_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_cnc_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronCnc {
     type Target = aeron_cnc_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_cnc_t> for AeronCnc {
@@ -6340,11 +6583,19 @@ impl AeronCongestionControlStrategy {
     pub fn get_inner(&self) -> *mut aeron_congestion_control_strategy_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_congestion_control_strategy_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_congestion_control_strategy_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronCongestionControlStrategy {
     type Target = aeron_congestion_control_strategy_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_congestion_control_strategy_t> for AeronCongestionControlStrategy {
@@ -7279,11 +7530,19 @@ impl AeronContext {
     pub fn get_inner(&self) -> *mut aeron_context_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_context_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_context_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronContext {
     type Target = aeron_context_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_context_t> for AeronContext {
@@ -7438,11 +7697,19 @@ impl AeronControlledFragmentAssembler {
     pub fn get_inner(&self) -> *mut aeron_controlled_fragment_assembler_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_controlled_fragment_assembler_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_controlled_fragment_assembler_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronControlledFragmentAssembler {
     type Target = aeron_controlled_fragment_assembler_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_controlled_fragment_assembler_t> for AeronControlledFragmentAssembler {
@@ -7601,10 +7868,18 @@ impl AeronCorrelatedCommand {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronCorrelatedCommand {
-    type Target = aeron_correlated_command_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_correlated_command_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronCorrelatedCommand = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_correlated_command_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronCorrelatedCommand = self as *const _ as *mut _;
@@ -7612,6 +7887,12 @@ impl std::ops::Deref for AeronCorrelatedCommand {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronCorrelatedCommand {
+    type Target = aeron_correlated_command_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_correlated_command_t> for AeronCorrelatedCommand {
@@ -7679,8 +7960,7 @@ impl AeronCorrelatedCommand {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -7792,10 +8072,18 @@ impl AeronCounterCommand {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronCounterCommand {
-    type Target = aeron_counter_command_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_counter_command_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronCounterCommand = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_counter_command_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronCounterCommand = self as *const _ as *mut _;
@@ -7803,6 +8091,12 @@ impl std::ops::Deref for AeronCounterCommand {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronCounterCommand {
+    type Target = aeron_counter_command_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_counter_command_t> for AeronCounterCommand {
@@ -7870,8 +8164,7 @@ impl AeronCounterCommand {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -7984,10 +8277,18 @@ impl AeronCounterConstants {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronCounterConstants {
-    type Target = aeron_counter_constants_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_counter_constants_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronCounterConstants = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_counter_constants_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronCounterConstants = self as *const _ as *mut _;
@@ -7995,6 +8296,12 @@ impl std::ops::Deref for AeronCounterConstants {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronCounterConstants {
+    type Target = aeron_counter_constants_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_counter_constants_t> for AeronCounterConstants {
@@ -8062,8 +8369,7 @@ impl AeronCounterConstants {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -8175,10 +8481,18 @@ impl AeronCounterLink {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronCounterLink {
-    type Target = aeron_counter_link_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_counter_link_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronCounterLink = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_counter_link_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronCounterLink = self as *const _ as *mut _;
@@ -8186,6 +8500,12 @@ impl std::ops::Deref for AeronCounterLink {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronCounterLink {
+    type Target = aeron_counter_link_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_counter_link_t> for AeronCounterLink {
@@ -8253,8 +8573,7 @@ impl AeronCounterLink {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -8400,10 +8719,18 @@ impl AeronCounterMetadataDescriptor {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronCounterMetadataDescriptor {
-    type Target = aeron_counter_metadata_descriptor_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_counter_metadata_descriptor_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronCounterMetadataDescriptor = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_counter_metadata_descriptor_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronCounterMetadataDescriptor = self as *const _ as *mut _;
@@ -8411,6 +8738,12 @@ impl std::ops::Deref for AeronCounterMetadataDescriptor {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronCounterMetadataDescriptor {
+    type Target = aeron_counter_metadata_descriptor_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_counter_metadata_descriptor_t> for AeronCounterMetadataDescriptor {
@@ -8478,8 +8811,7 @@ impl AeronCounterMetadataDescriptor {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -8662,11 +8994,19 @@ impl AeronCounter {
     pub fn get_inner(&self) -> *mut aeron_counter_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_counter_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_counter_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronCounter {
     type Target = aeron_counter_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_counter_t> for AeronCounter {
@@ -8844,10 +9184,18 @@ impl AeronCounterUpdate {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronCounterUpdate {
-    type Target = aeron_counter_update_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_counter_update_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronCounterUpdate = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_counter_update_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronCounterUpdate = self as *const _ as *mut _;
@@ -8855,6 +9203,12 @@ impl std::ops::Deref for AeronCounterUpdate {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronCounterUpdate {
+    type Target = aeron_counter_update_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_counter_update_t> for AeronCounterUpdate {
@@ -8922,8 +9276,7 @@ impl AeronCounterUpdate {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -9060,10 +9413,18 @@ impl AeronCounterValueDescriptor {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronCounterValueDescriptor {
-    type Target = aeron_counter_value_descriptor_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_counter_value_descriptor_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronCounterValueDescriptor = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_counter_value_descriptor_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronCounterValueDescriptor = self as *const _ as *mut _;
@@ -9071,6 +9432,12 @@ impl std::ops::Deref for AeronCounterValueDescriptor {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronCounterValueDescriptor {
+    type Target = aeron_counter_value_descriptor_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_counter_value_descriptor_t> for AeronCounterValueDescriptor {
@@ -9138,8 +9505,7 @@ impl AeronCounterValueDescriptor {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -9498,11 +9864,19 @@ impl AeronCountersManager {
     pub fn get_inner(&self) -> *mut aeron_counters_manager_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_counters_manager_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_counters_manager_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronCountersManager {
     type Target = aeron_counters_manager_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_counters_manager_t> for AeronCountersManager {
@@ -9570,8 +9944,7 @@ impl AeronCountersManager {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -9698,10 +10071,18 @@ impl AeronCountersReaderBuffers {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronCountersReaderBuffers {
-    type Target = aeron_counters_reader_buffers_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_counters_reader_buffers_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronCountersReaderBuffers = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_counters_reader_buffers_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronCountersReaderBuffers = self as *const _ as *mut _;
@@ -9709,6 +10090,12 @@ impl std::ops::Deref for AeronCountersReaderBuffers {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronCountersReaderBuffers {
+    type Target = aeron_counters_reader_buffers_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_counters_reader_buffers_t> for AeronCountersReaderBuffers {
@@ -9776,8 +10163,7 @@ impl AeronCountersReaderBuffers {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -10192,11 +10578,19 @@ impl AeronCountersReader {
     pub fn get_inner(&self) -> *mut aeron_counters_reader_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_counters_reader_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_counters_reader_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronCountersReader {
     type Target = aeron_counters_reader_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_counters_reader_t> for AeronCountersReader {
@@ -10386,10 +10780,18 @@ impl AeronDataHeader {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronDataHeader {
-    type Target = aeron_data_header_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_data_header_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronDataHeader = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_data_header_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronDataHeader = self as *const _ as *mut _;
@@ -10397,6 +10799,12 @@ impl std::ops::Deref for AeronDataHeader {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronDataHeader {
+    type Target = aeron_data_header_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_data_header_t> for AeronDataHeader {
@@ -10464,8 +10872,7 @@ impl AeronDataHeader {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -10604,10 +11011,18 @@ impl AeronDataPacketDispatcherStreamInterest {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronDataPacketDispatcherStreamInterest {
-    type Target = aeron_data_packet_dispatcher_stream_interest_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_data_packet_dispatcher_stream_interest_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronDataPacketDispatcherStreamInterest = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_data_packet_dispatcher_stream_interest_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronDataPacketDispatcherStreamInterest = self as *const _ as *mut _;
@@ -10615,6 +11030,12 @@ impl std::ops::Deref for AeronDataPacketDispatcherStreamInterest {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronDataPacketDispatcherStreamInterest {
+    type Target = aeron_data_packet_dispatcher_stream_interest_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_data_packet_dispatcher_stream_interest_t>
@@ -10694,8 +11115,7 @@ impl AeronDataPacketDispatcherStreamInterest {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -11122,11 +11542,19 @@ impl AeronDataPacketDispatcher {
     pub fn get_inner(&self) -> *mut aeron_data_packet_dispatcher_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_data_packet_dispatcher_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_data_packet_dispatcher_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronDataPacketDispatcher {
     type Target = aeron_data_packet_dispatcher_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_data_packet_dispatcher_t> for AeronDataPacketDispatcher {
@@ -11194,8 +11622,7 @@ impl AeronDataPacketDispatcher {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -11384,11 +11811,19 @@ impl AeronDeque {
     pub fn get_inner(&self) -> *mut aeron_deque_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_deque_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_deque_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronDeque {
     type Target = aeron_deque_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_deque_t> for AeronDeque {
@@ -11456,8 +11891,7 @@ impl AeronDeque {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -11587,10 +12021,18 @@ impl AeronDestinationByIdCommand {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronDestinationByIdCommand {
-    type Target = aeron_destination_by_id_command_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_destination_by_id_command_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronDestinationByIdCommand = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_destination_by_id_command_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronDestinationByIdCommand = self as *const _ as *mut _;
@@ -11598,6 +12040,12 @@ impl std::ops::Deref for AeronDestinationByIdCommand {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronDestinationByIdCommand {
+    type Target = aeron_destination_by_id_command_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_destination_by_id_command_t> for AeronDestinationByIdCommand {
@@ -11665,8 +12113,7 @@ impl AeronDestinationByIdCommand {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -11788,10 +12235,18 @@ impl AeronDestinationCommand {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronDestinationCommand {
-    type Target = aeron_destination_command_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_destination_command_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronDestinationCommand = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_destination_command_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronDestinationCommand = self as *const _ as *mut _;
@@ -11799,6 +12254,12 @@ impl std::ops::Deref for AeronDestinationCommand {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronDestinationCommand {
+    type Target = aeron_destination_command_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_destination_command_t> for AeronDestinationCommand {
@@ -11866,8 +12327,7 @@ impl AeronDestinationCommand {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -11985,10 +12445,18 @@ impl AeronDistinctErrorLogObservationList {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronDistinctErrorLogObservationList {
-    type Target = aeron_distinct_error_log_observation_list_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_distinct_error_log_observation_list_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronDistinctErrorLogObservationList = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_distinct_error_log_observation_list_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronDistinctErrorLogObservationList = self as *const _ as *mut _;
@@ -11996,6 +12464,12 @@ impl std::ops::Deref for AeronDistinctErrorLogObservationList {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronDistinctErrorLogObservationList {
+    type Target = aeron_distinct_error_log_observation_list_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_distinct_error_log_observation_list_t>
@@ -12071,8 +12545,7 @@ impl AeronDistinctErrorLogObservationList {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -12263,11 +12736,19 @@ impl AeronDistinctErrorLog {
     pub fn get_inner(&self) -> *mut aeron_distinct_error_log_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_distinct_error_log_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_distinct_error_log_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronDistinctErrorLog {
     type Target = aeron_distinct_error_log_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_distinct_error_log_t> for AeronDistinctErrorLog {
@@ -12335,8 +12816,7 @@ impl AeronDistinctErrorLog {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -12467,10 +12947,18 @@ impl AeronDistinctObservation {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronDistinctObservation {
-    type Target = aeron_distinct_observation_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_distinct_observation_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronDistinctObservation = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_distinct_observation_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronDistinctObservation = self as *const _ as *mut _;
@@ -12478,6 +12966,12 @@ impl std::ops::Deref for AeronDistinctObservation {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronDistinctObservation {
+    type Target = aeron_distinct_observation_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_distinct_observation_t> for AeronDistinctObservation {
@@ -12545,8 +13039,7 @@ impl AeronDistinctObservation {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -12620,11 +13113,19 @@ impl AeronDlLoadedLibsState {
     pub fn get_inner(&self) -> *mut aeron_dl_loaded_libs_state_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_dl_loaded_libs_state_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_dl_loaded_libs_state_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronDlLoadedLibsState {
     type Target = aeron_dl_loaded_libs_state_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_dl_loaded_libs_state_t> for AeronDlLoadedLibsState {
@@ -12967,11 +13468,19 @@ impl AeronDriverConductorProxy {
     pub fn get_inner(&self) -> *mut aeron_driver_conductor_proxy_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_driver_conductor_proxy_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_driver_conductor_proxy_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronDriverConductorProxy {
     type Target = aeron_driver_conductor_proxy_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_driver_conductor_proxy_t> for AeronDriverConductorProxy {
@@ -13039,8 +13548,7 @@ impl AeronDriverConductorProxy {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -14446,11 +14954,19 @@ impl AeronDriverConductor {
     pub fn get_inner(&self) -> *mut aeron_driver_conductor_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_driver_conductor_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_driver_conductor_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronDriverConductor {
     type Target = aeron_driver_conductor_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_driver_conductor_t> for AeronDriverConductor {
@@ -14518,8 +15034,7 @@ impl AeronDriverConductor {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -14637,10 +15152,18 @@ impl AeronDriverContextBindingsClientdEntry {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronDriverContextBindingsClientdEntry {
-    type Target = aeron_driver_context_bindings_clientd_entry_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_driver_context_bindings_clientd_entry_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronDriverContextBindingsClientdEntry = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_driver_context_bindings_clientd_entry_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronDriverContextBindingsClientdEntry = self as *const _ as *mut _;
@@ -14648,6 +15171,12 @@ impl std::ops::Deref for AeronDriverContextBindingsClientdEntry {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronDriverContextBindingsClientdEntry {
+    type Target = aeron_driver_context_bindings_clientd_entry_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_driver_context_bindings_clientd_entry_t>
@@ -14727,8 +15256,7 @@ impl AeronDriverContextBindingsClientdEntry {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -18303,11 +18831,19 @@ impl AeronDriverContext {
     pub fn get_inner(&self) -> *mut aeron_driver_context_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_driver_context_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_driver_context_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronDriverContext {
     type Target = aeron_driver_context_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_driver_context_t> for AeronDriverContext {
@@ -18494,10 +19030,18 @@ impl AeronDriverManagedResource {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronDriverManagedResource {
-    type Target = aeron_driver_managed_resource_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_driver_managed_resource_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronDriverManagedResource = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_driver_managed_resource_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronDriverManagedResource = self as *const _ as *mut _;
@@ -18505,6 +19049,12 @@ impl std::ops::Deref for AeronDriverManagedResource {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronDriverManagedResource {
+    type Target = aeron_driver_managed_resource_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_driver_managed_resource_t> for AeronDriverManagedResource {
@@ -18572,8 +19122,7 @@ impl AeronDriverManagedResource {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -18681,10 +19230,18 @@ impl AeronDriverReceiverImageEntry {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronDriverReceiverImageEntry {
-    type Target = aeron_driver_receiver_image_entry_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_driver_receiver_image_entry_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronDriverReceiverImageEntry = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_driver_receiver_image_entry_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronDriverReceiverImageEntry = self as *const _ as *mut _;
@@ -18692,6 +19249,12 @@ impl std::ops::Deref for AeronDriverReceiverImageEntry {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronDriverReceiverImageEntry {
+    type Target = aeron_driver_receiver_image_entry_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_driver_receiver_image_entry_t> for AeronDriverReceiverImageEntry {
@@ -18759,8 +19322,7 @@ impl AeronDriverReceiverImageEntry {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -18916,10 +19478,18 @@ impl AeronDriverReceiverPendingSetupEntry {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronDriverReceiverPendingSetupEntry {
-    type Target = aeron_driver_receiver_pending_setup_entry_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_driver_receiver_pending_setup_entry_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronDriverReceiverPendingSetupEntry = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_driver_receiver_pending_setup_entry_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronDriverReceiverPendingSetupEntry = self as *const _ as *mut _;
@@ -18927,6 +19497,12 @@ impl std::ops::Deref for AeronDriverReceiverPendingSetupEntry {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronDriverReceiverPendingSetupEntry {
+    type Target = aeron_driver_receiver_pending_setup_entry_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_driver_receiver_pending_setup_entry_t>
@@ -19002,8 +19578,7 @@ impl AeronDriverReceiverPendingSetupEntry {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -19356,11 +19931,19 @@ impl AeronDriverReceiverProxy {
     pub fn get_inner(&self) -> *mut aeron_driver_receiver_proxy_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_driver_receiver_proxy_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_driver_receiver_proxy_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronDriverReceiverProxy {
     type Target = aeron_driver_receiver_proxy_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_driver_receiver_proxy_t> for AeronDriverReceiverProxy {
@@ -19428,8 +20011,7 @@ impl AeronDriverReceiverProxy {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -19835,11 +20417,19 @@ impl AeronDriverReceiver {
     pub fn get_inner(&self) -> *mut aeron_driver_receiver_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_driver_receiver_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_driver_receiver_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronDriverReceiver {
     type Target = aeron_driver_receiver_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_driver_receiver_t> for AeronDriverReceiver {
@@ -19907,8 +20497,7 @@ impl AeronDriverReceiver {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -20018,10 +20607,18 @@ impl AeronDriverSenderNetworkPublicationEntry {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronDriverSenderNetworkPublicationEntry {
-    type Target = aeron_driver_sender_network_publication_entry_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_driver_sender_network_publication_entry_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronDriverSenderNetworkPublicationEntry = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_driver_sender_network_publication_entry_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronDriverSenderNetworkPublicationEntry = self as *const _ as *mut _;
@@ -20029,6 +20626,12 @@ impl std::ops::Deref for AeronDriverSenderNetworkPublicationEntry {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronDriverSenderNetworkPublicationEntry {
+    type Target = aeron_driver_sender_network_publication_entry_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_driver_sender_network_publication_entry_t>
@@ -20108,8 +20711,7 @@ impl AeronDriverSenderNetworkPublicationEntry {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -20340,11 +20942,19 @@ impl AeronDriverSenderProxy {
     pub fn get_inner(&self) -> *mut aeron_driver_sender_proxy_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_driver_sender_proxy_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_driver_sender_proxy_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronDriverSenderProxy {
     type Target = aeron_driver_sender_proxy_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_driver_sender_proxy_t> for AeronDriverSenderProxy {
@@ -20412,8 +21022,7 @@ impl AeronDriverSenderProxy {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -20804,11 +21413,19 @@ impl AeronDriverSender {
     pub fn get_inner(&self) -> *mut aeron_driver_sender_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_driver_sender_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_driver_sender_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronDriverSender {
     type Target = aeron_driver_sender_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_driver_sender_t> for AeronDriverSender {
@@ -20876,8 +21493,7 @@ impl AeronDriverSender {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -21035,11 +21651,19 @@ impl AeronDriver {
     pub fn get_inner(&self) -> *mut aeron_driver_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_driver_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_driver_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronDriver {
     type Target = aeron_driver_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_driver_t> for AeronDriver {
@@ -21388,11 +22012,19 @@ impl AeronDriverUriPublicationParams {
     pub fn get_inner(&self) -> *mut aeron_driver_uri_publication_params_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_driver_uri_publication_params_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_driver_uri_publication_params_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronDriverUriPublicationParams {
     type Target = aeron_driver_uri_publication_params_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_driver_uri_publication_params_t> for AeronDriverUriPublicationParams {
@@ -21460,8 +22092,7 @@ impl AeronDriverUriPublicationParams {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -21629,10 +22260,18 @@ impl AeronDriverUriSubscriptionParams {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronDriverUriSubscriptionParams {
-    type Target = aeron_driver_uri_subscription_params_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_driver_uri_subscription_params_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronDriverUriSubscriptionParams = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_driver_uri_subscription_params_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronDriverUriSubscriptionParams = self as *const _ as *mut _;
@@ -21640,6 +22279,12 @@ impl std::ops::Deref for AeronDriverUriSubscriptionParams {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronDriverUriSubscriptionParams {
+    type Target = aeron_driver_uri_subscription_params_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_driver_uri_subscription_params_t> for AeronDriverUriSubscriptionParams {
@@ -21707,8 +22352,7 @@ impl AeronDriverUriSubscriptionParams {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -21859,10 +22503,18 @@ impl AeronDutyCycleStallTracker {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronDutyCycleStallTracker {
-    type Target = aeron_duty_cycle_stall_tracker_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_duty_cycle_stall_tracker_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronDutyCycleStallTracker = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_duty_cycle_stall_tracker_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronDutyCycleStallTracker = self as *const _ as *mut _;
@@ -21870,6 +22522,12 @@ impl std::ops::Deref for AeronDutyCycleStallTracker {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronDutyCycleStallTracker {
+    type Target = aeron_duty_cycle_stall_tracker_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_duty_cycle_stall_tracker_t> for AeronDutyCycleStallTracker {
@@ -21937,8 +22595,7 @@ impl AeronDutyCycleStallTracker {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -22072,10 +22729,18 @@ impl AeronDutyCycleTracker {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronDutyCycleTracker {
-    type Target = aeron_duty_cycle_tracker_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_duty_cycle_tracker_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronDutyCycleTracker = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_duty_cycle_tracker_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronDutyCycleTracker = self as *const _ as *mut _;
@@ -22083,6 +22748,12 @@ impl std::ops::Deref for AeronDutyCycleTracker {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronDutyCycleTracker {
+    type Target = aeron_duty_cycle_tracker_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_duty_cycle_tracker_t> for AeronDutyCycleTracker {
@@ -22150,8 +22821,7 @@ impl AeronDutyCycleTracker {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -22264,10 +22934,18 @@ impl AeronEndOfLifeResource {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronEndOfLifeResource {
-    type Target = aeron_end_of_life_resource_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_end_of_life_resource_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronEndOfLifeResource = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_end_of_life_resource_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronEndOfLifeResource = self as *const _ as *mut _;
@@ -22275,6 +22953,12 @@ impl std::ops::Deref for AeronEndOfLifeResource {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronEndOfLifeResource {
+    type Target = aeron_end_of_life_resource_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_end_of_life_resource_t> for AeronEndOfLifeResource {
@@ -22342,8 +23026,7 @@ impl AeronEndOfLifeResource {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -22478,10 +23161,18 @@ impl AeronErrorLogEntry {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronErrorLogEntry {
-    type Target = aeron_error_log_entry_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_error_log_entry_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronErrorLogEntry = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_error_log_entry_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronErrorLogEntry = self as *const _ as *mut _;
@@ -22489,6 +23180,12 @@ impl std::ops::Deref for AeronErrorLogEntry {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronErrorLogEntry {
+    type Target = aeron_error_log_entry_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_error_log_entry_t> for AeronErrorLogEntry {
@@ -22556,8 +23253,7 @@ impl AeronErrorLogEntry {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -22685,10 +23381,18 @@ impl AeronErrorResponse {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronErrorResponse {
-    type Target = aeron_error_response_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_error_response_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronErrorResponse = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_error_response_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronErrorResponse = self as *const _ as *mut _;
@@ -22696,6 +23400,12 @@ impl std::ops::Deref for AeronErrorResponse {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronErrorResponse {
+    type Target = aeron_error_response_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_error_response_t> for AeronErrorResponse {
@@ -22763,8 +23473,7 @@ impl AeronErrorResponse {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -22919,11 +23628,19 @@ impl AeronError {
     pub fn get_inner(&self) -> *mut aeron_error_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_error_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_error_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronError {
     type Target = aeron_error_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_error_t> for AeronError {
@@ -22991,8 +23708,7 @@ impl AeronError {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -23437,11 +24153,19 @@ impl AeronExclusivePublication {
     pub fn get_inner(&self) -> *mut aeron_exclusive_publication_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_exclusive_publication_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_exclusive_publication_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronExclusivePublication {
     type Target = aeron_exclusive_publication_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_exclusive_publication_t> for AeronExclusivePublication {
@@ -23653,11 +24377,19 @@ impl AeronFeedbackDelayGeneratorState {
     pub fn get_inner(&self) -> *mut aeron_feedback_delay_generator_state_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_feedback_delay_generator_state_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_feedback_delay_generator_state_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronFeedbackDelayGeneratorState {
     type Target = aeron_feedback_delay_generator_state_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_feedback_delay_generator_state_t> for AeronFeedbackDelayGeneratorState {
@@ -23725,8 +24457,7 @@ impl AeronFeedbackDelayGeneratorState {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -23850,10 +24581,19 @@ impl AeronFlowControlStrategySupplierFuncTableEntry {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronFlowControlStrategySupplierFuncTableEntry {
-    type Target = aeron_flow_control_strategy_supplier_func_table_entry_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_flow_control_strategy_supplier_func_table_entry_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronFlowControlStrategySupplierFuncTableEntry =
+                    self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_flow_control_strategy_supplier_func_table_entry_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronFlowControlStrategySupplierFuncTableEntry =
@@ -23862,6 +24602,12 @@ impl std::ops::Deref for AeronFlowControlStrategySupplierFuncTableEntry {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronFlowControlStrategySupplierFuncTableEntry {
+    type Target = aeron_flow_control_strategy_supplier_func_table_entry_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_flow_control_strategy_supplier_func_table_entry_t>
@@ -23941,8 +24687,7 @@ impl AeronFlowControlStrategySupplierFuncTableEntry {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -24146,11 +24891,19 @@ impl AeronFlowControlStrategy {
     pub fn get_inner(&self) -> *mut aeron_flow_control_strategy_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_flow_control_strategy_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_flow_control_strategy_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronFlowControlStrategy {
     type Target = aeron_flow_control_strategy_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_flow_control_strategy_t> for AeronFlowControlStrategy {
@@ -24342,10 +25095,18 @@ impl AeronFlowControlTaggedOptions {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronFlowControlTaggedOptions {
-    type Target = aeron_flow_control_tagged_options_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_flow_control_tagged_options_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronFlowControlTaggedOptions = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_flow_control_tagged_options_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronFlowControlTaggedOptions = self as *const _ as *mut _;
@@ -24353,6 +25114,12 @@ impl std::ops::Deref for AeronFlowControlTaggedOptions {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronFlowControlTaggedOptions {
+    type Target = aeron_flow_control_tagged_options_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_flow_control_tagged_options_t> for AeronFlowControlTaggedOptions {
@@ -24420,8 +25187,7 @@ impl AeronFlowControlTaggedOptions {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -24522,11 +25288,19 @@ impl AeronFragmentAssembler {
     pub fn get_inner(&self) -> *mut aeron_fragment_assembler_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_fragment_assembler_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_fragment_assembler_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronFragmentAssembler {
     type Target = aeron_fragment_assembler_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_fragment_assembler_t> for AeronFragmentAssembler {
@@ -24695,10 +25469,18 @@ impl AeronFrameHeader {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronFrameHeader {
-    type Target = aeron_frame_header_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_frame_header_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronFrameHeader = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_frame_header_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronFrameHeader = self as *const _ as *mut _;
@@ -24706,6 +25488,12 @@ impl std::ops::Deref for AeronFrameHeader {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronFrameHeader {
+    type Target = aeron_frame_header_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_frame_header_t> for AeronFrameHeader {
@@ -24773,8 +25561,7 @@ impl AeronFrameHeader {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -24916,11 +25703,19 @@ impl AeronHeader {
     pub fn get_inner(&self) -> *mut aeron_header_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_header_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_header_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronHeader {
     type Target = aeron_header_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_header_t> for AeronHeader {
@@ -25129,10 +25924,18 @@ impl AeronHeaderValuesFrame {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronHeaderValuesFrame {
-    type Target = aeron_header_values_frame_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_header_values_frame_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronHeaderValuesFrame = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_header_values_frame_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronHeaderValuesFrame = self as *const _ as *mut _;
@@ -25140,6 +25943,12 @@ impl std::ops::Deref for AeronHeaderValuesFrame {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronHeaderValuesFrame {
+    type Target = aeron_header_values_frame_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_header_values_frame_t> for AeronHeaderValuesFrame {
@@ -25207,8 +26016,7 @@ impl AeronHeaderValuesFrame {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -25333,10 +26141,18 @@ impl AeronHeaderValues {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronHeaderValues {
-    type Target = aeron_header_values_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_header_values_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronHeaderValues = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_header_values_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronHeaderValues = self as *const _ as *mut _;
@@ -25344,6 +26160,12 @@ impl std::ops::Deref for AeronHeaderValues {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronHeaderValues {
+    type Target = aeron_header_values_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_header_values_t> for AeronHeaderValues {
@@ -25411,8 +26233,7 @@ impl AeronHeaderValues {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -25520,10 +26341,18 @@ impl AeronHeartbeatTimestampKeyLayout {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronHeartbeatTimestampKeyLayout {
-    type Target = aeron_heartbeat_timestamp_key_layout_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_heartbeat_timestamp_key_layout_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronHeartbeatTimestampKeyLayout = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_heartbeat_timestamp_key_layout_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronHeartbeatTimestampKeyLayout = self as *const _ as *mut _;
@@ -25531,6 +26360,12 @@ impl std::ops::Deref for AeronHeartbeatTimestampKeyLayout {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronHeartbeatTimestampKeyLayout {
+    type Target = aeron_heartbeat_timestamp_key_layout_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_heartbeat_timestamp_key_layout_t> for AeronHeartbeatTimestampKeyLayout {
@@ -25598,8 +26433,7 @@ impl AeronHeartbeatTimestampKeyLayout {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -25728,11 +26562,19 @@ impl AeronIdleStrategy {
     pub fn get_inner(&self) -> *mut aeron_idle_strategy_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_idle_strategy_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_idle_strategy_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronIdleStrategy {
     type Target = aeron_idle_strategy_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_idle_strategy_t> for AeronIdleStrategy {
@@ -25921,10 +26763,18 @@ impl AeronImageBuffersReady {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronImageBuffersReady {
-    type Target = aeron_image_buffers_ready_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_image_buffers_ready_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronImageBuffersReady = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_image_buffers_ready_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronImageBuffersReady = self as *const _ as *mut _;
@@ -25932,6 +26782,12 @@ impl std::ops::Deref for AeronImageBuffersReady {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronImageBuffersReady {
+    type Target = aeron_image_buffers_ready_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_image_buffers_ready_t> for AeronImageBuffersReady {
@@ -25999,8 +26855,7 @@ impl AeronImageBuffersReady {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -26185,10 +27040,18 @@ impl AeronImageConstants {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronImageConstants {
-    type Target = aeron_image_constants_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_image_constants_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronImageConstants = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_image_constants_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronImageConstants = self as *const _ as *mut _;
@@ -26196,6 +27059,12 @@ impl std::ops::Deref for AeronImageConstants {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronImageConstants {
+    type Target = aeron_image_constants_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_image_constants_t> for AeronImageConstants {
@@ -26263,8 +27132,7 @@ impl AeronImageConstants {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -26376,11 +27244,19 @@ impl AeronImageControlledFragmentAssembler {
     pub fn get_inner(&self) -> *mut aeron_image_controlled_fragment_assembler_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_image_controlled_fragment_assembler_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_image_controlled_fragment_assembler_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronImageControlledFragmentAssembler {
     type Target = aeron_image_controlled_fragment_assembler_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_image_controlled_fragment_assembler_t>
@@ -26536,11 +27412,19 @@ impl AeronImageFragmentAssembler {
     pub fn get_inner(&self) -> *mut aeron_image_fragment_assembler_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_image_fragment_assembler_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_image_fragment_assembler_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronImageFragmentAssembler {
     type Target = aeron_image_fragment_assembler_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_image_fragment_assembler_t> for AeronImageFragmentAssembler {
@@ -26719,10 +27603,18 @@ impl AeronImageMessage {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronImageMessage {
-    type Target = aeron_image_message_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_image_message_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronImageMessage = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_image_message_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronImageMessage = self as *const _ as *mut _;
@@ -26730,6 +27622,12 @@ impl std::ops::Deref for AeronImageMessage {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronImageMessage {
+    type Target = aeron_image_message_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_image_message_t> for AeronImageMessage {
@@ -26797,8 +27695,7 @@ impl AeronImageMessage {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -27462,11 +28359,19 @@ impl AeronImage {
     pub fn get_inner(&self) -> *mut aeron_image_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_image_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_image_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronImage {
     type Target = aeron_image_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_image_t> for AeronImage {
@@ -27655,10 +28560,18 @@ impl AeronInt64CounterMap {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronInt64CounterMap {
-    type Target = aeron_int64_counter_map_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_int64_counter_map_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronInt64CounterMap = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_int64_counter_map_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronInt64CounterMap = self as *const _ as *mut _;
@@ -27666,6 +28579,12 @@ impl std::ops::Deref for AeronInt64CounterMap {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronInt64CounterMap {
+    type Target = aeron_int64_counter_map_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_int64_counter_map_t> for AeronInt64CounterMap {
@@ -27733,8 +28652,7 @@ impl AeronInt64CounterMap {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -27875,10 +28793,18 @@ impl AeronInt64ToPtrHashMap {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronInt64ToPtrHashMap {
-    type Target = aeron_int64_to_ptr_hash_map_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_int64_to_ptr_hash_map_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronInt64ToPtrHashMap = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_int64_to_ptr_hash_map_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronInt64ToPtrHashMap = self as *const _ as *mut _;
@@ -27886,6 +28812,12 @@ impl std::ops::Deref for AeronInt64ToPtrHashMap {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronInt64ToPtrHashMap {
+    type Target = aeron_int64_to_ptr_hash_map_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_int64_to_ptr_hash_map_t> for AeronInt64ToPtrHashMap {
@@ -27953,8 +28885,7 @@ impl AeronInt64ToPtrHashMap {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -28077,10 +29008,18 @@ impl AeronInt64ToTaggedPtrEntry {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronInt64ToTaggedPtrEntry {
-    type Target = aeron_int64_to_tagged_ptr_entry_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_int64_to_tagged_ptr_entry_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronInt64ToTaggedPtrEntry = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_int64_to_tagged_ptr_entry_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronInt64ToTaggedPtrEntry = self as *const _ as *mut _;
@@ -28088,6 +29027,12 @@ impl std::ops::Deref for AeronInt64ToTaggedPtrEntry {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronInt64ToTaggedPtrEntry {
+    type Target = aeron_int64_to_tagged_ptr_entry_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_int64_to_tagged_ptr_entry_t> for AeronInt64ToTaggedPtrEntry {
@@ -28155,8 +29100,7 @@ impl AeronInt64ToTaggedPtrEntry {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -28300,10 +29244,18 @@ impl AeronInt64ToTaggedPtrHashMap {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronInt64ToTaggedPtrHashMap {
-    type Target = aeron_int64_to_tagged_ptr_hash_map_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_int64_to_tagged_ptr_hash_map_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronInt64ToTaggedPtrHashMap = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_int64_to_tagged_ptr_hash_map_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronInt64ToTaggedPtrHashMap = self as *const _ as *mut _;
@@ -28311,6 +29263,12 @@ impl std::ops::Deref for AeronInt64ToTaggedPtrHashMap {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronInt64ToTaggedPtrHashMap {
+    type Target = aeron_int64_to_tagged_ptr_hash_map_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_int64_to_tagged_ptr_hash_map_t> for AeronInt64ToTaggedPtrHashMap {
@@ -28378,8 +29336,7 @@ impl AeronInt64ToTaggedPtrHashMap {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -28490,10 +29447,18 @@ impl AeronIovec {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronIovec {
-    type Target = aeron_iovec_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_iovec_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronIovec = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_iovec_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronIovec = self as *const _ as *mut _;
@@ -28501,6 +29466,12 @@ impl std::ops::Deref for AeronIovec {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronIovec {
+    type Target = aeron_iovec_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_iovec_t> for AeronIovec {
@@ -28568,8 +29539,7 @@ impl AeronIovec {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -28697,10 +29667,18 @@ impl AeronIpcChannelParams {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronIpcChannelParams {
-    type Target = aeron_ipc_channel_params_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_ipc_channel_params_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronIpcChannelParams = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_ipc_channel_params_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronIpcChannelParams = self as *const _ as *mut _;
@@ -28708,6 +29686,12 @@ impl std::ops::Deref for AeronIpcChannelParams {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronIpcChannelParams {
+    type Target = aeron_ipc_channel_params_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_ipc_channel_params_t> for AeronIpcChannelParams {
@@ -28775,8 +29759,7 @@ impl AeronIpcChannelParams {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -28882,10 +29865,18 @@ impl AeronIpcPublicationEntry {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronIpcPublicationEntry {
-    type Target = aeron_ipc_publication_entry_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_ipc_publication_entry_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronIpcPublicationEntry = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_ipc_publication_entry_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronIpcPublicationEntry = self as *const _ as *mut _;
@@ -28893,6 +29884,12 @@ impl std::ops::Deref for AeronIpcPublicationEntry {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronIpcPublicationEntry {
+    type Target = aeron_ipc_publication_entry_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_ipc_publication_entry_t> for AeronIpcPublicationEntry {
@@ -28960,8 +29957,7 @@ impl AeronIpcPublicationEntry {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -29240,11 +30236,19 @@ impl AeronIpcPublication {
     pub fn get_inner(&self) -> *mut aeron_ipc_publication_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_ipc_publication_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_ipc_publication_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronIpcPublication {
     type Target = aeron_ipc_publication_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_ipc_publication_t> for AeronIpcPublication {
@@ -29415,10 +30419,18 @@ impl AeronLingerResourceEntry {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronLingerResourceEntry {
-    type Target = aeron_linger_resource_entry_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_linger_resource_entry_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronLingerResourceEntry = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_linger_resource_entry_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronLingerResourceEntry = self as *const _ as *mut _;
@@ -29426,6 +30438,12 @@ impl std::ops::Deref for AeronLingerResourceEntry {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronLingerResourceEntry {
+    type Target = aeron_linger_resource_entry_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_linger_resource_entry_t> for AeronLingerResourceEntry {
@@ -29493,8 +30511,7 @@ impl AeronLingerResourceEntry {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -29579,11 +30596,19 @@ impl AeronLinkedQueueNode {
     pub fn get_inner(&self) -> *mut aeron_linked_queue_node_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_linked_queue_node_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_linked_queue_node_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronLinkedQueueNode {
     type Target = aeron_linked_queue_node_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_linked_queue_node_t> for AeronLinkedQueueNode {
@@ -29778,11 +30803,19 @@ impl AeronLinkedQueue {
     pub fn get_inner(&self) -> *mut aeron_linked_queue_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_linked_queue_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_linked_queue_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronLinkedQueue {
     type Target = aeron_linked_queue_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_linked_queue_t> for AeronLinkedQueue {
@@ -29952,10 +30985,18 @@ impl AeronLocalSockaddrKeyLayout {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronLocalSockaddrKeyLayout {
-    type Target = aeron_local_sockaddr_key_layout_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_local_sockaddr_key_layout_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronLocalSockaddrKeyLayout = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_local_sockaddr_key_layout_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronLocalSockaddrKeyLayout = self as *const _ as *mut _;
@@ -29963,6 +31004,12 @@ impl std::ops::Deref for AeronLocalSockaddrKeyLayout {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronLocalSockaddrKeyLayout {
+    type Target = aeron_local_sockaddr_key_layout_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_local_sockaddr_key_layout_t> for AeronLocalSockaddrKeyLayout {
@@ -30030,8 +31077,7 @@ impl AeronLocalSockaddrKeyLayout {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -30105,11 +31151,19 @@ impl AeronLogBuffer {
     pub fn get_inner(&self) -> *mut aeron_log_buffer_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_log_buffer_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_log_buffer_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronLogBuffer {
     type Target = aeron_log_buffer_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_log_buffer_t> for AeronLogBuffer {
@@ -30539,10 +31593,18 @@ impl AeronLogbufferMetadata {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronLogbufferMetadata {
-    type Target = aeron_logbuffer_metadata_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_logbuffer_metadata_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronLogbufferMetadata = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_logbuffer_metadata_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronLogbufferMetadata = self as *const _ as *mut _;
@@ -30550,6 +31612,12 @@ impl std::ops::Deref for AeronLogbufferMetadata {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronLogbufferMetadata {
+    type Target = aeron_logbuffer_metadata_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_logbuffer_metadata_t> for AeronLogbufferMetadata {
@@ -30617,8 +31685,7 @@ impl AeronLogbufferMetadata {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -30736,10 +31803,18 @@ impl AeronLossDetectorGap {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronLossDetectorGap {
-    type Target = aeron_loss_detector_gap_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_loss_detector_gap_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronLossDetectorGap = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_loss_detector_gap_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronLossDetectorGap = self as *const _ as *mut _;
@@ -30747,6 +31822,12 @@ impl std::ops::Deref for AeronLossDetectorGap {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronLossDetectorGap {
+    type Target = aeron_loss_detector_gap_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_loss_detector_gap_t> for AeronLossDetectorGap {
@@ -30814,8 +31895,7 @@ impl AeronLossDetectorGap {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -31043,11 +32123,19 @@ impl AeronLossDetector {
     pub fn get_inner(&self) -> *mut aeron_loss_detector_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_loss_detector_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_loss_detector_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronLossDetector {
     type Target = aeron_loss_detector_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_loss_detector_t> for AeronLossDetector {
@@ -31115,8 +32203,7 @@ impl AeronLossDetector {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -31265,10 +32352,18 @@ impl AeronLossReporterEntry {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronLossReporterEntry {
-    type Target = aeron_loss_reporter_entry_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_loss_reporter_entry_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronLossReporterEntry = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_loss_reporter_entry_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronLossReporterEntry = self as *const _ as *mut _;
@@ -31276,6 +32371,12 @@ impl std::ops::Deref for AeronLossReporterEntry {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronLossReporterEntry {
+    type Target = aeron_loss_reporter_entry_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_loss_reporter_entry_t> for AeronLossReporterEntry {
@@ -31343,8 +32444,7 @@ impl AeronLossReporterEntry {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -31597,11 +32697,19 @@ impl AeronLossReporter {
     pub fn get_inner(&self) -> *mut aeron_loss_reporter_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_loss_reporter_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_loss_reporter_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronLossReporter {
     type Target = aeron_loss_reporter_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_loss_reporter_t> for AeronLossReporter {
@@ -31669,8 +32777,7 @@ impl AeronLossReporter {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -31787,10 +32894,18 @@ impl AeronMappedBuffer {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronMappedBuffer {
-    type Target = aeron_mapped_buffer_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_mapped_buffer_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronMappedBuffer = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_mapped_buffer_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronMappedBuffer = self as *const _ as *mut _;
@@ -31798,6 +32913,12 @@ impl std::ops::Deref for AeronMappedBuffer {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronMappedBuffer {
+    type Target = aeron_mapped_buffer_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_mapped_buffer_t> for AeronMappedBuffer {
@@ -31865,8 +32986,7 @@ impl AeronMappedBuffer {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -32032,11 +33152,19 @@ impl AeronMappedFile {
     pub fn get_inner(&self) -> *mut aeron_mapped_file_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_mapped_file_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_mapped_file_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronMappedFile {
     type Target = aeron_mapped_file_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_mapped_file_t> for AeronMappedFile {
@@ -32104,8 +33232,7 @@ impl AeronMappedFile {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -32293,11 +33420,19 @@ impl AeronMappedRawLog {
     pub fn get_inner(&self) -> *mut aeron_mapped_raw_log_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_mapped_raw_log_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_mapped_raw_log_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronMappedRawLog {
     type Target = aeron_mapped_raw_log_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_mapped_raw_log_t> for AeronMappedRawLog {
@@ -32365,8 +33500,7 @@ impl AeronMappedRawLog {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -32526,11 +33660,19 @@ impl AeronMpscConcurrentArrayQueue {
     pub fn get_inner(&self) -> *mut aeron_mpsc_concurrent_array_queue_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_mpsc_concurrent_array_queue_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_mpsc_concurrent_array_queue_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronMpscConcurrentArrayQueue {
     type Target = aeron_mpsc_concurrent_array_queue_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_mpsc_concurrent_array_queue_t> for AeronMpscConcurrentArrayQueue {
@@ -32598,8 +33740,7 @@ impl AeronMpscConcurrentArrayQueue {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -32915,11 +34056,19 @@ impl AeronMpscRb {
     pub fn get_inner(&self) -> *mut aeron_mpsc_rb_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_mpsc_rb_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_mpsc_rb_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronMpscRb {
     type Target = aeron_mpsc_rb_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_mpsc_rb_t> for AeronMpscRb {
@@ -32987,8 +34136,7 @@ impl AeronMpscRb {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -33131,10 +34279,18 @@ impl AeronNakHeader {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronNakHeader {
-    type Target = aeron_nak_header_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_nak_header_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronNakHeader = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_nak_header_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronNakHeader = self as *const _ as *mut _;
@@ -33142,6 +34298,12 @@ impl std::ops::Deref for AeronNakHeader {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronNakHeader {
+    type Target = aeron_nak_header_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_nak_header_t> for AeronNakHeader {
@@ -33209,8 +34371,7 @@ impl AeronNakHeader {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -33318,10 +34479,18 @@ impl AeronNetworkPublicationEntry {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronNetworkPublicationEntry {
-    type Target = aeron_network_publication_entry_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_network_publication_entry_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronNetworkPublicationEntry = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_network_publication_entry_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronNetworkPublicationEntry = self as *const _ as *mut _;
@@ -33329,6 +34498,12 @@ impl std::ops::Deref for AeronNetworkPublicationEntry {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronNetworkPublicationEntry {
+    type Target = aeron_network_publication_entry_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_network_publication_entry_t> for AeronNetworkPublicationEntry {
@@ -33396,8 +34571,7 @@ impl AeronNetworkPublicationEntry {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -34031,11 +35205,19 @@ impl AeronNetworkPublication {
     pub fn get_inner(&self) -> *mut aeron_network_publication_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_network_publication_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_network_publication_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronNetworkPublication {
     type Target = aeron_network_publication_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_network_publication_t> for AeronNetworkPublication {
@@ -34209,10 +35391,18 @@ impl AeronAvailableCounterPair {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronAvailableCounterPair {
-    type Target = aeron_on_available_counter_pair_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_on_available_counter_pair_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronAvailableCounterPair = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_on_available_counter_pair_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronAvailableCounterPair = self as *const _ as *mut _;
@@ -34220,6 +35410,12 @@ impl std::ops::Deref for AeronAvailableCounterPair {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronAvailableCounterPair {
+    type Target = aeron_on_available_counter_pair_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_on_available_counter_pair_t> for AeronAvailableCounterPair {
@@ -34287,8 +35483,7 @@ impl AeronAvailableCounterPair {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -34409,10 +35604,18 @@ impl AeronCloseClientPair {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronCloseClientPair {
-    type Target = aeron_on_close_client_pair_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_on_close_client_pair_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronCloseClientPair = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_on_close_client_pair_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronCloseClientPair = self as *const _ as *mut _;
@@ -34420,6 +35623,12 @@ impl std::ops::Deref for AeronCloseClientPair {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronCloseClientPair {
+    type Target = aeron_on_close_client_pair_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_on_close_client_pair_t> for AeronCloseClientPair {
@@ -34487,8 +35696,7 @@ impl AeronCloseClientPair {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -34615,10 +35823,18 @@ impl AeronUnavailableCounterPair {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronUnavailableCounterPair {
-    type Target = aeron_on_unavailable_counter_pair_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_on_unavailable_counter_pair_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronUnavailableCounterPair = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_on_unavailable_counter_pair_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronUnavailableCounterPair = self as *const _ as *mut _;
@@ -34626,6 +35842,12 @@ impl std::ops::Deref for AeronUnavailableCounterPair {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronUnavailableCounterPair {
+    type Target = aeron_on_unavailable_counter_pair_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_on_unavailable_counter_pair_t> for AeronUnavailableCounterPair {
@@ -34693,8 +35915,7 @@ impl AeronUnavailableCounterPair {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -34800,10 +36021,18 @@ impl AeronOperationSucceeded {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronOperationSucceeded {
-    type Target = aeron_operation_succeeded_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_operation_succeeded_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronOperationSucceeded = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_operation_succeeded_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronOperationSucceeded = self as *const _ as *mut _;
@@ -34811,6 +36040,12 @@ impl std::ops::Deref for AeronOperationSucceeded {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronOperationSucceeded {
+    type Target = aeron_operation_succeeded_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_operation_succeeded_t> for AeronOperationSucceeded {
@@ -34878,8 +36113,7 @@ impl AeronOperationSucceeded {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -34991,10 +36225,18 @@ impl AeronOptionHeader {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronOptionHeader {
-    type Target = aeron_option_header_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_option_header_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronOptionHeader = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_option_header_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronOptionHeader = self as *const _ as *mut _;
@@ -35002,6 +36244,12 @@ impl std::ops::Deref for AeronOptionHeader {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronOptionHeader {
+    type Target = aeron_option_header_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_option_header_t> for AeronOptionHeader {
@@ -35069,8 +36317,7 @@ impl AeronOptionHeader {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -35189,10 +36436,18 @@ impl AeronParsedAddress {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronParsedAddress {
-    type Target = aeron_parsed_address_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_parsed_address_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronParsedAddress = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_parsed_address_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronParsedAddress = self as *const _ as *mut _;
@@ -35200,6 +36455,12 @@ impl std::ops::Deref for AeronParsedAddress {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronParsedAddress {
+    type Target = aeron_parsed_address_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_parsed_address_t> for AeronParsedAddress {
@@ -35267,8 +36528,7 @@ impl AeronParsedAddress {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -35393,10 +36653,18 @@ impl AeronParsedInterface {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronParsedInterface {
-    type Target = aeron_parsed_interface_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_parsed_interface_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronParsedInterface = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_parsed_interface_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronParsedInterface = self as *const _ as *mut _;
@@ -35404,6 +36672,12 @@ impl std::ops::Deref for AeronParsedInterface {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronParsedInterface {
+    type Target = aeron_parsed_interface_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_parsed_interface_t> for AeronParsedInterface {
@@ -35471,8 +36745,7 @@ impl AeronParsedInterface {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -35592,10 +36865,18 @@ impl AeronPerThreadError {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronPerThreadError {
-    type Target = aeron_per_thread_error_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_per_thread_error_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronPerThreadError = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_per_thread_error_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronPerThreadError = self as *const _ as *mut _;
@@ -35603,6 +36884,12 @@ impl std::ops::Deref for AeronPerThreadError {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronPerThreadError {
+    type Target = aeron_per_thread_error_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_per_thread_error_t> for AeronPerThreadError {
@@ -35670,8 +36957,7 @@ impl AeronPerThreadError {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -35805,10 +37091,18 @@ impl AeronPortManager {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronPortManager {
-    type Target = aeron_port_manager_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_port_manager_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronPortManager = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_port_manager_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronPortManager = self as *const _ as *mut _;
@@ -35816,6 +37110,12 @@ impl std::ops::Deref for AeronPortManager {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronPortManager {
+    type Target = aeron_port_manager_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_port_manager_t> for AeronPortManager {
@@ -35883,8 +37183,7 @@ impl AeronPortManager {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -35995,10 +37294,18 @@ impl AeronPosition {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronPosition {
-    type Target = aeron_position_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_position_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronPosition = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_position_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronPosition = self as *const _ as *mut _;
@@ -36006,6 +37313,12 @@ impl std::ops::Deref for AeronPosition {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronPosition {
+    type Target = aeron_position_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_position_t> for AeronPosition {
@@ -36073,8 +37386,7 @@ impl AeronPosition {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -36232,10 +37544,18 @@ impl AeronPublicationBuffersReady {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronPublicationBuffersReady {
-    type Target = aeron_publication_buffers_ready_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_publication_buffers_ready_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronPublicationBuffersReady = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_publication_buffers_ready_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronPublicationBuffersReady = self as *const _ as *mut _;
@@ -36243,6 +37563,12 @@ impl std::ops::Deref for AeronPublicationBuffersReady {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronPublicationBuffersReady {
+    type Target = aeron_publication_buffers_ready_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_publication_buffers_ready_t> for AeronPublicationBuffersReady {
@@ -36310,8 +37636,7 @@ impl AeronPublicationBuffersReady {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -36433,10 +37758,18 @@ impl AeronPublicationCommand {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronPublicationCommand {
-    type Target = aeron_publication_command_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_publication_command_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronPublicationCommand = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_publication_command_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronPublicationCommand = self as *const _ as *mut _;
@@ -36444,6 +37777,12 @@ impl std::ops::Deref for AeronPublicationCommand {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronPublicationCommand {
+    type Target = aeron_publication_command_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_publication_command_t> for AeronPublicationCommand {
@@ -36511,8 +37850,7 @@ impl AeronPublicationCommand {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -36723,10 +38061,18 @@ impl AeronPublicationConstants {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronPublicationConstants {
-    type Target = aeron_publication_constants_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_publication_constants_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronPublicationConstants = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_publication_constants_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronPublicationConstants = self as *const _ as *mut _;
@@ -36734,6 +38080,12 @@ impl std::ops::Deref for AeronPublicationConstants {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronPublicationConstants {
+    type Target = aeron_publication_constants_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_publication_constants_t> for AeronPublicationConstants {
@@ -36801,8 +38153,7 @@ impl AeronPublicationConstants {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -36991,10 +38342,18 @@ impl AeronPublicationError {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronPublicationError {
-    type Target = aeron_publication_error_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_publication_error_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronPublicationError = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_publication_error_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronPublicationError = self as *const _ as *mut _;
@@ -37002,6 +38361,12 @@ impl std::ops::Deref for AeronPublicationError {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronPublicationError {
+    type Target = aeron_publication_error_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_publication_error_t> for AeronPublicationError {
@@ -37069,8 +38434,7 @@ impl AeronPublicationError {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -37218,11 +38582,19 @@ impl AeronPublicationErrorValues {
     pub fn get_inner(&self) -> *mut aeron_publication_error_values_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_publication_error_values_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_publication_error_values_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronPublicationErrorValues {
     type Target = aeron_publication_error_values_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_publication_error_values_t> for AeronPublicationErrorValues {
@@ -37444,10 +38816,18 @@ impl AeronPublicationImageConnection {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronPublicationImageConnection {
-    type Target = aeron_publication_image_connection_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_publication_image_connection_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronPublicationImageConnection = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_publication_image_connection_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronPublicationImageConnection = self as *const _ as *mut _;
@@ -37455,6 +38835,12 @@ impl std::ops::Deref for AeronPublicationImageConnection {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronPublicationImageConnection {
+    type Target = aeron_publication_image_connection_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_publication_image_connection_t> for AeronPublicationImageConnection {
@@ -37522,8 +38908,7 @@ impl AeronPublicationImageConnection {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -37629,10 +39014,18 @@ impl AeronPublicationImageEntry {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronPublicationImageEntry {
-    type Target = aeron_publication_image_entry_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_publication_image_entry_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronPublicationImageEntry = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_publication_image_entry_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronPublicationImageEntry = self as *const _ as *mut _;
@@ -37640,6 +39033,12 @@ impl std::ops::Deref for AeronPublicationImageEntry {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronPublicationImageEntry {
+    type Target = aeron_publication_image_entry_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_publication_image_entry_t> for AeronPublicationImageEntry {
@@ -37707,8 +39106,7 @@ impl AeronPublicationImageEntry {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -38338,11 +39736,19 @@ impl AeronPublicationImage {
     pub fn get_inner(&self) -> *mut aeron_publication_image_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_publication_image_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_publication_image_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronPublicationImage {
     type Target = aeron_publication_image_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_publication_image_t> for AeronPublicationImage {
@@ -38504,10 +39910,18 @@ impl AeronPublicationLink {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronPublicationLink {
-    type Target = aeron_publication_link_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_publication_link_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronPublicationLink = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_publication_link_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronPublicationLink = self as *const _ as *mut _;
@@ -38515,6 +39929,12 @@ impl std::ops::Deref for AeronPublicationLink {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronPublicationLink {
+    type Target = aeron_publication_link_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_publication_link_t> for AeronPublicationLink {
@@ -38582,8 +40002,7 @@ impl AeronPublicationLink {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -39042,11 +40461,19 @@ impl AeronPublication {
     pub fn get_inner(&self) -> *mut aeron_publication_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_publication_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_publication_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronPublication {
     type Target = aeron_publication_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_publication_t> for AeronPublication {
@@ -39284,10 +40711,18 @@ impl AeronRbDescriptor {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronRbDescriptor {
-    type Target = aeron_rb_descriptor_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_rb_descriptor_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronRbDescriptor = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_rb_descriptor_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronRbDescriptor = self as *const _ as *mut _;
@@ -39295,6 +40730,12 @@ impl std::ops::Deref for AeronRbDescriptor {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronRbDescriptor {
+    type Target = aeron_rb_descriptor_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_rb_descriptor_t> for AeronRbDescriptor {
@@ -39362,8 +40803,7 @@ impl AeronRbDescriptor {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -39475,10 +40915,18 @@ impl AeronRbRecordDescriptor {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronRbRecordDescriptor {
-    type Target = aeron_rb_record_descriptor_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_rb_record_descriptor_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronRbRecordDescriptor = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_rb_record_descriptor_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronRbRecordDescriptor = self as *const _ as *mut _;
@@ -39486,6 +40934,12 @@ impl std::ops::Deref for AeronRbRecordDescriptor {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronRbRecordDescriptor {
+    type Target = aeron_rb_record_descriptor_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_rb_record_descriptor_t> for AeronRbRecordDescriptor {
@@ -39553,8 +41007,7 @@ impl AeronRbRecordDescriptor {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -39662,10 +41115,18 @@ impl AeronReceiveChannelEndpointEntry {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronReceiveChannelEndpointEntry {
-    type Target = aeron_receive_channel_endpoint_entry_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_receive_channel_endpoint_entry_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronReceiveChannelEndpointEntry = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_receive_channel_endpoint_entry_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronReceiveChannelEndpointEntry = self as *const _ as *mut _;
@@ -39673,6 +41134,12 @@ impl std::ops::Deref for AeronReceiveChannelEndpointEntry {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronReceiveChannelEndpointEntry {
+    type Target = aeron_receive_channel_endpoint_entry_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_receive_channel_endpoint_entry_t> for AeronReceiveChannelEndpointEntry {
@@ -39740,8 +41207,7 @@ impl AeronReceiveChannelEndpointEntry {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -40546,11 +42012,19 @@ impl AeronReceiveChannelEndpoint {
     pub fn get_inner(&self) -> *mut aeron_receive_channel_endpoint_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_receive_channel_endpoint_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_receive_channel_endpoint_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronReceiveChannelEndpoint {
     type Target = aeron_receive_channel_endpoint_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_receive_channel_endpoint_t> for AeronReceiveChannelEndpoint {
@@ -40724,10 +42198,18 @@ impl AeronReceiveDestinationEntry {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronReceiveDestinationEntry {
-    type Target = aeron_receive_destination_entry_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_receive_destination_entry_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronReceiveDestinationEntry = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_receive_destination_entry_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronReceiveDestinationEntry = self as *const _ as *mut _;
@@ -40735,6 +42217,12 @@ impl std::ops::Deref for AeronReceiveDestinationEntry {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronReceiveDestinationEntry {
+    type Target = aeron_receive_destination_entry_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_receive_destination_entry_t> for AeronReceiveDestinationEntry {
@@ -40802,8 +42290,7 @@ impl AeronReceiveDestinationEntry {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -40946,11 +42433,19 @@ impl AeronReceiveDestination {
     pub fn get_inner(&self) -> *mut aeron_receive_destination_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_receive_destination_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_receive_destination_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronReceiveDestination {
     type Target = aeron_receive_destination_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_receive_destination_t> for AeronReceiveDestination {
@@ -41135,10 +42630,18 @@ impl AeronRejectImageCommand {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronRejectImageCommand {
-    type Target = aeron_reject_image_command_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_reject_image_command_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronRejectImageCommand = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_reject_image_command_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronRejectImageCommand = self as *const _ as *mut _;
@@ -41146,6 +42649,12 @@ impl std::ops::Deref for AeronRejectImageCommand {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronRejectImageCommand {
+    type Target = aeron_reject_image_command_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_reject_image_command_t> for AeronRejectImageCommand {
@@ -41213,8 +42722,7 @@ impl AeronRejectImageCommand {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -41329,10 +42837,18 @@ impl AeronRemoveCommand {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronRemoveCommand {
-    type Target = aeron_remove_command_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_remove_command_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronRemoveCommand = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_remove_command_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronRemoveCommand = self as *const _ as *mut _;
@@ -41340,6 +42856,12 @@ impl std::ops::Deref for AeronRemoveCommand {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronRemoveCommand {
+    type Target = aeron_remove_command_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_remove_command_t> for AeronRemoveCommand {
@@ -41407,8 +42929,7 @@ impl AeronRemoveCommand {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -41530,11 +43051,19 @@ impl AeronResolutionHeaderIpv4 {
     pub fn get_inner(&self) -> *mut aeron_resolution_header_ipv4_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_resolution_header_ipv4_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_resolution_header_ipv4_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronResolutionHeaderIpv4 {
     type Target = aeron_resolution_header_ipv4_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_resolution_header_ipv4_t> for AeronResolutionHeaderIpv4 {
@@ -41602,8 +43131,7 @@ impl AeronResolutionHeaderIpv4 {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -41725,11 +43253,19 @@ impl AeronResolutionHeaderIpv6 {
     pub fn get_inner(&self) -> *mut aeron_resolution_header_ipv6_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_resolution_header_ipv6_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_resolution_header_ipv6_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronResolutionHeaderIpv6 {
     type Target = aeron_resolution_header_ipv6_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_resolution_header_ipv6_t> for AeronResolutionHeaderIpv6 {
@@ -41797,8 +43333,7 @@ impl AeronResolutionHeaderIpv6 {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -41925,10 +43460,18 @@ impl AeronResolutionHeader {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronResolutionHeader {
-    type Target = aeron_resolution_header_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_resolution_header_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronResolutionHeader = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_resolution_header_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronResolutionHeader = self as *const _ as *mut _;
@@ -41936,6 +43479,12 @@ impl std::ops::Deref for AeronResolutionHeader {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronResolutionHeader {
+    type Target = aeron_resolution_header_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_resolution_header_t> for AeronResolutionHeader {
@@ -42003,8 +43552,7 @@ impl AeronResolutionHeader {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -42133,10 +43681,18 @@ impl AeronResponseSetupHeader {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronResponseSetupHeader {
-    type Target = aeron_response_setup_header_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_response_setup_header_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronResponseSetupHeader = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_response_setup_header_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronResponseSetupHeader = self as *const _ as *mut _;
@@ -42144,6 +43700,12 @@ impl std::ops::Deref for AeronResponseSetupHeader {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronResponseSetupHeader {
+    type Target = aeron_response_setup_header_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_response_setup_header_t> for AeronResponseSetupHeader {
@@ -42211,8 +43773,7 @@ impl AeronResponseSetupHeader {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -42347,10 +43908,18 @@ impl AeronRetransmitAction {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronRetransmitAction {
-    type Target = aeron_retransmit_action_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_retransmit_action_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronRetransmitAction = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_retransmit_action_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronRetransmitAction = self as *const _ as *mut _;
@@ -42358,6 +43927,12 @@ impl std::ops::Deref for AeronRetransmitAction {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronRetransmitAction {
+    type Target = aeron_retransmit_action_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_retransmit_action_t> for AeronRetransmitAction {
@@ -42425,8 +44000,7 @@ impl AeronRetransmitAction {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -42765,11 +44339,19 @@ impl AeronRetransmitHandler {
     pub fn get_inner(&self) -> *mut aeron_retransmit_handler_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_retransmit_handler_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_retransmit_handler_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronRetransmitHandler {
     type Target = aeron_retransmit_handler_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_retransmit_handler_t> for AeronRetransmitHandler {
@@ -42837,8 +44419,7 @@ impl AeronRetransmitHandler {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -42981,10 +44562,18 @@ impl AeronRttmHeader {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronRttmHeader {
-    type Target = aeron_rttm_header_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_rttm_header_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronRttmHeader = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_rttm_header_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronRttmHeader = self as *const _ as *mut _;
@@ -42992,6 +44581,12 @@ impl std::ops::Deref for AeronRttmHeader {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronRttmHeader {
+    type Target = aeron_rttm_header_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_rttm_header_t> for AeronRttmHeader {
@@ -43059,8 +44654,7 @@ impl AeronRttmHeader {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -43168,10 +44762,18 @@ impl AeronSendChannelEndpointEntry {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronSendChannelEndpointEntry {
-    type Target = aeron_send_channel_endpoint_entry_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_send_channel_endpoint_entry_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronSendChannelEndpointEntry = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_send_channel_endpoint_entry_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronSendChannelEndpointEntry = self as *const _ as *mut _;
@@ -43179,6 +44781,12 @@ impl std::ops::Deref for AeronSendChannelEndpointEntry {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronSendChannelEndpointEntry {
+    type Target = aeron_send_channel_endpoint_entry_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_send_channel_endpoint_entry_t> for AeronSendChannelEndpointEntry {
@@ -43246,8 +44854,7 @@ impl AeronSendChannelEndpointEntry {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -43629,11 +45236,19 @@ impl AeronSendChannelEndpoint {
     pub fn get_inner(&self) -> *mut aeron_send_channel_endpoint_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_send_channel_endpoint_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_send_channel_endpoint_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronSendChannelEndpoint {
     type Target = aeron_send_channel_endpoint_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_send_channel_endpoint_t> for AeronSendChannelEndpoint {
@@ -43844,10 +45459,18 @@ impl AeronSetupHeader {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronSetupHeader {
-    type Target = aeron_setup_header_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_setup_header_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronSetupHeader = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_setup_header_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronSetupHeader = self as *const _ as *mut _;
@@ -43855,6 +45478,12 @@ impl std::ops::Deref for AeronSetupHeader {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronSetupHeader {
+    type Target = aeron_setup_header_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_setup_header_t> for AeronSetupHeader {
@@ -43922,8 +45551,7 @@ impl AeronSetupHeader {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -44083,11 +45711,19 @@ impl AeronSpscConcurrentArrayQueue {
     pub fn get_inner(&self) -> *mut aeron_spsc_concurrent_array_queue_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_spsc_concurrent_array_queue_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_spsc_concurrent_array_queue_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronSpscConcurrentArrayQueue {
     type Target = aeron_spsc_concurrent_array_queue_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_spsc_concurrent_array_queue_t> for AeronSpscConcurrentArrayQueue {
@@ -44155,8 +45791,7 @@ impl AeronSpscConcurrentArrayQueue {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -44278,10 +45913,18 @@ impl AeronStaticCounterCommand {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronStaticCounterCommand {
-    type Target = aeron_static_counter_command_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_static_counter_command_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronStaticCounterCommand = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_static_counter_command_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronStaticCounterCommand = self as *const _ as *mut _;
@@ -44289,6 +45932,12 @@ impl std::ops::Deref for AeronStaticCounterCommand {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronStaticCounterCommand {
+    type Target = aeron_static_counter_command_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_static_counter_command_t> for AeronStaticCounterCommand {
@@ -44356,8 +46005,7 @@ impl AeronStaticCounterCommand {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -44469,10 +46117,18 @@ impl AeronStaticCounterResponse {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronStaticCounterResponse {
-    type Target = aeron_static_counter_response_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_static_counter_response_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronStaticCounterResponse = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_static_counter_response_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronStaticCounterResponse = self as *const _ as *mut _;
@@ -44480,6 +46136,12 @@ impl std::ops::Deref for AeronStaticCounterResponse {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronStaticCounterResponse {
+    type Target = aeron_static_counter_response_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_static_counter_response_t> for AeronStaticCounterResponse {
@@ -44547,8 +46209,7 @@ impl AeronStaticCounterResponse {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -44707,11 +46368,19 @@ impl AeronStatusMessageHeader {
     pub fn get_inner(&self) -> *mut aeron_status_message_header_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_status_message_header_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_status_message_header_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronStatusMessageHeader {
     type Target = aeron_status_message_header_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_status_message_header_t> for AeronStatusMessageHeader {
@@ -44779,8 +46448,7 @@ impl AeronStatusMessageHeader {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -44888,10 +46556,18 @@ impl AeronStatusMessageOptionalHeader {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronStatusMessageOptionalHeader {
-    type Target = aeron_status_message_optional_header_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_status_message_optional_header_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronStatusMessageOptionalHeader = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_status_message_optional_header_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronStatusMessageOptionalHeader = self as *const _ as *mut _;
@@ -44899,6 +46575,12 @@ impl std::ops::Deref for AeronStatusMessageOptionalHeader {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronStatusMessageOptionalHeader {
+    type Target = aeron_status_message_optional_header_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_status_message_optional_header_t> for AeronStatusMessageOptionalHeader {
@@ -44966,8 +46648,7 @@ impl AeronStatusMessageOptionalHeader {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -45088,10 +46769,18 @@ impl AeronStrToPtrHashMapKey {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronStrToPtrHashMapKey {
-    type Target = aeron_str_to_ptr_hash_map_key_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_str_to_ptr_hash_map_key_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronStrToPtrHashMapKey = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_str_to_ptr_hash_map_key_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronStrToPtrHashMapKey = self as *const _ as *mut _;
@@ -45099,6 +46788,12 @@ impl std::ops::Deref for AeronStrToPtrHashMapKey {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronStrToPtrHashMapKey {
+    type Target = aeron_str_to_ptr_hash_map_key_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_str_to_ptr_hash_map_key_t> for AeronStrToPtrHashMapKey {
@@ -45166,8 +46861,7 @@ impl AeronStrToPtrHashMapKey {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -45309,10 +47003,18 @@ impl AeronStrToPtrHashMap {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronStrToPtrHashMap {
-    type Target = aeron_str_to_ptr_hash_map_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_str_to_ptr_hash_map_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronStrToPtrHashMap = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_str_to_ptr_hash_map_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronStrToPtrHashMap = self as *const _ as *mut _;
@@ -45320,6 +47022,12 @@ impl std::ops::Deref for AeronStrToPtrHashMap {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronStrToPtrHashMap {
+    type Target = aeron_str_to_ptr_hash_map_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_str_to_ptr_hash_map_t> for AeronStrToPtrHashMap {
@@ -45387,8 +47095,7 @@ impl AeronStrToPtrHashMap {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -45526,10 +47233,18 @@ impl AeronStreamPositionCounterKeyLayout {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronStreamPositionCounterKeyLayout {
-    type Target = aeron_stream_position_counter_key_layout_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_stream_position_counter_key_layout_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronStreamPositionCounterKeyLayout = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_stream_position_counter_key_layout_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronStreamPositionCounterKeyLayout = self as *const _ as *mut _;
@@ -45537,6 +47252,12 @@ impl std::ops::Deref for AeronStreamPositionCounterKeyLayout {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronStreamPositionCounterKeyLayout {
+    type Target = aeron_stream_position_counter_key_layout_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_stream_position_counter_key_layout_t> for AeronStreamPositionCounterKeyLayout {
@@ -45608,8 +47329,7 @@ impl AeronStreamPositionCounterKeyLayout {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -45721,10 +47441,18 @@ impl AeronSubscribableListEntry {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronSubscribableListEntry {
-    type Target = aeron_subscribable_list_entry_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_subscribable_list_entry_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronSubscribableListEntry = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_subscribable_list_entry_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronSubscribableListEntry = self as *const _ as *mut _;
@@ -45732,6 +47460,12 @@ impl std::ops::Deref for AeronSubscribableListEntry {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronSubscribableListEntry {
+    type Target = aeron_subscribable_list_entry_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_subscribable_list_entry_t> for AeronSubscribableListEntry {
@@ -45799,8 +47533,7 @@ impl AeronSubscribableListEntry {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -45999,11 +47732,19 @@ impl AeronSubscribable {
     pub fn get_inner(&self) -> *mut aeron_subscribable_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_subscribable_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_subscribable_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronSubscribable {
     type Target = aeron_subscribable_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_subscribable_t> for AeronSubscribable {
@@ -46071,8 +47812,7 @@ impl AeronSubscribable {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -46204,10 +47944,18 @@ impl AeronSubscriptionCommand {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronSubscriptionCommand {
-    type Target = aeron_subscription_command_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_subscription_command_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronSubscriptionCommand = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_subscription_command_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronSubscriptionCommand = self as *const _ as *mut _;
@@ -46215,6 +47963,12 @@ impl std::ops::Deref for AeronSubscriptionCommand {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronSubscriptionCommand {
+    type Target = aeron_subscription_command_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_subscription_command_t> for AeronSubscriptionCommand {
@@ -46282,8 +48036,7 @@ impl AeronSubscriptionCommand {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -46430,10 +48183,18 @@ impl AeronSubscriptionConstants {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronSubscriptionConstants {
-    type Target = aeron_subscription_constants_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_subscription_constants_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronSubscriptionConstants = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_subscription_constants_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronSubscriptionConstants = self as *const _ as *mut _;
@@ -46441,6 +48202,12 @@ impl std::ops::Deref for AeronSubscriptionConstants {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronSubscriptionConstants {
+    type Target = aeron_subscription_constants_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_subscription_constants_t> for AeronSubscriptionConstants {
@@ -46508,8 +48275,7 @@ impl AeronSubscriptionConstants {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -46726,11 +48492,19 @@ impl AeronSubscriptionLink {
     pub fn get_inner(&self) -> *mut aeron_subscription_link_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_subscription_link_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_subscription_link_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronSubscriptionLink {
     type Target = aeron_subscription_link_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_subscription_link_t> for AeronSubscriptionLink {
@@ -46798,8 +48572,7 @@ impl AeronSubscriptionLink {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -46914,10 +48687,18 @@ impl AeronSubscriptionReady {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronSubscriptionReady {
-    type Target = aeron_subscription_ready_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_subscription_ready_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronSubscriptionReady = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_subscription_ready_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronSubscriptionReady = self as *const _ as *mut _;
@@ -46925,6 +48706,12 @@ impl std::ops::Deref for AeronSubscriptionReady {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronSubscriptionReady {
+    type Target = aeron_subscription_ready_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_subscription_ready_t> for AeronSubscriptionReady {
@@ -46992,8 +48779,7 @@ impl AeronSubscriptionReady {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -47661,11 +49447,19 @@ impl AeronSubscription {
     pub fn get_inner(&self) -> *mut aeron_subscription_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_subscription_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_subscription_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronSubscription {
     type Target = aeron_subscription_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_subscription_t> for AeronSubscription {
@@ -47846,10 +49640,18 @@ impl AeronSystemCounter {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronSystemCounter {
-    type Target = aeron_system_counter_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_system_counter_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronSystemCounter = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_system_counter_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronSystemCounter = self as *const _ as *mut _;
@@ -47857,6 +49659,12 @@ impl std::ops::Deref for AeronSystemCounter {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronSystemCounter {
+    type Target = aeron_system_counter_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_system_counter_t> for AeronSystemCounter {
@@ -47924,8 +49732,7 @@ impl AeronSystemCounter {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -48051,11 +49858,19 @@ impl AeronSystemCounters {
     pub fn get_inner(&self) -> *mut aeron_system_counters_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_system_counters_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_system_counters_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronSystemCounters {
     type Target = aeron_system_counters_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_system_counters_t> for AeronSystemCounters {
@@ -48123,8 +49938,7 @@ impl AeronSystemCounters {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -49762,11 +51576,19 @@ impl Aeron {
     pub fn get_inner(&self) -> *mut aeron_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for Aeron {
     type Target = aeron_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_t> for Aeron {
@@ -49930,10 +51752,18 @@ impl AeronTerminateDriverCommand {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronTerminateDriverCommand {
-    type Target = aeron_terminate_driver_command_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_terminate_driver_command_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronTerminateDriverCommand = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_terminate_driver_command_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronTerminateDriverCommand = self as *const _ as *mut _;
@@ -49941,6 +51771,12 @@ impl std::ops::Deref for AeronTerminateDriverCommand {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronTerminateDriverCommand {
+    type Target = aeron_terminate_driver_command_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_terminate_driver_command_t> for AeronTerminateDriverCommand {
@@ -50008,8 +51844,7 @@ impl AeronTerminateDriverCommand {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -50169,11 +52004,19 @@ impl AeronTetherablePosition {
     pub fn get_inner(&self) -> *mut aeron_tetherable_position_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_tetherable_position_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_tetherable_position_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronTetherablePosition {
     type Target = aeron_tetherable_position_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_tetherable_position_t> for AeronTetherablePosition {
@@ -50241,8 +52084,7 @@ impl AeronTetherablePosition {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -50354,10 +52196,18 @@ impl AeronUdpChannelAsyncParse {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronUdpChannelAsyncParse {
-    type Target = aeron_udp_channel_async_parse_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_udp_channel_async_parse_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronUdpChannelAsyncParse = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_udp_channel_async_parse_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronUdpChannelAsyncParse = self as *const _ as *mut _;
@@ -50365,6 +52215,12 @@ impl std::ops::Deref for AeronUdpChannelAsyncParse {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronUdpChannelAsyncParse {
+    type Target = aeron_udp_channel_async_parse_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_udp_channel_async_parse_t> for AeronUdpChannelAsyncParse {
@@ -50432,8 +52288,7 @@ impl AeronUdpChannelAsyncParse {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -50695,11 +52550,19 @@ impl AeronUdpChannelDataPaths {
     pub fn get_inner(&self) -> *mut aeron_udp_channel_data_paths_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_udp_channel_data_paths_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_udp_channel_data_paths_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronUdpChannelDataPaths {
     type Target = aeron_udp_channel_data_paths_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_udp_channel_data_paths_t> for AeronUdpChannelDataPaths {
@@ -50767,8 +52630,7 @@ impl AeronUdpChannelDataPaths {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -50922,10 +52784,18 @@ impl AeronUdpChannelIncomingInterceptor {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronUdpChannelIncomingInterceptor {
-    type Target = aeron_udp_channel_incoming_interceptor_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_udp_channel_incoming_interceptor_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronUdpChannelIncomingInterceptor = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_udp_channel_incoming_interceptor_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronUdpChannelIncomingInterceptor = self as *const _ as *mut _;
@@ -50933,6 +52803,12 @@ impl std::ops::Deref for AeronUdpChannelIncomingInterceptor {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronUdpChannelIncomingInterceptor {
+    type Target = aeron_udp_channel_incoming_interceptor_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_udp_channel_incoming_interceptor_t> for AeronUdpChannelIncomingInterceptor {
@@ -51000,8 +52876,7 @@ impl AeronUdpChannelIncomingInterceptor {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -51204,11 +53079,19 @@ impl AeronUdpChannelInterceptorBindings {
     pub fn get_inner(&self) -> *mut aeron_udp_channel_interceptor_bindings_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_udp_channel_interceptor_bindings_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_udp_channel_interceptor_bindings_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronUdpChannelInterceptorBindings {
     type Target = aeron_udp_channel_interceptor_bindings_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_udp_channel_interceptor_bindings_t> for AeronUdpChannelInterceptorBindings {
@@ -51276,8 +53159,7 @@ impl AeronUdpChannelInterceptorBindings {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -51431,10 +53313,18 @@ impl AeronUdpChannelOutgoingInterceptor {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronUdpChannelOutgoingInterceptor {
-    type Target = aeron_udp_channel_outgoing_interceptor_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_udp_channel_outgoing_interceptor_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronUdpChannelOutgoingInterceptor = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_udp_channel_outgoing_interceptor_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronUdpChannelOutgoingInterceptor = self as *const _ as *mut _;
@@ -51442,6 +53332,12 @@ impl std::ops::Deref for AeronUdpChannelOutgoingInterceptor {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronUdpChannelOutgoingInterceptor {
+    type Target = aeron_udp_channel_outgoing_interceptor_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_udp_channel_outgoing_interceptor_t> for AeronUdpChannelOutgoingInterceptor {
@@ -51509,8 +53405,7 @@ impl AeronUdpChannelOutgoingInterceptor {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -51696,10 +53591,18 @@ impl AeronUdpChannelParams {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronUdpChannelParams {
-    type Target = aeron_udp_channel_params_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_udp_channel_params_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronUdpChannelParams = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_udp_channel_params_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronUdpChannelParams = self as *const _ as *mut _;
@@ -51707,6 +53610,12 @@ impl std::ops::Deref for AeronUdpChannelParams {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronUdpChannelParams {
+    type Target = aeron_udp_channel_params_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_udp_channel_params_t> for AeronUdpChannelParams {
@@ -51774,8 +53683,7 @@ impl AeronUdpChannelParams {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -52030,11 +53938,19 @@ impl AeronUdpChannel {
     pub fn get_inner(&self) -> *mut aeron_udp_channel_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_udp_channel_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_udp_channel_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronUdpChannel {
     type Target = aeron_udp_channel_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_udp_channel_t> for AeronUdpChannel {
@@ -52252,10 +54168,18 @@ impl AeronUdpDestinationEntry {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronUdpDestinationEntry {
-    type Target = aeron_udp_destination_entry_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_udp_destination_entry_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronUdpDestinationEntry = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_udp_destination_entry_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronUdpDestinationEntry = self as *const _ as *mut _;
@@ -52263,6 +54187,12 @@ impl std::ops::Deref for AeronUdpDestinationEntry {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronUdpDestinationEntry {
+    type Target = aeron_udp_destination_entry_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_udp_destination_entry_t> for AeronUdpDestinationEntry {
@@ -52330,8 +54260,7 @@ impl AeronUdpDestinationEntry {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -52594,11 +54523,19 @@ impl AeronUdpDestinationTracker {
     pub fn get_inner(&self) -> *mut aeron_udp_destination_tracker_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_udp_destination_tracker_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_udp_destination_tracker_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronUdpDestinationTracker {
     type Target = aeron_udp_destination_tracker_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_udp_destination_tracker_t> for AeronUdpDestinationTracker {
@@ -52763,10 +54700,18 @@ impl AeronUriParam {
         }
         self.inner
     }
-}
-impl std::ops::Deref for AeronUriParam {
-    type Target = aeron_uri_param_t;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_uri_param_t {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut AeronUriParam = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_uri_param_t {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut AeronUriParam = self as *const _ as *mut _;
@@ -52774,6 +54719,12 @@ impl std::ops::Deref for AeronUriParam {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for AeronUriParam {
+    type Target = aeron_uri_param_t;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_uri_param_t> for AeronUriParam {
@@ -52841,8 +54792,7 @@ impl AeronUriParam {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -53076,11 +55026,19 @@ impl AeronUriParams {
     pub fn get_inner(&self) -> *mut aeron_uri_params_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_uri_params_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_uri_params_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronUriParams {
     type Target = aeron_uri_params_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_uri_params_t> for AeronUriParams {
@@ -53148,8 +55106,7 @@ impl AeronUriParams {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -53419,11 +55376,19 @@ impl AeronUriStringBuilder {
     pub fn get_inner(&self) -> *mut aeron_uri_string_builder_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_uri_string_builder_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_uri_string_builder_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronUriStringBuilder {
     type Target = aeron_uri_string_builder_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_uri_string_builder_t> for AeronUriStringBuilder {
@@ -53491,8 +55456,7 @@ impl AeronUriStringBuilder {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -53801,11 +55765,19 @@ impl AeronUri {
     pub fn get_inner(&self) -> *mut aeron_uri_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_uri_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_uri_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronUri {
     type Target = aeron_uri_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_uri_t> for AeronUri {
@@ -53892,8 +55864,7 @@ impl AeronUri {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -54098,11 +56069,19 @@ impl AeronWildcardPortManager {
     pub fn get_inner(&self) -> *mut aeron_wildcard_port_manager_t {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut aeron_wildcard_port_manager_t {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &aeron_wildcard_port_manager_t {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for AeronWildcardPortManager {
     type Target = aeron_wildcard_port_manager_t;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut aeron_wildcard_port_manager_t> for AeronWildcardPortManager {
@@ -54170,8 +56149,7 @@ impl AeronWildcardPortManager {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -54284,11 +56262,19 @@ impl Ifaddrs {
     pub fn get_inner(&self) -> *mut ifaddrs {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut ifaddrs {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &ifaddrs {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for Ifaddrs {
     type Target = ifaddrs;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut ifaddrs> for Ifaddrs {
@@ -54424,11 +56410,19 @@ impl In6Addr {
     pub fn get_inner(&self) -> *mut in6_addr {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut in6_addr {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &in6_addr {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for In6Addr {
     type Target = in6_addr;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut in6_addr> for In6Addr {
@@ -54586,10 +56580,18 @@ impl Iovec {
         }
         self.inner
     }
-}
-impl std::ops::Deref for Iovec {
-    type Target = iovec;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut iovec {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut Iovec = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &iovec {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut Iovec = self as *const _ as *mut _;
@@ -54597,6 +56599,12 @@ impl std::ops::Deref for Iovec {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for Iovec {
+    type Target = iovec;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut iovec> for Iovec {
@@ -54664,8 +56672,7 @@ impl Iovec {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -54739,11 +56746,19 @@ impl Mmsghdr {
     pub fn get_inner(&self) -> *mut mmsghdr {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut mmsghdr {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &mmsghdr {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for Mmsghdr {
     type Target = mmsghdr;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut mmsghdr> for Mmsghdr {
@@ -54934,10 +56949,18 @@ impl Msghdr {
         }
         self.inner
     }
-}
-impl std::ops::Deref for Msghdr {
-    type Target = msghdr;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut msghdr {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut Msghdr = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &msghdr {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut Msghdr = self as *const _ as *mut _;
@@ -54945,6 +56968,12 @@ impl std::ops::Deref for Msghdr {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for Msghdr {
+    type Target = msghdr;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut msghdr> for Msghdr {
@@ -55012,8 +57041,7 @@ impl Msghdr {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -55141,11 +57169,19 @@ impl Pollfd {
     pub fn get_inner(&self) -> *mut pollfd {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut pollfd {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &pollfd {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for Pollfd {
     type Target = pollfd;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut pollfd> for Pollfd {
@@ -55213,8 +57249,7 @@ impl Pollfd {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -55333,10 +57368,18 @@ impl Sockaddr {
         }
         self.inner
     }
-}
-impl std::ops::Deref for Sockaddr {
-    type Target = sockaddr;
-    fn deref(&self) -> &Self::Target {
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut sockaddr {
+        if let Some(stack) = self._owned_on_stack.as_ref() {
+            unsafe {
+                let me: *mut Sockaddr = self as *const _ as *mut _;
+                (*me).inner = stack.as_ptr() as *mut _;
+            }
+        }
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &sockaddr {
         if let Some(stack) = self._owned_on_stack.as_ref() {
             unsafe {
                 let me: *mut Sockaddr = self as *const _ as *mut _;
@@ -55344,6 +57387,12 @@ impl std::ops::Deref for Sockaddr {
             }
         }
         unsafe { &*self.inner }
+    }
+}
+impl std::ops::Deref for Sockaddr {
+    type Target = sockaddr;
+    fn deref(&self) -> &Self::Target {
+        self.get_inner_ref()
     }
 }
 impl From<*mut sockaddr> for Sockaddr {
@@ -55411,8 +57460,7 @@ impl Sockaddr {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
@@ -55542,11 +57590,19 @@ impl SockaddrStorage {
     pub fn get_inner(&self) -> *mut sockaddr_storage {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut sockaddr_storage {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &sockaddr_storage {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for SockaddrStorage {
     type Target = sockaddr_storage;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut sockaddr_storage> for SockaddrStorage {
@@ -55714,11 +57770,19 @@ impl Timespec {
     pub fn get_inner(&self) -> *mut timespec {
         self.inner
     }
+    #[inline(always)]
+    pub fn get_inner_mut(&self) -> &mut timespec {
+        unsafe { &mut *self.inner }
+    }
+    #[inline(always)]
+    pub fn get_inner_ref(&self) -> &timespec {
+        unsafe { &*self.inner }
+    }
 }
 impl std::ops::Deref for Timespec {
     type Target = timespec;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.inner }
+        self.get_inner_ref()
     }
 }
 impl From<*mut timespec> for Timespec {
@@ -55786,8 +57850,7 @@ impl Timespec {
     #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
-        let inner = unsafe { &mut *self.inner };
-        inner.clone_from(self.deref());
+        copy.get_inner_mut().clone_from(self.deref());
         copy
     }
 }
