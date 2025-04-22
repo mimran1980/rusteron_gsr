@@ -53,12 +53,8 @@ mod tests {
     #[test]
     #[serial]
     fn version_check() -> Result<(), Box<dyn error::Error>> {
-        let _ = env_logger::Builder::new()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Info)
-            .try_init();
-
         let alloc_count = current_allocs();
+
         {
             let major = unsafe { crate::aeron_version_major() };
             let minor = unsafe { crate::aeron_version_minor() };
@@ -74,11 +70,15 @@ mod tests {
             ctx.set_error_handler(Some(&handler))?;
 
             assert!(Aeron::epoch_clock() > 0);
+            drop(ctx);
+            assert!(handler.should_drop);
             handler.release();
+            assert!(!handler.should_drop);
+            drop(handler);
         }
 
         assert!(
-            current_allocs() <= alloc_count + 1,
+            current_allocs() <= alloc_count,
             "allocations {} > {alloc_count}",
             current_allocs()
         );

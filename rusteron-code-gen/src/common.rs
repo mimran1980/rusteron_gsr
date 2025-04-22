@@ -398,6 +398,8 @@ pub struct Handlers;
 impl<T> Handler<T> {
     pub fn leak(handler: T) -> Self {
         let raw_ptr = Box::into_raw(Box::new(handler)) as *mut _;
+        #[cfg(feature = "extra-logging")]
+        log::info!("creating handler {:?}", raw_ptr);
         Self {
             raw_ptr,
             should_drop: true,
@@ -417,7 +419,7 @@ impl<T> Handler<T> {
             unsafe {
                 #[cfg(feature = "extra-logging")]
                 log::info!("dropping handler {:?}", self.raw_ptr);
-                let _ = Box::from_raw(self.raw_ptr as *mut Box<T>);
+                let _ = Box::from_raw(self.raw_ptr as *mut T);
                 self.should_drop = false;
             }
         }
