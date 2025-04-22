@@ -2237,8 +2237,7 @@ pub fn generate_rust_code(
                 /// More intended for AeronArchiveRecordingDescriptor
                 pub fn clone_struct(&self) -> Self {
                     let copy = Self::default();
-                    let inner = unsafe { &mut *self.inner };
-                    inner.clone_from(self.deref());
+                    copy.get_inner_mut().clone_from(self.deref());
                     copy
                 }
             }
@@ -2305,14 +2304,25 @@ pub fn generate_rust_code(
                 #sync_stack_var
                 self.inner
             }
+
+            #[inline(always)]
+            pub fn get_inner_mut(&self) -> &mut #type_name {
+                #sync_stack_var
+                unsafe { &mut *self.inner }
+            }
+
+            #[inline(always)]
+            pub fn get_inner_ref(&self) -> & #type_name {
+                #sync_stack_var
+                unsafe { &*self.inner }
+            }
         }
 
         impl std::ops::Deref for #class_name {
             type Target = #type_name;
 
             fn deref(&self) -> &Self::Target {
-                #sync_stack_var
-                unsafe { &*self.inner }
+                self.get_inner_ref()
             }
         }
 

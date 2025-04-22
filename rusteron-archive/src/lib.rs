@@ -791,6 +791,14 @@ mod tests {
                         start_pos.set(d.start_position);
                         end_pos.set(d.stop_position);
                     }
+
+                    // verify clone_struct works
+                    let copy = d.clone_struct();
+                    assert_eq!(copy.deref(), d.deref());
+                    assert_eq!(copy.recording_id, d.recording_id);
+                    assert_eq!(copy.control_session_id, d.control_session_id);
+                    assert_eq!(copy.mtu_length, d.mtu_length);
+                    assert_eq!(copy.source_identity_length, d.source_identity_length);
                 },
             )?;
             archive.poll_for_recording_signals()?;
