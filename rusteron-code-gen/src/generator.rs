@@ -374,16 +374,12 @@ impl ReturnType {
                 let length_name = handler_client.get(1).unwrap().as_ident();
                 if include_field_name {
                     return quote! {
-                        #array_name: {
-                            std::ffi::CString::new(#array_name).expect("CString::new failed").into_raw()
-                        },
+                        #array_name: #array_name.as_ptr() as *const _,
                         #length_name: #array_name.len()
                     };
                 } else {
                     return quote! {
-                        {
-                            std::ffi::CString::new(#array_name).expect("CString::new failed").into_raw()
-                        },
+                        #array_name.as_ptr() as *const _,
                         #array_name.len()
                     };
                 }
@@ -398,8 +394,8 @@ impl ReturnType {
                 let length_name = handler_client.get(1).unwrap().as_ident();
                 if include_field_name {
                     return quote! {
-                    #array_name: #array_name.as_ptr() as *mut _,
-                    #length_name: #array_name.len()
+                        #array_name: #array_name.as_ptr() as *mut _,
+                        #length_name: #array_name.len()
                     };
                 } else {
                     return quote! {
