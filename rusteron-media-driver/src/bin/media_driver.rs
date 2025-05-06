@@ -15,16 +15,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create Aeron context
     let aeron_context = AeronDriverContext::new()?;
+    info!("aeron dir: {:?}", aeron_context.get_dir());
+    aeron_context.print_configuration();
 
     // Create Aeron driver
     let aeron_driver = AeronDriver::new(&aeron_context)?;
     aeron_driver.start(true)?;
     // Start the Aeron driver
     info!("Aeron media driver started successfully. Press Ctrl+C to stop.");
-
-    aeron_driver.conductor().context().print_configuration();
-    aeron_driver.main_do_work()?;
-    info!("aeron dir: {:?}", aeron_context.get_dir());
 
     // Poll for work until Ctrl+C is pressed
     while running.load(Ordering::Acquire) {
