@@ -240,9 +240,9 @@ impl AeronArchiveContext {
         let context = Self::new()?;
         context.set_no_credentials_supplier()?;
         context.set_aeron(aeron)?;
-        context.set_control_request_channel(request_control_channel)?;
-        context.set_control_response_channel(response_control_channel)?;
-        context.set_recording_events_channel(recording_events_channel)?;
+        context.set_control_request_channel(&request_control_channel.into_c_string())?;
+        context.set_control_response_channel(&response_control_channel.into_c_string())?;
+        context.set_recording_events_channel(&recording_events_channel.into_c_string())?;
         // see https://github.com/mimran1980/rusteron/issues/18
         context.set_idle_strategy(Some(&Handler::leak(NoOpAeronIdleStrategyFunc)))?;
         Ok(context)
@@ -401,7 +401,8 @@ mod tests {
     ) -> Result<(i32, JoinHandle<()>), AeronCError> {
         let publication = aeron.add_publication(
             // &format!("aeron:udp?control={CONTROL_ENDPOINT}|control-mode=dynamic|term-length=65536|fc=tagged,g:99901/1,t:5s"),
-            &format!("aeron:udp?control={CONTROL_ENDPOINT}|control-mode=dynamic|term-length=65536"),
+            &format!("aeron:udp?control={CONTROL_ENDPOINT}|control-mode=dynamic|term-length=65536")
+                .into_c_string(),
             STREAM_ID,
             Duration::from_secs(5),
         )?;
@@ -419,7 +420,12 @@ mod tests {
             "aeron:udp?endpoint={RECORDING_ENDPOINT}|control={CONTROL_ENDPOINT}|session-id={session_id}"
         );
         info!("recording channel {}", recording_channel);
-        archive.start_recording(&recording_channel, STREAM_ID, SOURCE_LOCATION_REMOTE, true)?;
+        archive.start_recording(
+            &recording_channel.into_c_string(),
+            STREAM_ID,
+            SOURCE_LOCATION_REMOTE,
+            true,
+        )?;
 
         info!("waiting for publisher to be connected");
         while !publication.is_connected() {
@@ -469,15 +475,16 @@ mod tests {
         session_id: i32,
     ) -> Result<(), AeronCError> {
         // let replay_channel = format!("aeron:udp?control-mode=manual|session-id={session_id}");
-        let replay_channel = format!("aeron:udp?session-id={session_id}");
-        info!("replay channel {}", replay_channel);
+        let replay_channel = format!("aeron:udp?session-id={session_id}").into_c_string();
+        info!("replay channel {:?}", replay_channel);
 
-        let replay_destination = format!("aeron:udp?endpoint={REPLAY_ENDPOINT}");
-        info!("replay destination {}", replay_destination);
+        let replay_destination = format!("aeron:udp?endpoint={REPLAY_ENDPOINT}").into_c_string();
+        info!("replay destination {:?}", replay_destination);
 
         let live_destination =
-            format!("aeron:udp?endpoint={LIVE_ENDPOINT}|control={CONTROL_ENDPOINT}");
-        info!("live destination {}", live_destination);
+            format!("aeron:udp?endpoint={LIVE_ENDPOINT}|control={CONTROL_ENDPOINT}")
+                .into_c_string();
+        info!("live destination {:?}", live_destination);
 
         let counters_reader = aeron.counters_reader();
         let mut counter_id = -1;
@@ -524,8 +531,9 @@ mod tests {
             Duration::from_secs(5),
         )?;
 
-        let subscribe_channel = format!("aeron:udp?control-mode=manual|session-id={session_id}");
-        info!("subscribe channel {}", subscribe_channel);
+        let subscribe_channel =
+            format!("aeron:udp?control-mode=manual|session-id={session_id}").into_c_string();
+        info!("subscribe channel {:?}", subscribe_channel);
         let subscription = aeron.add_subscription(
             &subscribe_channel,
             STREAM_ID,
@@ -547,13 +555,13 @@ mod tests {
         )?;
 
         info!(
-            "ReplayMerge initialization: recordingId={}, startPosition={}, subscriptionChannel={}, replayChannel={}, replayDestination={}, liveDestination={}",
+            "ReplayMerge initialization: recordingId={}, startPosition={}, subscriptionChannel={:?}, replayChannel={:?}, replayDestination={:?}, liveDestination={:?}",
             recording_id,
             start_position,
             subscribe_channel,
-            replay_channel,
-            replay_destination,
-            live_destination
+            &replay_channel,
+            &replay_destination,
+            &live_destination
         );
 
         // media_driver
@@ -652,8 +660,8 @@ mod tests {
         .expect("Failed to start Java process");
 
         let aeron_context = AeronContext::new()?;
-        aeron_context.set_dir(&aeron_dir)?;
-        aeron_context.set_client_name("test")?;
+        aeron_context.set_dir(&aeron_dir.into_c_string())?;
+        aeron_context.set_client_name(&"test".into_c_string())?;
         aeron_context.set_publication_error_frame_handler(Some(&Handler::leak(
             AeronPublicationErrorFrameHandlerLogger,
         )))?;
@@ -825,10 +833,11 @@ mod tests {
 
         info!("replay session id {}", replay_session_id);
         info!("session id {}", session_id);
-        let channel_replay = format!("{}?session-id={}", channel, session_id);
+        let channel_replay =
+            format!("{}?session-id={}", channel.to_str().unwrap(), session_id).into_c_string();
         info!("archive id: {}", archive.get_archive_id());
 
-        info!("add subscription {}", channel_replay);
+        info!("add subscription {:?}", channel_replay);
         let subscription = aeron
             .async_add_subscription(
                 &channel_replay,
@@ -883,9 +892,9 @@ mod tests {
             .poll_blocking(Duration::from_secs(30))
             .expect("failed to connect to archive");
 
-        let invalid_channel = "invalid:channel";
+        let invalid_channel = "invalid:channel".into_c_string();
         let result =
-            archive.start_recording(invalid_channel, STREAM_ID, SOURCE_LOCATION_LOCAL, true);
+            archive.start_recording(&invalid_channel, STREAM_ID, SOURCE_LOCATION_LOCAL, true);
         assert!(
             result.is_err(),
             "Expected error when starting recording with an invalid channel"
@@ -903,7 +912,7 @@ mod tests {
             .poll_blocking(Duration::from_secs(30))
             .expect("failed to connect to archive");
 
-        let nonexistent_channel = "aeron:udp?endpoint=localhost:9999";
+        let nonexistent_channel = &"aeron:udp?endpoint=localhost:9999".into_c_string();
         let result = archive.stop_recording_channel_and_stream(nonexistent_channel, STREAM_ID);
         assert!(
             result.is_err(),
@@ -926,7 +935,7 @@ mod tests {
         let params = AeronArchiveReplayParams::new(0, i32::MAX, 0, 100, 0, 0)?;
         let result = archive.start_replay(
             invalid_recording_id,
-            "aeron:udp?endpoint=localhost:8888",
+            &"aeron:udp?endpoint=localhost:8888".into_c_string(),
             STREAM_ID,
             &params,
         );

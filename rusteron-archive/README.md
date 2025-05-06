@@ -44,6 +44,7 @@ You must also ensure that you include Aeron C libraries required by **rusteron-a
 - **Subscription**: Receive messages from Aeron channels.
 - **Callbacks**: Handle events such as new publications, new subscriptions, and errors.
 - **Automatic Resource Management (`new` method only)**: The wrappers attempt to automatically manage resources, specifically when using the `new` method. This includes calling the appropriate `xxx_init` method during initialisation and automatically invoking `xxx_close` or `xxx_destroy` methods (if one exists) during cleanup. However, this management is partial. For other methods, such as `AeronArchive::set_aeron`, it is the developer's responsibility to ensure that the arguments remain valid and alive during their use. Proper resource management beyond initialisation requires manual handling by the user to avoid undefined behaviour or resource leaks.
+- **String Handling**: Setter and `new` methods accept `&CStr` arguments, giving developers control over allocation and enabling reuse of `CString` instances. All getter methods return `&str`.
 
 ## General Patterns
 
