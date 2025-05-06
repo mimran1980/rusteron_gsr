@@ -48,7 +48,7 @@ fn main() -> Result<()> {
             match archive.list_recordings_for_uri(
                 0,
                 i32::MAX,
-                channel,
+                &channel.clone().into_c_string(),
                 stream_id,
                 Some(&record_reader),
             ) {
@@ -66,7 +66,7 @@ fn main() -> Result<()> {
                             format!("aeron:udp?control-mode=manual|session-id={session_id}");
                         info!("replay channel {}", replay_channel);
                         let subscription = aeron.add_subscription(
-                            &replay_channel,
+                            &replay_channel.clone().into_c_string(),
                             TICKER_STREAM_ID,
                             Handlers::no_available_image_handler(),
                             Handlers::no_unavailable_image_handler(),
@@ -82,9 +82,9 @@ fn main() -> Result<()> {
                         let merge = AeronArchiveReplayMerge::new(
                             &subscription,
                             &archive,
-                            &replay_channel,
-                            &replay_destination,
-                            &live_destination,
+                            &replay_channel.clone().into_c_string(),
+                            &replay_destination.clone().into_c_string(),
+                            &live_destination.clone().into_c_string(),
                             record.recording_id,
                             record.start_position,
                             Aeron::epoch_clock(),
@@ -114,7 +114,7 @@ fn main() -> Result<()> {
                         // change from ephemeral port to real port
                         let replay_channel = aeron
                             .add_subscription(
-                                "aeron:udp?endpoint=localhost:0",
+                                &"aeron:udp?endpoint=localhost:0".into_c_string(),
                                 stream_id,
                                 Handlers::no_available_image_handler(),
                                 Handlers::no_unavailable_image_handler(),
@@ -131,7 +131,7 @@ fn main() -> Result<()> {
 
                         let replay_session_id = archive.start_replay(
                             recording_id,
-                            &replay_channel,
+                            &replay_channel.clone().into_c_string(),
                             stream_id,
                             &params,
                         )?;
@@ -140,7 +140,7 @@ fn main() -> Result<()> {
                         let channel_replay = format!("{}|session-id={}", channel, session_id);
                         info!("replay subscription {}", channel_replay);
                         match aeron.add_subscription(
-                            &channel_replay,
+                            &channel_replay.to_string().into_c_string(),
                             stream_id,
                             Some(&Handler::leak(AeronAvailableImageLogger)),
                             Some(&Handler::leak(AeronUnavailableImageLogger)),
@@ -188,7 +188,7 @@ fn main() -> Result<()> {
         if live_subscription.is_none() {
             live_subscription = aeron
                 .add_subscription(
-                    channel,
+                    &channel.to_string().into_c_string(),
                     stream_id,
                     Handlers::no_available_image_handler(),
                     Handlers::no_unavailable_image_handler(),

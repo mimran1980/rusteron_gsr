@@ -96,10 +96,10 @@ impl AeronRecorder {
             archive.aeron().is_closed(),
         );
         let subscription_id =
-            archive.start_recording(channel, stream_id, SOURCE_LOCATION_REMOTE, true)?;
+            archive.start_recording(&channel.clone().into_c_string(), stream_id, SOURCE_LOCATION_REMOTE, true)?;
         info!("started recording ticker stream [subscriptionId={subscription_id}]");
 
-        let publication = aeron.add_publication(channel, stream_id, Duration::from_secs(60))?;
+        let publication = aeron.add_publication(&channel.clone().into_c_string(), stream_id, Duration::from_secs(60))?;
 
         info!(
             "created ticker publication [sessionId={}]",
@@ -143,7 +143,7 @@ impl JsonMesssageHandler for AeronRecorder {
                     let stream_id = TICKER_STREAM_ID;
                     self.publication = self
                         .aeron
-                        .add_publication(channel, stream_id, Duration::from_secs(60))
+                        .add_publication(&channel.clone().into_c_string(), stream_id, Duration::from_secs(60))
                         .expect("failed to add exclusive publication");
 
                     info!(
