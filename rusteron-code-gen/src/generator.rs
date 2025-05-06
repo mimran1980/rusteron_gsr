@@ -219,10 +219,12 @@ impl ReturnType {
             return quote! { Result<i32, AeronCError> };
         }
         if self.original.is_c_string() {
-            return quote! { &str };
-        }
-        if self.original.is_mut_c_string() {
-            // return quote! { &mut str };
+            // if incoming argument use &CString
+            if !convert_errors && use_ref_for_cwrapper {
+                return quote! { &std::ffi::CStr };
+            } else {
+                return quote! { &str };
+            }
         }
         let return_type: Type = parse_str(&self.original).expect("Invalid return type");
         if self.original.is_single_mut_pointer() && self.original.is_primitive() {
@@ -412,7 +414,7 @@ impl ReturnType {
             let arg_name = self.original.as_ident();
             return if self.original.is_c_string() {
                 quote! {
-                    #arg_name: std::ffi::CString::new(#result).unwrap().into_raw()
+                    #arg_name: #result.as_ptr()
                 }
             } else {
                 if self.original.is_single_mut_pointer() && self.original.is_primitive() {
@@ -433,7 +435,7 @@ impl ReturnType {
 
         if self.original.is_c_string() {
             quote! {
-                std::ffi::CString::new(#result).unwrap().into_raw()
+                #result.as_ptr()
             }
         } else {
             quote! { #result.into() }

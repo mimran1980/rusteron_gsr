@@ -76,56 +76,6 @@ mod tests {
 
     #[test]
     #[cfg(not(target_os = "windows"))] // the generated bindings have different sizes
-    fn media_driver() {
-        let mut bindings = parse_bindings(&"../rusteron-code-gen/bindings/media-driver.rs".into());
-        assert_eq!(
-            "AeronImageFragmentAssembler",
-            bindings
-                .wrappers
-                .get("aeron_image_fragment_assembler_t")
-                .unwrap()
-                .class_name
-        );
-
-        let file = write_to_file(TokenStream::new(), true, "md.rs");
-
-        let bindings_copy = bindings.clone();
-        for handler in bindings.handlers.iter_mut() {
-            // need to run this first so I know the FnMut(xxxx) which is required in generate_rust_code
-            let _ = crate::generate_handlers(handler, &bindings_copy);
-        }
-        for (p, w) in bindings
-            .wrappers
-            .values()
-            .filter(|w| !w.type_name.contains("_t_") && w.type_name != "in_addr")
-            .enumerate()
-        {
-            let code = crate::generate_rust_code(
-                w,
-                &bindings.wrappers,
-                p == 0,
-                true,
-                true,
-                &bindings.handlers,
-            );
-            write_to_file(code, false, "md.rs");
-        }
-        let bindings_copy = bindings.clone();
-        for handler in bindings.handlers.iter_mut() {
-            let code = crate::generate_handlers(handler, &bindings_copy);
-            append_to_file(&file, &format_with_rustfmt(&code.to_string()).unwrap()).unwrap();
-        }
-        let t = trybuild::TestCases::new();
-        append_to_file(&file, "use bindings::*; mod bindings { ").unwrap();
-        append_to_file(&file, MEDIA_DRIVER_BINDINGS).unwrap();
-        append_to_file(&file, "}").unwrap();
-        append_to_file(&file, CUSTOM_AERON_CODE).unwrap();
-        append_to_file(&file, "\npub fn main() {}\n").unwrap();
-        t.pass(&file)
-    }
-
-    #[test]
-    #[cfg(not(target_os = "windows"))] // the generated bindings have different sizes
     fn client() {
         let mut bindings = parse_bindings(&"../rusteron-code-gen/bindings/client.rs".into());
         assert_eq!(
@@ -173,6 +123,56 @@ mod tests {
         append_to_file(&file, CUSTOM_AERON_CODE).unwrap();
         append_to_file(&file, "\npub fn main() {}\n").unwrap();
         t.pass(file)
+    }
+
+    #[test]
+    #[cfg(not(target_os = "windows"))] // the generated bindings have different sizes
+    fn media_driver() {
+        let mut bindings = parse_bindings(&"../rusteron-code-gen/bindings/media-driver.rs".into());
+        assert_eq!(
+            "AeronImageFragmentAssembler",
+            bindings
+                .wrappers
+                .get("aeron_image_fragment_assembler_t")
+                .unwrap()
+                .class_name
+        );
+
+        let file = write_to_file(TokenStream::new(), true, "md.rs");
+
+        let bindings_copy = bindings.clone();
+        for handler in bindings.handlers.iter_mut() {
+            // need to run this first so I know the FnMut(xxxx) which is required in generate_rust_code
+            let _ = crate::generate_handlers(handler, &bindings_copy);
+        }
+        for (p, w) in bindings
+            .wrappers
+            .values()
+            .filter(|w| !w.type_name.contains("_t_") && w.type_name != "in_addr")
+            .enumerate()
+        {
+            let code = crate::generate_rust_code(
+                w,
+                &bindings.wrappers,
+                p == 0,
+                true,
+                true,
+                &bindings.handlers,
+            );
+            write_to_file(code, false, "md.rs");
+        }
+        let bindings_copy = bindings.clone();
+        for handler in bindings.handlers.iter_mut() {
+            let code = crate::generate_handlers(handler, &bindings_copy);
+            append_to_file(&file, &format_with_rustfmt(&code.to_string()).unwrap()).unwrap();
+        }
+        let t = trybuild::TestCases::new();
+        append_to_file(&file, "use bindings::*; mod bindings { ").unwrap();
+        append_to_file(&file, MEDIA_DRIVER_BINDINGS).unwrap();
+        append_to_file(&file, "}").unwrap();
+        append_to_file(&file, CUSTOM_AERON_CODE).unwrap();
+        append_to_file(&file, "\npub fn main() {}\n").unwrap();
+        t.pass(&file)
     }
 
     #[test]

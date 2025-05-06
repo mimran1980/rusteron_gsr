@@ -151,7 +151,7 @@ Ensure you have also set up the necessary Aeron C libraries required by **ruster
 
 ```rust,no_ignore
 use rusteron_client::*;
-use rusteron_media_driver::{AeronDriverContext, AeronDriver};
+use rusteron_media_driver::{AeronDriverContext, AeronDriver, IntoCString};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -165,13 +165,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let stop3 = stop.clone();
 
     let ctx = AeronContext::new()?;
-    ctx.set_dir(media_driver_ctx.get_dir())?;
+    ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
     let aeron = Aeron::new(&ctx)?;
     aeron.start()?;
     
     // Set up the publication
     let publisher = aeron
-        .async_add_publication("aeron:ipc", 123)?
+        .async_add_publication(&"aeron:ipc".into_c_string(), 123)?
         .poll_blocking(Duration::from_secs(5))?;
     let publisher2 = publisher.clone();
 
@@ -208,7 +208,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Set up the subscription
     let subscription = aeron
-        .async_add_subscription("aeron:ipc", 123,                
+        .async_add_subscription(&"aeron:ipc".into_c_string(), 123,                
                                 Handlers::no_available_image_handler(),
                                 Handlers::no_unavailable_image_handler())?
         .poll_blocking(Duration::from_secs(5))?;

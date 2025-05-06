@@ -1,6 +1,8 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use rusteron_client::*;
 use rusteron_media_driver::{AeronDriver, AeronDriverContext};
+use std::clone::Clone;
+use std::ffi::CStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -8,14 +10,14 @@ use std::time::Duration;
 
 const PING_STREAM_ID: i32 = 1002;
 const PONG_STREAM_ID: i32 = 1003;
-const PING_CHANNEL: &str = AERON_IPC_STREAM;
-const PONG_CHANNEL: &str = AERON_IPC_STREAM;
+static PING_CHANNEL: &CStr = AERON_IPC_STREAM;
+static PONG_CHANNEL: &CStr = AERON_IPC_STREAM;
 const MESSAGE_LENGTH: usize = 32;
 const FRAGMENT_COUNT_LIMIT: usize = 10;
 
 fn criterion_benchmark(c: &mut Criterion) {
     let ctx = AeronDriverContext::new().unwrap();
-    ctx.set_dir(&format!("{}{}", ctx.get_dir(), Aeron::nano_clock()))
+    ctx.set_dir(&format!("{}{}", ctx.get_dir(), Aeron::nano_clock()).into_c_string())
         .unwrap();
     ctx.set_dir_delete_on_start(true).unwrap();
     ctx.set_dir_delete_on_shutdown(true).unwrap();
@@ -32,7 +34,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     let context = AeronContext::new().unwrap();
     println!("idle sleep {}", context.get_idle_sleep_duration_ns());
     context.set_idle_sleep_duration_ns(0).unwrap();
-    context.set_dir(dir2).unwrap();
+    context.set_dir(&dir2.into_c_string()).unwrap();
     let aeron = Aeron::new(&context).unwrap();
     aeron.start().unwrap();
 
@@ -52,8 +54,11 @@ fn criterion_benchmark(c: &mut Criterion) {
         .poll_blocking(Duration::from_secs(4))
         .unwrap();
 
-    println!("PING: pong publisher {} {}", PONG_CHANNEL, PONG_STREAM_ID);
-    println!("PING: ping subscriber {} {}", PING_CHANNEL, PING_STREAM_ID);
+    println!("PING: pong publisher {:?} {}", PONG_CHANNEL, PONG_STREAM_ID);
+    println!(
+        "PING: ping subscriber {:?} {}",
+        PING_CHANNEL, PING_STREAM_ID
+    );
 
     let mut buffer = vec![0u8; MESSAGE_LENGTH];
 
@@ -75,7 +80,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
 fn run_pong(stop: Arc<AtomicBool>, dir: &str) -> Result<(), Box<dyn std::error::Error>> {
     let context = AeronContext::new()?;
-    context.set_dir(dir)?;
+    context.set_dir(&dir.into_c_string())?;
     context.set_idle_sleep_duration_ns(0)?;
     let aeron = Aeron::new(&context)?;
     aeron.start()?;
@@ -91,8 +96,11 @@ fn run_pong(stop: Arc<AtomicBool>, dir: &str) -> Result<(), Box<dyn std::error::
         )?
         .poll_blocking(Duration::from_secs(4))?;
 
-    println!("PONG: ping publisher {} {}", PING_CHANNEL, PING_STREAM_ID);
-    println!("PONG: pong subscriber {} {}", PONG_CHANNEL, PONG_STREAM_ID);
+    println!("PONG: ping publisher {:?} {}", PING_CHANNEL, PING_STREAM_ID);
+    println!(
+        "PONG: pong subscriber {:?} {}",
+        PONG_CHANNEL, PONG_STREAM_ID
+    );
 
     println!("Starting pong thread");
     pub struct PongRoundTripHandler {

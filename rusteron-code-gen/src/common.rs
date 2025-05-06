@@ -552,3 +552,31 @@ pub(crate) mod test_alloc {
         GLOBAL.current()
     }
 }
+
+pub trait IntoCString {
+    fn into_c_string(self) -> std::ffi::CString;
+}
+
+impl IntoCString for std::ffi::CString {
+    fn into_c_string(self) -> std::ffi::CString {
+        self
+    }
+}
+
+impl IntoCString for &str {
+    fn into_c_string(self) -> std::ffi::CString {
+        #[cfg(feature = "extra-logging")]
+        log::info!("created c string on heap: {:?}", self);
+
+        std::ffi::CString::new(self).expect("failed to create CString")
+    }
+}
+
+impl IntoCString for String {
+    fn into_c_string(self) -> std::ffi::CString {
+        #[cfg(feature = "extra-logging")]
+        log::info!("created c string on heap: {:?}", self);
+
+        std::ffi::CString::new(self).expect("failed to create CString")
+    }
+}

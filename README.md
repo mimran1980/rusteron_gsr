@@ -94,7 +94,7 @@ Replace `rusteron-client` with `rusteron-archive`/`rusteron-media-driver` as per
 Below is a step-by-step example of creating and using an Aeron client.
 
 ```rust,no_ignore
-use rusteron::client::{Aeron, AeronContext};
+use rusteron::client::{Aeron, AeronContext, IntoCString};
 use rusteron_media_driver::AeronDriverContext;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -106,18 +106,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (stop, driver_handle) = AeronDriver::launch_embedded(media_driver_ctx.clone(), false);
 
     let ctx = AeronContext::new()?;
-    ctx.set_dir(media_driver_ctx.get_dir())?;
+    ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
     let aeron = Aeron::new(&ctx)?;
     aeron.start()?;
 
     let subscription = aeron
-        .async_add_subscription("aeron:ipc", 123,                
+        .async_add_subscription(&"aeron:ipc".into_c_string(), 123,                
                                 Handlers::no_available_image_handler(),
                                 Handlers::no_unavailable_image_handler())?
         .poll_blocking(Duration::from_secs(5))?;
 
     let publisher = aeron
-        .async_add_publication("aeron:ipc", 123)?
+        .async_add_publication(&"aeron:ipc".into_c_string(), 123)?
         .poll_blocking(Duration::from_secs(5))?;
 
     let message = "Hello, Aeron!".as_bytes();

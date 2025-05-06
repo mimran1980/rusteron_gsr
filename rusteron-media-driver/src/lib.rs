@@ -167,7 +167,7 @@ mod tests {
 
         let dir = aeron_context.get_dir().to_string();
         let ctx = AeronContext::new()?;
-        ctx.set_dir(&dir)?;
+        ctx.set_dir(&dir.into_c_string())?;
 
         let client = Aeron::new(&ctx)?;
 
