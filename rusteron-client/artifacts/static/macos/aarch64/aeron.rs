@@ -2,19 +2,16 @@
 type aeron_client_registering_resource_t = aeron_client_registering_resource_stct;
 #[derive(Clone)]
 pub struct AeronAsyncAddCounter {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_async_add_counter_t>>>,
-    inner: *mut aeron_async_add_counter_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_async_add_counter_t>>,
+    inner: CResource<aeron_async_add_counter_t>,
 }
 impl core::fmt::Debug for AeronAsyncAddCounter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronAsyncAddCounter))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronAsyncAddCounter))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -42,9 +39,7 @@ impl AeronAsyncAddCounter {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -56,15 +51,9 @@ impl AeronAsyncAddCounter {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_async_add_counter_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     #[doc = "Gets the registration id for addition of the counter. Note that using this after a call to poll the succeeds or"]
@@ -79,15 +68,15 @@ impl AeronAsyncAddCounter {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_async_add_counter_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_async_add_counter_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_async_add_counter_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronAsyncAddCounter {
@@ -100,9 +89,7 @@ impl From<*mut aeron_async_add_counter_t> for AeronAsyncAddCounter {
     #[inline]
     fn from(value: *mut aeron_async_add_counter_t) -> Self {
         AeronAsyncAddCounter {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -128,9 +115,7 @@ impl From<*const aeron_async_add_counter_t> for AeronAsyncAddCounter {
     #[inline]
     fn from(value: *const aeron_async_add_counter_t) -> Self {
         AeronAsyncAddCounter {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_async_add_counter_t,
+            inner: CResource::Borrowed(value as *mut aeron_async_add_counter_t),
         }
     }
 }
@@ -138,9 +123,7 @@ impl From<aeron_async_add_counter_t> for AeronAsyncAddCounter {
     #[inline]
     fn from(mut value: aeron_async_add_counter_t) -> Self {
         AeronAsyncAddCounter {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_async_add_counter_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_async_add_counter_t),
         }
     }
 }
@@ -154,9 +137,7 @@ impl AeronCounter {
             None,
         )?;
         Ok(Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         })
     }
 }
@@ -170,11 +151,7 @@ impl Aeron {
     ) -> Result<AeronAsyncAddCounter, AeronCError> {
         let mut result = AeronAsyncAddCounter::new(self, type_id, key_buffer, label_buffer);
         if let Ok(result) = &mut result {
-            result
-                .owned_inner
-                .as_mut()
-                .unwrap()
-                .add_dependency(self.clone());
+            result.inner.add_dependency(self.clone());
         }
         result
     }
@@ -232,30 +209,20 @@ impl AeronAsyncAddCounter {
             false,
             None,
         )?;
-        let mut result = Self {
-            inner: resource_async.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource_async)),
+        let result = Self {
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource_async)),
         };
-        result
-            .owned_inner
-            .as_mut()
-            .unwrap()
-            .add_dependency(client.clone());
+        result.inner.add_dependency(client.clone());
         Ok(result)
     }
     pub fn poll(&self) -> Result<Option<AeronCounter>, AeronCError> {
         let mut result = AeronCounter::new(self);
         if let Ok(result) = &mut result {
             unsafe {
-                for d in (&mut *self.owned_inner.as_ref().unwrap().dependencies.get()).iter_mut() {
-                    result
-                        .owned_inner
-                        .as_mut()
-                        .unwrap()
-                        .add_dependency(d.clone());
+                for d in (&mut *self.inner.as_owned().unwrap().dependencies.get()).iter_mut() {
+                    result.inner.add_dependency(d.clone());
                 }
-                result.owned_inner.as_mut().unwrap().auto_close.set(true);
+                result.inner.as_owned().unwrap().auto_close.set(true);
             }
         }
         match result {
@@ -284,7 +251,77 @@ use crate::AeronErrorType::Unknown;
 #[cfg(feature = "backtrace")]
 use std::backtrace::Backtrace;
 use std::cell::UnsafeCell;
+use std::fmt::Formatter;
+use std::mem::MaybeUninit;
 use std::ops::{Deref, DerefMut};
+pub enum CResource<T> {
+    OwnedOnHeap(std::rc::Rc<ManagedCResource<T>>),
+    #[doc = " stored on stack, unsafe, use with care"]
+    OwnedOnStack(std::mem::MaybeUninit<T>),
+    Borrowed(*mut T),
+}
+impl<T: Clone> Clone for CResource<T> {
+    fn clone(&self) -> Self {
+        unsafe {
+            match self {
+                CResource::OwnedOnHeap(r) => CResource::OwnedOnHeap(r.clone()),
+                CResource::OwnedOnStack(r) => {
+                    CResource::OwnedOnStack(MaybeUninit::new(r.assume_init_ref().clone()))
+                }
+                CResource::Borrowed(r) => CResource::Borrowed(r.clone()),
+            }
+        }
+    }
+}
+impl<T> CResource<T> {
+    #[inline]
+    pub fn get(&self) -> *mut T {
+        match self {
+            CResource::OwnedOnHeap(r) => r.get(),
+            CResource::OwnedOnStack(r) => r.as_ptr() as *mut T,
+            CResource::Borrowed(r) => *r,
+        }
+    }
+    #[inline]
+    pub fn add_dependency<D: std::any::Any>(&self, dep: D) {
+        match self {
+            CResource::OwnedOnHeap(r) => r.add_dependency(dep),
+            CResource::OwnedOnStack(_) | CResource::Borrowed(_) => {
+                unreachable!("only owned on heap")
+            }
+        }
+    }
+    #[inline]
+    pub fn get_dependency<V: Clone + 'static>(&self) -> Option<V> {
+        match self {
+            CResource::OwnedOnHeap(r) => r.get_dependency(),
+            CResource::OwnedOnStack(_) | CResource::Borrowed(_) => None,
+        }
+    }
+    #[inline]
+    pub fn as_owned(&self) -> Option<&std::rc::Rc<ManagedCResource<T>>> {
+        match self {
+            CResource::OwnedOnHeap(r) => Some(r),
+            CResource::OwnedOnStack(_) | CResource::Borrowed(_) => None,
+        }
+    }
+}
+impl<T> std::fmt::Debug for CResource<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let name = std::any::type_name::<T>();
+        match self {
+            CResource::OwnedOnHeap(r) => {
+                write!(f, "{name} heap({:?})", r)
+            }
+            CResource::OwnedOnStack(r) => {
+                write!(f, "{name} stack({:?})", *r)
+            }
+            CResource::Borrowed(r) => {
+                write!(f, "{name} borrowed ({:?})", r)
+            }
+        }
+    }
+}
 #[doc = " A custom struct for managing C resources with automatic cleanup."]
 #[doc = ""]
 #[doc = " It handles initialisation and clean-up of the resource and ensures that resources"]
@@ -789,19 +826,16 @@ impl IntoCString for String {
 }
 #[derive(Clone)]
 pub struct AeronAsyncAddExclusivePublication {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_async_add_exclusive_publication_t>>>,
-    inner: *mut aeron_async_add_exclusive_publication_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_async_add_exclusive_publication_t>>,
+    inner: CResource<aeron_async_add_exclusive_publication_t>,
 }
 impl core::fmt::Debug for AeronAsyncAddExclusivePublication {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronAsyncAddExclusivePublication))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronAsyncAddExclusivePublication))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -830,9 +864,7 @@ impl AeronAsyncAddExclusivePublication {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -844,15 +876,9 @@ impl AeronAsyncAddExclusivePublication {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_async_add_exclusive_publication_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     #[doc = "Gets the registration id for addition of the exclusive_publication. Note that using this after a call to poll the"]
@@ -869,15 +895,15 @@ impl AeronAsyncAddExclusivePublication {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_async_add_exclusive_publication_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_async_add_exclusive_publication_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_async_add_exclusive_publication_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronAsyncAddExclusivePublication {
@@ -890,9 +916,7 @@ impl From<*mut aeron_async_add_exclusive_publication_t> for AeronAsyncAddExclusi
     #[inline]
     fn from(value: *mut aeron_async_add_exclusive_publication_t) -> Self {
         AeronAsyncAddExclusivePublication {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -918,9 +942,7 @@ impl From<*const aeron_async_add_exclusive_publication_t> for AeronAsyncAddExclu
     #[inline]
     fn from(value: *const aeron_async_add_exclusive_publication_t) -> Self {
         AeronAsyncAddExclusivePublication {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_async_add_exclusive_publication_t,
+            inner: CResource::Borrowed(value as *mut aeron_async_add_exclusive_publication_t),
         }
     }
 }
@@ -928,9 +950,7 @@ impl From<aeron_async_add_exclusive_publication_t> for AeronAsyncAddExclusivePub
     #[inline]
     fn from(mut value: aeron_async_add_exclusive_publication_t) -> Self {
         AeronAsyncAddExclusivePublication {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_async_add_exclusive_publication_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_async_add_exclusive_publication_t),
         }
     }
 }
@@ -946,9 +966,7 @@ impl AeronExclusivePublication {
             None,
         )?;
         Ok(Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         })
     }
 }
@@ -961,11 +979,7 @@ impl Aeron {
     ) -> Result<AeronAsyncAddExclusivePublication, AeronCError> {
         let mut result = AeronAsyncAddExclusivePublication::new(self, uri, stream_id);
         if let Ok(result) = &mut result {
-            result
-                .owned_inner
-                .as_mut()
-                .unwrap()
-                .add_dependency(self.clone());
+            result.inner.add_dependency(self.clone());
         }
         result
     }
@@ -1014,30 +1028,20 @@ impl AeronAsyncAddExclusivePublication {
             false,
             None,
         )?;
-        let mut result = Self {
-            inner: resource_async.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource_async)),
+        let result = Self {
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource_async)),
         };
-        result
-            .owned_inner
-            .as_mut()
-            .unwrap()
-            .add_dependency(client.clone());
+        result.inner.add_dependency(client.clone());
         Ok(result)
     }
     pub fn poll(&self) -> Result<Option<AeronExclusivePublication>, AeronCError> {
         let mut result = AeronExclusivePublication::new(self);
         if let Ok(result) = &mut result {
             unsafe {
-                for d in (&mut *self.owned_inner.as_ref().unwrap().dependencies.get()).iter_mut() {
-                    result
-                        .owned_inner
-                        .as_mut()
-                        .unwrap()
-                        .add_dependency(d.clone());
+                for d in (&mut *self.inner.as_owned().unwrap().dependencies.get()).iter_mut() {
+                    result.inner.add_dependency(d.clone());
                 }
-                result.owned_inner.as_mut().unwrap().auto_close.set(true);
+                result.inner.as_owned().unwrap().auto_close.set(true);
             }
         }
         match result {
@@ -1067,19 +1071,16 @@ impl AeronAsyncAddExclusivePublication {
 }
 #[derive(Clone)]
 pub struct AeronAsyncAddPublication {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_async_add_publication_t>>>,
-    inner: *mut aeron_async_add_publication_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_async_add_publication_t>>,
+    inner: CResource<aeron_async_add_publication_t>,
 }
 impl core::fmt::Debug for AeronAsyncAddPublication {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronAsyncAddPublication))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronAsyncAddPublication))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -1107,9 +1108,7 @@ impl AeronAsyncAddPublication {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -1121,15 +1120,9 @@ impl AeronAsyncAddPublication {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_async_add_publication_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     #[doc = "Gets the registration id for addition of the publication. Note that using this after a call to poll the succeeds or"]
@@ -1144,15 +1137,15 @@ impl AeronAsyncAddPublication {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_async_add_publication_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_async_add_publication_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_async_add_publication_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronAsyncAddPublication {
@@ -1165,9 +1158,7 @@ impl From<*mut aeron_async_add_publication_t> for AeronAsyncAddPublication {
     #[inline]
     fn from(value: *mut aeron_async_add_publication_t) -> Self {
         AeronAsyncAddPublication {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -1193,9 +1184,7 @@ impl From<*const aeron_async_add_publication_t> for AeronAsyncAddPublication {
     #[inline]
     fn from(value: *const aeron_async_add_publication_t) -> Self {
         AeronAsyncAddPublication {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_async_add_publication_t,
+            inner: CResource::Borrowed(value as *mut aeron_async_add_publication_t),
         }
     }
 }
@@ -1203,9 +1192,7 @@ impl From<aeron_async_add_publication_t> for AeronAsyncAddPublication {
     #[inline]
     fn from(mut value: aeron_async_add_publication_t) -> Self {
         AeronAsyncAddPublication {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_async_add_publication_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_async_add_publication_t),
         }
     }
 }
@@ -1219,9 +1206,7 @@ impl AeronPublication {
             None,
         )?;
         Ok(Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         })
     }
 }
@@ -1234,11 +1219,7 @@ impl Aeron {
     ) -> Result<AeronAsyncAddPublication, AeronCError> {
         let mut result = AeronAsyncAddPublication::new(self, uri, stream_id);
         if let Ok(result) = &mut result {
-            result
-                .owned_inner
-                .as_mut()
-                .unwrap()
-                .add_dependency(self.clone());
+            result.inner.add_dependency(self.clone());
         }
         result
     }
@@ -1287,30 +1268,20 @@ impl AeronAsyncAddPublication {
             false,
             None,
         )?;
-        let mut result = Self {
-            inner: resource_async.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource_async)),
+        let result = Self {
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource_async)),
         };
-        result
-            .owned_inner
-            .as_mut()
-            .unwrap()
-            .add_dependency(client.clone());
+        result.inner.add_dependency(client.clone());
         Ok(result)
     }
     pub fn poll(&self) -> Result<Option<AeronPublication>, AeronCError> {
         let mut result = AeronPublication::new(self);
         if let Ok(result) = &mut result {
             unsafe {
-                for d in (&mut *self.owned_inner.as_ref().unwrap().dependencies.get()).iter_mut() {
-                    result
-                        .owned_inner
-                        .as_mut()
-                        .unwrap()
-                        .add_dependency(d.clone());
+                for d in (&mut *self.inner.as_owned().unwrap().dependencies.get()).iter_mut() {
+                    result.inner.add_dependency(d.clone());
                 }
-                result.owned_inner.as_mut().unwrap().auto_close.set(true);
+                result.inner.as_owned().unwrap().auto_close.set(true);
             }
         }
         match result {
@@ -1340,19 +1311,16 @@ impl AeronAsyncAddPublication {
 }
 #[derive(Clone)]
 pub struct AeronAsyncAddSubscription {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_async_add_subscription_t>>>,
-    inner: *mut aeron_async_add_subscription_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_async_add_subscription_t>>,
+    inner: CResource<aeron_async_add_subscription_t>,
 }
 impl core::fmt::Debug for AeronAsyncAddSubscription {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronAsyncAddSubscription))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronAsyncAddSubscription))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -1380,9 +1348,7 @@ impl AeronAsyncAddSubscription {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -1394,15 +1360,9 @@ impl AeronAsyncAddSubscription {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_async_add_subscription_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     #[doc = "Gets the registration id for addition of the subscription. Note that using this after a call to poll the succeeds or"]
@@ -1417,15 +1377,15 @@ impl AeronAsyncAddSubscription {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_async_add_subscription_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_async_add_subscription_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_async_add_subscription_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronAsyncAddSubscription {
@@ -1438,9 +1398,7 @@ impl From<*mut aeron_async_add_subscription_t> for AeronAsyncAddSubscription {
     #[inline]
     fn from(value: *mut aeron_async_add_subscription_t) -> Self {
         AeronAsyncAddSubscription {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -1466,9 +1424,7 @@ impl From<*const aeron_async_add_subscription_t> for AeronAsyncAddSubscription {
     #[inline]
     fn from(value: *const aeron_async_add_subscription_t) -> Self {
         AeronAsyncAddSubscription {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_async_add_subscription_t,
+            inner: CResource::Borrowed(value as *mut aeron_async_add_subscription_t),
         }
     }
 }
@@ -1476,9 +1432,7 @@ impl From<aeron_async_add_subscription_t> for AeronAsyncAddSubscription {
     #[inline]
     fn from(mut value: aeron_async_add_subscription_t) -> Self {
         AeronAsyncAddSubscription {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_async_add_subscription_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_async_add_subscription_t),
         }
     }
 }
@@ -1492,9 +1446,7 @@ impl AeronSubscription {
             None,
         )?;
         Ok(Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         })
     }
 }
@@ -1518,11 +1470,7 @@ impl Aeron {
             on_unavailable_image_handler,
         );
         if let Ok(result) = &mut result {
-            result
-                .owned_inner
-                .as_mut()
-                .unwrap()
-                .add_dependency(self.clone());
+            result.inner.add_dependency(self.clone());
         }
         result
     }
@@ -1622,30 +1570,20 @@ impl AeronAsyncAddSubscription {
             false,
             None,
         )?;
-        let mut result = Self {
-            inner: resource_async.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource_async)),
+        let result = Self {
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource_async)),
         };
-        result
-            .owned_inner
-            .as_mut()
-            .unwrap()
-            .add_dependency(client.clone());
+        result.inner.add_dependency(client.clone());
         Ok(result)
     }
     pub fn poll(&self) -> Result<Option<AeronSubscription>, AeronCError> {
         let mut result = AeronSubscription::new(self);
         if let Ok(result) = &mut result {
             unsafe {
-                for d in (&mut *self.owned_inner.as_ref().unwrap().dependencies.get()).iter_mut() {
-                    result
-                        .owned_inner
-                        .as_mut()
-                        .unwrap()
-                        .add_dependency(d.clone());
+                for d in (&mut *self.inner.as_owned().unwrap().dependencies.get()).iter_mut() {
+                    result.inner.add_dependency(d.clone());
                 }
-                result.owned_inner.as_mut().unwrap().auto_close.set(true);
+                result.inner.as_owned().unwrap().auto_close.set(true);
             }
         }
         match result {
@@ -1675,19 +1613,16 @@ impl AeronAsyncAddSubscription {
 }
 #[derive(Clone)]
 pub struct AeronAsyncDestinationById {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_async_destination_by_id_t>>>,
-    inner: *mut aeron_async_destination_by_id_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_async_destination_by_id_t>>,
+    inner: CResource<aeron_async_destination_by_id_t>,
 }
 impl core::fmt::Debug for AeronAsyncDestinationById {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronAsyncDestinationById))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronAsyncDestinationById))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -1715,9 +1650,7 @@ impl AeronAsyncDestinationById {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -1729,27 +1662,21 @@ impl AeronAsyncDestinationById {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_async_destination_by_id_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_async_destination_by_id_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_async_destination_by_id_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_async_destination_by_id_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronAsyncDestinationById {
@@ -1762,9 +1689,7 @@ impl From<*mut aeron_async_destination_by_id_t> for AeronAsyncDestinationById {
     #[inline]
     fn from(value: *mut aeron_async_destination_by_id_t) -> Self {
         AeronAsyncDestinationById {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -1790,9 +1715,7 @@ impl From<*const aeron_async_destination_by_id_t> for AeronAsyncDestinationById 
     #[inline]
     fn from(value: *const aeron_async_destination_by_id_t) -> Self {
         AeronAsyncDestinationById {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_async_destination_by_id_t,
+            inner: CResource::Borrowed(value as *mut aeron_async_destination_by_id_t),
         }
     }
 }
@@ -1800,27 +1723,22 @@ impl From<aeron_async_destination_by_id_t> for AeronAsyncDestinationById {
     #[inline]
     fn from(mut value: aeron_async_destination_by_id_t) -> Self {
         AeronAsyncDestinationById {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_async_destination_by_id_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_async_destination_by_id_t),
         }
     }
 }
 #[derive(Clone)]
 pub struct AeronAsyncDestination {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_async_destination_t>>>,
-    inner: *mut aeron_async_destination_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_async_destination_t>>,
+    inner: CResource<aeron_async_destination_t>,
 }
 impl core::fmt::Debug for AeronAsyncDestination {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronAsyncDestination))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronAsyncDestination))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -1858,9 +1776,7 @@ impl AeronAsyncDestination {
             None,
         )?;
         Ok(Self {
-            inner: resource_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource_constructor)),
         })
     }
     #[doc = "Add a destination manually to a multi-destination-cast exclusive publication."]
@@ -1899,9 +1815,7 @@ impl AeronAsyncDestination {
             None,
         )?;
         Ok(Self {
-            inner: resource_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource_constructor)),
         })
     }
     #[doc = "Add a destination manually to a multi-destination-subscription."]
@@ -1935,9 +1849,7 @@ impl AeronAsyncDestination {
             None,
         )?;
         Ok(Self {
-            inner: resource_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource_constructor)),
         })
     }
     #[inline]
@@ -1996,15 +1908,15 @@ impl AeronAsyncDestination {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_async_destination_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_async_destination_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_async_destination_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronAsyncDestination {
@@ -2017,9 +1929,7 @@ impl From<*mut aeron_async_destination_t> for AeronAsyncDestination {
     #[inline]
     fn from(value: *mut aeron_async_destination_t) -> Self {
         AeronAsyncDestination {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -2045,9 +1955,7 @@ impl From<*const aeron_async_destination_t> for AeronAsyncDestination {
     #[inline]
     fn from(value: *const aeron_async_destination_t) -> Self {
         AeronAsyncDestination {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_async_destination_t,
+            inner: CResource::Borrowed(value as *mut aeron_async_destination_t),
         }
     }
 }
@@ -2055,28 +1963,23 @@ impl From<aeron_async_destination_t> for AeronAsyncDestination {
     #[inline]
     fn from(mut value: aeron_async_destination_t) -> Self {
         AeronAsyncDestination {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_async_destination_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_async_destination_t),
         }
     }
 }
 #[doc = "Structure used to hold information for a try_claim function call."]
 #[derive(Clone)]
 pub struct AeronBufferClaim {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_buffer_claim_t>>>,
-    inner: *mut aeron_buffer_claim_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_buffer_claim_t>>,
+    inner: CResource<aeron_buffer_claim_t>,
 }
 impl core::fmt::Debug for AeronBufferClaim {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronBufferClaim))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronBufferClaim))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(length), &self.length())
                 .finish()
@@ -2102,9 +2005,7 @@ impl AeronBufferClaim {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -2128,9 +2029,7 @@ impl AeronBufferClaim {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -2142,15 +2041,9 @@ impl AeronBufferClaim {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_buffer_claim_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn frame_header(&self) -> *mut u8 {
@@ -2200,15 +2093,15 @@ impl AeronBufferClaim {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_buffer_claim_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_buffer_claim_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_buffer_claim_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronBufferClaim {
@@ -2221,9 +2114,7 @@ impl From<*mut aeron_buffer_claim_t> for AeronBufferClaim {
     #[inline]
     fn from(value: *mut aeron_buffer_claim_t) -> Self {
         AeronBufferClaim {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -2249,9 +2140,7 @@ impl From<*const aeron_buffer_claim_t> for AeronBufferClaim {
     #[inline]
     fn from(value: *const aeron_buffer_claim_t) -> Self {
         AeronBufferClaim {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_buffer_claim_t,
+            inner: CResource::Borrowed(value as *mut aeron_buffer_claim_t),
         }
     }
 }
@@ -2259,9 +2148,7 @@ impl From<aeron_buffer_claim_t> for AeronBufferClaim {
     #[inline]
     fn from(mut value: aeron_buffer_claim_t) -> Self {
         AeronBufferClaim {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_buffer_claim_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_buffer_claim_t),
         }
     }
 }
@@ -2288,19 +2175,16 @@ impl AeronBufferClaim {
 }
 #[derive(Clone)]
 pub struct AeronClientRegisteringResource {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_client_registering_resource_t>>>,
-    inner: *mut aeron_client_registering_resource_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_client_registering_resource_t>>,
+    inner: CResource<aeron_client_registering_resource_t>,
 }
 impl core::fmt::Debug for AeronClientRegisteringResource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronClientRegisteringResource))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronClientRegisteringResource))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -2329,9 +2213,7 @@ impl AeronClientRegisteringResource {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -2343,27 +2225,21 @@ impl AeronClientRegisteringResource {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_client_registering_resource_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_client_registering_resource_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_client_registering_resource_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_client_registering_resource_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronClientRegisteringResource {
@@ -2376,9 +2252,7 @@ impl From<*mut aeron_client_registering_resource_t> for AeronClientRegisteringRe
     #[inline]
     fn from(value: *mut aeron_client_registering_resource_t) -> Self {
         AeronClientRegisteringResource {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -2404,9 +2278,7 @@ impl From<*const aeron_client_registering_resource_t> for AeronClientRegistering
     #[inline]
     fn from(value: *const aeron_client_registering_resource_t) -> Self {
         AeronClientRegisteringResource {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_client_registering_resource_t,
+            inner: CResource::Borrowed(value as *mut aeron_client_registering_resource_t),
         }
     }
 }
@@ -2414,27 +2286,22 @@ impl From<aeron_client_registering_resource_t> for AeronClientRegisteringResourc
     #[inline]
     fn from(mut value: aeron_client_registering_resource_t) -> Self {
         AeronClientRegisteringResource {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_client_registering_resource_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_client_registering_resource_t),
         }
     }
 }
 #[derive(Clone)]
 pub struct AeronCncConstants {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_cnc_constants_t>>>,
-    inner: *mut aeron_cnc_constants_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_cnc_constants_t>>,
+    inner: CResource<aeron_cnc_constants_t>,
 }
 impl core::fmt::Debug for AeronCncConstants {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronCncConstants))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronCncConstants))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(cnc_version), &self.cnc_version())
                 .field(
@@ -2502,9 +2369,7 @@ impl AeronCncConstants {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -2528,9 +2393,7 @@ impl AeronCncConstants {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -2542,15 +2405,9 @@ impl AeronCncConstants {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_cnc_constants_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn cnc_version(&self) -> i32 {
@@ -2590,33 +2447,15 @@ impl AeronCncConstants {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_cnc_constants_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronCncConstants = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_cnc_constants_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronCncConstants = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_cnc_constants_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronCncConstants = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronCncConstants {
@@ -2629,9 +2468,7 @@ impl From<*mut aeron_cnc_constants_t> for AeronCncConstants {
     #[inline]
     fn from(value: *mut aeron_cnc_constants_t) -> Self {
         AeronCncConstants {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -2657,9 +2494,7 @@ impl From<*const aeron_cnc_constants_t> for AeronCncConstants {
     #[inline]
     fn from(value: *const aeron_cnc_constants_t) -> Self {
         AeronCncConstants {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_cnc_constants_t,
+            inner: CResource::Borrowed(value as *mut aeron_cnc_constants_t),
         }
     }
 }
@@ -2667,9 +2502,7 @@ impl From<aeron_cnc_constants_t> for AeronCncConstants {
     #[inline]
     fn from(mut value: aeron_cnc_constants_t) -> Self {
         AeronCncConstants {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_cnc_constants_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_cnc_constants_t),
         }
     }
 }
@@ -2696,19 +2529,16 @@ impl AeronCncConstants {
 }
 #[derive(Clone)]
 pub struct AeronCncMetadata {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_cnc_metadata_t>>>,
-    inner: *mut aeron_cnc_metadata_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_cnc_metadata_t>>,
+    inner: CResource<aeron_cnc_metadata_t>,
 }
 impl core::fmt::Debug for AeronCncMetadata {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronCncMetadata))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronCncMetadata))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(cnc_version), &self.cnc_version())
                 .field(
@@ -2776,9 +2606,7 @@ impl AeronCncMetadata {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -2802,9 +2630,7 @@ impl AeronCncMetadata {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -2816,15 +2642,9 @@ impl AeronCncMetadata {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_cnc_metadata_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn cnc_version(&self) -> i32 {
@@ -2871,15 +2691,15 @@ impl AeronCncMetadata {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_cnc_metadata_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_cnc_metadata_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_cnc_metadata_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronCncMetadata {
@@ -2892,9 +2712,7 @@ impl From<*mut aeron_cnc_metadata_t> for AeronCncMetadata {
     #[inline]
     fn from(value: *mut aeron_cnc_metadata_t) -> Self {
         AeronCncMetadata {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -2920,9 +2738,7 @@ impl From<*const aeron_cnc_metadata_t> for AeronCncMetadata {
     #[inline]
     fn from(value: *const aeron_cnc_metadata_t) -> Self {
         AeronCncMetadata {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_cnc_metadata_t,
+            inner: CResource::Borrowed(value as *mut aeron_cnc_metadata_t),
         }
     }
 }
@@ -2930,9 +2746,7 @@ impl From<aeron_cnc_metadata_t> for AeronCncMetadata {
     #[inline]
     fn from(mut value: aeron_cnc_metadata_t) -> Self {
         AeronCncMetadata {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_cnc_metadata_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_cnc_metadata_t),
         }
     }
 }
@@ -2959,19 +2773,16 @@ impl AeronCncMetadata {
 }
 #[derive(Clone)]
 pub struct AeronCnc {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_cnc_t>>>,
-    inner: *mut aeron_cnc_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_cnc_t>>,
+    inner: CResource<aeron_cnc_t>,
 }
 impl core::fmt::Debug for AeronCnc {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronCnc))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronCnc))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -2999,9 +2810,7 @@ impl AeronCnc {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -3013,15 +2822,9 @@ impl AeronCnc {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_cnc_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     #[doc = "Fetch the sets of constant values associated with this command and control file."]
@@ -3042,10 +2845,7 @@ impl AeronCnc {
     #[doc = "Fetch the sets of constant values associated with this command and control file."]
     #[doc = ""]
     pub fn get_constants(&self) -> Result<AeronCncConstants, AeronCError> {
-        let mut result = AeronCncConstants::new_zeroed_on_stack();
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
-        }
+        let result = AeronCncConstants::new_zeroed_on_stack();
         self.constants(&result)?;
         Ok(result)
     }
@@ -3224,7 +3024,7 @@ impl AeronCnc {
     #[doc = "Closes the instance of the aeron cnc and frees its resources."]
     #[doc = ""]
     pub fn close(&self) -> () {
-        if let Some(inner) = self.owned_inner.as_ref() {
+        if let Some(inner) = self.inner.as_owned() {
             inner.close_already_called.set(true);
         }
         unsafe {
@@ -3253,15 +3053,15 @@ impl AeronCnc {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_cnc_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_cnc_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_cnc_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronCnc {
@@ -3274,9 +3074,7 @@ impl From<*mut aeron_cnc_t> for AeronCnc {
     #[inline]
     fn from(value: *mut aeron_cnc_t) -> Self {
         AeronCnc {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -3302,9 +3100,7 @@ impl From<*const aeron_cnc_t> for AeronCnc {
     #[inline]
     fn from(value: *const aeron_cnc_t) -> Self {
         AeronCnc {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_cnc_t,
+            inner: CResource::Borrowed(value as *mut aeron_cnc_t),
         }
     }
 }
@@ -3312,27 +3108,22 @@ impl From<aeron_cnc_t> for AeronCnc {
     #[inline]
     fn from(mut value: aeron_cnc_t) -> Self {
         AeronCnc {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_cnc_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_cnc_t),
         }
     }
 }
 #[derive(Clone)]
 pub struct AeronContext {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_context_t>>>,
-    inner: *mut aeron_context_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_context_t>>,
+    inner: CResource<aeron_context_t>,
 }
 impl core::fmt::Debug for AeronContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronContext))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronContext))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -3352,9 +3143,7 @@ impl AeronContext {
             None,
         )?;
         Ok(Self {
-            inner: resource_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource_constructor)),
         })
     }
     #[inline]
@@ -4155,7 +3944,7 @@ impl AeronContext {
     #[doc = ""]
     #[doc = " \n# Return\n 0 for success and -1 for error."]
     pub fn close(&self) -> Result<i32, AeronCError> {
-        if let Some(inner) = self.owned_inner.as_ref() {
+        if let Some(inner) = self.inner.as_owned() {
             inner.close_already_called.set(true);
         }
         unsafe {
@@ -4194,15 +3983,15 @@ impl AeronContext {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_context_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_context_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_context_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronContext {
@@ -4215,9 +4004,7 @@ impl From<*mut aeron_context_t> for AeronContext {
     #[inline]
     fn from(value: *mut aeron_context_t) -> Self {
         AeronContext {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -4243,9 +4030,7 @@ impl From<*const aeron_context_t> for AeronContext {
     #[inline]
     fn from(value: *const aeron_context_t) -> Self {
         AeronContext {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_context_t,
+            inner: CResource::Borrowed(value as *mut aeron_context_t),
         }
     }
 }
@@ -4253,27 +4038,22 @@ impl From<aeron_context_t> for AeronContext {
     #[inline]
     fn from(mut value: aeron_context_t) -> Self {
         AeronContext {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_context_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_context_t),
         }
     }
 }
 #[derive(Clone)]
 pub struct AeronControlledFragmentAssembler {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_controlled_fragment_assembler_t>>>,
-    inner: *mut aeron_controlled_fragment_assembler_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_controlled_fragment_assembler_t>>,
+    inner: CResource<aeron_controlled_fragment_assembler_t>,
 }
 impl core::fmt::Debug for AeronControlledFragmentAssembler {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronControlledFragmentAssembler))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronControlledFragmentAssembler))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -4318,9 +4098,7 @@ impl AeronControlledFragmentAssembler {
             None,
         )?;
         Ok(Self {
-            inner: resource_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource_constructor)),
         })
     }
     #[inline]
@@ -4361,15 +4139,15 @@ impl AeronControlledFragmentAssembler {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_controlled_fragment_assembler_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_controlled_fragment_assembler_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_controlled_fragment_assembler_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronControlledFragmentAssembler {
@@ -4382,9 +4160,7 @@ impl From<*mut aeron_controlled_fragment_assembler_t> for AeronControlledFragmen
     #[inline]
     fn from(value: *mut aeron_controlled_fragment_assembler_t) -> Self {
         AeronControlledFragmentAssembler {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -4410,9 +4186,7 @@ impl From<*const aeron_controlled_fragment_assembler_t> for AeronControlledFragm
     #[inline]
     fn from(value: *const aeron_controlled_fragment_assembler_t) -> Self {
         AeronControlledFragmentAssembler {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_controlled_fragment_assembler_t,
+            inner: CResource::Borrowed(value as *mut aeron_controlled_fragment_assembler_t),
         }
     }
 }
@@ -4420,28 +4194,23 @@ impl From<aeron_controlled_fragment_assembler_t> for AeronControlledFragmentAsse
     #[inline]
     fn from(mut value: aeron_controlled_fragment_assembler_t) -> Self {
         AeronControlledFragmentAssembler {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_controlled_fragment_assembler_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_controlled_fragment_assembler_t),
         }
     }
 }
 #[doc = "Configuration for a counter that does not change during it's lifetime."]
 #[derive(Clone)]
 pub struct AeronCounterConstants {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_counter_constants_t>>>,
-    inner: *mut aeron_counter_constants_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_counter_constants_t>>,
+    inner: CResource<aeron_counter_constants_t>,
 }
 impl core::fmt::Debug for AeronCounterConstants {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronCounterConstants))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronCounterConstants))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(registration_id), &self.registration_id())
                 .field(stringify!(counter_id), &self.counter_id())
@@ -4467,9 +4236,7 @@ impl AeronCounterConstants {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -4493,9 +4260,7 @@ impl AeronCounterConstants {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -4507,15 +4272,9 @@ impl AeronCounterConstants {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_counter_constants_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn registration_id(&self) -> i64 {
@@ -4527,33 +4286,15 @@ impl AeronCounterConstants {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_counter_constants_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronCounterConstants = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_counter_constants_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronCounterConstants = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_counter_constants_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronCounterConstants = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronCounterConstants {
@@ -4566,9 +4307,7 @@ impl From<*mut aeron_counter_constants_t> for AeronCounterConstants {
     #[inline]
     fn from(value: *mut aeron_counter_constants_t) -> Self {
         AeronCounterConstants {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -4594,9 +4333,7 @@ impl From<*const aeron_counter_constants_t> for AeronCounterConstants {
     #[inline]
     fn from(value: *const aeron_counter_constants_t) -> Self {
         AeronCounterConstants {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_counter_constants_t,
+            inner: CResource::Borrowed(value as *mut aeron_counter_constants_t),
         }
     }
 }
@@ -4604,9 +4341,7 @@ impl From<aeron_counter_constants_t> for AeronCounterConstants {
     #[inline]
     fn from(mut value: aeron_counter_constants_t) -> Self {
         AeronCounterConstants {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_counter_constants_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_counter_constants_t),
         }
     }
 }
@@ -4633,19 +4368,16 @@ impl AeronCounterConstants {
 }
 #[derive(Clone)]
 pub struct AeronCounterMetadataDescriptor {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_counter_metadata_descriptor_t>>>,
-    inner: *mut aeron_counter_metadata_descriptor_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_counter_metadata_descriptor_t>>,
+    inner: CResource<aeron_counter_metadata_descriptor_t>,
 }
 impl core::fmt::Debug for AeronCounterMetadataDescriptor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronCounterMetadataDescriptor))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronCounterMetadataDescriptor))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(state), &self.state())
                 .field(stringify!(type_id), &self.type_id())
@@ -4688,9 +4420,7 @@ impl AeronCounterMetadataDescriptor {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -4715,9 +4445,7 @@ impl AeronCounterMetadataDescriptor {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -4729,15 +4457,9 @@ impl AeronCounterMetadataDescriptor {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_counter_metadata_descriptor_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn state(&self) -> i32 {
@@ -4765,33 +4487,15 @@ impl AeronCounterMetadataDescriptor {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_counter_metadata_descriptor_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronCounterMetadataDescriptor = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_counter_metadata_descriptor_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronCounterMetadataDescriptor = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_counter_metadata_descriptor_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronCounterMetadataDescriptor = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronCounterMetadataDescriptor {
@@ -4804,9 +4508,7 @@ impl From<*mut aeron_counter_metadata_descriptor_t> for AeronCounterMetadataDesc
     #[inline]
     fn from(value: *mut aeron_counter_metadata_descriptor_t) -> Self {
         AeronCounterMetadataDescriptor {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -4832,9 +4534,7 @@ impl From<*const aeron_counter_metadata_descriptor_t> for AeronCounterMetadataDe
     #[inline]
     fn from(value: *const aeron_counter_metadata_descriptor_t) -> Self {
         AeronCounterMetadataDescriptor {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_counter_metadata_descriptor_t,
+            inner: CResource::Borrowed(value as *mut aeron_counter_metadata_descriptor_t),
         }
     }
 }
@@ -4842,9 +4542,7 @@ impl From<aeron_counter_metadata_descriptor_t> for AeronCounterMetadataDescripto
     #[inline]
     fn from(mut value: aeron_counter_metadata_descriptor_t) -> Self {
         AeronCounterMetadataDescriptor {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_counter_metadata_descriptor_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_counter_metadata_descriptor_t),
         }
     }
 }
@@ -4871,19 +4569,16 @@ impl AeronCounterMetadataDescriptor {
 }
 #[derive(Clone)]
 pub struct AeronCounter {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_counter_t>>>,
-    inner: *mut aeron_counter_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_counter_t>>,
+    inner: CResource<aeron_counter_t>,
 }
 impl core::fmt::Debug for AeronCounter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronCounter))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronCounter))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -4911,9 +4606,7 @@ impl AeronCounter {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -4925,15 +4618,9 @@ impl AeronCounter {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_counter_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     #[doc = "Return a pointer to the counter value."]
@@ -4965,10 +4652,7 @@ impl AeronCounter {
     #[doc = "Fill in a structure with the constants in use by a counter."]
     #[doc = ""]
     pub fn get_constants(&self) -> Result<AeronCounterConstants, AeronCError> {
-        let mut result = AeronCounterConstants::new_zeroed_on_stack();
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
-        }
+        let result = AeronCounterConstants::new_zeroed_on_stack();
         self.constants(&result)?;
         Ok(result)
     }
@@ -4980,7 +4664,7 @@ impl AeronCounter {
         &self,
         on_close_complete: Option<&Handler<AeronNotificationHandlerImpl>>,
     ) -> Result<i32, AeronCError> {
-        if let Some(inner) = self.owned_inner.as_ref() {
+        if let Some(inner) = self.inner.as_owned() {
             inner.close_already_called.set(true);
         }
         unsafe {
@@ -5017,7 +4701,7 @@ impl AeronCounter {
         &self,
         mut on_close_complete: AeronNotificationHandlerImpl,
     ) -> Result<i32, AeronCError> {
-        if let Some(inner) = self.owned_inner.as_ref() {
+        if let Some(inner) = self.inner.as_owned() {
             inner.close_already_called.set(true);
         }
         unsafe {
@@ -5046,15 +4730,15 @@ impl AeronCounter {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_counter_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_counter_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_counter_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronCounter {
@@ -5067,9 +4751,7 @@ impl From<*mut aeron_counter_t> for AeronCounter {
     #[inline]
     fn from(value: *mut aeron_counter_t) -> Self {
         AeronCounter {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -5095,9 +4777,7 @@ impl From<*const aeron_counter_t> for AeronCounter {
     #[inline]
     fn from(value: *const aeron_counter_t) -> Self {
         AeronCounter {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_counter_t,
+            inner: CResource::Borrowed(value as *mut aeron_counter_t),
         }
     }
 }
@@ -5105,17 +4785,15 @@ impl From<aeron_counter_t> for AeronCounter {
     #[inline]
     fn from(mut value: aeron_counter_t) -> Self {
         AeronCounter {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_counter_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_counter_t),
         }
     }
 }
 impl Drop for AeronCounter {
     fn drop(&mut self) {
-        if let Some(inner) = self.owned_inner.as_mut() {
+        if let Some(inner) = self.inner.as_owned() {
             if (inner.cleanup.is_none())
-                && std::rc::Rc::strong_count(&inner) == 1
+                && std::rc::Rc::strong_count(inner) == 1
                 && !inner.is_closed_already_called()
             {
                 if inner.auto_close.get() {
@@ -5132,19 +4810,16 @@ impl Drop for AeronCounter {
 }
 #[derive(Clone)]
 pub struct AeronCounterValueDescriptor {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_counter_value_descriptor_t>>>,
-    inner: *mut aeron_counter_value_descriptor_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_counter_value_descriptor_t>>,
+    inner: CResource<aeron_counter_value_descriptor_t>,
 }
 impl core::fmt::Debug for AeronCounterValueDescriptor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronCounterValueDescriptor))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronCounterValueDescriptor))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(counter_value), &self.counter_value())
                 .field(stringify!(registration_id), &self.registration_id())
@@ -5182,9 +4857,7 @@ impl AeronCounterValueDescriptor {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -5209,9 +4882,7 @@ impl AeronCounterValueDescriptor {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -5223,15 +4894,9 @@ impl AeronCounterValueDescriptor {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_counter_value_descriptor_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn counter_value(&self) -> i64 {
@@ -5255,33 +4920,15 @@ impl AeronCounterValueDescriptor {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_counter_value_descriptor_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronCounterValueDescriptor = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_counter_value_descriptor_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronCounterValueDescriptor = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_counter_value_descriptor_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronCounterValueDescriptor = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronCounterValueDescriptor {
@@ -5294,9 +4941,7 @@ impl From<*mut aeron_counter_value_descriptor_t> for AeronCounterValueDescriptor
     #[inline]
     fn from(value: *mut aeron_counter_value_descriptor_t) -> Self {
         AeronCounterValueDescriptor {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -5322,9 +4967,7 @@ impl From<*const aeron_counter_value_descriptor_t> for AeronCounterValueDescript
     #[inline]
     fn from(value: *const aeron_counter_value_descriptor_t) -> Self {
         AeronCounterValueDescriptor {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_counter_value_descriptor_t,
+            inner: CResource::Borrowed(value as *mut aeron_counter_value_descriptor_t),
         }
     }
 }
@@ -5332,9 +4975,7 @@ impl From<aeron_counter_value_descriptor_t> for AeronCounterValueDescriptor {
     #[inline]
     fn from(mut value: aeron_counter_value_descriptor_t) -> Self {
         AeronCounterValueDescriptor {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_counter_value_descriptor_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_counter_value_descriptor_t),
         }
     }
 }
@@ -5361,19 +5002,16 @@ impl AeronCounterValueDescriptor {
 }
 #[derive(Clone)]
 pub struct AeronCountersReaderBuffers {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_counters_reader_buffers_t>>>,
-    inner: *mut aeron_counters_reader_buffers_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_counters_reader_buffers_t>>,
+    inner: CResource<aeron_counters_reader_buffers_t>,
 }
 impl core::fmt::Debug for AeronCountersReaderBuffers {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronCountersReaderBuffers))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronCountersReaderBuffers))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(values_length), &self.values_length())
                 .field(stringify!(metadata_length), &self.metadata_length())
@@ -5406,9 +5044,7 @@ impl AeronCountersReaderBuffers {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -5432,9 +5068,7 @@ impl AeronCountersReaderBuffers {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -5446,15 +5080,9 @@ impl AeronCountersReaderBuffers {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_counters_reader_buffers_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn values(&self) -> *mut u8 {
@@ -5474,33 +5102,15 @@ impl AeronCountersReaderBuffers {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_counters_reader_buffers_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronCountersReaderBuffers = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_counters_reader_buffers_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronCountersReaderBuffers = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_counters_reader_buffers_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronCountersReaderBuffers = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronCountersReaderBuffers {
@@ -5513,9 +5123,7 @@ impl From<*mut aeron_counters_reader_buffers_t> for AeronCountersReaderBuffers {
     #[inline]
     fn from(value: *mut aeron_counters_reader_buffers_t) -> Self {
         AeronCountersReaderBuffers {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -5541,9 +5149,7 @@ impl From<*const aeron_counters_reader_buffers_t> for AeronCountersReaderBuffers
     #[inline]
     fn from(value: *const aeron_counters_reader_buffers_t) -> Self {
         AeronCountersReaderBuffers {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_counters_reader_buffers_t,
+            inner: CResource::Borrowed(value as *mut aeron_counters_reader_buffers_t),
         }
     }
 }
@@ -5551,9 +5157,7 @@ impl From<aeron_counters_reader_buffers_t> for AeronCountersReaderBuffers {
     #[inline]
     fn from(mut value: aeron_counters_reader_buffers_t) -> Self {
         AeronCountersReaderBuffers {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_counters_reader_buffers_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_counters_reader_buffers_t),
         }
     }
 }
@@ -5580,19 +5184,16 @@ impl AeronCountersReaderBuffers {
 }
 #[derive(Clone)]
 pub struct AeronCountersReader {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_counters_reader_t>>>,
-    inner: *mut aeron_counters_reader_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_counters_reader_t>>,
+    inner: CResource<aeron_counters_reader_t>,
 }
 impl core::fmt::Debug for AeronCountersReader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronCountersReader))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronCountersReader))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -5620,9 +5221,7 @@ impl AeronCountersReader {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -5634,15 +5233,9 @@ impl AeronCountersReader {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_counters_reader_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     #[doc = "Get buffer pointers and lengths for the counters reader."]
@@ -5912,15 +5505,15 @@ impl AeronCountersReader {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_counters_reader_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_counters_reader_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_counters_reader_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronCountersReader {
@@ -5933,9 +5526,7 @@ impl From<*mut aeron_counters_reader_t> for AeronCountersReader {
     #[inline]
     fn from(value: *mut aeron_counters_reader_t) -> Self {
         AeronCountersReader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -5961,9 +5552,7 @@ impl From<*const aeron_counters_reader_t> for AeronCountersReader {
     #[inline]
     fn from(value: *const aeron_counters_reader_t) -> Self {
         AeronCountersReader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_counters_reader_t,
+            inner: CResource::Borrowed(value as *mut aeron_counters_reader_t),
         }
     }
 }
@@ -5971,27 +5560,22 @@ impl From<aeron_counters_reader_t> for AeronCountersReader {
     #[inline]
     fn from(mut value: aeron_counters_reader_t) -> Self {
         AeronCountersReader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_counters_reader_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_counters_reader_t),
         }
     }
 }
 #[derive(Clone)]
 pub struct AeronDataHeader {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_data_header_t>>>,
-    inner: *mut aeron_data_header_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_data_header_t>>,
+    inner: CResource<aeron_data_header_t>,
 }
 impl core::fmt::Debug for AeronDataHeader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronDataHeader))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronDataHeader))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(frame_header), &self.frame_header())
                 .field(stringify!(term_offset), &self.term_offset())
@@ -6032,9 +5616,7 @@ impl AeronDataHeader {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -6058,9 +5640,7 @@ impl AeronDataHeader {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -6072,15 +5652,9 @@ impl AeronDataHeader {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_data_header_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn frame_header(&self) -> AeronFrameHeader {
@@ -6108,33 +5682,15 @@ impl AeronDataHeader {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_data_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronDataHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_data_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronDataHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_data_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronDataHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronDataHeader {
@@ -6147,9 +5703,7 @@ impl From<*mut aeron_data_header_t> for AeronDataHeader {
     #[inline]
     fn from(value: *mut aeron_data_header_t) -> Self {
         AeronDataHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -6175,9 +5729,7 @@ impl From<*const aeron_data_header_t> for AeronDataHeader {
     #[inline]
     fn from(value: *const aeron_data_header_t) -> Self {
         AeronDataHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_data_header_t,
+            inner: CResource::Borrowed(value as *mut aeron_data_header_t),
         }
     }
 }
@@ -6185,9 +5737,7 @@ impl From<aeron_data_header_t> for AeronDataHeader {
     #[inline]
     fn from(mut value: aeron_data_header_t) -> Self {
         AeronDataHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_data_header_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_data_header_t),
         }
     }
 }
@@ -6214,19 +5764,16 @@ impl AeronDataHeader {
 }
 #[derive(Clone)]
 pub struct AeronError {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_error_t>>>,
-    inner: *mut aeron_error_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_error_t>>,
+    inner: CResource<aeron_error_t>,
 }
 impl core::fmt::Debug for AeronError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronError))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronError))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(frame_header), &self.frame_header())
                 .field(stringify!(session_id), &self.session_id())
@@ -6270,9 +5817,7 @@ impl AeronError {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -6296,9 +5841,7 @@ impl AeronError {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -6310,15 +5853,9 @@ impl AeronError {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_error_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn frame_header(&self) -> AeronFrameHeader {
@@ -6350,33 +5887,15 @@ impl AeronError {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_error_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronError = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_error_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronError = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_error_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronError = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronError {
@@ -6389,9 +5908,7 @@ impl From<*mut aeron_error_t> for AeronError {
     #[inline]
     fn from(value: *mut aeron_error_t) -> Self {
         AeronError {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -6417,9 +5934,7 @@ impl From<*const aeron_error_t> for AeronError {
     #[inline]
     fn from(value: *const aeron_error_t) -> Self {
         AeronError {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_error_t,
+            inner: CResource::Borrowed(value as *mut aeron_error_t),
         }
     }
 }
@@ -6427,9 +5942,7 @@ impl From<aeron_error_t> for AeronError {
     #[inline]
     fn from(mut value: aeron_error_t) -> Self {
         AeronError {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_error_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_error_t),
         }
     }
 }
@@ -6456,19 +5969,16 @@ impl AeronError {
 }
 #[derive(Clone)]
 pub struct AeronExclusivePublication {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_exclusive_publication_t>>>,
-    inner: *mut aeron_exclusive_publication_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_exclusive_publication_t>>,
+    inner: CResource<aeron_exclusive_publication_t>,
 }
 impl core::fmt::Debug for AeronExclusivePublication {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronExclusivePublication))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronExclusivePublication))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -6496,9 +6006,7 @@ impl AeronExclusivePublication {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -6510,15 +6018,9 @@ impl AeronExclusivePublication {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_exclusive_publication_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     #[doc = "Non-blocking publish of a buffer containing a message."]
@@ -6753,10 +6255,7 @@ impl AeronExclusivePublication {
     #[doc = "Fill in a structure with the constants in use by a publication."]
     #[doc = ""]
     pub fn get_constants(&self) -> Result<AeronPublicationConstants, AeronCError> {
-        let mut result = AeronPublicationConstants::new_zeroed_on_stack();
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
-        }
+        let result = AeronPublicationConstants::new_zeroed_on_stack();
         self.constants(&result)?;
         Ok(result)
     }
@@ -6790,7 +6289,7 @@ impl AeronExclusivePublication {
         &self,
         on_close_complete: Option<&Handler<AeronNotificationHandlerImpl>>,
     ) -> Result<i32, AeronCError> {
-        if let Some(inner) = self.owned_inner.as_ref() {
+        if let Some(inner) = self.inner.as_owned() {
             inner.close_already_called.set(true);
         }
         unsafe {
@@ -6827,7 +6326,7 @@ impl AeronExclusivePublication {
         &self,
         mut on_close_complete: AeronNotificationHandlerImpl,
     ) -> Result<i32, AeronCError> {
-        if let Some(inner) = self.owned_inner.as_ref() {
+        if let Some(inner) = self.inner.as_owned() {
             inner.close_already_called.set(true);
         }
         unsafe {
@@ -6893,15 +6392,15 @@ impl AeronExclusivePublication {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_exclusive_publication_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_exclusive_publication_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_exclusive_publication_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronExclusivePublication {
@@ -6914,9 +6413,7 @@ impl From<*mut aeron_exclusive_publication_t> for AeronExclusivePublication {
     #[inline]
     fn from(value: *mut aeron_exclusive_publication_t) -> Self {
         AeronExclusivePublication {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -6942,9 +6439,7 @@ impl From<*const aeron_exclusive_publication_t> for AeronExclusivePublication {
     #[inline]
     fn from(value: *const aeron_exclusive_publication_t) -> Self {
         AeronExclusivePublication {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_exclusive_publication_t,
+            inner: CResource::Borrowed(value as *mut aeron_exclusive_publication_t),
         }
     }
 }
@@ -6952,17 +6447,15 @@ impl From<aeron_exclusive_publication_t> for AeronExclusivePublication {
     #[inline]
     fn from(mut value: aeron_exclusive_publication_t) -> Self {
         AeronExclusivePublication {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_exclusive_publication_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_exclusive_publication_t),
         }
     }
 }
 impl Drop for AeronExclusivePublication {
     fn drop(&mut self) {
-        if let Some(inner) = self.owned_inner.as_mut() {
+        if let Some(inner) = self.inner.as_owned() {
             if (inner.cleanup.is_none())
-                && std::rc::Rc::strong_count(&inner) == 1
+                && std::rc::Rc::strong_count(inner) == 1
                 && !inner.is_closed_already_called()
             {
                 if inner.auto_close.get() {
@@ -6979,19 +6472,16 @@ impl Drop for AeronExclusivePublication {
 }
 #[derive(Clone)]
 pub struct AeronFragmentAssembler {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_fragment_assembler_t>>>,
-    inner: *mut aeron_fragment_assembler_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_fragment_assembler_t>>,
+    inner: CResource<aeron_fragment_assembler_t>,
 }
 impl core::fmt::Debug for AeronFragmentAssembler {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronFragmentAssembler))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronFragmentAssembler))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -7030,9 +6520,7 @@ impl AeronFragmentAssembler {
             None,
         )?;
         Ok(Self {
-            inner: resource_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource_constructor)),
         })
     }
     #[inline]
@@ -7072,15 +6560,15 @@ impl AeronFragmentAssembler {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_fragment_assembler_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_fragment_assembler_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_fragment_assembler_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronFragmentAssembler {
@@ -7093,9 +6581,7 @@ impl From<*mut aeron_fragment_assembler_t> for AeronFragmentAssembler {
     #[inline]
     fn from(value: *mut aeron_fragment_assembler_t) -> Self {
         AeronFragmentAssembler {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -7121,9 +6607,7 @@ impl From<*const aeron_fragment_assembler_t> for AeronFragmentAssembler {
     #[inline]
     fn from(value: *const aeron_fragment_assembler_t) -> Self {
         AeronFragmentAssembler {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_fragment_assembler_t,
+            inner: CResource::Borrowed(value as *mut aeron_fragment_assembler_t),
         }
     }
 }
@@ -7131,27 +6615,22 @@ impl From<aeron_fragment_assembler_t> for AeronFragmentAssembler {
     #[inline]
     fn from(mut value: aeron_fragment_assembler_t) -> Self {
         AeronFragmentAssembler {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_fragment_assembler_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_fragment_assembler_t),
         }
     }
 }
 #[derive(Clone)]
 pub struct AeronFrameHeader {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_frame_header_t>>>,
-    inner: *mut aeron_frame_header_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_frame_header_t>>,
+    inner: CResource<aeron_frame_header_t>,
 }
 impl core::fmt::Debug for AeronFrameHeader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronFrameHeader))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronFrameHeader))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(frame_length), &self.frame_length())
                 .field(stringify!(type_), &self.type_())
@@ -7179,9 +6658,7 @@ impl AeronFrameHeader {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -7205,9 +6682,7 @@ impl AeronFrameHeader {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -7219,15 +6694,9 @@ impl AeronFrameHeader {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_frame_header_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn frame_length(&self) -> i32 {
@@ -7247,33 +6716,15 @@ impl AeronFrameHeader {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_frame_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronFrameHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_frame_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronFrameHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_frame_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronFrameHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronFrameHeader {
@@ -7286,9 +6737,7 @@ impl From<*mut aeron_frame_header_t> for AeronFrameHeader {
     #[inline]
     fn from(value: *mut aeron_frame_header_t) -> Self {
         AeronFrameHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -7314,9 +6763,7 @@ impl From<*const aeron_frame_header_t> for AeronFrameHeader {
     #[inline]
     fn from(value: *const aeron_frame_header_t) -> Self {
         AeronFrameHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_frame_header_t,
+            inner: CResource::Borrowed(value as *mut aeron_frame_header_t),
         }
     }
 }
@@ -7324,9 +6771,7 @@ impl From<aeron_frame_header_t> for AeronFrameHeader {
     #[inline]
     fn from(mut value: aeron_frame_header_t) -> Self {
         AeronFrameHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_frame_header_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_frame_header_t),
         }
     }
 }
@@ -7353,19 +6798,16 @@ impl AeronFrameHeader {
 }
 #[derive(Clone)]
 pub struct AeronHeader {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_header_t>>>,
-    inner: *mut aeron_header_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_header_t>>,
+    inner: CResource<aeron_header_t>,
 }
 impl core::fmt::Debug for AeronHeader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronHeader))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronHeader))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -7393,9 +6835,7 @@ impl AeronHeader {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -7407,15 +6847,9 @@ impl AeronHeader {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_header_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     #[doc = "Get all of the field values from the header. This will do a memcpy into the supplied header_values_t pointer."]
@@ -7437,10 +6871,7 @@ impl AeronHeader {
     #[doc = "Get all of the field values from the header. This will do a memcpy into the supplied header_values_t pointer."]
     #[doc = ""]
     pub fn get_values(&self) -> Result<AeronHeaderValues, AeronCError> {
-        let mut result = AeronHeaderValues::new_zeroed_on_stack();
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
-        }
+        let result = AeronHeaderValues::new_zeroed_on_stack();
         self.values(&result)?;
         Ok(result)
     }
@@ -7487,15 +6918,15 @@ impl AeronHeader {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_header_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_header_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_header_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronHeader {
@@ -7508,9 +6939,7 @@ impl From<*mut aeron_header_t> for AeronHeader {
     #[inline]
     fn from(value: *mut aeron_header_t) -> Self {
         AeronHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -7536,9 +6965,7 @@ impl From<*const aeron_header_t> for AeronHeader {
     #[inline]
     fn from(value: *const aeron_header_t) -> Self {
         AeronHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_header_t,
+            inner: CResource::Borrowed(value as *mut aeron_header_t),
         }
     }
 }
@@ -7546,27 +6973,22 @@ impl From<aeron_header_t> for AeronHeader {
     #[inline]
     fn from(mut value: aeron_header_t) -> Self {
         AeronHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_header_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_header_t),
         }
     }
 }
 #[derive(Clone)]
 pub struct AeronHeaderValuesFrame {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_header_values_frame_t>>>,
-    inner: *mut aeron_header_values_frame_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_header_values_frame_t>>,
+    inner: CResource<aeron_header_values_frame_t>,
 }
 impl core::fmt::Debug for AeronHeaderValuesFrame {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronHeaderValuesFrame))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronHeaderValuesFrame))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(frame_length), &self.frame_length())
                 .field(stringify!(type_), &self.type_())
@@ -7614,9 +7036,7 @@ impl AeronHeaderValuesFrame {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -7640,9 +7060,7 @@ impl AeronHeaderValuesFrame {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -7654,15 +7072,9 @@ impl AeronHeaderValuesFrame {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_header_values_frame_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn frame_length(&self) -> i32 {
@@ -7702,33 +7114,15 @@ impl AeronHeaderValuesFrame {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_header_values_frame_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronHeaderValuesFrame = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_header_values_frame_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronHeaderValuesFrame = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_header_values_frame_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronHeaderValuesFrame = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronHeaderValuesFrame {
@@ -7741,9 +7135,7 @@ impl From<*mut aeron_header_values_frame_t> for AeronHeaderValuesFrame {
     #[inline]
     fn from(value: *mut aeron_header_values_frame_t) -> Self {
         AeronHeaderValuesFrame {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -7769,9 +7161,7 @@ impl From<*const aeron_header_values_frame_t> for AeronHeaderValuesFrame {
     #[inline]
     fn from(value: *const aeron_header_values_frame_t) -> Self {
         AeronHeaderValuesFrame {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_header_values_frame_t,
+            inner: CResource::Borrowed(value as *mut aeron_header_values_frame_t),
         }
     }
 }
@@ -7779,9 +7169,7 @@ impl From<aeron_header_values_frame_t> for AeronHeaderValuesFrame {
     #[inline]
     fn from(mut value: aeron_header_values_frame_t) -> Self {
         AeronHeaderValuesFrame {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_header_values_frame_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_header_values_frame_t),
         }
     }
 }
@@ -7808,19 +7196,16 @@ impl AeronHeaderValuesFrame {
 }
 #[derive(Clone)]
 pub struct AeronHeaderValues {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_header_values_t>>>,
-    inner: *mut aeron_header_values_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_header_values_t>>,
+    inner: CResource<aeron_header_values_t>,
 }
 impl core::fmt::Debug for AeronHeaderValues {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronHeaderValues))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronHeaderValues))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(frame), &self.frame())
                 .field(stringify!(initial_term_id), &self.initial_term_id())
@@ -7855,9 +7240,7 @@ impl AeronHeaderValues {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -7881,9 +7264,7 @@ impl AeronHeaderValues {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -7895,15 +7276,9 @@ impl AeronHeaderValues {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_header_values_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn frame(&self) -> AeronHeaderValuesFrame {
@@ -7919,33 +7294,15 @@ impl AeronHeaderValues {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_header_values_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronHeaderValues = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_header_values_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronHeaderValues = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_header_values_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronHeaderValues = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronHeaderValues {
@@ -7958,9 +7315,7 @@ impl From<*mut aeron_header_values_t> for AeronHeaderValues {
     #[inline]
     fn from(value: *mut aeron_header_values_t) -> Self {
         AeronHeaderValues {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -7986,9 +7341,7 @@ impl From<*const aeron_header_values_t> for AeronHeaderValues {
     #[inline]
     fn from(value: *const aeron_header_values_t) -> Self {
         AeronHeaderValues {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_header_values_t,
+            inner: CResource::Borrowed(value as *mut aeron_header_values_t),
         }
     }
 }
@@ -7996,9 +7349,7 @@ impl From<aeron_header_values_t> for AeronHeaderValues {
     #[inline]
     fn from(mut value: aeron_header_values_t) -> Self {
         AeronHeaderValues {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_header_values_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_header_values_t),
         }
     }
 }
@@ -8026,19 +7377,16 @@ impl AeronHeaderValues {
 #[doc = "Configuration for an image that does not change during it's lifetime."]
 #[derive(Clone)]
 pub struct AeronImageConstants {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_image_constants_t>>>,
-    inner: *mut aeron_image_constants_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_image_constants_t>>,
+    inner: CResource<aeron_image_constants_t>,
 }
 impl core::fmt::Debug for AeronImageConstants {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronImageConstants))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronImageConstants))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(correlation_id), &self.correlation_id())
                 .field(stringify!(join_position), &self.join_position())
@@ -8096,9 +7444,7 @@ impl AeronImageConstants {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -8122,9 +7468,7 @@ impl AeronImageConstants {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -8136,15 +7480,9 @@ impl AeronImageConstants {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_image_constants_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn subscription(&self) -> AeronSubscription {
@@ -8196,33 +7534,15 @@ impl AeronImageConstants {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_image_constants_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronImageConstants = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_image_constants_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronImageConstants = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_image_constants_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronImageConstants = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronImageConstants {
@@ -8235,9 +7555,7 @@ impl From<*mut aeron_image_constants_t> for AeronImageConstants {
     #[inline]
     fn from(value: *mut aeron_image_constants_t) -> Self {
         AeronImageConstants {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -8263,9 +7581,7 @@ impl From<*const aeron_image_constants_t> for AeronImageConstants {
     #[inline]
     fn from(value: *const aeron_image_constants_t) -> Self {
         AeronImageConstants {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_image_constants_t,
+            inner: CResource::Borrowed(value as *mut aeron_image_constants_t),
         }
     }
 }
@@ -8273,9 +7589,7 @@ impl From<aeron_image_constants_t> for AeronImageConstants {
     #[inline]
     fn from(mut value: aeron_image_constants_t) -> Self {
         AeronImageConstants {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_image_constants_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_image_constants_t),
         }
     }
 }
@@ -8302,19 +7616,16 @@ impl AeronImageConstants {
 }
 #[derive(Clone)]
 pub struct AeronImageControlledFragmentAssembler {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_image_controlled_fragment_assembler_t>>>,
-    inner: *mut aeron_image_controlled_fragment_assembler_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_image_controlled_fragment_assembler_t>>,
+    inner: CResource<aeron_image_controlled_fragment_assembler_t>,
 }
 impl core::fmt::Debug for AeronImageControlledFragmentAssembler {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronImageControlledFragmentAssembler))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronImageControlledFragmentAssembler))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -8363,9 +7674,7 @@ impl AeronImageControlledFragmentAssembler {
             None,
         )?;
         Ok(Self {
-            inner: resource_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource_constructor)),
         })
     }
     #[inline]
@@ -8406,15 +7715,15 @@ impl AeronImageControlledFragmentAssembler {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_image_controlled_fragment_assembler_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_image_controlled_fragment_assembler_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_image_controlled_fragment_assembler_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronImageControlledFragmentAssembler {
@@ -8429,9 +7738,7 @@ impl From<*mut aeron_image_controlled_fragment_assembler_t>
     #[inline]
     fn from(value: *mut aeron_image_controlled_fragment_assembler_t) -> Self {
         AeronImageControlledFragmentAssembler {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -8463,9 +7770,7 @@ impl From<*const aeron_image_controlled_fragment_assembler_t>
     #[inline]
     fn from(value: *const aeron_image_controlled_fragment_assembler_t) -> Self {
         AeronImageControlledFragmentAssembler {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_image_controlled_fragment_assembler_t,
+            inner: CResource::Borrowed(value as *mut aeron_image_controlled_fragment_assembler_t),
         }
     }
 }
@@ -8473,27 +7778,24 @@ impl From<aeron_image_controlled_fragment_assembler_t> for AeronImageControlledF
     #[inline]
     fn from(mut value: aeron_image_controlled_fragment_assembler_t) -> Self {
         AeronImageControlledFragmentAssembler {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_image_controlled_fragment_assembler_t,
+            inner: CResource::Borrowed(
+                &mut value as *mut aeron_image_controlled_fragment_assembler_t,
+            ),
         }
     }
 }
 #[derive(Clone)]
 pub struct AeronImageFragmentAssembler {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_image_fragment_assembler_t>>>,
-    inner: *mut aeron_image_fragment_assembler_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_image_fragment_assembler_t>>,
+    inner: CResource<aeron_image_fragment_assembler_t>,
 }
 impl core::fmt::Debug for AeronImageFragmentAssembler {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronImageFragmentAssembler))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronImageFragmentAssembler))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -8532,9 +7834,7 @@ impl AeronImageFragmentAssembler {
             None,
         )?;
         Ok(Self {
-            inner: resource_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource_constructor)),
         })
     }
     #[inline]
@@ -8574,15 +7874,15 @@ impl AeronImageFragmentAssembler {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_image_fragment_assembler_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_image_fragment_assembler_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_image_fragment_assembler_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronImageFragmentAssembler {
@@ -8595,9 +7895,7 @@ impl From<*mut aeron_image_fragment_assembler_t> for AeronImageFragmentAssembler
     #[inline]
     fn from(value: *mut aeron_image_fragment_assembler_t) -> Self {
         AeronImageFragmentAssembler {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -8623,9 +7921,7 @@ impl From<*const aeron_image_fragment_assembler_t> for AeronImageFragmentAssembl
     #[inline]
     fn from(value: *const aeron_image_fragment_assembler_t) -> Self {
         AeronImageFragmentAssembler {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_image_fragment_assembler_t,
+            inner: CResource::Borrowed(value as *mut aeron_image_fragment_assembler_t),
         }
     }
 }
@@ -8633,27 +7929,22 @@ impl From<aeron_image_fragment_assembler_t> for AeronImageFragmentAssembler {
     #[inline]
     fn from(mut value: aeron_image_fragment_assembler_t) -> Self {
         AeronImageFragmentAssembler {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_image_fragment_assembler_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_image_fragment_assembler_t),
         }
     }
 }
 #[derive(Clone)]
 pub struct AeronImage {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_image_t>>>,
-    inner: *mut aeron_image_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_image_t>>,
+    inner: CResource<aeron_image_t>,
 }
 impl core::fmt::Debug for AeronImage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronImage))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronImage))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -8681,9 +7972,7 @@ impl AeronImage {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -8695,15 +7984,9 @@ impl AeronImage {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_image_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     #[doc = "Fill in a structure with the constants in use by a image."]
@@ -8725,10 +8008,7 @@ impl AeronImage {
     #[doc = "Fill in a structure with the constants in use by a image."]
     #[doc = ""]
     pub fn get_constants(&self) -> Result<AeronImageConstants, AeronCError> {
-        let mut result = AeronImageConstants::new_zeroed_on_stack();
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
-        }
+        let result = AeronImageConstants::new_zeroed_on_stack();
         self.constants(&result)?;
         Ok(result)
     }
@@ -9297,15 +8577,15 @@ impl AeronImage {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_image_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_image_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_image_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronImage {
@@ -9318,9 +8598,7 @@ impl From<*mut aeron_image_t> for AeronImage {
     #[inline]
     fn from(value: *mut aeron_image_t) -> Self {
         AeronImage {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -9346,9 +8624,7 @@ impl From<*const aeron_image_t> for AeronImage {
     #[inline]
     fn from(value: *const aeron_image_t) -> Self {
         AeronImage {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_image_t,
+            inner: CResource::Borrowed(value as *mut aeron_image_t),
         }
     }
 }
@@ -9356,27 +8632,22 @@ impl From<aeron_image_t> for AeronImage {
     #[inline]
     fn from(mut value: aeron_image_t) -> Self {
         AeronImage {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_image_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_image_t),
         }
     }
 }
 #[derive(Clone)]
 pub struct AeronIovec {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_iovec_t>>>,
-    inner: *mut aeron_iovec_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_iovec_t>>,
+    inner: CResource<aeron_iovec_t>,
 }
 impl core::fmt::Debug for AeronIovec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronIovec))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronIovec))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(iov_len), &self.iov_len())
                 .finish()
@@ -9401,9 +8672,7 @@ impl AeronIovec {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -9427,9 +8696,7 @@ impl AeronIovec {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -9441,15 +8708,9 @@ impl AeronIovec {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_iovec_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn iov_base(&self) -> *mut u8 {
@@ -9461,33 +8722,15 @@ impl AeronIovec {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_iovec_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronIovec = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_iovec_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronIovec = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_iovec_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronIovec = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronIovec {
@@ -9500,9 +8743,7 @@ impl From<*mut aeron_iovec_t> for AeronIovec {
     #[inline]
     fn from(value: *mut aeron_iovec_t) -> Self {
         AeronIovec {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -9528,9 +8769,7 @@ impl From<*const aeron_iovec_t> for AeronIovec {
     #[inline]
     fn from(value: *const aeron_iovec_t) -> Self {
         AeronIovec {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_iovec_t,
+            inner: CResource::Borrowed(value as *mut aeron_iovec_t),
         }
     }
 }
@@ -9538,9 +8777,7 @@ impl From<aeron_iovec_t> for AeronIovec {
     #[inline]
     fn from(mut value: aeron_iovec_t) -> Self {
         AeronIovec {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_iovec_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_iovec_t),
         }
     }
 }
@@ -9567,19 +8804,16 @@ impl AeronIovec {
 }
 #[derive(Clone)]
 pub struct AeronIpcChannelParams {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_ipc_channel_params_t>>>,
-    inner: *mut aeron_ipc_channel_params_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_ipc_channel_params_t>>,
+    inner: CResource<aeron_ipc_channel_params_t>,
 }
 impl core::fmt::Debug for AeronIpcChannelParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronIpcChannelParams))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronIpcChannelParams))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(additional_params), &self.additional_params())
                 .finish()
@@ -9609,9 +8843,7 @@ impl AeronIpcChannelParams {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -9635,9 +8867,7 @@ impl AeronIpcChannelParams {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -9649,15 +8879,9 @@ impl AeronIpcChannelParams {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_ipc_channel_params_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn channel_tag(&self) -> &str {
@@ -9681,33 +8905,15 @@ impl AeronIpcChannelParams {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_ipc_channel_params_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronIpcChannelParams = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_ipc_channel_params_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronIpcChannelParams = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_ipc_channel_params_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronIpcChannelParams = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronIpcChannelParams {
@@ -9720,9 +8926,7 @@ impl From<*mut aeron_ipc_channel_params_t> for AeronIpcChannelParams {
     #[inline]
     fn from(value: *mut aeron_ipc_channel_params_t) -> Self {
         AeronIpcChannelParams {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -9748,9 +8952,7 @@ impl From<*const aeron_ipc_channel_params_t> for AeronIpcChannelParams {
     #[inline]
     fn from(value: *const aeron_ipc_channel_params_t) -> Self {
         AeronIpcChannelParams {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_ipc_channel_params_t,
+            inner: CResource::Borrowed(value as *mut aeron_ipc_channel_params_t),
         }
     }
 }
@@ -9758,9 +8960,7 @@ impl From<aeron_ipc_channel_params_t> for AeronIpcChannelParams {
     #[inline]
     fn from(mut value: aeron_ipc_channel_params_t) -> Self {
         AeronIpcChannelParams {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_ipc_channel_params_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_ipc_channel_params_t),
         }
     }
 }
@@ -9787,19 +8987,16 @@ impl AeronIpcChannelParams {
 }
 #[derive(Clone)]
 pub struct AeronLogBuffer {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_log_buffer_t>>>,
-    inner: *mut aeron_log_buffer_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_log_buffer_t>>,
+    inner: CResource<aeron_log_buffer_t>,
 }
 impl core::fmt::Debug for AeronLogBuffer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronLogBuffer))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronLogBuffer))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -9827,9 +9024,7 @@ impl AeronLogBuffer {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -9841,27 +9036,21 @@ impl AeronLogBuffer {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_log_buffer_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_log_buffer_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_log_buffer_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_log_buffer_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronLogBuffer {
@@ -9874,9 +9063,7 @@ impl From<*mut aeron_log_buffer_t> for AeronLogBuffer {
     #[inline]
     fn from(value: *mut aeron_log_buffer_t) -> Self {
         AeronLogBuffer {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -9902,9 +9089,7 @@ impl From<*const aeron_log_buffer_t> for AeronLogBuffer {
     #[inline]
     fn from(value: *const aeron_log_buffer_t) -> Self {
         AeronLogBuffer {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_log_buffer_t,
+            inner: CResource::Borrowed(value as *mut aeron_log_buffer_t),
         }
     }
 }
@@ -9912,27 +9097,22 @@ impl From<aeron_log_buffer_t> for AeronLogBuffer {
     #[inline]
     fn from(mut value: aeron_log_buffer_t) -> Self {
         AeronLogBuffer {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_log_buffer_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_log_buffer_t),
         }
     }
 }
 #[derive(Clone)]
 pub struct AeronLogbufferMetadata {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_logbuffer_metadata_t>>>,
-    inner: *mut aeron_logbuffer_metadata_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_logbuffer_metadata_t>>,
+    inner: CResource<aeron_logbuffer_metadata_t>,
 }
 impl core::fmt::Debug for AeronLogbufferMetadata {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronLogbufferMetadata))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronLogbufferMetadata))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(active_term_count), &self.active_term_count())
                 .field(
@@ -10093,9 +9273,7 @@ impl AeronLogbufferMetadata {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -10119,9 +9297,7 @@ impl AeronLogbufferMetadata {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -10133,15 +9309,9 @@ impl AeronLogbufferMetadata {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_logbuffer_metadata_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn term_tail_counters(&self) -> [i64; 3usize] {
@@ -10289,33 +9459,15 @@ impl AeronLogbufferMetadata {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_logbuffer_metadata_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronLogbufferMetadata = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_logbuffer_metadata_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronLogbufferMetadata = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_logbuffer_metadata_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronLogbufferMetadata = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronLogbufferMetadata {
@@ -10328,9 +9480,7 @@ impl From<*mut aeron_logbuffer_metadata_t> for AeronLogbufferMetadata {
     #[inline]
     fn from(value: *mut aeron_logbuffer_metadata_t) -> Self {
         AeronLogbufferMetadata {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -10356,9 +9506,7 @@ impl From<*const aeron_logbuffer_metadata_t> for AeronLogbufferMetadata {
     #[inline]
     fn from(value: *const aeron_logbuffer_metadata_t) -> Self {
         AeronLogbufferMetadata {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_logbuffer_metadata_t,
+            inner: CResource::Borrowed(value as *mut aeron_logbuffer_metadata_t),
         }
     }
 }
@@ -10366,9 +9514,7 @@ impl From<aeron_logbuffer_metadata_t> for AeronLogbufferMetadata {
     #[inline]
     fn from(mut value: aeron_logbuffer_metadata_t) -> Self {
         AeronLogbufferMetadata {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_logbuffer_metadata_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_logbuffer_metadata_t),
         }
     }
 }
@@ -10395,19 +9541,16 @@ impl AeronLogbufferMetadata {
 }
 #[derive(Clone)]
 pub struct AeronLossReporterEntry {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_loss_reporter_entry_t>>>,
-    inner: *mut aeron_loss_reporter_entry_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_loss_reporter_entry_t>>,
+    inner: CResource<aeron_loss_reporter_entry_t>,
 }
 impl core::fmt::Debug for AeronLossReporterEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronLossReporterEntry))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronLossReporterEntry))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(observation_count), &self.observation_count())
                 .field(stringify!(total_bytes_lost), &self.total_bytes_lost())
@@ -10454,9 +9597,7 @@ impl AeronLossReporterEntry {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -10480,9 +9621,7 @@ impl AeronLossReporterEntry {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -10494,15 +9633,9 @@ impl AeronLossReporterEntry {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_loss_reporter_entry_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn observation_count(&self) -> i64 {
@@ -10530,33 +9663,15 @@ impl AeronLossReporterEntry {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_loss_reporter_entry_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronLossReporterEntry = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_loss_reporter_entry_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronLossReporterEntry = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_loss_reporter_entry_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronLossReporterEntry = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronLossReporterEntry {
@@ -10569,9 +9684,7 @@ impl From<*mut aeron_loss_reporter_entry_t> for AeronLossReporterEntry {
     #[inline]
     fn from(value: *mut aeron_loss_reporter_entry_t) -> Self {
         AeronLossReporterEntry {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -10597,9 +9710,7 @@ impl From<*const aeron_loss_reporter_entry_t> for AeronLossReporterEntry {
     #[inline]
     fn from(value: *const aeron_loss_reporter_entry_t) -> Self {
         AeronLossReporterEntry {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_loss_reporter_entry_t,
+            inner: CResource::Borrowed(value as *mut aeron_loss_reporter_entry_t),
         }
     }
 }
@@ -10607,9 +9718,7 @@ impl From<aeron_loss_reporter_entry_t> for AeronLossReporterEntry {
     #[inline]
     fn from(mut value: aeron_loss_reporter_entry_t) -> Self {
         AeronLossReporterEntry {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_loss_reporter_entry_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_loss_reporter_entry_t),
         }
     }
 }
@@ -10636,19 +9745,16 @@ impl AeronLossReporterEntry {
 }
 #[derive(Clone)]
 pub struct AeronLossReporter {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_loss_reporter_t>>>,
-    inner: *mut aeron_loss_reporter_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_loss_reporter_t>>,
+    inner: CResource<aeron_loss_reporter_t>,
 }
 impl core::fmt::Debug for AeronLossReporter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronLossReporter))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronLossReporter))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(next_record_offset), &self.next_record_offset())
                 .field(stringify!(capacity), &self.capacity())
@@ -10679,9 +9785,7 @@ impl AeronLossReporter {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -10705,9 +9809,7 @@ impl AeronLossReporter {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -10719,15 +9821,9 @@ impl AeronLossReporter {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_loss_reporter_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn buffer(&self) -> *mut u8 {
@@ -10873,15 +9969,15 @@ impl AeronLossReporter {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_loss_reporter_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_loss_reporter_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_loss_reporter_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronLossReporter {
@@ -10894,9 +9990,7 @@ impl From<*mut aeron_loss_reporter_t> for AeronLossReporter {
     #[inline]
     fn from(value: *mut aeron_loss_reporter_t) -> Self {
         AeronLossReporter {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -10922,9 +10016,7 @@ impl From<*const aeron_loss_reporter_t> for AeronLossReporter {
     #[inline]
     fn from(value: *const aeron_loss_reporter_t) -> Self {
         AeronLossReporter {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_loss_reporter_t,
+            inner: CResource::Borrowed(value as *mut aeron_loss_reporter_t),
         }
     }
 }
@@ -10932,9 +10024,7 @@ impl From<aeron_loss_reporter_t> for AeronLossReporter {
     #[inline]
     fn from(mut value: aeron_loss_reporter_t) -> Self {
         AeronLossReporter {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_loss_reporter_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_loss_reporter_t),
         }
     }
 }
@@ -10961,19 +10051,16 @@ impl AeronLossReporter {
 }
 #[derive(Clone)]
 pub struct AeronMappedBuffer {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_mapped_buffer_t>>>,
-    inner: *mut aeron_mapped_buffer_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_mapped_buffer_t>>,
+    inner: CResource<aeron_mapped_buffer_t>,
 }
 impl core::fmt::Debug for AeronMappedBuffer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronMappedBuffer))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronMappedBuffer))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(length), &self.length())
                 .finish()
@@ -10998,9 +10085,7 @@ impl AeronMappedBuffer {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -11024,9 +10109,7 @@ impl AeronMappedBuffer {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -11038,15 +10121,9 @@ impl AeronMappedBuffer {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_mapped_buffer_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn addr(&self) -> &mut [u8] {
@@ -11064,33 +10141,15 @@ impl AeronMappedBuffer {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_mapped_buffer_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronMappedBuffer = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_mapped_buffer_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronMappedBuffer = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_mapped_buffer_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronMappedBuffer = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronMappedBuffer {
@@ -11103,9 +10162,7 @@ impl From<*mut aeron_mapped_buffer_t> for AeronMappedBuffer {
     #[inline]
     fn from(value: *mut aeron_mapped_buffer_t) -> Self {
         AeronMappedBuffer {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -11131,9 +10188,7 @@ impl From<*const aeron_mapped_buffer_t> for AeronMappedBuffer {
     #[inline]
     fn from(value: *const aeron_mapped_buffer_t) -> Self {
         AeronMappedBuffer {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_mapped_buffer_t,
+            inner: CResource::Borrowed(value as *mut aeron_mapped_buffer_t),
         }
     }
 }
@@ -11141,9 +10196,7 @@ impl From<aeron_mapped_buffer_t> for AeronMappedBuffer {
     #[inline]
     fn from(mut value: aeron_mapped_buffer_t) -> Self {
         AeronMappedBuffer {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_mapped_buffer_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_mapped_buffer_t),
         }
     }
 }
@@ -11170,19 +10223,16 @@ impl AeronMappedBuffer {
 }
 #[derive(Clone)]
 pub struct AeronMappedFile {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_mapped_file_t>>>,
-    inner: *mut aeron_mapped_file_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_mapped_file_t>>,
+    inner: CResource<aeron_mapped_file_t>,
 }
 impl core::fmt::Debug for AeronMappedFile {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronMappedFile))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronMappedFile))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(length), &self.length())
                 .finish()
@@ -11207,9 +10257,7 @@ impl AeronMappedFile {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -11233,9 +10281,7 @@ impl AeronMappedFile {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -11247,15 +10293,9 @@ impl AeronMappedFile {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_mapped_file_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn addr(&self) -> *mut ::std::os::raw::c_void {
@@ -11305,15 +10345,15 @@ impl AeronMappedFile {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_mapped_file_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_mapped_file_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_mapped_file_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronMappedFile {
@@ -11326,9 +10366,7 @@ impl From<*mut aeron_mapped_file_t> for AeronMappedFile {
     #[inline]
     fn from(value: *mut aeron_mapped_file_t) -> Self {
         AeronMappedFile {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -11354,9 +10392,7 @@ impl From<*const aeron_mapped_file_t> for AeronMappedFile {
     #[inline]
     fn from(value: *const aeron_mapped_file_t) -> Self {
         AeronMappedFile {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_mapped_file_t,
+            inner: CResource::Borrowed(value as *mut aeron_mapped_file_t),
         }
     }
 }
@@ -11364,9 +10400,7 @@ impl From<aeron_mapped_file_t> for AeronMappedFile {
     #[inline]
     fn from(mut value: aeron_mapped_file_t) -> Self {
         AeronMappedFile {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_mapped_file_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_mapped_file_t),
         }
     }
 }
@@ -11393,19 +10427,16 @@ impl AeronMappedFile {
 }
 #[derive(Clone)]
 pub struct AeronMappedRawLog {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_mapped_raw_log_t>>>,
-    inner: *mut aeron_mapped_raw_log_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_mapped_raw_log_t>>,
+    inner: CResource<aeron_mapped_raw_log_t>,
 }
 impl core::fmt::Debug for AeronMappedRawLog {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronMappedRawLog))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronMappedRawLog))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(log_meta_data), &self.log_meta_data())
                 .field(stringify!(mapped_file), &self.mapped_file())
@@ -11439,9 +10470,7 @@ impl AeronMappedRawLog {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -11465,9 +10494,7 @@ impl AeronMappedRawLog {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -11479,15 +10506,9 @@ impl AeronMappedRawLog {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_mapped_raw_log_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn term_buffers(&self) -> [aeron_mapped_buffer_t; 3usize] {
@@ -11564,15 +10585,15 @@ impl AeronMappedRawLog {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_mapped_raw_log_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_mapped_raw_log_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_mapped_raw_log_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronMappedRawLog {
@@ -11585,9 +10606,7 @@ impl From<*mut aeron_mapped_raw_log_t> for AeronMappedRawLog {
     #[inline]
     fn from(value: *mut aeron_mapped_raw_log_t) -> Self {
         AeronMappedRawLog {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -11613,9 +10632,7 @@ impl From<*const aeron_mapped_raw_log_t> for AeronMappedRawLog {
     #[inline]
     fn from(value: *const aeron_mapped_raw_log_t) -> Self {
         AeronMappedRawLog {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_mapped_raw_log_t,
+            inner: CResource::Borrowed(value as *mut aeron_mapped_raw_log_t),
         }
     }
 }
@@ -11623,9 +10640,7 @@ impl From<aeron_mapped_raw_log_t> for AeronMappedRawLog {
     #[inline]
     fn from(mut value: aeron_mapped_raw_log_t) -> Self {
         AeronMappedRawLog {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_mapped_raw_log_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_mapped_raw_log_t),
         }
     }
 }
@@ -11652,19 +10667,16 @@ impl AeronMappedRawLog {
 }
 #[derive(Clone)]
 pub struct AeronNakHeader {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_nak_header_t>>>,
-    inner: *mut aeron_nak_header_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_nak_header_t>>,
+    inner: CResource<aeron_nak_header_t>,
 }
 impl core::fmt::Debug for AeronNakHeader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronNakHeader))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronNakHeader))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(frame_header), &self.frame_header())
                 .field(stringify!(session_id), &self.session_id())
@@ -11705,9 +10717,7 @@ impl AeronNakHeader {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -11731,9 +10741,7 @@ impl AeronNakHeader {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -11745,15 +10753,9 @@ impl AeronNakHeader {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_nak_header_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn frame_header(&self) -> AeronFrameHeader {
@@ -11781,33 +10783,15 @@ impl AeronNakHeader {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_nak_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronNakHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_nak_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronNakHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_nak_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronNakHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronNakHeader {
@@ -11820,9 +10804,7 @@ impl From<*mut aeron_nak_header_t> for AeronNakHeader {
     #[inline]
     fn from(value: *mut aeron_nak_header_t) -> Self {
         AeronNakHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -11848,9 +10830,7 @@ impl From<*const aeron_nak_header_t> for AeronNakHeader {
     #[inline]
     fn from(value: *const aeron_nak_header_t) -> Self {
         AeronNakHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_nak_header_t,
+            inner: CResource::Borrowed(value as *mut aeron_nak_header_t),
         }
     }
 }
@@ -11858,9 +10838,7 @@ impl From<aeron_nak_header_t> for AeronNakHeader {
     #[inline]
     fn from(mut value: aeron_nak_header_t) -> Self {
         AeronNakHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_nak_header_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_nak_header_t),
         }
     }
 }
@@ -11887,19 +10865,16 @@ impl AeronNakHeader {
 }
 #[derive(Clone)]
 pub struct AeronAvailableCounterPair {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_on_available_counter_pair_t>>>,
-    inner: *mut aeron_on_available_counter_pair_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_on_available_counter_pair_t>>,
+    inner: CResource<aeron_on_available_counter_pair_t>,
 }
 impl core::fmt::Debug for AeronAvailableCounterPair {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronAvailableCounterPair))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronAvailableCounterPair))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -11939,9 +10914,7 @@ impl AeronAvailableCounterPair {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -11966,9 +10939,7 @@ impl AeronAvailableCounterPair {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -11980,15 +10951,9 @@ impl AeronAvailableCounterPair {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_on_available_counter_pair_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn handler(&self) -> aeron_on_available_counter_t {
@@ -12000,33 +10965,15 @@ impl AeronAvailableCounterPair {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_on_available_counter_pair_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronAvailableCounterPair = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_on_available_counter_pair_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronAvailableCounterPair = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_on_available_counter_pair_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronAvailableCounterPair = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronAvailableCounterPair {
@@ -12039,9 +10986,7 @@ impl From<*mut aeron_on_available_counter_pair_t> for AeronAvailableCounterPair 
     #[inline]
     fn from(value: *mut aeron_on_available_counter_pair_t) -> Self {
         AeronAvailableCounterPair {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -12067,9 +11012,7 @@ impl From<*const aeron_on_available_counter_pair_t> for AeronAvailableCounterPai
     #[inline]
     fn from(value: *const aeron_on_available_counter_pair_t) -> Self {
         AeronAvailableCounterPair {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_on_available_counter_pair_t,
+            inner: CResource::Borrowed(value as *mut aeron_on_available_counter_pair_t),
         }
     }
 }
@@ -12077,9 +11020,7 @@ impl From<aeron_on_available_counter_pair_t> for AeronAvailableCounterPair {
     #[inline]
     fn from(mut value: aeron_on_available_counter_pair_t) -> Self {
         AeronAvailableCounterPair {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_on_available_counter_pair_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_on_available_counter_pair_t),
         }
     }
 }
@@ -12106,19 +11047,16 @@ impl AeronAvailableCounterPair {
 }
 #[derive(Clone)]
 pub struct AeronCloseClientPair {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_on_close_client_pair_t>>>,
-    inner: *mut aeron_on_close_client_pair_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_on_close_client_pair_t>>,
+    inner: CResource<aeron_on_close_client_pair_t>,
 }
 impl core::fmt::Debug for AeronCloseClientPair {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronCloseClientPair))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronCloseClientPair))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -12153,9 +11091,7 @@ impl AeronCloseClientPair {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -12179,9 +11115,7 @@ impl AeronCloseClientPair {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -12193,15 +11127,9 @@ impl AeronCloseClientPair {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_on_close_client_pair_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn handler(&self) -> aeron_on_close_client_t {
@@ -12213,33 +11141,15 @@ impl AeronCloseClientPair {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_on_close_client_pair_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronCloseClientPair = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_on_close_client_pair_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronCloseClientPair = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_on_close_client_pair_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronCloseClientPair = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronCloseClientPair {
@@ -12252,9 +11162,7 @@ impl From<*mut aeron_on_close_client_pair_t> for AeronCloseClientPair {
     #[inline]
     fn from(value: *mut aeron_on_close_client_pair_t) -> Self {
         AeronCloseClientPair {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -12280,9 +11188,7 @@ impl From<*const aeron_on_close_client_pair_t> for AeronCloseClientPair {
     #[inline]
     fn from(value: *const aeron_on_close_client_pair_t) -> Self {
         AeronCloseClientPair {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_on_close_client_pair_t,
+            inner: CResource::Borrowed(value as *mut aeron_on_close_client_pair_t),
         }
     }
 }
@@ -12290,9 +11196,7 @@ impl From<aeron_on_close_client_pair_t> for AeronCloseClientPair {
     #[inline]
     fn from(mut value: aeron_on_close_client_pair_t) -> Self {
         AeronCloseClientPair {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_on_close_client_pair_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_on_close_client_pair_t),
         }
     }
 }
@@ -12319,19 +11223,16 @@ impl AeronCloseClientPair {
 }
 #[derive(Clone)]
 pub struct AeronUnavailableCounterPair {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_on_unavailable_counter_pair_t>>>,
-    inner: *mut aeron_on_unavailable_counter_pair_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_on_unavailable_counter_pair_t>>,
+    inner: CResource<aeron_on_unavailable_counter_pair_t>,
 }
 impl core::fmt::Debug for AeronUnavailableCounterPair {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronUnavailableCounterPair))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronUnavailableCounterPair))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -12371,9 +11272,7 @@ impl AeronUnavailableCounterPair {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -12398,9 +11297,7 @@ impl AeronUnavailableCounterPair {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -12412,15 +11309,9 @@ impl AeronUnavailableCounterPair {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_on_unavailable_counter_pair_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn handler(&self) -> aeron_on_unavailable_counter_t {
@@ -12432,33 +11323,15 @@ impl AeronUnavailableCounterPair {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_on_unavailable_counter_pair_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronUnavailableCounterPair = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_on_unavailable_counter_pair_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronUnavailableCounterPair = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_on_unavailable_counter_pair_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronUnavailableCounterPair = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronUnavailableCounterPair {
@@ -12471,9 +11344,7 @@ impl From<*mut aeron_on_unavailable_counter_pair_t> for AeronUnavailableCounterP
     #[inline]
     fn from(value: *mut aeron_on_unavailable_counter_pair_t) -> Self {
         AeronUnavailableCounterPair {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -12499,9 +11370,7 @@ impl From<*const aeron_on_unavailable_counter_pair_t> for AeronUnavailableCounte
     #[inline]
     fn from(value: *const aeron_on_unavailable_counter_pair_t) -> Self {
         AeronUnavailableCounterPair {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_on_unavailable_counter_pair_t,
+            inner: CResource::Borrowed(value as *mut aeron_on_unavailable_counter_pair_t),
         }
     }
 }
@@ -12509,9 +11378,7 @@ impl From<aeron_on_unavailable_counter_pair_t> for AeronUnavailableCounterPair {
     #[inline]
     fn from(mut value: aeron_on_unavailable_counter_pair_t) -> Self {
         AeronUnavailableCounterPair {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_on_unavailable_counter_pair_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_on_unavailable_counter_pair_t),
         }
     }
 }
@@ -12538,19 +11405,16 @@ impl AeronUnavailableCounterPair {
 }
 #[derive(Clone)]
 pub struct AeronOptionHeader {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_option_header_t>>>,
-    inner: *mut aeron_option_header_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_option_header_t>>,
+    inner: CResource<aeron_option_header_t>,
 }
 impl core::fmt::Debug for AeronOptionHeader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronOptionHeader))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronOptionHeader))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(option_length), &self.option_length())
                 .field(stringify!(type_), &self.type_())
@@ -12576,9 +11440,7 @@ impl AeronOptionHeader {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -12602,9 +11464,7 @@ impl AeronOptionHeader {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -12616,15 +11476,9 @@ impl AeronOptionHeader {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_option_header_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn option_length(&self) -> u16 {
@@ -12636,33 +11490,15 @@ impl AeronOptionHeader {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_option_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronOptionHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_option_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronOptionHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_option_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronOptionHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronOptionHeader {
@@ -12675,9 +11511,7 @@ impl From<*mut aeron_option_header_t> for AeronOptionHeader {
     #[inline]
     fn from(value: *mut aeron_option_header_t) -> Self {
         AeronOptionHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -12703,9 +11537,7 @@ impl From<*const aeron_option_header_t> for AeronOptionHeader {
     #[inline]
     fn from(value: *const aeron_option_header_t) -> Self {
         AeronOptionHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_option_header_t,
+            inner: CResource::Borrowed(value as *mut aeron_option_header_t),
         }
     }
 }
@@ -12713,9 +11545,7 @@ impl From<aeron_option_header_t> for AeronOptionHeader {
     #[inline]
     fn from(mut value: aeron_option_header_t) -> Self {
         AeronOptionHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_option_header_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_option_header_t),
         }
     }
 }
@@ -12742,19 +11572,16 @@ impl AeronOptionHeader {
 }
 #[derive(Clone)]
 pub struct AeronPerThreadError {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_per_thread_error_t>>>,
-    inner: *mut aeron_per_thread_error_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_per_thread_error_t>>,
+    inner: CResource<aeron_per_thread_error_t>,
 }
 impl core::fmt::Debug for AeronPerThreadError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronPerThreadError))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronPerThreadError))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(offset), &self.offset())
                 .finish()
@@ -12784,9 +11611,7 @@ impl AeronPerThreadError {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -12810,9 +11635,7 @@ impl AeronPerThreadError {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -12824,15 +11647,9 @@ impl AeronPerThreadError {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_per_thread_error_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn errcode(&self) -> ::std::os::raw::c_int {
@@ -12848,33 +11665,15 @@ impl AeronPerThreadError {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_per_thread_error_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronPerThreadError = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_per_thread_error_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronPerThreadError = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_per_thread_error_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronPerThreadError = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronPerThreadError {
@@ -12887,9 +11686,7 @@ impl From<*mut aeron_per_thread_error_t> for AeronPerThreadError {
     #[inline]
     fn from(value: *mut aeron_per_thread_error_t) -> Self {
         AeronPerThreadError {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -12915,9 +11712,7 @@ impl From<*const aeron_per_thread_error_t> for AeronPerThreadError {
     #[inline]
     fn from(value: *const aeron_per_thread_error_t) -> Self {
         AeronPerThreadError {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_per_thread_error_t,
+            inner: CResource::Borrowed(value as *mut aeron_per_thread_error_t),
         }
     }
 }
@@ -12925,9 +11720,7 @@ impl From<aeron_per_thread_error_t> for AeronPerThreadError {
     #[inline]
     fn from(mut value: aeron_per_thread_error_t) -> Self {
         AeronPerThreadError {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_per_thread_error_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_per_thread_error_t),
         }
     }
 }
@@ -12955,19 +11748,16 @@ impl AeronPerThreadError {
 #[doc = "Configuration for a publication that does not change during it's lifetime."]
 #[derive(Clone)]
 pub struct AeronPublicationConstants {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_publication_constants_t>>>,
-    inner: *mut aeron_publication_constants_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_publication_constants_t>>,
+    inner: CResource<aeron_publication_constants_t>,
 }
 impl core::fmt::Debug for AeronPublicationConstants {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronPublicationConstants))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronPublicationConstants))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(
                     stringify!(original_registration_id),
@@ -13043,9 +11833,7 @@ impl AeronPublicationConstants {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -13069,9 +11857,7 @@ impl AeronPublicationConstants {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -13083,15 +11869,9 @@ impl AeronPublicationConstants {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_publication_constants_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn channel(&self) -> &str {
@@ -13151,33 +11931,15 @@ impl AeronPublicationConstants {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_publication_constants_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronPublicationConstants = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_publication_constants_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronPublicationConstants = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_publication_constants_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronPublicationConstants = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronPublicationConstants {
@@ -13190,9 +11952,7 @@ impl From<*mut aeron_publication_constants_t> for AeronPublicationConstants {
     #[inline]
     fn from(value: *mut aeron_publication_constants_t) -> Self {
         AeronPublicationConstants {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -13218,9 +11978,7 @@ impl From<*const aeron_publication_constants_t> for AeronPublicationConstants {
     #[inline]
     fn from(value: *const aeron_publication_constants_t) -> Self {
         AeronPublicationConstants {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_publication_constants_t,
+            inner: CResource::Borrowed(value as *mut aeron_publication_constants_t),
         }
     }
 }
@@ -13228,9 +11986,7 @@ impl From<aeron_publication_constants_t> for AeronPublicationConstants {
     #[inline]
     fn from(mut value: aeron_publication_constants_t) -> Self {
         AeronPublicationConstants {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_publication_constants_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_publication_constants_t),
         }
     }
 }
@@ -13257,19 +12013,16 @@ impl AeronPublicationConstants {
 }
 #[derive(Clone)]
 pub struct AeronPublicationErrorValues {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_publication_error_values_t>>>,
-    inner: *mut aeron_publication_error_values_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_publication_error_values_t>>,
+    inner: CResource<aeron_publication_error_values_t>,
 }
 impl core::fmt::Debug for AeronPublicationErrorValues {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronPublicationErrorValues))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronPublicationErrorValues))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(registration_id), &self.registration_id())
                 .field(
@@ -13314,9 +12067,7 @@ impl AeronPublicationErrorValues {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -13328,15 +12079,9 @@ impl AeronPublicationErrorValues {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_publication_error_values_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn registration_id(&self) -> i64 {
@@ -13397,15 +12142,15 @@ impl AeronPublicationErrorValues {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_publication_error_values_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_publication_error_values_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_publication_error_values_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronPublicationErrorValues {
@@ -13418,9 +12163,7 @@ impl From<*mut aeron_publication_error_values_t> for AeronPublicationErrorValues
     #[inline]
     fn from(value: *mut aeron_publication_error_values_t) -> Self {
         AeronPublicationErrorValues {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -13446,9 +12189,7 @@ impl From<*const aeron_publication_error_values_t> for AeronPublicationErrorValu
     #[inline]
     fn from(value: *const aeron_publication_error_values_t) -> Self {
         AeronPublicationErrorValues {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_publication_error_values_t,
+            inner: CResource::Borrowed(value as *mut aeron_publication_error_values_t),
         }
     }
 }
@@ -13456,27 +12197,22 @@ impl From<aeron_publication_error_values_t> for AeronPublicationErrorValues {
     #[inline]
     fn from(mut value: aeron_publication_error_values_t) -> Self {
         AeronPublicationErrorValues {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_publication_error_values_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_publication_error_values_t),
         }
     }
 }
 #[derive(Clone)]
 pub struct AeronPublication {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_publication_t>>>,
-    inner: *mut aeron_publication_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_publication_t>>,
+    inner: CResource<aeron_publication_t>,
 }
 impl core::fmt::Debug for AeronPublication {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronPublication))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronPublication))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -13504,9 +12240,7 @@ impl AeronPublication {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -13518,15 +12252,9 @@ impl AeronPublication {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_publication_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     #[doc = "Non-blocking publish of a buffer containing a message."]
@@ -13755,10 +12483,7 @@ impl AeronPublication {
     #[doc = "Fill in a structure with the constants in use by a publication."]
     #[doc = ""]
     pub fn get_constants(&self) -> Result<AeronPublicationConstants, AeronCError> {
-        let mut result = AeronPublicationConstants::new_zeroed_on_stack();
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
-        }
+        let result = AeronPublicationConstants::new_zeroed_on_stack();
         self.constants(&result)?;
         Ok(result)
     }
@@ -13796,7 +12521,7 @@ impl AeronPublication {
         &self,
         on_close_complete: Option<&Handler<AeronNotificationHandlerImpl>>,
     ) -> Result<i32, AeronCError> {
-        if let Some(inner) = self.owned_inner.as_ref() {
+        if let Some(inner) = self.inner.as_owned() {
             inner.close_already_called.set(true);
         }
         unsafe {
@@ -13837,7 +12562,7 @@ impl AeronPublication {
         &self,
         mut on_close_complete: AeronNotificationHandlerImpl,
     ) -> Result<i32, AeronCError> {
-        if let Some(inner) = self.owned_inner.as_ref() {
+        if let Some(inner) = self.inner.as_owned() {
             inner.close_already_called.set(true);
         }
         unsafe {
@@ -13936,15 +12661,15 @@ impl AeronPublication {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_publication_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_publication_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_publication_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronPublication {
@@ -13957,9 +12682,7 @@ impl From<*mut aeron_publication_t> for AeronPublication {
     #[inline]
     fn from(value: *mut aeron_publication_t) -> Self {
         AeronPublication {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -13985,9 +12708,7 @@ impl From<*const aeron_publication_t> for AeronPublication {
     #[inline]
     fn from(value: *const aeron_publication_t) -> Self {
         AeronPublication {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_publication_t,
+            inner: CResource::Borrowed(value as *mut aeron_publication_t),
         }
     }
 }
@@ -13995,17 +12716,15 @@ impl From<aeron_publication_t> for AeronPublication {
     #[inline]
     fn from(mut value: aeron_publication_t) -> Self {
         AeronPublication {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_publication_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_publication_t),
         }
     }
 }
 impl Drop for AeronPublication {
     fn drop(&mut self) {
-        if let Some(inner) = self.owned_inner.as_mut() {
+        if let Some(inner) = self.inner.as_owned() {
             if (inner.cleanup.is_none())
-                && std::rc::Rc::strong_count(&inner) == 1
+                && std::rc::Rc::strong_count(inner) == 1
                 && !inner.is_closed_already_called()
             {
                 if inner.auto_close.get() {
@@ -14022,19 +12741,16 @@ impl Drop for AeronPublication {
 }
 #[derive(Clone)]
 pub struct AeronResolutionHeaderIpv4 {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_resolution_header_ipv4_t>>>,
-    inner: *mut aeron_resolution_header_ipv4_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_resolution_header_ipv4_t>>,
+    inner: CResource<aeron_resolution_header_ipv4_t>,
 }
 impl core::fmt::Debug for AeronResolutionHeaderIpv4 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronResolutionHeaderIpv4))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronResolutionHeaderIpv4))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(resolution_header), &self.resolution_header())
                 .field(stringify!(name_length), &self.name_length())
@@ -14065,9 +12781,7 @@ impl AeronResolutionHeaderIpv4 {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -14091,9 +12805,7 @@ impl AeronResolutionHeaderIpv4 {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -14105,15 +12817,9 @@ impl AeronResolutionHeaderIpv4 {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_resolution_header_ipv4_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn resolution_header(&self) -> AeronResolutionHeader {
@@ -14136,15 +12842,15 @@ impl AeronResolutionHeaderIpv4 {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_resolution_header_ipv4_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_resolution_header_ipv4_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_resolution_header_ipv4_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronResolutionHeaderIpv4 {
@@ -14157,9 +12863,7 @@ impl From<*mut aeron_resolution_header_ipv4_t> for AeronResolutionHeaderIpv4 {
     #[inline]
     fn from(value: *mut aeron_resolution_header_ipv4_t) -> Self {
         AeronResolutionHeaderIpv4 {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -14185,9 +12889,7 @@ impl From<*const aeron_resolution_header_ipv4_t> for AeronResolutionHeaderIpv4 {
     #[inline]
     fn from(value: *const aeron_resolution_header_ipv4_t) -> Self {
         AeronResolutionHeaderIpv4 {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_resolution_header_ipv4_t,
+            inner: CResource::Borrowed(value as *mut aeron_resolution_header_ipv4_t),
         }
     }
 }
@@ -14195,9 +12897,7 @@ impl From<aeron_resolution_header_ipv4_t> for AeronResolutionHeaderIpv4 {
     #[inline]
     fn from(mut value: aeron_resolution_header_ipv4_t) -> Self {
         AeronResolutionHeaderIpv4 {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_resolution_header_ipv4_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_resolution_header_ipv4_t),
         }
     }
 }
@@ -14224,19 +12924,16 @@ impl AeronResolutionHeaderIpv4 {
 }
 #[derive(Clone)]
 pub struct AeronResolutionHeaderIpv6 {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_resolution_header_ipv6_t>>>,
-    inner: *mut aeron_resolution_header_ipv6_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_resolution_header_ipv6_t>>,
+    inner: CResource<aeron_resolution_header_ipv6_t>,
 }
 impl core::fmt::Debug for AeronResolutionHeaderIpv6 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronResolutionHeaderIpv6))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronResolutionHeaderIpv6))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(resolution_header), &self.resolution_header())
                 .field(stringify!(name_length), &self.name_length())
@@ -14267,9 +12964,7 @@ impl AeronResolutionHeaderIpv6 {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -14293,9 +12988,7 @@ impl AeronResolutionHeaderIpv6 {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -14307,15 +13000,9 @@ impl AeronResolutionHeaderIpv6 {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_resolution_header_ipv6_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn resolution_header(&self) -> AeronResolutionHeader {
@@ -14338,15 +13025,15 @@ impl AeronResolutionHeaderIpv6 {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_resolution_header_ipv6_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_resolution_header_ipv6_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_resolution_header_ipv6_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronResolutionHeaderIpv6 {
@@ -14359,9 +13046,7 @@ impl From<*mut aeron_resolution_header_ipv6_t> for AeronResolutionHeaderIpv6 {
     #[inline]
     fn from(value: *mut aeron_resolution_header_ipv6_t) -> Self {
         AeronResolutionHeaderIpv6 {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -14387,9 +13072,7 @@ impl From<*const aeron_resolution_header_ipv6_t> for AeronResolutionHeaderIpv6 {
     #[inline]
     fn from(value: *const aeron_resolution_header_ipv6_t) -> Self {
         AeronResolutionHeaderIpv6 {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_resolution_header_ipv6_t,
+            inner: CResource::Borrowed(value as *mut aeron_resolution_header_ipv6_t),
         }
     }
 }
@@ -14397,9 +13080,7 @@ impl From<aeron_resolution_header_ipv6_t> for AeronResolutionHeaderIpv6 {
     #[inline]
     fn from(mut value: aeron_resolution_header_ipv6_t) -> Self {
         AeronResolutionHeaderIpv6 {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_resolution_header_ipv6_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_resolution_header_ipv6_t),
         }
     }
 }
@@ -14426,19 +13107,16 @@ impl AeronResolutionHeaderIpv6 {
 }
 #[derive(Clone)]
 pub struct AeronResolutionHeader {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_resolution_header_t>>>,
-    inner: *mut aeron_resolution_header_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_resolution_header_t>>,
+    inner: CResource<aeron_resolution_header_t>,
 }
 impl core::fmt::Debug for AeronResolutionHeader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronResolutionHeader))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronResolutionHeader))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(udp_port), &self.udp_port())
                 .field(stringify!(age_in_ms), &self.age_in_ms())
@@ -14471,9 +13149,7 @@ impl AeronResolutionHeader {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -14497,9 +13173,7 @@ impl AeronResolutionHeader {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -14511,15 +13185,9 @@ impl AeronResolutionHeader {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_resolution_header_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn res_type(&self) -> i8 {
@@ -14539,33 +13207,15 @@ impl AeronResolutionHeader {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_resolution_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronResolutionHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_resolution_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronResolutionHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_resolution_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronResolutionHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronResolutionHeader {
@@ -14578,9 +13228,7 @@ impl From<*mut aeron_resolution_header_t> for AeronResolutionHeader {
     #[inline]
     fn from(value: *mut aeron_resolution_header_t) -> Self {
         AeronResolutionHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -14606,9 +13254,7 @@ impl From<*const aeron_resolution_header_t> for AeronResolutionHeader {
     #[inline]
     fn from(value: *const aeron_resolution_header_t) -> Self {
         AeronResolutionHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_resolution_header_t,
+            inner: CResource::Borrowed(value as *mut aeron_resolution_header_t),
         }
     }
 }
@@ -14616,9 +13262,7 @@ impl From<aeron_resolution_header_t> for AeronResolutionHeader {
     #[inline]
     fn from(mut value: aeron_resolution_header_t) -> Self {
         AeronResolutionHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_resolution_header_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_resolution_header_t),
         }
     }
 }
@@ -14645,19 +13289,16 @@ impl AeronResolutionHeader {
 }
 #[derive(Clone)]
 pub struct AeronResponseSetupHeader {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_response_setup_header_t>>>,
-    inner: *mut aeron_response_setup_header_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_response_setup_header_t>>,
+    inner: CResource<aeron_response_setup_header_t>,
 }
 impl core::fmt::Debug for AeronResponseSetupHeader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronResponseSetupHeader))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronResponseSetupHeader))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(frame_header), &self.frame_header())
                 .field(stringify!(session_id), &self.session_id())
@@ -14692,9 +13333,7 @@ impl AeronResponseSetupHeader {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -14718,9 +13357,7 @@ impl AeronResponseSetupHeader {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -14732,15 +13369,9 @@ impl AeronResponseSetupHeader {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_response_setup_header_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn frame_header(&self) -> AeronFrameHeader {
@@ -14760,33 +13391,15 @@ impl AeronResponseSetupHeader {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_response_setup_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronResponseSetupHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_response_setup_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronResponseSetupHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_response_setup_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronResponseSetupHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronResponseSetupHeader {
@@ -14799,9 +13412,7 @@ impl From<*mut aeron_response_setup_header_t> for AeronResponseSetupHeader {
     #[inline]
     fn from(value: *mut aeron_response_setup_header_t) -> Self {
         AeronResponseSetupHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -14827,9 +13438,7 @@ impl From<*const aeron_response_setup_header_t> for AeronResponseSetupHeader {
     #[inline]
     fn from(value: *const aeron_response_setup_header_t) -> Self {
         AeronResponseSetupHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_response_setup_header_t,
+            inner: CResource::Borrowed(value as *mut aeron_response_setup_header_t),
         }
     }
 }
@@ -14837,9 +13446,7 @@ impl From<aeron_response_setup_header_t> for AeronResponseSetupHeader {
     #[inline]
     fn from(mut value: aeron_response_setup_header_t) -> Self {
         AeronResponseSetupHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_response_setup_header_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_response_setup_header_t),
         }
     }
 }
@@ -14866,19 +13473,16 @@ impl AeronResponseSetupHeader {
 }
 #[derive(Clone)]
 pub struct AeronRttmHeader {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_rttm_header_t>>>,
-    inner: *mut aeron_rttm_header_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_rttm_header_t>>,
+    inner: CResource<aeron_rttm_header_t>,
 }
 impl core::fmt::Debug for AeronRttmHeader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronRttmHeader))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronRttmHeader))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(frame_header), &self.frame_header())
                 .field(stringify!(session_id), &self.session_id())
@@ -14919,9 +13523,7 @@ impl AeronRttmHeader {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -14945,9 +13547,7 @@ impl AeronRttmHeader {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -14959,15 +13559,9 @@ impl AeronRttmHeader {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_rttm_header_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn frame_header(&self) -> AeronFrameHeader {
@@ -14995,33 +13589,15 @@ impl AeronRttmHeader {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_rttm_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronRttmHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_rttm_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronRttmHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_rttm_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronRttmHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronRttmHeader {
@@ -15034,9 +13610,7 @@ impl From<*mut aeron_rttm_header_t> for AeronRttmHeader {
     #[inline]
     fn from(value: *mut aeron_rttm_header_t) -> Self {
         AeronRttmHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -15062,9 +13636,7 @@ impl From<*const aeron_rttm_header_t> for AeronRttmHeader {
     #[inline]
     fn from(value: *const aeron_rttm_header_t) -> Self {
         AeronRttmHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_rttm_header_t,
+            inner: CResource::Borrowed(value as *mut aeron_rttm_header_t),
         }
     }
 }
@@ -15072,9 +13644,7 @@ impl From<aeron_rttm_header_t> for AeronRttmHeader {
     #[inline]
     fn from(mut value: aeron_rttm_header_t) -> Self {
         AeronRttmHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_rttm_header_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_rttm_header_t),
         }
     }
 }
@@ -15101,19 +13671,16 @@ impl AeronRttmHeader {
 }
 #[derive(Clone)]
 pub struct AeronSetupHeader {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_setup_header_t>>>,
-    inner: *mut aeron_setup_header_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_setup_header_t>>,
+    inner: CResource<aeron_setup_header_t>,
 }
 impl core::fmt::Debug for AeronSetupHeader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronSetupHeader))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronSetupHeader))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(frame_header), &self.frame_header())
                 .field(stringify!(term_offset), &self.term_offset())
@@ -15163,9 +13730,7 @@ impl AeronSetupHeader {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -15189,9 +13754,7 @@ impl AeronSetupHeader {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -15203,15 +13766,9 @@ impl AeronSetupHeader {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_setup_header_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn frame_header(&self) -> AeronFrameHeader {
@@ -15251,33 +13808,15 @@ impl AeronSetupHeader {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_setup_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronSetupHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_setup_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronSetupHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_setup_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronSetupHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronSetupHeader {
@@ -15290,9 +13829,7 @@ impl From<*mut aeron_setup_header_t> for AeronSetupHeader {
     #[inline]
     fn from(value: *mut aeron_setup_header_t) -> Self {
         AeronSetupHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -15318,9 +13855,7 @@ impl From<*const aeron_setup_header_t> for AeronSetupHeader {
     #[inline]
     fn from(value: *const aeron_setup_header_t) -> Self {
         AeronSetupHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_setup_header_t,
+            inner: CResource::Borrowed(value as *mut aeron_setup_header_t),
         }
     }
 }
@@ -15328,9 +13863,7 @@ impl From<aeron_setup_header_t> for AeronSetupHeader {
     #[inline]
     fn from(mut value: aeron_setup_header_t) -> Self {
         AeronSetupHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_setup_header_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_setup_header_t),
         }
     }
 }
@@ -15357,19 +13890,16 @@ impl AeronSetupHeader {
 }
 #[derive(Clone)]
 pub struct AeronStatusMessageHeader {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_status_message_header_t>>>,
-    inner: *mut aeron_status_message_header_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_status_message_header_t>>,
+    inner: CResource<aeron_status_message_header_t>,
 }
 impl core::fmt::Debug for AeronStatusMessageHeader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronStatusMessageHeader))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronStatusMessageHeader))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(frame_header), &self.frame_header())
                 .field(stringify!(session_id), &self.session_id())
@@ -15416,9 +13946,7 @@ impl AeronStatusMessageHeader {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -15442,9 +13970,7 @@ impl AeronStatusMessageHeader {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -15456,15 +13982,9 @@ impl AeronStatusMessageHeader {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_status_message_header_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn frame_header(&self) -> AeronFrameHeader {
@@ -15508,15 +14028,15 @@ impl AeronStatusMessageHeader {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_status_message_header_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_status_message_header_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_status_message_header_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronStatusMessageHeader {
@@ -15529,9 +14049,7 @@ impl From<*mut aeron_status_message_header_t> for AeronStatusMessageHeader {
     #[inline]
     fn from(value: *mut aeron_status_message_header_t) -> Self {
         AeronStatusMessageHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -15557,9 +14075,7 @@ impl From<*const aeron_status_message_header_t> for AeronStatusMessageHeader {
     #[inline]
     fn from(value: *const aeron_status_message_header_t) -> Self {
         AeronStatusMessageHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_status_message_header_t,
+            inner: CResource::Borrowed(value as *mut aeron_status_message_header_t),
         }
     }
 }
@@ -15567,9 +14083,7 @@ impl From<aeron_status_message_header_t> for AeronStatusMessageHeader {
     #[inline]
     fn from(mut value: aeron_status_message_header_t) -> Self {
         AeronStatusMessageHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_status_message_header_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_status_message_header_t),
         }
     }
 }
@@ -15596,19 +14110,16 @@ impl AeronStatusMessageHeader {
 }
 #[derive(Clone)]
 pub struct AeronStatusMessageOptionalHeader {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_status_message_optional_header_t>>>,
-    inner: *mut aeron_status_message_optional_header_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_status_message_optional_header_t>>,
+    inner: CResource<aeron_status_message_optional_header_t>,
 }
 impl core::fmt::Debug for AeronStatusMessageOptionalHeader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronStatusMessageOptionalHeader))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronStatusMessageOptionalHeader))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(group_tag), &self.group_tag())
                 .finish()
@@ -15633,9 +14144,7 @@ impl AeronStatusMessageOptionalHeader {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -15660,9 +14169,7 @@ impl AeronStatusMessageOptionalHeader {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -15674,15 +14181,9 @@ impl AeronStatusMessageOptionalHeader {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_status_message_optional_header_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn group_tag(&self) -> i64 {
@@ -15690,33 +14191,15 @@ impl AeronStatusMessageOptionalHeader {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_status_message_optional_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronStatusMessageOptionalHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_status_message_optional_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronStatusMessageOptionalHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_status_message_optional_header_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronStatusMessageOptionalHeader = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronStatusMessageOptionalHeader {
@@ -15729,9 +14212,7 @@ impl From<*mut aeron_status_message_optional_header_t> for AeronStatusMessageOpt
     #[inline]
     fn from(value: *mut aeron_status_message_optional_header_t) -> Self {
         AeronStatusMessageOptionalHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -15757,9 +14238,7 @@ impl From<*const aeron_status_message_optional_header_t> for AeronStatusMessageO
     #[inline]
     fn from(value: *const aeron_status_message_optional_header_t) -> Self {
         AeronStatusMessageOptionalHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_status_message_optional_header_t,
+            inner: CResource::Borrowed(value as *mut aeron_status_message_optional_header_t),
         }
     }
 }
@@ -15767,9 +14246,7 @@ impl From<aeron_status_message_optional_header_t> for AeronStatusMessageOptional
     #[inline]
     fn from(mut value: aeron_status_message_optional_header_t) -> Self {
         AeronStatusMessageOptionalHeader {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_status_message_optional_header_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_status_message_optional_header_t),
         }
     }
 }
@@ -15796,19 +14273,16 @@ impl AeronStatusMessageOptionalHeader {
 }
 #[derive(Clone)]
 pub struct AeronStrToPtrHashMapKey {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_str_to_ptr_hash_map_key_t>>>,
-    inner: *mut aeron_str_to_ptr_hash_map_key_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_str_to_ptr_hash_map_key_t>>,
+    inner: CResource<aeron_str_to_ptr_hash_map_key_t>,
 }
 impl core::fmt::Debug for AeronStrToPtrHashMapKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronStrToPtrHashMapKey))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronStrToPtrHashMapKey))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(hash_code), &self.hash_code())
                 .field(stringify!(str_length), &self.str_length())
@@ -15839,9 +14313,7 @@ impl AeronStrToPtrHashMapKey {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -15865,9 +14337,7 @@ impl AeronStrToPtrHashMapKey {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -15879,15 +14349,9 @@ impl AeronStrToPtrHashMapKey {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_str_to_ptr_hash_map_key_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn str_(&self) -> &str {
@@ -15907,33 +14371,15 @@ impl AeronStrToPtrHashMapKey {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_str_to_ptr_hash_map_key_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronStrToPtrHashMapKey = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_str_to_ptr_hash_map_key_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronStrToPtrHashMapKey = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_str_to_ptr_hash_map_key_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronStrToPtrHashMapKey = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronStrToPtrHashMapKey {
@@ -15946,9 +14392,7 @@ impl From<*mut aeron_str_to_ptr_hash_map_key_t> for AeronStrToPtrHashMapKey {
     #[inline]
     fn from(value: *mut aeron_str_to_ptr_hash_map_key_t) -> Self {
         AeronStrToPtrHashMapKey {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -15974,9 +14418,7 @@ impl From<*const aeron_str_to_ptr_hash_map_key_t> for AeronStrToPtrHashMapKey {
     #[inline]
     fn from(value: *const aeron_str_to_ptr_hash_map_key_t) -> Self {
         AeronStrToPtrHashMapKey {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_str_to_ptr_hash_map_key_t,
+            inner: CResource::Borrowed(value as *mut aeron_str_to_ptr_hash_map_key_t),
         }
     }
 }
@@ -15984,9 +14426,7 @@ impl From<aeron_str_to_ptr_hash_map_key_t> for AeronStrToPtrHashMapKey {
     #[inline]
     fn from(mut value: aeron_str_to_ptr_hash_map_key_t) -> Self {
         AeronStrToPtrHashMapKey {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_str_to_ptr_hash_map_key_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_str_to_ptr_hash_map_key_t),
         }
     }
 }
@@ -16013,19 +14453,16 @@ impl AeronStrToPtrHashMapKey {
 }
 #[derive(Clone)]
 pub struct AeronStrToPtrHashMap {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_str_to_ptr_hash_map_t>>>,
-    inner: *mut aeron_str_to_ptr_hash_map_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_str_to_ptr_hash_map_t>>,
+    inner: CResource<aeron_str_to_ptr_hash_map_t>,
 }
 impl core::fmt::Debug for AeronStrToPtrHashMap {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronStrToPtrHashMap))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronStrToPtrHashMap))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(load_factor), &self.load_factor())
                 .field(stringify!(capacity), &self.capacity())
@@ -16065,9 +14502,7 @@ impl AeronStrToPtrHashMap {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -16091,9 +14526,7 @@ impl AeronStrToPtrHashMap {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -16105,15 +14538,9 @@ impl AeronStrToPtrHashMap {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_str_to_ptr_hash_map_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn keys(&self) -> AeronStrToPtrHashMapKey {
@@ -16141,33 +14568,15 @@ impl AeronStrToPtrHashMap {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_str_to_ptr_hash_map_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronStrToPtrHashMap = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_str_to_ptr_hash_map_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronStrToPtrHashMap = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_str_to_ptr_hash_map_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronStrToPtrHashMap = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronStrToPtrHashMap {
@@ -16180,9 +14589,7 @@ impl From<*mut aeron_str_to_ptr_hash_map_t> for AeronStrToPtrHashMap {
     #[inline]
     fn from(value: *mut aeron_str_to_ptr_hash_map_t) -> Self {
         AeronStrToPtrHashMap {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -16208,9 +14615,7 @@ impl From<*const aeron_str_to_ptr_hash_map_t> for AeronStrToPtrHashMap {
     #[inline]
     fn from(value: *const aeron_str_to_ptr_hash_map_t) -> Self {
         AeronStrToPtrHashMap {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_str_to_ptr_hash_map_t,
+            inner: CResource::Borrowed(value as *mut aeron_str_to_ptr_hash_map_t),
         }
     }
 }
@@ -16218,9 +14623,7 @@ impl From<aeron_str_to_ptr_hash_map_t> for AeronStrToPtrHashMap {
     #[inline]
     fn from(mut value: aeron_str_to_ptr_hash_map_t) -> Self {
         AeronStrToPtrHashMap {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_str_to_ptr_hash_map_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_str_to_ptr_hash_map_t),
         }
     }
 }
@@ -16247,19 +14650,16 @@ impl AeronStrToPtrHashMap {
 }
 #[derive(Clone)]
 pub struct AeronSubscriptionConstants {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_subscription_constants_t>>>,
-    inner: *mut aeron_subscription_constants_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_subscription_constants_t>>,
+    inner: CResource<aeron_subscription_constants_t>,
 }
 impl core::fmt::Debug for AeronSubscriptionConstants {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronSubscriptionConstants))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronSubscriptionConstants))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(registration_id), &self.registration_id())
                 .field(stringify!(stream_id), &self.stream_id())
@@ -16300,9 +14700,7 @@ impl AeronSubscriptionConstants {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -16326,9 +14724,7 @@ impl AeronSubscriptionConstants {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -16340,15 +14736,9 @@ impl AeronSubscriptionConstants {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_subscription_constants_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn channel(&self) -> &str {
@@ -16380,33 +14770,15 @@ impl AeronSubscriptionConstants {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_subscription_constants_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronSubscriptionConstants = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_subscription_constants_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronSubscriptionConstants = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_subscription_constants_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronSubscriptionConstants = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronSubscriptionConstants {
@@ -16419,9 +14791,7 @@ impl From<*mut aeron_subscription_constants_t> for AeronSubscriptionConstants {
     #[inline]
     fn from(value: *mut aeron_subscription_constants_t) -> Self {
         AeronSubscriptionConstants {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -16447,9 +14817,7 @@ impl From<*const aeron_subscription_constants_t> for AeronSubscriptionConstants 
     #[inline]
     fn from(value: *const aeron_subscription_constants_t) -> Self {
         AeronSubscriptionConstants {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_subscription_constants_t,
+            inner: CResource::Borrowed(value as *mut aeron_subscription_constants_t),
         }
     }
 }
@@ -16457,9 +14825,7 @@ impl From<aeron_subscription_constants_t> for AeronSubscriptionConstants {
     #[inline]
     fn from(mut value: aeron_subscription_constants_t) -> Self {
         AeronSubscriptionConstants {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_subscription_constants_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_subscription_constants_t),
         }
     }
 }
@@ -16486,19 +14852,16 @@ impl AeronSubscriptionConstants {
 }
 #[derive(Clone)]
 pub struct AeronSubscription {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_subscription_t>>>,
-    inner: *mut aeron_subscription_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_subscription_t>>,
+    inner: CResource<aeron_subscription_t>,
 }
 impl core::fmt::Debug for AeronSubscription {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronSubscription))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronSubscription))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -16526,9 +14889,7 @@ impl AeronSubscription {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -16540,15 +14901,9 @@ impl AeronSubscription {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_subscription_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     #[doc = "Poll the images under the subscription for available message fragments."]
@@ -16807,10 +15162,7 @@ impl AeronSubscription {
     #[doc = "Fill in a structure with the constants in use by a subscription."]
     #[doc = ""]
     pub fn get_constants(&self) -> Result<AeronSubscriptionConstants, AeronCError> {
-        let mut result = AeronSubscriptionConstants::new_zeroed_on_stack();
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
-        }
+        let result = AeronSubscriptionConstants::new_zeroed_on_stack();
         self.constants(&result)?;
         Ok(result)
     }
@@ -16946,7 +15298,7 @@ impl AeronSubscription {
         &self,
         on_close_complete: Option<&Handler<AeronNotificationHandlerImpl>>,
     ) -> Result<i32, AeronCError> {
-        if let Some(inner) = self.owned_inner.as_ref() {
+        if let Some(inner) = self.inner.as_owned() {
             inner.close_already_called.set(true);
         }
         unsafe {
@@ -16987,7 +15339,7 @@ impl AeronSubscription {
         &self,
         mut on_close_complete: AeronNotificationHandlerImpl,
     ) -> Result<i32, AeronCError> {
-        if let Some(inner) = self.owned_inner.as_ref() {
+        if let Some(inner) = self.inner.as_owned() {
             inner.close_already_called.set(true);
         }
         unsafe {
@@ -17150,15 +15502,15 @@ impl AeronSubscription {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_subscription_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_subscription_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_subscription_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronSubscription {
@@ -17171,9 +15523,7 @@ impl From<*mut aeron_subscription_t> for AeronSubscription {
     #[inline]
     fn from(value: *mut aeron_subscription_t) -> Self {
         AeronSubscription {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -17199,9 +15549,7 @@ impl From<*const aeron_subscription_t> for AeronSubscription {
     #[inline]
     fn from(value: *const aeron_subscription_t) -> Self {
         AeronSubscription {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_subscription_t,
+            inner: CResource::Borrowed(value as *mut aeron_subscription_t),
         }
     }
 }
@@ -17209,17 +15557,15 @@ impl From<aeron_subscription_t> for AeronSubscription {
     #[inline]
     fn from(mut value: aeron_subscription_t) -> Self {
         AeronSubscription {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_subscription_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_subscription_t),
         }
     }
 }
 impl Drop for AeronSubscription {
     fn drop(&mut self) {
-        if let Some(inner) = self.owned_inner.as_mut() {
+        if let Some(inner) = self.inner.as_owned() {
             if (inner.cleanup.is_none())
-                && std::rc::Rc::strong_count(&inner) == 1
+                && std::rc::Rc::strong_count(inner) == 1
                 && !inner.is_closed_already_called()
             {
                 if inner.auto_close.get() {
@@ -17236,20 +15582,17 @@ impl Drop for AeronSubscription {
 }
 #[derive(Clone)]
 pub struct Aeron {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_t>>>,
-    inner: *mut aeron_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_t>>,
+    inner: CResource<aeron_t>,
     _context: Option<AeronContext>,
 }
 impl core::fmt::Debug for Aeron {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(Aeron))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(Aeron))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -17274,9 +15617,7 @@ impl Aeron {
             Some(|c| unsafe { aeron_is_closed(c) }),
         )?;
         Ok(Self {
-            inner: resource_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource_constructor)),
             _context: Some(context_copy),
         })
     }
@@ -17325,7 +15666,7 @@ impl Aeron {
     #[doc = ""]
     #[doc = " \n# Return\n 0 for success and -1 for error."]
     pub fn close(&self) -> Result<i32, AeronCError> {
-        if let Some(inner) = self.owned_inner.as_ref() {
+        if let Some(inner) = self.inner.as_owned() {
             inner.close_already_called.set(true);
         }
         unsafe {
@@ -18077,15 +16418,15 @@ impl Aeron {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for Aeron {
@@ -18098,9 +16439,7 @@ impl From<*mut aeron_t> for Aeron {
     #[inline]
     fn from(value: *mut aeron_t) -> Self {
         Aeron {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
             _context: None,
         }
     }
@@ -18127,9 +16466,7 @@ impl From<*const aeron_t> for Aeron {
     #[inline]
     fn from(value: *const aeron_t) -> Self {
         Aeron {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_t,
+            inner: CResource::Borrowed(value as *mut aeron_t),
             _context: None,
         }
     }
@@ -18138,28 +16475,23 @@ impl From<aeron_t> for Aeron {
     #[inline]
     fn from(mut value: aeron_t) -> Self {
         Aeron {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_t),
             _context: None,
         }
     }
 }
 #[derive(Clone)]
 pub struct AeronUdpChannelParams {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_udp_channel_params_t>>>,
-    inner: *mut aeron_udp_channel_params_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_udp_channel_params_t>>,
+    inner: CResource<aeron_udp_channel_params_t>,
 }
 impl core::fmt::Debug for AeronUdpChannelParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronUdpChannelParams))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronUdpChannelParams))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(additional_params), &self.additional_params())
                 .finish()
@@ -18199,9 +16531,7 @@ impl AeronUdpChannelParams {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -18225,9 +16555,7 @@ impl AeronUdpChannelParams {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -18239,15 +16567,9 @@ impl AeronUdpChannelParams {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_udp_channel_params_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn endpoint(&self) -> &str {
@@ -18319,33 +16641,15 @@ impl AeronUdpChannelParams {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_udp_channel_params_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronUdpChannelParams = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_udp_channel_params_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronUdpChannelParams = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_udp_channel_params_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronUdpChannelParams = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronUdpChannelParams {
@@ -18358,9 +16662,7 @@ impl From<*mut aeron_udp_channel_params_t> for AeronUdpChannelParams {
     #[inline]
     fn from(value: *mut aeron_udp_channel_params_t) -> Self {
         AeronUdpChannelParams {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -18386,9 +16688,7 @@ impl From<*const aeron_udp_channel_params_t> for AeronUdpChannelParams {
     #[inline]
     fn from(value: *const aeron_udp_channel_params_t) -> Self {
         AeronUdpChannelParams {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_udp_channel_params_t,
+            inner: CResource::Borrowed(value as *mut aeron_udp_channel_params_t),
         }
     }
 }
@@ -18396,9 +16696,7 @@ impl From<aeron_udp_channel_params_t> for AeronUdpChannelParams {
     #[inline]
     fn from(mut value: aeron_udp_channel_params_t) -> Self {
         AeronUdpChannelParams {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_udp_channel_params_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_udp_channel_params_t),
         }
     }
 }
@@ -18425,19 +16723,16 @@ impl AeronUdpChannelParams {
 }
 #[derive(Clone)]
 pub struct AeronUriParam {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_uri_param_t>>>,
-    inner: *mut aeron_uri_param_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_uri_param_t>>,
+    inner: CResource<aeron_uri_param_t>,
 }
 impl core::fmt::Debug for AeronUriParam {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronUriParam))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronUriParam))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -18461,9 +16756,7 @@ impl AeronUriParam {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -18487,9 +16780,7 @@ impl AeronUriParam {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -18501,15 +16792,9 @@ impl AeronUriParam {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_uri_param_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn key(&self) -> &str {
@@ -18529,33 +16814,15 @@ impl AeronUriParam {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_uri_param_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronUriParam = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_uri_param_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronUriParam = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_uri_param_t {
-        if let Some(stack) = self._owned_on_stack.as_ref() {
-            unsafe {
-                let me: *mut AeronUriParam = self as *const _ as *mut _;
-                (*me).inner = stack.as_ptr() as *mut _;
-            }
-        }
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronUriParam {
@@ -18568,9 +16835,7 @@ impl From<*mut aeron_uri_param_t> for AeronUriParam {
     #[inline]
     fn from(value: *mut aeron_uri_param_t) -> Self {
         AeronUriParam {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -18596,9 +16861,7 @@ impl From<*const aeron_uri_param_t> for AeronUriParam {
     #[inline]
     fn from(value: *const aeron_uri_param_t) -> Self {
         AeronUriParam {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_uri_param_t,
+            inner: CResource::Borrowed(value as *mut aeron_uri_param_t),
         }
     }
 }
@@ -18606,9 +16869,7 @@ impl From<aeron_uri_param_t> for AeronUriParam {
     #[inline]
     fn from(mut value: aeron_uri_param_t) -> Self {
         AeronUriParam {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_uri_param_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_uri_param_t),
         }
     }
 }
@@ -18635,19 +16896,16 @@ impl AeronUriParam {
 }
 #[derive(Clone)]
 pub struct AeronUriParams {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_uri_params_t>>>,
-    inner: *mut aeron_uri_params_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_uri_params_t>>,
+    inner: CResource<aeron_uri_params_t>,
 }
 impl core::fmt::Debug for AeronUriParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronUriParams))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronUriParams))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(length), &self.length())
                 .finish()
@@ -18673,9 +16931,7 @@ impl AeronUriParams {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -18699,9 +16955,7 @@ impl AeronUriParams {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -18713,15 +16967,9 @@ impl AeronUriParams {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_uri_params_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn length(&self) -> usize {
@@ -18851,15 +17099,15 @@ impl AeronUriParams {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_uri_params_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_uri_params_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_uri_params_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronUriParams {
@@ -18872,9 +17120,7 @@ impl From<*mut aeron_uri_params_t> for AeronUriParams {
     #[inline]
     fn from(value: *mut aeron_uri_params_t) -> Self {
         AeronUriParams {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -18900,9 +17146,7 @@ impl From<*const aeron_uri_params_t> for AeronUriParams {
     #[inline]
     fn from(value: *const aeron_uri_params_t) -> Self {
         AeronUriParams {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_uri_params_t,
+            inner: CResource::Borrowed(value as *mut aeron_uri_params_t),
         }
     }
 }
@@ -18910,9 +17154,7 @@ impl From<aeron_uri_params_t> for AeronUriParams {
     #[inline]
     fn from(mut value: aeron_uri_params_t) -> Self {
         AeronUriParams {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_uri_params_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_uri_params_t),
         }
     }
 }
@@ -18939,19 +17181,16 @@ impl AeronUriParams {
 }
 #[derive(Clone)]
 pub struct AeronUriStringBuilder {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_uri_string_builder_t>>>,
-    inner: *mut aeron_uri_string_builder_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_uri_string_builder_t>>,
+    inner: CResource<aeron_uri_string_builder_t>,
 }
 impl core::fmt::Debug for AeronUriStringBuilder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronUriStringBuilder))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronUriStringBuilder))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .field(stringify!(params), &self.params())
                 .field(stringify!(closed), &self.closed())
@@ -18977,9 +17216,7 @@ impl AeronUriStringBuilder {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -19003,9 +17240,7 @@ impl AeronUriStringBuilder {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -19017,15 +17252,9 @@ impl AeronUriStringBuilder {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_uri_string_builder_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn params(&self) -> AeronStrToPtrHashMap {
@@ -19059,7 +17288,7 @@ impl AeronUriStringBuilder {
     }
     #[inline]
     pub fn close(&self) -> Result<i32, AeronCError> {
-        if let Some(inner) = self.owned_inner.as_ref() {
+        if let Some(inner) = self.inner.as_owned() {
             inner.close_already_called.set(true);
         }
         unsafe {
@@ -19186,15 +17415,15 @@ impl AeronUriStringBuilder {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_uri_string_builder_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_uri_string_builder_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_uri_string_builder_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronUriStringBuilder {
@@ -19207,9 +17436,7 @@ impl From<*mut aeron_uri_string_builder_t> for AeronUriStringBuilder {
     #[inline]
     fn from(value: *mut aeron_uri_string_builder_t) -> Self {
         AeronUriStringBuilder {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -19235,9 +17462,7 @@ impl From<*const aeron_uri_string_builder_t> for AeronUriStringBuilder {
     #[inline]
     fn from(value: *const aeron_uri_string_builder_t) -> Self {
         AeronUriStringBuilder {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_uri_string_builder_t,
+            inner: CResource::Borrowed(value as *mut aeron_uri_string_builder_t),
         }
     }
 }
@@ -19245,9 +17470,7 @@ impl From<aeron_uri_string_builder_t> for AeronUriStringBuilder {
     #[inline]
     fn from(mut value: aeron_uri_string_builder_t) -> Self {
         AeronUriStringBuilder {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_uri_string_builder_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_uri_string_builder_t),
         }
     }
 }
@@ -19274,19 +17497,16 @@ impl AeronUriStringBuilder {
 }
 #[derive(Clone)]
 pub struct AeronUri {
-    owned_inner: Option<std::rc::Rc<ManagedCResource<aeron_uri_t>>>,
-    inner: *mut aeron_uri_t,
-    _owned_on_stack: Option<std::mem::MaybeUninit<aeron_uri_t>>,
+    inner: CResource<aeron_uri_t>,
 }
 impl core::fmt::Debug for AeronUri {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.inner.is_null() {
+        if self.inner.get().is_null() {
             f.debug_struct(stringify!(AeronUri))
                 .field("inner", &"null")
                 .finish()
         } else {
             f.debug_struct(stringify!(AeronUri))
-                .field("owned_inner", &self.owned_inner)
                 .field("inner", &self.inner)
                 .finish()
         }
@@ -19315,9 +17535,7 @@ impl AeronUri {
             None,
         )?;
         Ok(Self {
-            inner: r_constructor.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(r_constructor)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         })
     }
     #[inline]
@@ -19341,9 +17559,7 @@ impl AeronUri {
         )
         .unwrap();
         Self {
-            inner: resource.get(),
-            _owned_on_stack: None,
-            owned_inner: Some(std::rc::Rc::new(resource)),
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
         }
     }
     #[inline]
@@ -19355,15 +17571,9 @@ impl AeronUri {
             "creating zeroed empty resource on stack {}",
             stringify!(aeron_uri_t)
         );
-        let mut result = Self {
-            inner: std::ptr::null_mut(),
-            _owned_on_stack: Some(std::mem::MaybeUninit::zeroed()),
-            owned_inner: None,
-        };
-        if let Some(stack) = result._owned_on_stack.as_mut() {
-            result.inner = stack.as_mut_ptr();
+        Self {
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
-        result
     }
     #[inline]
     pub fn mutable_uri(&self) -> [::std::os::raw::c_char; 4096usize] {
@@ -19447,7 +17657,7 @@ impl AeronUri {
     }
     #[inline]
     pub fn close(&self) -> () {
-        if let Some(inner) = self.owned_inner.as_ref() {
+        if let Some(inner) = self.inner.as_owned() {
             inner.close_already_called.set(true);
         }
         unsafe {
@@ -19515,15 +17725,15 @@ impl AeronUri {
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_uri_t {
-        self.inner
+        self.inner.get()
     }
     #[inline(always)]
     pub fn get_inner_mut(&self) -> &mut aeron_uri_t {
-        unsafe { &mut *self.inner }
+        unsafe { &mut *self.inner.get() }
     }
     #[inline(always)]
     pub fn get_inner_ref(&self) -> &aeron_uri_t {
-        unsafe { &*self.inner }
+        unsafe { &*self.inner.get() }
     }
 }
 impl std::ops::Deref for AeronUri {
@@ -19536,9 +17746,7 @@ impl From<*mut aeron_uri_t> for AeronUri {
     #[inline]
     fn from(value: *mut aeron_uri_t) -> Self {
         AeronUri {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value,
+            inner: CResource::Borrowed(value),
         }
     }
 }
@@ -19564,9 +17772,7 @@ impl From<*const aeron_uri_t> for AeronUri {
     #[inline]
     fn from(value: *const aeron_uri_t) -> Self {
         AeronUri {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: value as *mut aeron_uri_t,
+            inner: CResource::Borrowed(value as *mut aeron_uri_t),
         }
     }
 }
@@ -19574,17 +17780,15 @@ impl From<aeron_uri_t> for AeronUri {
     #[inline]
     fn from(mut value: aeron_uri_t) -> Self {
         AeronUri {
-            owned_inner: None,
-            _owned_on_stack: None,
-            inner: &mut value as *mut aeron_uri_t,
+            inner: CResource::Borrowed(&mut value as *mut aeron_uri_t),
         }
     }
 }
 impl Drop for AeronUri {
     fn drop(&mut self) {
-        if let Some(inner) = self.owned_inner.as_mut() {
+        if let Some(inner) = self.inner.as_owned() {
             if (inner.cleanup.is_none())
-                && std::rc::Rc::strong_count(&inner) == 1
+                && std::rc::Rc::strong_count(inner) == 1
                 && !inner.is_closed_already_called()
             {
                 if inner.auto_close.get() {
