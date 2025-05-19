@@ -471,12 +471,7 @@ impl CWrapper {
     }
 
     fn get_close_method(&self) -> Option<Method> {
-        let result = self.find_unique_method("close");
-        if result.is_none() {
-            self.find_unique_method("delete")
-        } else {
-            result
-        }
+        self.find_unique_method("close")
     }
 
     fn get_is_closed_method(&self) -> Option<Method> {

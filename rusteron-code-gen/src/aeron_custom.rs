@@ -866,6 +866,13 @@ impl Aeron {
     }
 }
 
+impl Drop for AeronFragmentAssembler {
+    fn drop(&mut self) {
+        if let Err(e) = self.delete() {
+            log::error!("failed to drop fragment assembler {:?}", e);
+        }
+    }
+}
 impl AeronFragmentHandlerCallback for AeronFragmentAssembler {
     fn handle_aeron_fragment_handler(&mut self, buffer: &[u8], header: AeronHeader) -> () {
         unsafe {
