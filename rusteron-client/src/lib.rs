@@ -192,41 +192,7 @@ mod tests {
         let count = Arc::new(AtomicUsize::new(0usize));
         let count_copy = Arc::clone(&count);
         let stop2 = stop.clone();
-
-        struct FragmentHandler {
-            count_copy: Arc<AtomicUsize>,
-            stop2: Arc<AtomicBool>,
-            string_len: usize,
-        }
-
-        impl AeronFragmentHandlerCallback for FragmentHandler {
-            fn handle_aeron_fragment_handler(&mut self, buffer: &[u8], header: AeronHeader) {
-                self.count_copy.fetch_add(1, Ordering::SeqCst);
-
-                let values = header.get_values().unwrap();
-                assert_ne!(values.frame.session_id, 0);
-
-                if buffer.len() != self.string_len {
-                    self.stop2.store(true, Ordering::SeqCst);
-                    error!(
-                        "ERROR: message was {} but was expecting {} [header={:?}]",
-                        buffer.len(),
-                        self.string_len,
-                        header
-                    );
-                    sleep(Duration::from_secs(1));
-                }
-
-                assert_eq!(buffer.len(), self.string_len);
-                assert_eq!(buffer, "1".repeat(self.string_len).as_bytes());
-            }
-        }
-
-        let (closure, _inner) = Handler::leak_with_fragment_assembler(FragmentHandler {
-            count_copy,
-            stop2,
-            string_len,
-        })?;
+        let mut assembler = AeronFragmentAssemblerHandler::new()?;
 
         // Start the timer
         let start_time = Instant::now();
@@ -243,7 +209,29 @@ mod tests {
             if c > 100 {
                 break;
             }
-            subscription.poll(Some(&closure), 128)?;
+            subscription.poll(
+                assembler.process(|buffer, header| {
+                    count_copy.fetch_add(1, Ordering::SeqCst);
+
+                    let values = header.get_values().unwrap();
+                    assert_ne!(values.frame.session_id, 0);
+
+                    if buffer.len() != string_len {
+                        stop2.store(true, Ordering::SeqCst);
+                        error!(
+                            "ERROR: message was {} but was expecting {} [header={:?}]",
+                            buffer.len(),
+                            string_len,
+                            header
+                        );
+                        sleep(Duration::from_secs(1));
+                    }
+
+                    assert_eq!(buffer.len(), string_len);
+                    assert_eq!(buffer, "1".repeat(string_len).as_bytes());
+                }),
+                128,
+            )?;
             assert_eq!(123, subscription.get_constants().unwrap().stream_id);
         }
 
