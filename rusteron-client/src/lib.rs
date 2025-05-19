@@ -192,7 +192,7 @@ mod tests {
         let count = Arc::new(AtomicUsize::new(0usize));
         let count_copy = Arc::clone(&count);
         let stop2 = stop.clone();
-        let mut assembler = AeronFragmentAssemblerHandler::new()?;
+        let mut assembler = AeronFragmentClosureAssembler::new()?;
 
         // Start the timer
         let start_time = Instant::now();
