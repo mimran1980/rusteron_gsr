@@ -880,6 +880,69 @@ impl AeronFragmentHandlerCallback for AeronFragmentAssembler {
     }
 }
 
+pub struct AeronFragmentAssemblerHandler<F: FnMut(&[u8], AeronHeader)> {
+    assembler: AeronFragmentAssembler,
+    handler: Handler<AeronFragmentClosureHandler<F>>,
+    assembler_handler: Handler<AeronFragmentAssembler>,
+}
+
+impl<F: FnMut(&[u8], AeronHeader)> AeronFragmentAssemblerHandler<F> {
+    pub fn new() -> Result<Self, AeronCError> {
+        let handler = Handler::leak(AeronFragmentClosureHandler::new());
+        Ok(Self {
+            assembler: AeronFragmentAssembler::new(Some(&handler))?,
+            handler,
+            assembler_handler: Handler {
+                raw_ptr: std::ptr::null_mut(),
+                should_drop: false,
+            },
+        })
+    }
+
+    /// use when you do aeron_subscription.poll(&assembler.process(|msg, header| { ... })
+    pub fn process(&mut self, closure: F) -> Option<&Handler<AeronFragmentAssembler>> {
+        self.handler.wrap(closure);
+        self.assembler_handler.raw_ptr = &mut self.assembler as *mut _;
+        Some(&self.assembler_handler)
+    }
+}
+impl<F: FnMut(&[u8], AeronHeader)> Drop for AeronFragmentAssemblerHandler<F> {
+    fn drop(&mut self) {
+        self.handler.closure.take();
+        self.handler.release();
+    }
+}
+
+pub struct AeronFragmentClosureHandler<F: FnMut(&[u8], AeronHeader) -> ()> {
+    closure: Option<F>,
+}
+impl<F: FnMut(&[u8], AeronHeader) -> ()> AeronFragmentHandlerCallback
+    for AeronFragmentClosureHandler<F>
+{
+    fn handle_aeron_fragment_handler(&mut self, buffer: &[u8], header: AeronHeader) -> () {
+        if let Some(closure) = self.closure.as_mut() {
+            (closure)(buffer, header)
+        }
+    }
+}
+impl<F: FnMut(&[u8], AeronHeader) -> ()> AeronFragmentClosureHandler<F> {
+    pub fn new() -> Self {
+        Self { closure: None }
+    }
+
+    pub fn wrap(&mut self, closure: F) -> &mut Self {
+        self.closure = Some(closure);
+        self
+    }
+}
+impl<F: FnMut(&[u8], AeronHeader) -> ()> From<F> for AeronFragmentClosureHandler<F> {
+    fn from(value: F) -> Self {
+        Self {
+            closure: Some(value),
+        }
+    }
+}
+
 impl AeronControlledFragmentHandlerCallback for AeronControlledFragmentAssembler {
     fn handle_aeron_controlled_fragment_handler(
         &mut self,
