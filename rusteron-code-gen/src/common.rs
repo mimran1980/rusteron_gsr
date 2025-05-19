@@ -502,6 +502,13 @@ impl<T> Handler<T> {
             }
         }
     }
+
+    pub unsafe fn new(raw_ptr: *mut T, should_drop: bool) -> Self {
+        Self {
+            raw_ptr,
+            should_drop,
+        }
+    }
 }
 
 impl<T> Deref for Handler<T> {
