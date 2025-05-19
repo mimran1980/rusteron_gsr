@@ -866,13 +866,6 @@ impl Aeron {
     }
 }
 
-impl Drop for AeronFragmentAssembler {
-    fn drop(&mut self) {
-        if let Err(e) = self.delete() {
-            log::error!("failed to drop fragment assembler {:?}", e);
-        }
-    }
-}
 impl AeronFragmentHandlerCallback for AeronFragmentAssembler {
     fn handle_aeron_fragment_handler(&mut self, buffer: &[u8], header: AeronHeader) -> () {
         unsafe {
@@ -893,7 +886,6 @@ pub struct AeronFragmentAssemblerHandler<F: FnMut(&[u8], AeronHeader)> {
 }
 
 impl<F: FnMut(&[u8], AeronHeader)> AeronFragmentAssemblerHandler<F> {
-
     pub fn new() -> Result<Self, AeronCError> {
         let handler = Handler::leak(AeronFragmentClosureHandler::new());
         Ok(Self {
@@ -923,7 +915,8 @@ impl<F: FnMut(&[u8], AeronHeader)> Drop for AeronFragmentAssemblerHandler<F> {
 pub struct AeronFragmentClosureHandler<F: FnMut(&[u8], AeronHeader) -> ()> {
     closure: Option<F>,
 }
-impl<F: FnMut(&[u8], AeronHeader) -> ()> AeronFragmentHandlerCallback  for AeronFragmentClosureHandler<F>
+impl<F: FnMut(&[u8], AeronHeader) -> ()> AeronFragmentHandlerCallback
+    for AeronFragmentClosureHandler<F>
 {
     fn handle_aeron_fragment_handler(&mut self, buffer: &[u8], header: AeronHeader) -> () {
         if let Some(closure) = self.closure.as_mut() {
@@ -943,10 +936,11 @@ impl<F: FnMut(&[u8], AeronHeader) -> ()> AeronFragmentClosureHandler<F> {
 }
 impl<F: FnMut(&[u8], AeronHeader) -> ()> From<F> for AeronFragmentClosureHandler<F> {
     fn from(value: F) -> Self {
-        Self { closure: Some(value) }
+        Self {
+            closure: Some(value),
+        }
     }
 }
-
 
 impl AeronControlledFragmentHandlerCallback for AeronControlledFragmentAssembler {
     fn handle_aeron_controlled_fragment_handler(
