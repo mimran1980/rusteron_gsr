@@ -879,116 +879,6 @@ impl AeronFragmentHandlerCallback for AeronFragmentAssembler {
     }
 }
 
-pub struct AeronFragmentAssemblerHandler<F: AeronFragmentHandlerCallback> {
-    assembler: AeronFragmentAssembler,
-    handler: Handler<WrappedAeronFragmentHandlerCallback<F>>,
-    assembler_handler: Handler<AeronFragmentAssembler>,
-}
-
-struct WrappedAeronFragmentHandlerCallback<F: AeronFragmentHandlerCallback> {
-    delegate: Option<F>,
-}
-
-impl<F: AeronFragmentHandlerCallback> AeronFragmentHandlerCallback
-    for WrappedAeronFragmentHandlerCallback<F>
-{
-    fn handle_aeron_fragment_handler(&mut self, buffer: &[u8], header: AeronHeader) -> () {
-        if let Some(delegate) = self.delegate.as_mut() {
-            delegate.handle_aeron_fragment_handler(buffer, header)
-        }
-    }
-}
-
-impl<F: AeronFragmentHandlerCallback> AeronFragmentAssemblerHandler<F> {
-    pub fn new() -> Result<Self, AeronCError> {
-        let handler = Handler::leak(WrappedAeronFragmentHandlerCallback { delegate: None });
-        Ok(Self {
-            assembler: AeronFragmentAssembler::new(Some(&handler))?,
-            handler,
-            assembler_handler: Handler {
-                raw_ptr: std::ptr::null_mut(),
-                should_drop: false,
-            },
-        })
-    }
-
-    /// use when you do aeron_subscription.poll(&assembler.process(|msg, header| { ... })
-    pub fn process(&mut self, closure: F) -> Option<&Handler<AeronFragmentAssembler>> {
-        self.handler.delegate = Some(closure);
-        self.assembler_handler.raw_ptr = &mut self.assembler as *mut _;
-        Some(&self.assembler_handler)
-    }
-}
-impl<F: AeronFragmentHandlerCallback> Drop for AeronFragmentAssemblerHandler<F> {
-    fn drop(&mut self) {
-        self.handler.delegate.take();
-        self.handler.release();
-    }
-}
-
-pub struct AeronFragmentClosureAssembler<F: FnMut(&[u8], AeronHeader)> {
-    assembler: AeronFragmentAssembler,
-    handler: Handler<AeronFragmentClosureHandler<F>>,
-    assembler_handler: Handler<AeronFragmentAssembler>,
-}
-
-impl<F: FnMut(&[u8], AeronHeader)> AeronFragmentClosureAssembler<F> {
-    pub fn new() -> Result<Self, AeronCError> {
-        let handler = Handler::leak(AeronFragmentClosureHandler::new());
-        Ok(Self {
-            assembler: AeronFragmentAssembler::new(Some(&handler))?,
-            handler,
-            assembler_handler: Handler {
-                raw_ptr: std::ptr::null_mut(),
-                should_drop: false,
-            },
-        })
-    }
-
-    /// use when you do aeron_subscription.poll(&assembler.process(|msg, header| { ... })
-    pub fn process(&mut self, closure: F) -> Option<&Handler<AeronFragmentAssembler>> {
-        self.handler.wrap(closure);
-        self.assembler_handler.raw_ptr = &mut self.assembler as *mut _;
-        Some(&self.assembler_handler)
-    }
-}
-impl<F: FnMut(&[u8], AeronHeader)> Drop for AeronFragmentClosureAssembler<F> {
-    fn drop(&mut self) {
-        self.handler.closure.take();
-        self.handler.release();
-    }
-}
-
-pub struct AeronFragmentClosureHandler<F: FnMut(&[u8], AeronHeader) -> ()> {
-    closure: Option<F>,
-}
-impl<F: FnMut(&[u8], AeronHeader) -> ()> AeronFragmentHandlerCallback
-    for AeronFragmentClosureHandler<F>
-{
-    fn handle_aeron_fragment_handler(&mut self, buffer: &[u8], header: AeronHeader) -> () {
-        if let Some(closure) = self.closure.as_mut() {
-            (closure)(buffer, header)
-        }
-    }
-}
-impl<F: FnMut(&[u8], AeronHeader) -> ()> AeronFragmentClosureHandler<F> {
-    pub fn new() -> Self {
-        Self { closure: None }
-    }
-
-    pub fn wrap(&mut self, closure: F) -> &mut Self {
-        self.closure = Some(closure);
-        self
-    }
-}
-impl<F: FnMut(&[u8], AeronHeader) -> ()> From<F> for AeronFragmentClosureHandler<F> {
-    fn from(value: F) -> Self {
-        Self {
-            closure: Some(value),
-        }
-    }
-}
-
 impl AeronControlledFragmentHandlerCallback for AeronControlledFragmentAssembler {
     fn handle_aeron_controlled_fragment_handler(
         &mut self,
@@ -1051,3 +941,79 @@ impl AeronErrorHandlerCallback for AeronErrorLogger {
 }
 unsafe impl Send for AeronErrorLogger {}
 unsafe impl Sync for AeronErrorLogger {}
+
+pub struct FnMutMessageHandler {
+    func: fn(*mut (), &[u8], AeronHeader),
+    ctx: *mut (),
+}
+
+impl AeronFragmentHandlerCallback for FnMutMessageHandler {
+    fn handle_aeron_fragment_handler(&mut self, buffer: &[u8], header: AeronHeader) -> () {
+        self.call(buffer, header);
+    }
+}
+
+impl FnMutMessageHandler {
+    pub fn new() -> Self {
+        Self {
+            func: Self::noop,
+            ctx: std::ptr::null_mut(),
+        }
+    }
+
+    #[inline]
+    /// SAFETY: you must make sure ctx lives longer than when `call` method is invoked
+    pub fn set<T>(&mut self, ctx: &mut T, func: fn(&mut T, &[u8], AeronHeader)) -> &mut Self {
+        self.func = Self::wrap::<T>(func);
+        self.ctx = ctx as *mut T as *mut ();
+        self
+    }
+
+    #[inline(always)]
+    pub fn call(&mut self, msg: &[u8], header: AeronHeader) {
+        (self.func)(self.ctx, msg, header);
+    }
+
+    #[inline]
+    fn wrap<T>(
+        f: fn(&mut T, &[u8], AeronHeader)
+    ) -> fn(*mut (), &[u8], AeronHeader) {
+        // SAFETY: `fn(&mut T,…)` and `fn(*mut(),…)` have the same ABI/representation
+        unsafe { std::mem::transmute(f) }
+    }
+
+    fn noop(_: *mut (), _: &[u8], _: AeronHeader) {
+        // default no-op handler
+    }
+}
+
+pub struct AeronFragmentClosureAssembler {
+    assembler: AeronFragmentAssembler,
+    handler: Handler<FnMutMessageHandler>,
+    assembler_handler: Handler<AeronFragmentAssembler>,
+}
+
+impl AeronFragmentClosureAssembler {
+    pub fn new() -> Result<Self, AeronCError> {
+        let handler = Handler::leak(FnMutMessageHandler::new());
+        Ok(Self {
+            assembler: AeronFragmentAssembler::new(Some(&handler))?,
+            handler,
+            assembler_handler: Handler {
+                raw_ptr: std::ptr::null_mut(),
+                should_drop: false,
+            },
+        })
+    }
+
+    pub fn process<T>(&mut self, ctx: &mut T, func: fn(&mut T, &[u8], AeronHeader)) -> Option<&Handler<AeronFragmentAssembler>> {
+        self.handler.set(ctx, func);
+        self.assembler_handler.raw_ptr = &mut self.assembler as *mut _;
+        Some(&self.assembler_handler)
+    }
+}
+impl Drop for AeronFragmentClosureAssembler {
+    fn drop(&mut self) {
+        self.handler.release();
+    }
+}

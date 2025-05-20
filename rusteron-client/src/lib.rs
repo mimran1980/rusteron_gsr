@@ -189,10 +189,20 @@ mod tests {
             })
         };
 
-        let count = Arc::new(AtomicUsize::new(0usize));
-        let count_copy = Arc::clone(&count);
-        let stop2 = stop.clone();
         let mut assembler = AeronFragmentClosureAssembler::new()?;
+
+        struct Context {
+            count: Arc<AtomicUsize>,
+            stop: Arc<AtomicBool>,
+            string_len: usize,
+        }
+
+        let count = Arc::new(AtomicUsize::new(0usize));
+        let mut context = Context {
+            count: count.clone(),
+            stop: stop.clone(),
+            string_len,
+        };
 
         // Start the timer
         let start_time = Instant::now();
@@ -209,29 +219,29 @@ mod tests {
             if c > 100 {
                 break;
             }
-            subscription.poll(
-                assembler.process(|buffer, header| {
-                    count_copy.fetch_add(1, Ordering::SeqCst);
 
-                    let values = header.get_values().unwrap();
-                    assert_ne!(values.frame.session_id, 0);
+            fn process_msg(ctx: &mut Context, buffer: &[u8], header: AeronHeader) {
+                ctx.count.fetch_add(1, Ordering::SeqCst);
 
-                    if buffer.len() != string_len {
-                        stop2.store(true, Ordering::SeqCst);
-                        error!(
-                            "ERROR: message was {} but was expecting {} [header={:?}]",
-                            buffer.len(),
-                            string_len,
-                            header
-                        );
-                        sleep(Duration::from_secs(1));
-                    }
+                let values = header.get_values().unwrap();
+                assert_ne!(values.frame.session_id, 0);
 
-                    assert_eq!(buffer.len(), string_len);
-                    assert_eq!(buffer, "1".repeat(string_len).as_bytes());
-                }),
-                128,
-            )?;
+                if buffer.len() != ctx.string_len {
+                    ctx.stop.store(true, Ordering::SeqCst);
+                    error!(
+                        "ERROR: message was {} but was expecting {} [header={:?}]",
+                        buffer.len(),
+                        ctx.string_len,
+                        header
+                    );
+                    sleep(Duration::from_secs(1));
+                }
+
+                assert_eq!(buffer.len(), ctx.string_len);
+                assert_eq!(buffer, "1".repeat(ctx.string_len).as_bytes());
+            }
+
+            subscription.poll(assembler.process(&mut context, process_msg), 128)?;
             assert_eq!(123, subscription.get_constants().unwrap().stream_id);
         }
 
