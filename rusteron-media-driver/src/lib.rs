@@ -30,6 +30,8 @@ include!(concat!(env!("OUT_DIR"), "/aeron_custom.rs"));
 
 unsafe impl Sync for AeronDriverContext {}
 unsafe impl Send for AeronDriverContext {}
+unsafe impl Sync for AeronDriver {}
+unsafe impl Send for AeronDriver {}
 
 impl AeronDriver {
     pub fn launch_embedded(
@@ -52,8 +54,10 @@ impl AeronDriver {
         let started = Arc::new(AtomicBool::new(false));
         let started2 = started.clone();
 
-        info!("Starting media driver [dir={}]", aeron_context.get_dir());
+        let dir = aeron_context.get_dir().to_string();
+        info!("Starting media driver [dir={}]", dir);
         let handle = std::thread::spawn(move || {
+            let aeron_context = aeron_context.clone();
             let aeron_driver = AeronDriver::new(&aeron_context)?;
             aeron_driver.start(true)?;
 
@@ -83,7 +87,7 @@ impl AeronDriver {
         if handle.is_finished() {
             panic!("failed to start media driver {:?}", handle.join())
         }
-        info!("started media driver");
+        info!("started media driver [dir={}]", dir);
 
         (stop_copy, handle)
     }
@@ -135,7 +139,7 @@ mod tests {
         let patch = unsafe { crate::aeron_version_patch() };
 
         let aeron_version = format!("{}.{}.{}", major, minor, patch);
-        let cargo_version = "1.47.4";
+        let cargo_version = "1.47.5";
         assert_eq!(aeron_version, cargo_version);
     }
 
@@ -163,7 +167,7 @@ mod tests {
 
         let dir = aeron_context.get_dir().to_string();
         let ctx = AeronContext::new()?;
-        ctx.set_dir(&dir)?;
+        ctx.set_dir(&dir.into_c_string())?;
 
         let client = Aeron::new(&ctx)?;
 
@@ -226,8 +230,6 @@ mod tests {
         let result = AeronAsyncAddPublication::new(&client, topic, stream_id)?;
 
         let publication = result.poll_blocking(std::time::Duration::from_secs(15))?;
-
-        let _sub: AeronAsyncAddSubscription = AeronAsyncAddSubscription::new_zeroed()?;
 
         info!("publication channel: {:?}", publication.channel());
         info!("publication stream_id: {:?}", publication.stream_id());

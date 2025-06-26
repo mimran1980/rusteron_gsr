@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "rusteron-code-gen",
-    "rusteron-rb",
     "rusteron-media-driver",
     "rusteron-client",
     "rusteron-archive",
@@ -13,7 +12,7 @@ resolver = "2"
 compression = "best"
 
 [workspace.dependencies]
-rusteron-code-gen = { path = "rusteron-code-gen", version = "0.1.121" }
+rusteron-code-gen = { path = "rusteron-code-gen", version = "=0.1.132" }
 ctrlc = "3.4"
 bindgen = "0.71"
 cmake = "0.1"
@@ -29,7 +28,7 @@ criterion = "0.5"
 serial_test = "3.2"
 regex = "1.11"
 log = "0.4"
-walkdir = "2.5.0"
+walkdir = "2.5"
 
 [release]
 bump = "auto"
@@ -51,3 +50,6 @@ compression = "best"
 debug = false
 panic = "unwind"
 
+#[profile.bench]
+#debug = true
+#opt-level = 0

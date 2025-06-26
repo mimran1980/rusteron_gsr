@@ -1,4 +1,5 @@
 use rusteron_client::*;
+use std::ffi::CStr;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -8,14 +9,14 @@ use std::time::{Duration, Instant};
 
 const BURST_LENGTH: usize = 1_000_000;
 const MESSAGE_LENGTH: usize = 32;
-const CHANNEL: &str = AERON_IPC_STREAM;
+static CHANNEL: &CStr = AERON_IPC_STREAM;
 const STREAM_ID: i32 = 1001;
 
 /// this code is based on Aeron samples EmbeddedExclusiveIpcThroughput
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let running = Arc::new(AtomicBool::new(true));
 
-    println!("message length {}, channel {}", MESSAGE_LENGTH, CHANNEL);
+    println!("message length {}, channel {:?}", MESSAGE_LENGTH, CHANNEL);
 
     let running_ctrl_c = Arc::clone(&running);
     ctrlc::set_handler(move || {
@@ -28,7 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let ctx = AeronContext::new()?;
     let dir = std::env::var("AERON_DIR").expect("AERON_DIR must be set");
-    ctx.set_dir(&dir)?;
+    ctx.set_dir(&dir.into_c_string())?;
     let aeron = Aeron::new(&ctx)?;
     aeron.start()?;
 

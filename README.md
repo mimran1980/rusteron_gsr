@@ -17,7 +17,7 @@ The purpose of **rusteron** is to take these C bindings and generate a Rust wrap
 
 The modules in **rusteron** aim to replicate and extend the capabilities available in the Aeron ecosystem, while simplifying their use for developers accustomed to Rust.
 
-For quick start use static lib with precompiled C libraries if your running on a mac. This will not require cmake or java to be installed on your system.
+For quick start use static lib with precompiled C libraries if you're running on a Mac. This will not require cmake or java to be installed on your system.
 
 ```toml
 rusteron-archive = { version = "0.1", features= ["static", "precompile"] }
@@ -25,7 +25,7 @@ rusteron-archive = { version = "0.1", features= ["static", "precompile"] }
 
 ## Project Status
 
-**rusteron** is currently in release candiante phase it is being planned to be used in a production system, meaning:
+**rusteron** is currently in release candidate phase and is being planned to be used in a production system, meaning:
 
 - It is still under active development.
 - APIs may be subject to breaking changes.
@@ -54,8 +54,6 @@ The library is divided into several modules, each focusing on specific parts of 
   Aeron Media Driver, a core component for managing messaging between producers and consumers. It uses the Aeron C
   bindings from aeron-driver module.
 
-- **[rusteron-rb](https://github.com/mimran1980/rusteron/tree/main/rusteron-rb)**: Provides ring buffer and broadcast functionalities via aeron c bindings, allowing efficient, low-latency message passing between different threads or processes. This module implements Single Producer, Single Consumer (SPSC) ring buffers, Multi-Producer, Single Consumer (MPSC) ring buffers, and broadcast channels.
-
 - **[rusteron-docker-samples](https://github.com/mimran1980/rusteron/tree/main/rusteron-docker-samples)**: A collection of simple examples demonstrating how Docker configurations might look for Aeron-based applications. The examples include Dockerfiles for Aeron Media Driver and dummy components like ticker writer and ticker reader, showcasing shared resource management and environment configurations. These are not production-ready configurations but can serve as inspiration for setting up your own Docker-based workflows. For details, see the module's [README](https://github.com/mimran1980/rusteron/tree/main/rusteron-docker-samples/README.md).
 
 ## Installation
@@ -65,7 +63,6 @@ Add the following line to your `Cargo.toml` to include the specific **rusteron**
 - **rusteron-client**: For core Aeron client functionalities.
 - **rusteron-archive**: For Aeron client with archive capabilities.
 - **rusteron-media-driver**: For the Aeron media driver.
-- **rusteron-rb**: Ring buffer (single and multi producer) and broadcast transmitter/receiver
 
 For detailed instructions on how to build **rusteron-archive**, please refer to the [HOW_TO_BUILD.md](./HOW_TO_BUILD.md) file.
 
@@ -88,7 +85,7 @@ rusteron-client = { version = "0.1", features= ["static", "precompile"] }
 ```
 
 
-Replace `rusteron-client` with `rusteron-archive`/`rusteron-media-driver`/`rusteron-rb` as per your requirement.
+Replace `rusteron-client` with `rusteron-archive`/`rusteron-media-driver` as per your requirement.
 
 ## Usage Example
 
@@ -97,8 +94,8 @@ Replace `rusteron-client` with `rusteron-archive`/`rusteron-media-driver`/`ruste
 Below is a step-by-step example of creating and using an Aeron client.
 
 ```rust,no_ignore
-use rusteron::client::{Aeron, AeronContext};
-use rusteron_media_driver::AeronDriverContext;
+use rusteron::client::{Aeron, AeronContext, IntoCString};
+use rusteron_media_driver::{AeronDriverContext, AeronDriver};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -109,18 +106,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (stop, driver_handle) = AeronDriver::launch_embedded(media_driver_ctx.clone(), false);
 
     let ctx = AeronContext::new()?;
-    ctx.set_dir(media_driver_ctx.get_dir())?;
+    ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
     let aeron = Aeron::new(&ctx)?;
     aeron.start()?;
 
     let subscription = aeron
-        .async_add_subscription("aeron:ipc", 123,                
+        .async_add_subscription(&"aeron:ipc".into_c_string(), 123,                
                                 Handlers::no_available_image_handler(),
                                 Handlers::no_unavailable_image_handler())?
         .poll_blocking(Duration::from_secs(5))?;
 
     let publisher = aeron
-        .async_add_publication("aeron:ipc", 123)?
+        .async_add_publication(&"aeron:ipc".into_c_string(), 123)?
         .poll_blocking(Duration::from_secs(5))?;
 
     let message = "Hello, Aeron!".as_bytes();
@@ -184,4 +181,3 @@ Special thanks to the authors of the original [`libaeron-sys`](https://github.co
 ---
 
 Feel free to reach out with any questions or suggestions via GitHub Issues!
-

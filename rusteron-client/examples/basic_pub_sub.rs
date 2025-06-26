@@ -8,7 +8,7 @@ pub fn main() -> Result<(), Box<dyn error::Error>> {
     let ctx = AeronContext::new()?;
 
     // set the directory
-    // ctx.set_dir(media_driver_ctx.get_dir())?;
+    // ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
 
     println!("creating client");
     let aeron = Aeron::new(&ctx)?;

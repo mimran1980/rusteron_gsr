@@ -16,6 +16,7 @@ The **rusteron-client** module acts as a Rust wrapper around the Aeron C client 
 - **Callbacks**: Handle events such as new publications, new subscriptions, and errors.
 - **Automatic Resource Management (`new` method only)**: The wrappers attempt to automatically manage resources, specifically when using the `new` method. This includes calling the appropriate `xxx_init` method during initialization and automatically invoking `xxx_close` or `xxx_destroy` methods (if one exists) during cleanup. However, this management is partial. For other methods, such as `AeronArchive::set_aeron`, it is the developer's responsibility to ensure that the arguments remain valid and alive during their use. Proper resource management beyond initialization requires manual handling by the user to avoid undefined behavior or resource leaks.
 - Updated methods with a single mutable out primitive to return `Result<primitive, AeronCError>`, enhancing usability and consistency by encapsulating return values and error handling.
+- **String Handling**: Setter and `new` methods accept `&CStr` arguments, giving developers control over allocation and enabling reuse of `CString` instances. All getter methods return `&str`.
 
 ## General Patterns
 
@@ -58,7 +59,7 @@ In this example, the `AeronErrorHandlerCallback` trait is implemented by `AeronE
 
 ### 2. Using a Closure
 
-Alternatively, you can use closures as handlers. However, all arguments must be copied if your planning to use them later, even ones with static lifetimes. This method is not suitable for performance-sensitive roles but is more convenient for simpler, non-critical scenarios. Example:
+Alternatively, you can use closures as handlers. However, all arguments must be copied if you're planning to use them later, even ones with static lifetimes. This method is not suitable for performance-sensitive roles but is more convenient for simpler, non-critical scenarios. Example:
 
 ```rust,no_ignore
 use rusteron_client::*;
@@ -151,7 +152,7 @@ Ensure you have also set up the necessary Aeron C libraries required by **ruster
 
 ```rust,no_ignore
 use rusteron_client::*;
-use rusteron_media_driver::{AeronDriverContext, AeronDriver};
+use rusteron_media_driver::{AeronDriverContext, AeronDriver, IntoCString};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -165,13 +166,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let stop3 = stop.clone();
 
     let ctx = AeronContext::new()?;
-    ctx.set_dir(media_driver_ctx.get_dir())?;
+    ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
     let aeron = Aeron::new(&ctx)?;
     aeron.start()?;
-    
+
     // Set up the publication
     let publisher = aeron
-        .async_add_publication("aeron:ipc", 123)?
+        .async_add_publication(&"aeron:ipc".into_c_string(), 123)?
         .poll_blocking(Duration::from_secs(5))?;
     let publisher2 = publisher.clone();
 
@@ -185,7 +186,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::thread::sleep(Duration::from_millis(500));
         }
     });
-    
+
     // Set up the publication with `try_claim`
     let string_len = 156;
 
@@ -208,7 +209,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Set up the subscription
     let subscription = aeron
-        .async_add_subscription("aeron:ipc", 123,                
+        .async_add_subscription(&"aeron:ipc".into_c_string(), 123,                
                                 Handlers::no_available_image_handler(),
                                 Handlers::no_unavailable_image_handler())?
         .poll_blocking(Duration::from_secs(5))?;
@@ -270,4 +271,3 @@ This project is dual-licensed under either the [MIT License](https://opensource.
 - [GitHub Repository](https://github.com/mimran1980/rusteron)
 
 Feel free to reach out with any questions or suggestions via GitHub Issues!
-

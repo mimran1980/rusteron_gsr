@@ -46,11 +46,11 @@ Ensure that you have also set up the necessary Aeron C libraries required by **r
 ### Standard Media Driver Example
 
 ```rust,no_ignore
-use rusteron_media_driver::{AeronDriver, AeronDriverContext};
+use rusteron_media_driver::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let aeron_context = AeronDriverContext::new()?;
-    aeron_context.set_dir("target/test")?;
+    aeron_context.set_dir(&"target/test".into_c_string())?;
 
     // Create Aeron driver
     let aeron_driver = AeronDriver::new(&aeron_context)?;
@@ -76,7 +76,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create Aeron context and link with the embedded driver
     let ctx = AeronContext::new()?;
-    ctx.set_dir(media_driver_ctx.get_dir())?;
+    ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
     
     // Wait a bit for demonstration purposes
     thread::sleep(Duration::from_secs(3));

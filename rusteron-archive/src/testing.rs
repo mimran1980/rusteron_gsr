@@ -1,3 +1,4 @@
+use crate::IntoCString;
 use crate::{
     Aeron, AeronArchive, AeronArchiveAsyncConnect, AeronArchiveContext, AeronContext, Handler,
     NoOpAeronIdleStrategyFunc,
@@ -6,6 +7,7 @@ use log::info;
 use log::{error, warn};
 use regex::Regex;
 use std::backtrace::Backtrace;
+use std::ffi::CString;
 use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::thread::sleep;
@@ -14,8 +16,8 @@ use std::{fs, io, panic, process};
 
 pub struct EmbeddedArchiveMediaDriverProcess {
     child: Child,
-    pub aeron_dir: String,
-    pub archive_dir: String,
+    pub aeron_dir: CString,
+    pub archive_dir: CString,
     pub control_request_channel: String,
     pub control_response_channel: String,
     pub recording_events_channel: String,
@@ -109,7 +111,7 @@ impl EmbeddedArchiveMediaDriverProcess {
 
     pub fn run_aeron_stats(&self) -> std::io::Result<Child> {
         let main_dir = env!("CARGO_MANIFEST_DIR");
-        let dir = format!("{}/{}", main_dir, &self.aeron_dir);
+        let dir = format!("{}/{}", main_dir, &self.aeron_dir.to_str().unwrap());
         info!("running 'just aeron-stat {}'", dir);
         Command::new("just")
             .args(["aeron-stat", dir.as_str()])
@@ -124,7 +126,7 @@ impl EmbeddedArchiveMediaDriverProcess {
             if let Ok(aeron_context) = AeronContext::new() {
                 aeron_context.set_dir(&self.aeron_dir).expect("invalid dir");
                 aeron_context
-                    .set_client_name("unit_test_client")
+                    .set_client_name(&CString::new("unit_test_client")?)
                     .expect("invalid client name");
                 if let Ok(aeron) = Aeron::new(&aeron_context) {
                     if aeron.start().is_ok() {
@@ -314,8 +316,8 @@ impl EmbeddedArchiveMediaDriverProcess {
 
         Ok(EmbeddedArchiveMediaDriverProcess {
             child,
-            aeron_dir: aeron_dir.to_string(),
-            archive_dir: archive_dir.to_string(),
+            aeron_dir: aeron_dir.into_c_string(),
+            archive_dir: archive_dir.into_c_string(),
             control_request_channel: control_request_channel.to_string(),
             control_response_channel: control_response_channel.to_string(),
             recording_events_channel: recording_events_channel.to_string(),
@@ -354,10 +356,10 @@ impl Drop for EmbeddedArchiveMediaDriverProcess {
         }
 
         // Clean up directories after the process has terminated
-        if let Err(e) = Self::clean_directory(&self.aeron_dir) {
+        if let Err(e) = Self::clean_directory(&self.aeron_dir.to_str().unwrap()) {
             error!("Failed to clean up Aeron directory: {}", e);
         }
-        if let Err(e) = Self::clean_directory(&self.archive_dir) {
+        if let Err(e) = Self::clean_directory(&self.archive_dir.to_str().unwrap()) {
             error!("Failed to clean up Archive directory: {}", e);
         }
     }

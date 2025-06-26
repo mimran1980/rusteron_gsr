@@ -55,16 +55,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn run_pong(running_pong: Arc<AtomicBool>) -> Result<(), Box<dyn std::error::Error>> {
     let context = AeronContext::new()?;
     let dir = std::env::var("AERON_DIR").expect("AERON_DIR must be set");
-    context.set_dir(&dir)?;
+    context.set_dir(&dir.into_c_string())?;
     context.set_idle_sleep_duration_ns(0)?;
     let aeron = Aeron::new(&context)?;
     aeron.start()?;
     let ping_publication = aeron
-        .async_add_publication(PING_CHANNEL, PING_STREAM_ID)?
+        .async_add_publication(&PING_CHANNEL.into_c_string(), PING_STREAM_ID)?
         .poll_blocking(Duration::from_secs(5))?;
     let pong_subscription = aeron
         .async_add_subscription(
-            PONG_CHANNEL,
+            &PONG_CHANNEL.into_c_string(),
             PONG_STREAM_ID,
             Handlers::no_available_image_handler(),
             Handlers::no_unavailable_image_handler(),
@@ -95,7 +95,7 @@ fn run_pong(running_pong: Arc<AtomicBool>) -> Result<(), Box<dyn std::error::Err
     }
 
     let handler = Handler::leak(PongRoundTripHandler {
-        publisher: ping_publication.clone(),
+        publisher: ping_publication,
         buffer_claim: Default::default(),
         header_values: Default::default(),
     });
@@ -114,16 +114,16 @@ fn run_ping(
     let dir = std::env::var("AERON_DIR").expect("AERON_DIR must be set");
     println!("idle sleep {}", context.get_idle_sleep_duration_ns());
     context.set_idle_sleep_duration_ns(0)?;
-    context.set_dir(&dir)?;
+    context.set_dir(&dir.into_c_string())?;
     let aeron = Aeron::new(&context)?;
     aeron.start()?;
 
     let pong_publication = aeron
-        .async_add_publication(PONG_CHANNEL, PONG_STREAM_ID)?
+        .async_add_publication(&PONG_CHANNEL.into_c_string(), PONG_STREAM_ID)?
         .poll_blocking(Duration::from_secs(5))?;
     let ping_subscription = aeron
         .async_add_subscription(
-            PING_CHANNEL,
+            &PING_CHANNEL.into_c_string(),
             PING_STREAM_ID,
             Handlers::no_available_image_handler(),
             Handlers::no_unavailable_image_handler(),

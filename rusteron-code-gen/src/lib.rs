@@ -20,7 +20,6 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 
 pub const CUSTOM_AERON_CODE: &str = include_str!("./aeron_custom.rs");
-pub const CUSTOM_RB_CODE: &str = include_str!("./rb_custom.rs");
 pub const COMMON_CODE: &str = include_str!("./common.rs");
 
 pub fn append_to_file(file_path: &str, code: &str) -> std::io::Result<()> {
@@ -70,60 +69,10 @@ mod tests {
     use crate::parser::parse_bindings;
     use crate::{
         append_to_file, format_token_stream, format_with_rustfmt, ARCHIVE_BINDINGS,
-        CLIENT_BINDINGS, CUSTOM_AERON_CODE, RB,
+        CLIENT_BINDINGS, CUSTOM_AERON_CODE,
     };
     use proc_macro2::TokenStream;
     use std::fs;
-
-    #[test]
-    #[cfg(not(target_os = "windows"))] // the generated bindings have different sizes
-    fn media_driver() {
-        let mut bindings = parse_bindings(&"../rusteron-code-gen/bindings/media-driver.rs".into());
-        assert_eq!(
-            "AeronImageFragmentAssembler",
-            bindings
-                .wrappers
-                .get("aeron_image_fragment_assembler_t")
-                .unwrap()
-                .class_name
-        );
-
-        let file = write_to_file(TokenStream::new(), true, "md.rs");
-
-        let bindings_copy = bindings.clone();
-        for handler in bindings.handlers.iter_mut() {
-            // need to run this first so I know the FnMut(xxxx) which is required in generate_rust_code
-            let _ = crate::generate_handlers(handler, &bindings_copy);
-        }
-        for (p, w) in bindings
-            .wrappers
-            .values()
-            .filter(|w| !w.type_name.contains("_t_") && w.type_name != "in_addr")
-            .enumerate()
-        {
-            let code = crate::generate_rust_code(
-                w,
-                &bindings.wrappers,
-                p == 0,
-                true,
-                true,
-                &bindings.handlers,
-            );
-            write_to_file(code, false, "md.rs");
-        }
-        let bindings_copy = bindings.clone();
-        for handler in bindings.handlers.iter_mut() {
-            let code = crate::generate_handlers(handler, &bindings_copy);
-            append_to_file(&file, &format_with_rustfmt(&code.to_string()).unwrap()).unwrap();
-        }
-        let t = trybuild::TestCases::new();
-        append_to_file(&file, "use bindings::*; mod bindings { ").unwrap();
-        append_to_file(&file, MEDIA_DRIVER_BINDINGS).unwrap();
-        append_to_file(&file, "}").unwrap();
-        append_to_file(&file, CUSTOM_AERON_CODE).unwrap();
-        append_to_file(&file, "\npub fn main() {}\n").unwrap();
-        t.pass(&file)
-    }
 
     #[test]
     #[cfg(not(target_os = "windows"))] // the generated bindings have different sizes
@@ -178,43 +127,52 @@ mod tests {
 
     #[test]
     #[cfg(not(target_os = "windows"))] // the generated bindings have different sizes
-    fn rb() {
-        let mut bindings = parse_bindings(&"../rusteron-code-gen/bindings/rb.rs".into());
+    fn media_driver() {
+        let mut bindings = parse_bindings(&"../rusteron-code-gen/bindings/media-driver.rs".into());
+        assert_eq!(
+            "AeronImageFragmentAssembler",
+            bindings
+                .wrappers
+                .get("aeron_image_fragment_assembler_t")
+                .unwrap()
+                .class_name
+        );
 
-        let file = write_to_file(TokenStream::new(), true, "rb.rs");
+        let file = write_to_file(TokenStream::new(), true, "md.rs");
 
         let bindings_copy = bindings.clone();
         for handler in bindings.handlers.iter_mut() {
             // need to run this first so I know the FnMut(xxxx) which is required in generate_rust_code
             let _ = crate::generate_handlers(handler, &bindings_copy);
         }
-
-        for (p, w) in bindings.wrappers.values().enumerate() {
+        for (p, w) in bindings
+            .wrappers
+            .values()
+            .filter(|w| !w.type_name.contains("_t_") && w.type_name != "in_addr")
+            .enumerate()
+        {
             let code = crate::generate_rust_code(
                 w,
                 &bindings.wrappers,
                 p == 0,
                 true,
-                false,
+                true,
                 &bindings.handlers,
             );
-            if code.to_string().contains("ndler : Option < AeronCloseClientHandlerImpl > , rbd :) -> Result < Self , AeronCError > { let resource = Manage") {
-                panic!("{}", format_token_stream(code));
-            }
-
-            write_to_file(code, false, "rb.rs");
+            write_to_file(code, false, "md.rs");
         }
-
         let bindings_copy = bindings.clone();
         for handler in bindings.handlers.iter_mut() {
             let code = crate::generate_handlers(handler, &bindings_copy);
             append_to_file(&file, &format_with_rustfmt(&code.to_string()).unwrap()).unwrap();
         }
-
         let t = trybuild::TestCases::new();
-        append_to_file(&file, RB).unwrap();
+        append_to_file(&file, "use bindings::*; mod bindings { ").unwrap();
+        append_to_file(&file, MEDIA_DRIVER_BINDINGS).unwrap();
+        append_to_file(&file, "}").unwrap();
+        append_to_file(&file, CUSTOM_AERON_CODE).unwrap();
         append_to_file(&file, "\npub fn main() {}\n").unwrap();
-        t.pass(file)
+        t.pass(&file)
     }
 
     #[test]
@@ -381,19 +339,6 @@ mod test {
     }
 
     #[test]
-    fn test_drop_does_not_call_cleanup_for_borrowed() {
-        let resource_ptr = make_resource(40);
-
-        let check_fn = Some(Box::new(|_res: *mut i32| -> bool {
-            panic!("check_for_is_closed should not be called for borrowed resources")
-        }) as Box<dyn Fn(*mut i32) -> bool>);
-
-        {
-            let _resource = ManagedCResource::new_borrowed(resource_ptr as *const i32, check_fn);
-        }
-    }
-
-    #[test]
     fn test_drop_does_not_call_cleanup_if_check_for_is_closed_returns_true() {
         let flag = Arc::new(AtomicBool::new(false));
         let flag_clone = flag.clone();
@@ -407,8 +352,7 @@ mod test {
             0
         }) as Box<dyn FnMut(*mut *mut i32) -> i32>);
 
-        let check_fn =
-            Some(Box::new(|_res: *mut i32| -> bool { true }) as Box<dyn Fn(*mut i32) -> bool>);
+        let check_fn = Some(|_res: *mut i32| -> bool { true } as fn(_) -> bool);
 
         {
             let _resource = ManagedCResource::new(
@@ -441,8 +385,7 @@ mod test {
             0
         }) as Box<dyn FnMut(*mut *mut i32) -> i32>);
 
-        let check_fn =
-            Some(Box::new(|_res: *mut i32| -> bool { false }) as Box<dyn Fn(*mut i32) -> bool>);
+        let check_fn = Some(|_res: *mut i32| -> bool { false } as fn(*mut i32) -> bool);
 
         {
             let _resource = ManagedCResource::new(

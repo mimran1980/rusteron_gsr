@@ -1,6 +1,6 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use rusteron_client::*;
-use rusteron_media_driver::{AeronDriver, AeronDriverContext};
+use rusteron_media_driver::{AeronDriver, AeronDriverContext, IntoCString};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -15,7 +15,7 @@ const FRAGMENT_COUNT_LIMIT: usize = 10;
 
 fn criterion_benchmark(c: &mut Criterion) {
     let ctx = AeronDriverContext::new().unwrap();
-    ctx.set_dir(&format!("{}{}", ctx.get_dir(), Aeron::nano_clock()))
+    ctx.set_dir(&format!("{}{}", ctx.get_dir(), Aeron::nano_clock()).into_c_string())
         .unwrap();
     ctx.set_dir_delete_on_start(true).unwrap();
     ctx.set_dir_delete_on_shutdown(true).unwrap();
@@ -33,18 +33,18 @@ fn criterion_benchmark(c: &mut Criterion) {
     let context = AeronContext::new().unwrap();
     println!("idle sleep {}", context.get_idle_sleep_duration_ns());
     context.set_idle_sleep_duration_ns(0).unwrap();
-    context.set_dir(dir2).unwrap();
+    context.set_dir(&dir2.into_c_string()).unwrap();
     let aeron = Aeron::new(&context).unwrap();
     aeron.start().unwrap();
 
     let pong_publication = aeron
-        .async_add_publication(PONG_CHANNEL, PONG_STREAM_ID)
+        .async_add_publication(&PONG_CHANNEL.into_c_string(), PONG_STREAM_ID)
         .unwrap()
         .poll_blocking(Duration::from_secs(5))
         .unwrap();
     let ping_subscription = aeron
         .async_add_subscription(
-            PING_CHANNEL,
+            &PING_CHANNEL.into_c_string(),
             PING_STREAM_ID,
             Handlers::no_available_image_handler(),
             Handlers::no_unavailable_image_handler(),
@@ -76,16 +76,16 @@ fn criterion_benchmark(c: &mut Criterion) {
 
 fn run_pong(stop: Arc<AtomicBool>, dir: &str) -> Result<(), Box<dyn std::error::Error>> {
     let context = AeronContext::new()?;
-    context.set_dir(dir)?;
+    context.set_dir(&dir.into_c_string())?;
     context.set_idle_sleep_duration_ns(0)?;
     let aeron = Aeron::new(&context)?;
     aeron.start()?;
     let ping_publication = aeron
-        .async_add_publication(PING_CHANNEL, PING_STREAM_ID)?
+        .async_add_publication(&PING_CHANNEL.into_c_string(), PING_STREAM_ID)?
         .poll_blocking(Duration::from_secs(5))?;
     let pong_subscription = aeron
         .async_add_subscription(
-            PONG_CHANNEL,
+            &PONG_CHANNEL.into_c_string(),
             PONG_STREAM_ID,
             Handlers::no_available_image_handler(),
             Handlers::no_unavailable_image_handler(),
@@ -99,14 +99,13 @@ fn run_pong(stop: Arc<AtomicBool>, dir: &str) -> Result<(), Box<dyn std::error::
     pub struct PongRoundTripHandler {
         publisher: AeronPublication,
         buffer_claim: AeronBufferClaim,
-        header_values: AeronHeaderValues,
     }
 
     impl AeronFragmentHandlerCallback for PongRoundTripHandler {
         #[inline]
         fn handle_aeron_fragment_handler(&mut self, buffer: &[u8], header: AeronHeader) {
-            header.values(&self.header_values).unwrap();
-            let flags = self.header_values.frame.flags;
+            let header_values = header.get_values().unwrap();
+            let flags = header_values.frame.flags;
 
             while self.publisher.try_claim(buffer.len(), &self.buffer_claim) < 0 {}
             self.buffer_claim.frame_header_mut().flags = flags;
@@ -118,7 +117,6 @@ fn run_pong(stop: Arc<AtomicBool>, dir: &str) -> Result<(), Box<dyn std::error::
     let handler = Handler::leak(PongRoundTripHandler {
         publisher: ping_publication.clone(),
         buffer_claim: Default::default(),
-        header_values: Default::default(),
     });
     while !stop.load(Ordering::Acquire) {
         let _ = pong_subscription.poll(Some(&handler), FRAGMENT_COUNT_LIMIT);

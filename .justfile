@@ -28,13 +28,14 @@ clean:
   rm -rf rusteron-archive/target
   rm -rf rusteron-client/target
   rm -rf rusteron-media-driver/target
-  rm -rf rusteron-rb/target
+  rm -rf rusteron-archive/artifacts
+  rm -rf rusteron-client/artifacts
+  rm -rf rusteron-media-driver/artifacts
   rm -rf rusteron-docker-samples/target
   rm -rf rusteron-docker-samples/rusteron-dummy-example/target
   cd rusteron-archive/aeron && git submodule update --init --recursive --checkout && git reset --hard && git clean -fdx && cd -
   cd rusteron-client/aeron && git submodule update --init --recursive --checkout && git reset --hard && git clean -fdx && cd -
   cd rusteron-media-driver/aeron && git submodule update --init --recursive --checkout && git reset --hard && git clean -fdx && cd -
-  cd rusteron-rb/aeron && git submodule update --init --recursive --checkout && git reset --hard && git clean -fdx && cd -
   cargo clean
 
 # Build the project in debug mode
@@ -231,12 +232,12 @@ build-docker-samples:
     cd rusteron-docker-samples/rusteron-dummy-example && cargo build --release && cd ..
     cd rusteron-docker-samples && just build
 
-# updates aeron version e.g. tags/1.47.4 or master
+# updates aeron version e.g. tags/1.47.5 or master
 update-aeron-version version:
     cd rusteron-client/aeron && git fetch && git checkout {{version}} && cd -
     cd rusteron-archive/aeron && git fetch && git checkout {{version}} && cd -
     cd rusteron-media-driver/aeron && git fetch && git checkout {{version}} && cd -
 
-update_to-latest-aeron-version:
+update-to-latest-aeron-version:
     just update-aeron-version tags/`curl -s https://github.com/aeron-io/aeron/releases | grep -o 'tag/[0-9]*\.[0-9]*\.[0-9]*' | head -1 | cut -d'/' -f2`
 
