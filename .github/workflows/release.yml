@@ -110,7 +110,7 @@ jobs:
         run: |
           cargo test --features precompile,static --workspace -- --nocapture
           git reset --hard HEAD
-          git clean -fdx
+          git clean -fdx -e artifacts
 
       - name: Install cargo-release
         run: cargo install cargo-release || true

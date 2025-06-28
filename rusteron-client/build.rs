@@ -57,14 +57,14 @@ pub fn main() {
     #[cfg(all(feature = "precompile", feature = "static"))]
     if artifacts_dir.exists()
         && fs::read_dir(&artifacts_dir).unwrap().next().is_none()
-        && !std::env::var_os("RUSTERON_BUILD_FROM_SOURCE").is_some()
+        && std::env::var_os("RUSTERON_BUILD_FROM_SOURCE").is_none()
     {
         let _ = download_precompiled_binaries(&artifacts_dir);
     }
     #[cfg(all(feature = "precompile", feature = "static"))]
     if artifacts_dir.exists()
         && fs::read_dir(&artifacts_dir).unwrap().next().is_some()
-        && !std::env::var_os("RUSTERON_BUILD_FROM_SOURCE").is_some()
+        && std::env::var_os("RUSTERON_BUILD_FROM_SOURCE").is_none()
     {
         println!(
             "Artifacts found in {}. Using published artifacts.",
