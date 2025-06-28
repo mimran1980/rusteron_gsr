@@ -400,7 +400,7 @@ fn download_precompiled_binaries(artifacts_dir: &Path) -> Result<(), Box<dyn std
 
     let asset = format!("https://github.com/mimran1980/rusteron/releases/download/v{version}/artifacts-{target_os}-{image}-{feature}.tar.gz");
 
-    eprintln!("downloading from {asset}");
+    println!("downloading from {asset}");
     // Download and extract the tar.gz to the artifacts directory
     // Download and unpack the tar.gz in one go
     let response = reqwest::blocking::get(&asset)?.error_for_status()?;

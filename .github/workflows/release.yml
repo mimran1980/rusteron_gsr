@@ -78,22 +78,6 @@ jobs:
           find artifacts
           
 
-      - name: Extract version
-        id: extract_version
-        run: |
-          version=$(grep '"rusteron-code-gen", version = ' Cargo.toml | sed -E 's/.*version = "=([^"]+)".*/\1/g')
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "found $version"
-      - uses: actions/create-release@v1
-        id: create_release
-        with:
-          tag_name: v${{ steps.extract_version.outputs.version }}
-          release_name: Release ${{ steps.extract_version.outputs.version }}
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Package artifacts
         shell: bash
         run: |
@@ -105,17 +89,6 @@ jobs:
             echo "📦 Creating archive $archive"
             tar -czf "$archive" -C artifacts "$(basename "$artifact_dir")"
           done
-
-      - name: Upload Release Assets
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          shopt -s nullglob
-          for f in artifacts/*.tar.gz; do
-            echo "⏫ Uploading $f"
-            gh release upload "v${{ steps.extract_version.outputs.version }}" "$f"
-          done
-
 
       - name: Cache cargo-release binary
         uses: actions/cache@v4
@@ -158,6 +131,32 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           branch: main
           tags: true
+
+      - name: Extract version
+        id: extract_version
+        run: |
+          version=$(grep '"rusteron-code-gen", version = ' Cargo.toml | sed -E 's/.*version = "=([^"]+)".*/\1/g')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "found $version"
+      - uses: actions/create-release@v1
+        id: create_release
+        with:
+          tag_name: v${{ steps.extract_version.outputs.version }}
+          release_name: Release ${{ steps.extract_version.outputs.version }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Release Assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          shopt -s nullglob
+          for f in artifacts/*.tar.gz; do
+            echo "⏫ Uploading $f"
+            gh release upload "v${{ steps.extract_version.outputs.version }}" "$f"
+          done
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
