@@ -94,28 +94,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Cache cargo-release binary
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/bin/cargo-release
-          key: cargo-release-${{ runner.os }}
-
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle/wrapper/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      - name: Test with artifacts
-        run: |
-          cargo test --features precompile,static --workspace -- --nocapture
-          git reset --hard HEAD
-          git clean -fdx
-
       - name: Package artifacts
         shell: bash
         run: |
@@ -137,6 +115,29 @@ jobs:
             echo "⏫ Uploading $f"
             gh release upload "v${{ steps.extract_version.outputs.version }}" "$f"
           done
+
+
+      - name: Cache cargo-release binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-release
+          key: cargo-release-${{ runner.os }}
+
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Test with artifacts
+        run: |
+          cargo test --features precompile,static --workspace -- --nocapture
+          git reset --hard HEAD
+          git clean -fdx
 
       - name: Install cargo-release
         run: cargo install cargo-release || true
