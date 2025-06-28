@@ -142,7 +142,7 @@ jobs:
         id: create_release
         with:
           tag_name: v${{ steps.extract_version.outputs.version }}
-          release_name: Release ${{ steps.extract_version.outputs.version }}
+          release_name: v${{ steps.extract_version.outputs.version }}
           draft: false
           prerelease: false
         env:
