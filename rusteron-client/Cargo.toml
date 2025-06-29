@@ -79,4 +79,4 @@ harness = false
 
 [package.metadata.docs.rs]
 features = ["static", "precompile"]
-default-target = "x86_64-apple-darwin"
+default-target = "aarch64-apple-darwin"
