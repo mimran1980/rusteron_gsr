@@ -55,11 +55,13 @@ pub fn main() {
 
     // If the artifacts folder exists use that instead of doing cmake and requiring java to be installed
     #[cfg(all(feature = "precompile", feature = "static"))]
-    if artifacts_dir.exists()
-        && fs::read_dir(&artifacts_dir).unwrap().next().is_none()
+    if fs::read_dir(&artifacts_dir).unwrap().next().is_none()
         && std::env::var_os("RUSTERON_BUILD_FROM_SOURCE").is_none()
     {
-        let _ = download_precompiled_binaries(&artifacts_dir);
+        if let Err(e) = download_precompiled_binaries(&artifacts_dir) {
+            eprintln!("Error downloading precompiled binaries: {e:?}");
+            println!("Error downloading precompiled binaries: {e:?}");
+        }
     }
     #[cfg(all(feature = "precompile", feature = "static"))]
     if artifacts_dir.exists()
@@ -392,6 +394,7 @@ fn download_precompiled_binaries(artifacts_dir: &Path) -> Result<(), Box<dyn std
     let asset = format!("https://github.com/mimran1980/rusteron/releases/download/v{version}/artifacts-{target_os}-{image}-{feature}.tar.gz");
 
     println!("downloading from {asset}");
+    eprintln!("downloading from {asset}");
     // Download and extract the tar.gz to the artifacts directory
     // Download and unpack the tar.gz in one go
     let response = reqwest::blocking::get(&asset)?.error_for_status()?;
