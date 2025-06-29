@@ -1,3 +1,10 @@
+> ## 📢 Important Notice: Project Has Moved
+
+> This repository has been relocated and is now officially hosted at:
+> ### **[https://github.com/gsrxyz/rusteron](https://github.com/gsrxyz/rusteron)**
+>
+> The project is now proudly sponsored by **GSR**. I will continue to be the active developer on this project, with future commits made under my work handle.
+
 # rusteron-media-driver
 
 **rusteron-media-driver** is a module in the **rusteron** project that provides an interface to the Aeron Media Driver in a Rust environment. This module is crucial for managing the messaging infrastructure between producers and consumers, allowing for efficient low-latency communication.

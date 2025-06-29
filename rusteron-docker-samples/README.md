@@ -1,3 +1,10 @@
+> ## 📢 Important Notice: Project Has Moved
+
+> This repository has been relocated and is now officially hosted at:
+> ### **[https://github.com/gsrxyz/rusteron](https://github.com/gsrxyz/rusteron)**
+>
+> The project is now proudly sponsored by **GSR**. I will continue to be the active developer on this project, with future commits made under my work handle.
+
 # Dummy Example for Docker and Kubernetes Configuration
 
 This repository provides a simple example to demonstrate containerization and orchestration using **Docker**, **Podman**, and **Kubernetes**. While not intended as production-ready, it serves as a helpful starting point.
