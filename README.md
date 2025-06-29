@@ -9,6 +9,15 @@
 
 > **Note**: For an idiomatic Rust API for Aeron, consider using [`aeron-rs`](https://github.com/UnitedTraders/aeron-rs)
 
+## 🚀 Sponsorship & Adoption
+
+🏢 Sponsored by GSR
+
+This project is proudly sponsored and maintained by *GSR*, a global leader in algorithmic trading and market making in digital assets.
+Rusteron plays a foundational role in GSR’s trading platform technology stack, providing critical infrastructure for performance-sensitive, real-time systems. As part of our commitment to engineering excellence and open collaboration, the project is now developed and maintained under GSR’s official GitHub organization.
+We believe in sharing robust, production-tested tools with the broader community and welcome external contributions, feedback, and discussion.
+If you're interested in contributing or partnering with us, feel free to reach out or open an issue!
+
 ## Project Background
 
 This project is based on a fork of [`libaeron-sys`](https://github.com/bspeice/libaeron-sys). Since it uses C bindings, **rusteron** inherently operates in an `unsafe` context. This means it requires extra caution when using, as incorrect handling can lead to undefined behaviour such as segmentation faults. For example, using a publisher after the `Aeron` client has closed will result in a segmentation fault.
