@@ -12,7 +12,7 @@ resolver = "2"
 compression = "best"
 
 [workspace.dependencies]
-rusteron-code-gen = { path = "rusteron-code-gen", version = "=0.1.132" }
+rusteron-code-gen = { path = "rusteron-code-gen", version = "=0.1.137" }
 ctrlc = "3.4"
 bindgen = "0.71"
 cmake = "0.1"
@@ -24,11 +24,15 @@ quote = "1.0"
 itertools = "0.14"
 num-format = "0.4"
 hdrhistogram = "7.5"
-criterion = "0.5"
+criterion = "0.6"
 serial_test = "3.2"
 regex = "1.11"
 log = "0.4"
 walkdir = "2.5"
+reqwest = { version = "0.12", features = ["blocking", "default-tls"] }
+flate2 = { version = "1.1"}
+tar    = "0.4"
+
 
 [release]
 bump = "auto"

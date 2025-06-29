@@ -1,3 +1,10 @@
+> ## 📢 Important Notice: Project Has Moved
+
+> This repository has been relocated and is now officially hosted at:
+> ### **[https://github.com/gsrxyz/rusteron](https://github.com/gsrxyz/rusteron)**
+>
+> The project is now proudly sponsored by **GSR**. I will continue to be the active developer on this project, with future commits made under my work handle.
+
 # rusteron-code-gen
 
 **rusteron-code-gen** is a module in the **rusteron** project that is responsible for generating Rust code by analyzing the Aeron C bindings. It plays a crucial role in automating the generation of the Rust wrappers that make it possible for developers to interact with the Aeron APIs in an idiomatic Rust way.

@@ -1,6 +1,6 @@
 [package]
 name = "rusteron-media-driver"
-version = "0.1.132"
+version = "0.1.137"
 edition = "2021"
 authors = ["Mo Imran <mimran1980@gmail.com>"]
 license = "MIT OR Apache-2.0"
@@ -47,6 +47,9 @@ rusteron-code-gen = { workspace = true }
 log = { workspace = true}
 regex = { workspace = true}
 walkdir = { workspace = true}
+reqwest = {workspace = true}
+flate2 = {workspace = true}
+tar    = {workspace = true}
 
 [features]
 # using static as different modules have different versions of aeron which don't seem to play nicely
@@ -63,4 +66,4 @@ path = "src/bin/media_driver.rs"
 
 [package.metadata.docs.rs]
 features = ["static", "precompile"]
-default-target = "x86_64-apple-darwin"
+default-target = "aarch64-apple-darwin"

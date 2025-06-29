@@ -1,5 +1,12 @@
 # Rusteron
 
+> ## 📢 Important Notice: Project Has Moved
+
+> This repository has been relocated and is now officially hosted at:
+> ### **[https://github.com/gsrxyz/rusteron](https://github.com/gsrxyz/rusteron)**
+>
+> The project is now proudly sponsored by **GSR**. I will continue to be the active developer on this project, with future commits made under my work handle.
+
 [![Crates.io](https://img.shields.io/crates/v/rusteron-archive)](https://crates.io/crates/rusteron-archive)
 [![github-ci](https://github.com/mimran1980/rusteron/actions/workflows/ci.yml/badge.svg)](https://github.com/mimran1980/rusteron/actions/workflows/ci.yml)
 [![docsrs](https://docs.rs/rusteron-client/badge.svg)](https://docs.rs/rusteron-client/)
@@ -25,10 +32,10 @@ rusteron-archive = { version = "0.1", features= ["static", "precompile"] }
 
 ## Project Status
 
-**rusteron** is currently in release candidate phase and is being planned to be used in a production system, meaning:
+**rusteron** is now stable and production-ready, meaning:
 
-- It is still under active development.
-- APIs may be subject to breaking changes.
+- It has a stable API.
+- `rusteron-client`, `rusteron-archive`, and `rusteron-media-driver` are all being used in production environments.
 
 Community feedback and contributions are welcome to improve its functionality and usability.
 

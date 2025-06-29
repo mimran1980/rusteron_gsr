@@ -1,3 +1,10 @@
+> ## 📢 Important Notice: Project Has Moved
+
+> This repository has been relocated and is now officially hosted at:
+> ### **[https://github.com/gsrxyz/rusteron](https://github.com/gsrxyz/rusteron)**
+>
+> The project is now proudly sponsored by **GSR**. I will continue to be the active developer on this project, with future commits made under my work handle.
+
 # rusteron-archive
 
 **rusteron-archive** is a module within the **rusteron** project that provides functionalities for interacting with Aeron's archive capabilities in a Rust environment. This module extends **rusteron-client** by offering features for recording streams, managing archives, and handling replay capabilities.
