@@ -10,7 +10,7 @@ The media driver can be used to set up the messaging directory and manage data s
 
 ## Usage Note
 
-It is recommended to run the media driver using the Aeron Java or C version for production use. This crate primarily serves as a utility to start the media driver embedded within unit or integration tests.
+It is recommended to run the media driver using the Aeron Java or C version for production use. This crate can also be used to start the media driver embedded within unit or integration tests.
 
 ## Installation
 
@@ -90,14 +90,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-## Safety Considerations
 
-Since **rusteron-media-driver** relies on Aeron C bindings, it involves the use of `unsafe` Rust code. Users must ensure:
-
-- Resources are properly managed (e.g., starting and stopping drivers in a correct order).
-- Proper synchronisation when accessing shared data in a multithreaded environment.
-
-Improper use of the media driver can lead to crashes or other undefined behaviours.
 
 ## Building This Project Instructions
 
