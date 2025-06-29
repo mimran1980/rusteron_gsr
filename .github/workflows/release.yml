@@ -28,8 +28,6 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-          persist-credentials: false   # don’t override our custom token
-          token: ${{ secrets.ACTIONS_PUSH_TOKEN }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -78,7 +76,7 @@ jobs:
       - name: Push new version and tag to GitHub
         uses: ad-m/github-push-action@v0.8.0
         with:
-          github_token: ${{ secrets.ACTIONS_PUSH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           branch: main
           tags: true
 
