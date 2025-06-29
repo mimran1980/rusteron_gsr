@@ -239,7 +239,7 @@ impl AeronArchiveContext {
         context.set_control_request_channel(&request_control_channel.into_c_string())?;
         context.set_control_response_channel(&response_control_channel.into_c_string())?;
         context.set_recording_events_channel(&recording_events_channel.into_c_string())?;
-        // see https://github.com/mimran1980/rusteron/issues/18
+        // see https://github.com/gsrxyz/rusteron/issues/18
         context.set_idle_strategy(Some(&Handler::leak(NoOpAeronIdleStrategyFunc)))?;
         Ok(context)
     }

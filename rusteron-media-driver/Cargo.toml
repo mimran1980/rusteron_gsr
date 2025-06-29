@@ -2,13 +2,13 @@
 name = "rusteron-media-driver"
 version = "0.1.137"
 edition = "2021"
-authors = ["Mo Imran <mimran1980@gmail.com>"]
+authors = ["Mo Imran <mimran1980@gmail.com>", "Mo Imran <mohammed.imran@gsr.io"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/mimran1980/rusteron"
-homepage = "https://github.com/mimran1980/rusteron"
+repository = "https://github.com/gsrxyz/rusteron"
+homepage = "https://github.com/gsrxyz/rusteron"
 keywords = ["aeron", "low-latency", "media-driver", "aeron-c-bindings", "networking"]
 categories = ["network-programming"]
-documentation = "https://mimran1980.github.io/rusteron/rusteron_media_driver/index.html"
+documentation = "https://gsrxyz.github.io/rusteron/rusteron_media_driver/index.html"
 description = "Implements the Aeron Media Driver, a core component for managing messaging between producers and consumers. It uses the Aeron C bindings from aeron-driver module."
 readme = "README.md"
 

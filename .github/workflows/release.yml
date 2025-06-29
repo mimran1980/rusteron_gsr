@@ -68,7 +68,7 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
           CARGO_HTTP_MULTIPLEXING: false
         run: |
-          git config --global user.email "mimran1980@gmail.com"
+          git config --global user.email "mohammed.imran@gsr.io"
           git config --global user.name "Mo Imran"
           release_type="${{ github.event.inputs.release_type }}"
           cargo release "$release_type" --workspace --execute --no-confirm --verbose --no-verify

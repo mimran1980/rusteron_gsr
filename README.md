@@ -1,16 +1,9 @@
 # Rusteron
 
-> ## 📢 Important Notice: Project Has Moved
-
-> This repository has been relocated and is now officially hosted at:
-> ### **[https://github.com/gsrxyz/rusteron](https://github.com/gsrxyz/rusteron)**
->
-> The project is now proudly sponsored by **GSR**. I will continue to be the active developer on this project, with future commits made under my work handle.
-
 [![Crates.io](https://img.shields.io/crates/v/rusteron-archive)](https://crates.io/crates/rusteron-archive)
-[![github-ci](https://github.com/mimran1980/rusteron/actions/workflows/ci.yml/badge.svg)](https://github.com/mimran1980/rusteron/actions/workflows/ci.yml)
+[![github-ci](https://github.com/gsrxyz/rusteron/actions/workflows/ci.yml/badge.svg)](https://github.com/gsrxyz/rusteron/actions/workflows/ci.yml)
 [![docsrs](https://docs.rs/rusteron-client/badge.svg)](https://docs.rs/rusteron-client/)
-[![github docs](https://custom-icon-badges.demolab.com/badge/githubdocs-blue.svg?logo=log&logoSource=feather)](https://mimran1980.github.io/rusteron)
+[![github docs](https://custom-icon-badges.demolab.com/badge/githubdocs-blue.svg?logo=log&logoSource=feather)](https://gsrxyz.github.io/rusteron)
 
 **rusteron** is a Rust client wrapper for the [Aeron](https://github.com/real-logic/aeron) C API, designed to help Rust developers interact with Aeron, a high-performance messaging system. This library is built as an extension to the Aeron C bindings, making it easier to leverage Aeron's low-latency communication capabilities in Rust applications.
 
@@ -43,25 +36,25 @@ Community feedback and contributions are welcome to improve its functionality an
 
 The library is divided into several modules, each focusing on specific parts of Aeron's functionality:
 
-- **[rusteron-code-gen](https://github.com/mimran1980/rusteron/tree/main/rusteron-code-gen)**: This module is
+- **[rusteron-code-gen](https://github.com/gsrxyz/rusteron/tree/main/rusteron-code-gen)**: This module is
   responsible for generating the Rust wrapper from the raw C bindings. It helps maintain a clean and repeatable way to
   bridge between the two languages.
 
-- **[rusteron-client](https://github.com/mimran1980/rusteron/tree/main/rusteron-client)**: Provides core client
+- **[rusteron-client](https://github.com/gsrxyz/rusteron/tree/main/rusteron-client)**: Provides core client
   functionalities for interacting with the Aeron protocol, such as establishing connections, subscribing, and
   publishing. It uses the Aeron C bindings from aeron-client module.
 
-- **[rusteron-archive](https://github.com/mimran1980/rusteron/tree/main/rusteron-archive)**: Extends the Aeron client to
+- **[rusteron-archive](https://github.com/gsrxyz/rusteron/tree/main/rusteron-archive)**: Extends the Aeron client to
   include archiving features, such as recording streams and handling replay capabilities. It uses the Aeron C bindings
   from aeron-archive module.
   Note rusteron-archive also includes rusteron-client code so no need to have them both as dependancies. Also make sure
   the media driver matches lib version.
 
-- **[rusteron-media-driver](https://github.com/mimran1980/rusteron/tree/main/rusteron-media-driver)**: Implements the
+- **[rusteron-media-driver](https://github.com/gsrxyz/rusteron/tree/main/rusteron-media-driver)**: Implements the
   Aeron Media Driver, a core component for managing messaging between producers and consumers. It uses the Aeron C
   bindings from aeron-driver module.
 
-- **[rusteron-docker-samples](https://github.com/mimran1980/rusteron/tree/main/rusteron-docker-samples)**: A collection of simple examples demonstrating how Docker configurations might look for Aeron-based applications. The examples include Dockerfiles for Aeron Media Driver and dummy components like ticker writer and ticker reader, showcasing shared resource management and environment configurations. These are not production-ready configurations but can serve as inspiration for setting up your own Docker-based workflows. For details, see the module's [README](https://github.com/mimran1980/rusteron/tree/main/rusteron-docker-samples/README.md).
+- **[rusteron-docker-samples](https://github.com/gsrxyz/rusteron/tree/main/rusteron-docker-samples)**: A collection of simple examples demonstrating how Docker configurations might look for Aeron-based applications. The examples include Dockerfiles for Aeron Media Driver and dummy components like ticker writer and ticker reader, showcasing shared resource management and environment configurations. These are not production-ready configurations but can serve as inspiration for setting up your own Docker-based workflows. For details, see the module's [README](https://github.com/gsrxyz/rusteron/tree/main/rusteron-docker-samples/README.md).
 
 ## Installation
 
@@ -169,7 +162,7 @@ Contributions are more than welcome! Please feel free to open issues, submit pul
 - Bug reports and feature requests.
 - Documentation improvements.
 
-If you're interested in helping, check out our [contributing guidelines](https://github.com/mimran1980/rusteron/blob/main/CONTRIBUTING.md).
+If you're interested in helping, check out our [contributing guidelines](https://github.com/gsrxyz/rusteron/blob/main/CONTRIBUTING.md).
 
 ## License
 
@@ -182,8 +175,8 @@ Special thanks to the authors of the original [`libaeron-sys`](https://github.co
 ## Links
 
 - [Documentation on docs.rs](https://docs.rs/rusteron-client/)
-- [API Reference on github](https://mimran1980.github.io/rusteron)
-- [GitHub Repository](https://github.com/mimran1980/rusteron)
+- [API Reference on github](https://gsrxyz.github.io/rusteron)
+- [GitHub Repository](https://github.com/gsrxyz/rusteron)
 
 ---
 
