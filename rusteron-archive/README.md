@@ -1,10 +1,3 @@
-> ## 📢 Important Notice: Project Has Moved
-
-> This repository has been relocated and is now officially hosted at:
-> ### **[https://github.com/gsrxyz/rusteron](https://github.com/gsrxyz/rusteron)**
->
-> The project is now proudly sponsored by **GSR**. I will continue to be the active developer on this project, with future commits made under my work handle.
-
 # rusteron-archive
 
 **rusteron-archive** is a module within the **rusteron** project that provides functionalities for interacting with Aeron's archive capabilities in a Rust environment. This module extends **rusteron-client** by offering features for recording streams, managing archives, and handling replay capabilities.
@@ -18,6 +11,16 @@ For quick start use static lib with precompiled C libraries if you're running on
 ```toml
 rusteron-archive = { version = "0.1", features= ["static", "precompile"] }
 ```
+
+## 🚀 Sponsorship & Adoption
+
+🏢 Sponsored by GSR
+
+This project is proudly sponsored and maintained by *GSR*, a global leader in algorithmic trading and market making in digital assets.
+Rusteron plays a foundational role in GSR’s trading platform technology stack, providing critical infrastructure for performance-sensitive, real-time systems. As part of our commitment to engineering excellence and open collaboration, the project is now developed and maintained under GSR’s official GitHub organization.
+We believe in sharing robust, production-tested tools with the broader community and welcome external contributions, feedback, and discussion.
+If you're interested in contributing or partnering with us, feel free to reach out or open an issue!
+
 
 ## Installation
 
@@ -174,7 +177,7 @@ You can view the benchmarks for this project by visiting [BENCHMARKS.md](../BENC
 
 ## Contributing
 
-Contributions are welcome! Please see our [contributing guidelines](https://github.com/mimran1980/rusteron/blob/main/CONTRIBUTING.md) for more information on how to get involved.
+Contributions are welcome! Please see our [contributing guidelines](https://github.com/gsrxyz/rusteron/blob/main/CONTRIBUTING.md) for more information on how to get involved.
 
 ## License
 
@@ -183,7 +186,7 @@ This project is dual-licensed under either the [MIT License](https://opensource.
 ## Links
 
 - [Documentation on docs.rs](https://docs.rs/rusteron-archive/)
-- [API Reference on github](https://mimran1980.github.io/rusteron/rusteron_archive)
-- [GitHub Repository](https://github.com/mimran1980/rusteron)
+- [API Reference on github](https://gsrxyz.github.io/rusteron/rusteron_archive)
+- [GitHub Repository](https://github.com/gsrxyz/rusteron)
 
 Feel free to reach out with any questions or suggestions via GitHub Issues!

@@ -2,13 +2,13 @@
 name = "rusteron-client"
 version = "0.1.137"
 edition = "2021"
-authors = ["Mo Imran <mimran1980@gmail.com>"]
+authors = ["Mo Imran <mimran1980@gmail.com>", "Mo Imran <mohammed.imran@gsr.io"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/mimran1980/rusteron"
-homepage = "https://github.com/mimran1980/rusteron"
+repository = "https://github.com/gsrxyz/rusteron"
+homepage = "https://github.com/gsrxyz/rusteron"
 keywords = ["aeron", "low-latency", "aeron-client", "aeron-c-bindings", "networking"]
 categories = ["network-programming"]
-documentation = "https://mimran1980.github.io/rusteron/rusteron_client/index.html"
+documentation = "https://gsrxyz.github.io/rusteron/rusteron_client/index.html"
 description = "Provides core client functionalities for interacting with the Aeron protocol, such as establishing connections, subscribing, and publishing. It uses the Aeron C bindings from aeron-client module."
 readme = "README.md"
 

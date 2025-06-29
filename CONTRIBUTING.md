@@ -5,7 +5,7 @@ Thank you for considering contributing to **rusteron**! Contributions are an int
 ## How Can You Contribute?
 
 ### 1. Reporting Issues
-If you find a bug, have a question, or want to request a new feature, please open an issue in our [GitHub Issues page](https://github.com/mimran1980/rusteron/issues). When reporting a bug, be as specific as possible about how to reproduce the issue, including any code snippets or error messages that may help.
+If you find a bug, have a question, or want to request a new feature, please open an issue in our [GitHub Issues page](https://github.com/gsrxyz/rusteron/issues). When reporting a bug, be as specific as possible about how to reproduce the issue, including any code snippets or error messages that may help.
 
 ### 2. Submitting Pull Requests
 If you'd like to fix a bug or add a feature yourself, follow these steps:
