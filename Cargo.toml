@@ -12,7 +12,7 @@ resolver = "2"
 compression = "best"
 
 [workspace.dependencies]
-rusteron-code-gen = { path = "rusteron-code-gen", version = "=0.1.138" }
+rusteron-code-gen = { path = "rusteron-code-gen", version = "=0.1.139" }
 ctrlc = "3.4"
 bindgen = "0.71"
 cmake = "0.1"
