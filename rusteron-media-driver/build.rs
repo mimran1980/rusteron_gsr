@@ -411,6 +411,24 @@ fn download_precompiled_binaries(artifacts_dir: &Path) -> Result<(), Box<dyn std
     let decoder = flate2::bufread::GzDecoder::new(cursor);
     let mut archive = tar::Archive::new(decoder);
     archive.unpack(artifacts_dir)?;
+
+    // move files we are interested in
+    let pkg_name =
+        std::env::var("CARGO_PKG_NAME").expect("CARGO_PKG_NAME should always be set by Cargo");
+    let dir = fs::read_dir(
+        artifacts_dir
+            .join(format!("artifacts-{target_os}-{image}-{feature}"))
+            .join(pkg_name)
+            .join("artifacts")
+            .join(feature)
+            .join(target_os)
+            .join(arch),
+    )?;
+    for file in dir {
+        let file = file?;
+        fs::rename(file.path(), artifacts_dir.join(file.file_name()))?;
+    }
+
     println!("extracted to {artifacts_dir:?}");
     eprintln!("extracted to {artifacts_dir:?}");
 
