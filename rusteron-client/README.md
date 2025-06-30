@@ -8,15 +8,6 @@ The **rusteron-client** module acts as a Rust wrapper around the Aeron C client 
 
 > **Note**: Since this module leverages Aeron C bindings, it is inherently unsafe and should be used with caution. Incorrect usage can lead to undefined behaviour, such as segmentation faults.
 
-## 🚀 Sponsorship & Adoption
-
-🏢 Sponsored by GSR
-
-This project is proudly sponsored and maintained by *GSR*, a global leader in algorithmic trading and market making in digital assets.
-Rusteron plays a foundational role in GSR’s trading platform technology stack, providing critical infrastructure for performance-sensitive, real-time systems. As part of our commitment to engineering excellence and open collaboration, the project is now developed and maintained under GSR’s official GitHub organization.
-We believe in sharing robust, production-tested tools with the broader community and welcome external contributions, feedback, and discussion.
-If you're interested in contributing or partnering with us, feel free to reach out or open an issue!
-
 ## Features
 
 - **Client Initialization**: Set up an Aeron client in Rust.
@@ -250,6 +241,15 @@ Since **rusteron-client** relies on Aeron C bindings, it involves `unsafe` Rust 
 
 Failing to uphold these safety measures can lead to crashes or undefined behaviour.
 
+
+## 🚀 Sponsorship & Adoption
+
+🏢 Sponsored by GSR
+
+This project is proudly sponsored and maintained by *GSR*, a global leader in algorithmic trading and market making in digital assets.
+Rusteron plays a foundational role in GSR’s trading platform technology stack, providing critical infrastructure for performance-sensitive, real-time systems. As part of our commitment to engineering excellence and open collaboration, the project is now developed and maintained under GSR’s official GitHub organization.
+We believe in sharing robust, production-tested tools with the broader community and welcome external contributions, feedback, and discussion.
+If you're interested in contributing or partnering with us, feel free to reach out or open an issue!
 
 ## Building This Project Instructions
 

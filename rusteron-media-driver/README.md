@@ -8,15 +8,6 @@ The **rusteron-media-driver** module is designed to help Rust developers interac
 
 The media driver can be used to set up the messaging directory and manage data streams. The embedded media driver is particularly useful for testing purposes or for simplifying deployment scenarios where a separate media driver process is not needed.
 
-## 🚀 Sponsorship & Adoption
-
-🏢 Sponsored by GSR
-
-This project is proudly sponsored and maintained by *GSR*, a global leader in algorithmic trading and market making in digital assets.
-Rusteron plays a foundational role in GSR’s trading platform technology stack, providing critical infrastructure for performance-sensitive, real-time systems. As part of our commitment to engineering excellence and open collaboration, the project is now developed and maintained under GSR’s official GitHub organization.
-We believe in sharing robust, production-tested tools with the broader community and welcome external contributions, feedback, and discussion.
-If you're interested in contributing or partnering with us, feel free to reach out or open an issue!
-
 ## Usage Note
 
 It is recommended to run the media driver using the Aeron Java or C version for production use. This crate can also be used to start the media driver embedded within unit or integration tests.
@@ -99,7 +90,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+## 🚀 Sponsorship & Adoption
 
+🏢 Sponsored by GSR
+
+This project is proudly sponsored and maintained by *GSR*, a global leader in algorithmic trading and market making in digital assets.
+Rusteron plays a foundational role in GSR’s trading platform technology stack, providing critical infrastructure for performance-sensitive, real-time systems. As part of our commitment to engineering excellence and open collaboration, the project is now developed and maintained under GSR’s official GitHub organization.
+We believe in sharing robust, production-tested tools with the broader community and welcome external contributions, feedback, and discussion.
+If you're interested in contributing or partnering with us, feel free to reach out or open an issue!
 
 ## Building This Project Instructions
 

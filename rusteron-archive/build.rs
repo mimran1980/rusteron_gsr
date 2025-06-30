@@ -347,9 +347,7 @@ fn get_artifact_path() -> PathBuf {
     }
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap(); // e.g., "x86_64", "aarch64"
     let artifacts_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
         .join("artifacts")
-        .join(env::var("CARGO_PKG_VERSION").unwrap())
         .join(feature)
         .join(&target_os)
         .join(&target_arch);

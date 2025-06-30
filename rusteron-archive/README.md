@@ -12,16 +12,6 @@ For quick start use static lib with precompiled C libraries if you're running on
 rusteron-archive = { version = "0.1", features= ["static", "precompile"] }
 ```
 
-## 🚀 Sponsorship & Adoption
-
-🏢 Sponsored by GSR
-
-This project is proudly sponsored and maintained by *GSR*, a global leader in algorithmic trading and market making in digital assets.
-Rusteron plays a foundational role in GSR’s trading platform technology stack, providing critical infrastructure for performance-sensitive, real-time systems. As part of our commitment to engineering excellence and open collaboration, the project is now developed and maintained under GSR’s official GitHub organization.
-We believe in sharing robust, production-tested tools with the broader community and welcome external contributions, feedback, and discussion.
-If you're interested in contributing or partnering with us, feel free to reach out or open an issue!
-
-
 ## Installation
 
 Add **rusteron-archive** to your `Cargo.toml`:
@@ -166,6 +156,15 @@ Failure to follow these guidelines can lead to unstable or unpredictable results
 5. **Locate Recording**: Identify and retrieve details about the recorded stream.
 6. **Replay Setup**: Configure replay parameters and replay the recorded messages on a new stream.
 7. **Subscribe and Receive**: Subscribe to the replay stream, receiving the replayed messages as they appear.
+
+## 🚀 Sponsorship & Adoption
+
+🏢 Sponsored by GSR
+
+This project is proudly sponsored and maintained by *GSR*, a global leader in algorithmic trading and market making in digital assets.
+Rusteron plays a foundational role in GSR’s trading platform technology stack, providing critical infrastructure for performance-sensitive, real-time systems. As part of our commitment to engineering excellence and open collaboration, the project is now developed and maintained under GSR’s official GitHub organization.
+We believe in sharing robust, production-tested tools with the broader community and welcome external contributions, feedback, and discussion.
+If you're interested in contributing or partnering with us, feel free to reach out or open an issue!
 
 ## Building This Project
 
