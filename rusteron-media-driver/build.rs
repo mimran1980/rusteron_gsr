@@ -411,6 +411,8 @@ fn download_precompiled_binaries(artifacts_dir: &Path) -> Result<(), Box<dyn std
     let decoder = flate2::bufread::GzDecoder::new(cursor);
     let mut archive = tar::Archive::new(decoder);
     archive.unpack(artifacts_dir)?;
+    println!("extracted to {artifacts_dir:?}");
+    eprintln!("extracted to {artifacts_dir:?}");
 
     Ok(())
 }
