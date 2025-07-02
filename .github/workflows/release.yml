@@ -81,7 +81,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           branch: main
-          tags: true
+          tags: false
 
       - name: Determine latest CI run ID
         id: find_ci
