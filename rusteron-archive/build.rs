@@ -64,7 +64,10 @@ pub fn main() {
 
     // If the artifacts folder exists use that instead of doing cmake and requiring java to be installed
     #[cfg(all(feature = "precompile", feature = "static"))]
-    if fs::read_dir(&artifacts_dir).unwrap().next().is_none()
+    if fs::read_dir(&artifacts_dir)
+        .as_mut()
+        .map(|s| s.next().is_none())
+        .unwrap_or_default()
         && std::env::var_os("RUSTERON_BUILD_FROM_SOURCE").is_none()
     {
         if let Err(e) = download_precompiled_binaries(&artifacts_dir) {
@@ -74,7 +77,10 @@ pub fn main() {
     }
     #[cfg(all(feature = "precompile", feature = "static"))]
     if artifacts_dir.exists()
-        && fs::read_dir(&artifacts_dir).unwrap().next().is_some()
+        && fs::read_dir(&artifacts_dir)
+            .as_mut()
+            .map(|s| s.next().is_some())
+            .unwrap_or_default()
         && std::env::var_os("RUSTERON_BUILD_FROM_SOURCE").is_none()
     {
         println!(
