@@ -888,7 +888,7 @@ mod tests {
                 Duration::from_secs(50),
             )
             .map_err(|e| {
-                error!("aeron error={}", aeron_sub.errmsg());
+                error!("aeron error={}", Aeron::errmsg());
                 e
             })?;
 
@@ -916,7 +916,7 @@ mod tests {
                 Duration::from_secs(5),
             )
             .map_err(|e| {
-                error!("aeron error={}", aeron_pub.errmsg());
+                error!("aeron error={}", Aeron::errmsg());
                 e
             })?;
 

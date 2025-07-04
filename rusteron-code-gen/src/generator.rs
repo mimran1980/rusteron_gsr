@@ -2,6 +2,7 @@ use crate::get_possible_wrappers;
 #[allow(unused_imports)]
 use crate::snake_to_pascal_case;
 use itertools::Itertools;
+use log::info;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote, ToTokens};
 use std::collections::{BTreeMap, BTreeSet};
@@ -502,7 +503,9 @@ impl CWrapper {
             .iter()
             .filter(|m| !m.arguments.iter().any(|arg| arg.is_double_mut_pointer()))
             .map(|method| {
-
+                if method.struct_method_name.contains("errmsg") {
+                    info!("{}", method.fn_name);
+                }
                 let set_closed = if method.struct_method_name == "close" {
                     quote! {
                         if let Some(inner) = self.inner.as_owned() {
@@ -513,13 +516,11 @@ impl CWrapper {
                     quote! {}
                 };
 
-
-
                 let fn_name =
                     Ident::new(&method.struct_method_name, proc_macro2::Span::call_site());
                 let return_type_helper =
                     ReturnType::new(method.return_type.clone(), wrappers.clone());
-                let return_type = return_type_helper.get_new_return_type(true, false);
+                let mut return_type = return_type_helper.get_new_return_type(true, false);
                 let ffi_call = Ident::new(&method.fn_name, proc_macro2::Span::call_site());
 
                 // Filter out arguments that are `*mut` of the struct's type
@@ -609,9 +610,12 @@ impl CWrapper {
 
                 let converter = return_type_helper.handle_c_to_rs_return(quote! { result }, true, false);
 
-                let possible_self = if uses_self || return_type.to_string().eq("& str") {
+                let possible_self = if uses_self  {
                     quote! { &self, }
                 } else {
+                    if return_type.to_string().eq("& str") {
+                        return_type = quote! { &'static str };
+                    }
                     quote! {}
                 };
 

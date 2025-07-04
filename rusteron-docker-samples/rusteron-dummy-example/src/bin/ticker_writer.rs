@@ -92,7 +92,7 @@ impl AeronRecorder {
         info!(
             "attempting to starting recording {} streamId={} [archive={archive:?}, aeronError={}, aeronClosed={}]",
             channel, stream_id,
-            archive.aeron().errmsg(),
+            Aeron::errmsg(),
             archive.aeron().is_closed(),
         );
         let subscription_id = archive.start_recording(

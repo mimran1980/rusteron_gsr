@@ -427,23 +427,6 @@ impl AeronCError {
     }
 }
 
-impl std::fmt::Display for AeronCError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Aeron error {}: {:?}", self.code, self.kind())
-    }
-}
-
-impl std::fmt::Debug for AeronCError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AeronCError")
-            .field("code", &self.code)
-            .field("kind", &self.kind())
-            .finish()
-    }
-}
-
-impl std::error::Error for AeronCError {}
-
 /// # Handler
 ///
 /// `Handler` is a struct that wraps a raw pointer and a drop flag.
