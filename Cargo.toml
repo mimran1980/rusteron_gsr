@@ -14,7 +14,7 @@ compression = "best"
 [workspace.dependencies]
 rusteron-code-gen = { path = "rusteron-code-gen", version = "=0.1.142" }
 ctrlc = "3.4"
-bindgen = "0.71"
+bindgen = "0.72"
 cmake = "0.1"
 dunce = "1.0"
 pkg-config = "0.3"
@@ -41,7 +41,7 @@ publish = true
 workspace = true
 auto_publish = true
 push = true
-tag = true
+tag = false
 dependency_version = "update"
 consolidate_commits = true
 allow_dirty = true
