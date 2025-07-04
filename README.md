@@ -5,9 +5,9 @@
 [![docsrs](https://docs.rs/rusteron-client/badge.svg)](https://docs.rs/rusteron-client/)
 [![github docs](https://custom-icon-badges.demolab.com/badge/githubdocs-blue.svg?logo=log&logoSource=feather)](https://gsrxyz.github.io/rusteron)
 
-**rusteron** is a Rust client wrapper for the [Aeron](https://github.com/real-logic/aeron) C API, designed to help Rust developers interact with Aeron, a high-performance messaging system. This library is built as an extension to the Aeron C bindings, making it easier to leverage Aeron's low-latency communication capabilities in Rust applications.
+**rusteron** is a thin, pass-through Rust wrapper over the [Aeron](https://github.com/real-logic/aeron) C API. Instead of re-implementing Aeron logic, it exposes the underlying C bindings with minimal Rust-side logic, prioritizing performance, reliability, and very low maintenance. This is achieved by automatically generating nearly all of the Rust API and documentation via a code generator, ensuring a consistent interface that can be upgraded with minimal manual effort and high confidence that new methods work out of the box. Such reliability and maintainability are essential for trading environments, where code quality is paramount.
 
-> **Note**: For an idiomatic Rust API for Aeron, consider using [`aeron-rs`](https://github.com/UnitedTraders/aeron-rs)
+> **Note**: For an idiomatic Rust API/port for Aeron, consider using [`aeron-rs`](https://github.com/UnitedTraders/aeron-rs)
 
 ## 🚀 Sponsorship & Adoption
 

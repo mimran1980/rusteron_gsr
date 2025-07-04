@@ -276,7 +276,7 @@ impl<T> Drop for ManagedCResource<T> {
 
 #[derive(Debug, PartialOrd, Eq, PartialEq, Clone)]
 pub enum AeronErrorType {
-    NullOrNotConnected,
+    GenericError,
     ClientErrorDriverTimeout,
     ClientErrorClientTimeout,
     ClientErrorConductorServiceTimeout,
@@ -299,7 +299,7 @@ impl From<AeronErrorType> for AeronCError {
 impl AeronErrorType {
     pub fn code(&self) -> i32 {
         match self {
-            AeronErrorType::NullOrNotConnected => -1,
+            AeronErrorType::GenericError => -1,
             AeronErrorType::ClientErrorDriverTimeout => -1000,
             AeronErrorType::ClientErrorClientTimeout => -1001,
             AeronErrorType::ClientErrorConductorServiceTimeout => -1002,
@@ -328,7 +328,7 @@ impl AeronErrorType {
 
     pub fn from_code(code: i32) -> Self {
         match code {
-            -1 => AeronErrorType::NullOrNotConnected,
+            -1 => AeronErrorType::GenericError,
             -1000 => AeronErrorType::ClientErrorDriverTimeout,
             -1001 => AeronErrorType::ClientErrorClientTimeout,
             -1002 => AeronErrorType::ClientErrorConductorServiceTimeout,
@@ -345,7 +345,7 @@ impl AeronErrorType {
 
     pub fn to_string(&self) -> &'static str {
         match self {
-            AeronErrorType::NullOrNotConnected => "Null Value or Not Connected",
+            AeronErrorType::GenericError => "Generic Error",
             AeronErrorType::ClientErrorDriverTimeout => "Client Error Driver Timeout",
             AeronErrorType::ClientErrorClientTimeout => "Client Error Client Timeout",
             AeronErrorType::ClientErrorConductorServiceTimeout => {

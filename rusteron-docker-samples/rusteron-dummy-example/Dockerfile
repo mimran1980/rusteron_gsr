@@ -1,4 +1,3 @@
-#FROM --platform=linux/amd64 rust:latest AS builder
 FROM ubuntu:latest AS builder
 
 WORKDIR /usr/src/app
