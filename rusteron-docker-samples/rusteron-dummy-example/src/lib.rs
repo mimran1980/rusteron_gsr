@@ -100,7 +100,7 @@ pub fn archive_connect() -> Result<(AeronArchive, Aeron), io::Error> {
                             info!(
                             "Successfully connected to aeron client, now trying to connect to archive... [aeronVersion={}, errors={:?}, closed={}]",
                             aeron.version_full(),
-                            aeron.errmsg(),
+                            Aeron::errmsg(),
                             aeron.is_closed()
                         );
 
@@ -138,7 +138,7 @@ pub fn archive_connect() -> Result<(AeronArchive, Aeron), io::Error> {
                         }
                         Err(e) => {
                             error!("error creating archive context: {:?}", e);
-                            error!("aeron error: {}", aeron.errmsg());
+                            error!("aeron error: {}", Aeron::errmsg());
                         }
                     },
                     Err(e) => {

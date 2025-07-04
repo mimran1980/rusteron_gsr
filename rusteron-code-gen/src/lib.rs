@@ -234,6 +234,7 @@ mod tests {
 #[cfg(test)]
 mod test {
     use crate::ManagedCResource;
+
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
 
@@ -267,8 +268,8 @@ mod test {
                 cleanup,
                 false,
                 None,
-            )
-            .unwrap();
+            );
+            assert!(_resource.is_ok())
         }
         assert!(flag.load(Ordering::SeqCst));
     }
@@ -298,8 +299,8 @@ mod test {
                 cleanup,
                 true,
                 None,
-            )
-            .unwrap();
+            );
+            assert!(_resource.is_ok())
         }
         assert!(flag.load(Ordering::SeqCst));
     }
@@ -328,10 +329,13 @@ mod test {
             cleanup,
             false,
             None,
-        )
-        .unwrap();
+        );
+        assert!(resource.is_ok());
 
-        resource.close().unwrap();
+        if let Ok(ref mut resource) = &mut resource {
+            assert!(resource.close().is_ok())
+        }
+
         // Reset the flag to ensure drop does not call cleanup a second time.
         flag.store(false, Ordering::SeqCst);
         drop(resource);
@@ -365,8 +369,8 @@ mod test {
                 cleanup,
                 false,
                 check_fn,
-            )
-            .unwrap();
+            );
+            assert!(_resource.is_ok());
         }
         assert!(!flag.load(Ordering::SeqCst));
     }
@@ -398,8 +402,8 @@ mod test {
                 cleanup,
                 false,
                 check_fn,
-            )
-            .unwrap();
+            );
+            assert!(_resource.is_ok())
         }
         assert!(flag.load(Ordering::SeqCst));
     }

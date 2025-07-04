@@ -597,8 +597,8 @@ mod tests {
                 if !err.is_empty() {
                     panic!("{}", err);
                 }
-                if aeron.errmsg().len() > 0 && "no error" != aeron.errmsg() {
-                    panic!("{}", aeron.errmsg());
+                if Aeron::errmsg().len() > 0 && "no error" != Aeron::errmsg() {
+                    panic!("{}", Aeron::errmsg());
                 }
                 archive.poll_for_recording_signals()?;
                 thread::sleep(Duration::from_millis(100));

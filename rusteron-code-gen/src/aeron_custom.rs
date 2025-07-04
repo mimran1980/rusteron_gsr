@@ -1017,3 +1017,21 @@ impl Drop for AeronFragmentClosureAssembler {
         self.handler.release();
     }
 }
+
+impl std::fmt::Display for AeronCError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Aeron error {}: {:?} - [lastErrMsg={}]", self.code, self.kind(), Aeron::errmsg())
+    }
+}
+
+impl std::fmt::Debug for AeronCError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AeronCError")
+            .field("code", &self.code)
+            .field("kind", &self.kind())
+            .field("last_error_msg", &Aeron::errmsg())
+            .finish()
+    }
+}
+
+impl std::error::Error for AeronCError {}

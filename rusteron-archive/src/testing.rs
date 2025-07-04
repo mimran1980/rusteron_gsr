@@ -154,7 +154,7 @@ impl EmbeddedArchiveMediaDriverProcess {
                                 };
                             }
                         }
-                        error!("aeron error: {}", aeron.errmsg());
+                        error!("aeron error: {}", Aeron::errmsg());
                     }
                 }
             }
