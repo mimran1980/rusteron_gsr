@@ -1,6 +1,6 @@
 [package]
 name = "rusteron-code-gen"
-version = "0.1.144"
+version = "0.1.145"
 authors = ["Mohammed Imran <mimran1980@gmail.com>", "Mohammed Imran <mohammed.imran@gsr.io"]
 repository = "https://github.com/gsrxyz/rusteron"
 documentation = "https://gsrxyz.github.io/rusteron/rusteron_code_gen"
