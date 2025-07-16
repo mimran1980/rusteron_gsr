@@ -54,11 +54,8 @@ fn criterion_benchmark(c: &mut Criterion) {
         .poll_blocking(Duration::from_secs(4))
         .unwrap();
 
-    println!("PING: pong publisher {:?} {}", PONG_CHANNEL, PONG_STREAM_ID);
-    println!(
-        "PING: ping subscriber {:?} {}",
-        PING_CHANNEL, PING_STREAM_ID
-    );
+    println!("PING: pong publisher {PONG_CHANNEL:?} {PONG_STREAM_ID}");
+    println!("PING: ping subscriber {PING_CHANNEL:?} {PING_STREAM_ID}");
 
     let mut buffer = vec![0u8; MESSAGE_LENGTH];
 
@@ -96,11 +93,8 @@ fn run_pong(stop: Arc<AtomicBool>, dir: &str) -> Result<(), Box<dyn std::error::
         )?
         .poll_blocking(Duration::from_secs(4))?;
 
-    println!("PONG: ping publisher {:?} {}", PING_CHANNEL, PING_STREAM_ID);
-    println!(
-        "PONG: pong subscriber {:?} {}",
-        PONG_CHANNEL, PONG_STREAM_ID
-    );
+    println!("PONG: ping publisher {PING_CHANNEL:?} {PING_STREAM_ID}");
+    println!("PONG: pong subscriber {PONG_CHANNEL:?} {PONG_STREAM_ID}");
 
     println!("Starting pong thread");
     pub struct PongRoundTripHandler {

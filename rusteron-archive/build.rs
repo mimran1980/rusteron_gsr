@@ -375,7 +375,7 @@ fn run_gradle_build_if_missing(aeron_path: &Path) {
             "./gradlew"
         };
         let dir = format!("{}{path}aeron", env!("CARGO_MANIFEST_DIR"),);
-        info!("running {} in {}", gradle, dir);
+        info!("running {gradle} in {dir}");
 
         Command::new(gradle)
             .current_dir(dir)

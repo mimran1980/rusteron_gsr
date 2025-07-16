@@ -33,7 +33,7 @@ pub fn main() -> Result<(), Box<dyn error::Error>> {
 
     // pick a large enough size to confirm fragment assembler is working
     let large_string_len = 1024 * 1024;
-    println!("string length: {}", large_string_len);
+    println!("string length: {large_string_len}");
 
     let _publisher_handler = {
         std::thread::spawn(move || loop {
