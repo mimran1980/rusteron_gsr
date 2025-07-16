@@ -1444,15 +1444,12 @@ impl CWrapper {
 
     fn has_default_method(&self) -> bool {
         // AeronUriStringBuilder does not follow the normal convention so have additional check arg.is_single_mut_pointer() && m.fn_name.contains("_init_")
-        let no_init_method = !self
-            .methods
-            .iter()
-            .any(|m| {
-                m.arguments.iter().any(|arg| {
-                    arg.is_double_mut_pointer()
-                        || (arg.is_single_mut_pointer() && m.fn_name.contains("_init_"))
-                })
-            });
+        let no_init_method = !self.methods.iter().any(|m| {
+            m.arguments.iter().any(|arg| {
+                arg.is_double_mut_pointer()
+                    || (arg.is_single_mut_pointer() && m.fn_name.contains("_init_"))
+            })
+        });
 
         no_init_method
             && !self.fields.iter().any(|arg| arg.name.starts_with("_"))
