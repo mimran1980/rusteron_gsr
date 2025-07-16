@@ -470,7 +470,7 @@ impl std::str::FromStr for AeronUriStringBuilder {
     }
 }
 
-// AeronUriStringBuilder does not follow convention so manually adding drop
+// AeronUriStringBuilder does not follow convention so manually adding Default method which calls close
 impl Default for AeronUriStringBuilder {
     fn default() -> Self {
         let r_constructor = ManagedCResource::new(
@@ -483,7 +483,7 @@ impl Default for AeronUriStringBuilder {
             Some(Box::new(move |ctx_field| unsafe {
                 aeron_uri_string_builder_close(*ctx_field)
             })),
-            false,
+            true,
             Some(|ctx| unsafe { (*ctx).closed })
         ).expect("should not happen");
         Self {
