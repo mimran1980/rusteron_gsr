@@ -281,6 +281,7 @@ mod tests {
     #[test]
     fn test_uri_string_builder() -> Result<(), AeronCError> {
         let builder = AeronUriStringBuilder::default();
+
         builder.init_new()?;
         builder
             .media(Media::Udp)? // very important to set media else set_initial_position will give an error of -1

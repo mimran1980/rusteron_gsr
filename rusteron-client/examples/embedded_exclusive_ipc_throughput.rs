@@ -16,7 +16,7 @@ const STREAM_ID: i32 = 1001;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let running = Arc::new(AtomicBool::new(true));
 
-    println!("message length {}, channel {:?}", MESSAGE_LENGTH, CHANNEL);
+    println!("message length {MESSAGE_LENGTH}, channel {CHANNEL:?}");
 
     let running_ctrl_c = Arc::clone(&running);
     ctrlc::set_handler(move || {
@@ -98,7 +98,7 @@ impl Publisher {
                 if !self.running.load(Ordering::Acquire) {
                     let back_pressure_ratio =
                         back_pressure_count as f64 / total_message_count as f64;
-                    println!("Publisher back pressure ratio: {:.6}", back_pressure_ratio);
+                    println!("Publisher back pressure ratio: {back_pressure_ratio:.6}");
                     return;
                 }
             }
@@ -106,7 +106,7 @@ impl Publisher {
         }
 
         let back_pressure_ratio = back_pressure_count as f64 / total_message_count as f64;
-        println!("Publisher back pressure ratio: {:.6}", back_pressure_ratio);
+        println!("Publisher back pressure ratio: {back_pressure_ratio:.6}");
     }
 }
 

@@ -470,6 +470,28 @@ impl std::str::FromStr for AeronUriStringBuilder {
     }
 }
 
+// AeronUriStringBuilder does not follow convention so manually adding drop
+impl Default for AeronUriStringBuilder {
+    fn default() -> Self {
+        let r_constructor = ManagedCResource::new(
+            move |ctx_field| {
+                let inst: aeron_uri_string_builder_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_uri_string_builder_t = Box::into_raw(Box::new(inst));
+                unsafe { *ctx_field = inner_ptr };
+                0
+            },
+            Some(Box::new(move |ctx_field| unsafe {
+                aeron_uri_string_builder_close(*ctx_field)
+            })),
+            false,
+            Some(|ctx| unsafe { (*ctx).closed })
+        ).expect("should not happen");
+        Self {
+            inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
+        }
+    }
+}
+
 const PARSE_CSTR_ERROR_CODE: i32 = -132131;
 
 impl AeronUriStringBuilder {

@@ -614,7 +614,7 @@ impl CWrapper {
                     quote! { &self, }
                 } else {
                     if return_type.to_string().eq("& str") {
-                        return_type = quote! { &'static str };
+                        return_type = quote! { &'static str  };
                     }
                     quote! {}
                 };
@@ -993,10 +993,9 @@ impl CWrapper {
         let constructors = self
             .methods
             .iter()
-            .filter(|m| m.arguments.iter().any(|arg| arg.is_double_mut_pointer()))
+            .filter(|m| m.arguments.iter().any(|arg| arg.is_double_mut_pointer() ))
             .map(|method| {
                 let init_fn = format_ident!("{}", method.fn_name);
-
                 let close_method = self.find_close_method(method);
                 let found_close = close_method.is_some()
                     && close_method.unwrap().return_type.is_c_raw_int()
@@ -1444,12 +1443,18 @@ impl CWrapper {
     }
 
     fn has_default_method(&self) -> bool {
-        let has_init_method = !self
+        // AeronUriStringBuilder does not follow the normal convention so have additional check arg.is_single_mut_pointer() && m.fn_name.contains("_init_")
+        let no_init_method = !self
             .methods
-            .iter()
-            .any(|m| m.arguments.iter().any(|arg| arg.is_double_mut_pointer()));
+            .iter() // Aeron
+            .any(|m| {
+                m.arguments.iter().any(|arg| {
+                    arg.is_double_mut_pointer()
+                        || (arg.is_single_mut_pointer() && m.fn_name.contains("_init_"))
+                })
+            });
 
-        has_init_method
+        no_init_method
             && !self.fields.iter().any(|arg| arg.name.starts_with("_"))
             && !self.fields.is_empty()
     }

@@ -26,7 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .spawn(move || run_pong(running_pong).unwrap())?;
 
     let hist = run_ping(running, pong_thread)?;
-    println!("message length {} bytes\n", MESSAGE_LENGTH);
+    println!("message length {MESSAGE_LENGTH} bytes\n");
     println!("Histogram of RTT latencies:");
     println!("# of samples: {}", hist.len());
     println!("min: {:?}", Duration::from_nanos(hist.min()));
@@ -71,8 +71,8 @@ fn run_pong(running_pong: Arc<AtomicBool>) -> Result<(), Box<dyn std::error::Err
         )?
         .poll_blocking(Duration::from_secs(4))?;
 
-    println!("PONG: ping publisher {} {}", PING_CHANNEL, PING_STREAM_ID);
-    println!("PONG: pong subscriber {} {}", PONG_CHANNEL, PONG_STREAM_ID);
+    println!("PONG: ping publisher {PING_CHANNEL} {PING_STREAM_ID}");
+    println!("PONG: pong subscriber {PONG_CHANNEL} {PONG_STREAM_ID}");
 
     println!("Starting pong thread");
     pub struct PongRoundTripHandler {
@@ -130,8 +130,8 @@ fn run_ping(
         )?
         .poll_blocking(Duration::from_secs(4))?;
 
-    println!("PING: pong publisher {} {}", PONG_CHANNEL, PONG_STREAM_ID);
-    println!("PING: ping subscriber {} {}", PING_CHANNEL, PING_STREAM_ID);
+    println!("PING: pong publisher {PONG_CHANNEL} {PONG_STREAM_ID}");
+    println!("PING: ping subscriber {PING_CHANNEL} {PING_STREAM_ID}");
 
     let mut buffer = vec![0u8; MESSAGE_LENGTH];
 

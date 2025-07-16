@@ -53,6 +53,9 @@ mod tests {
     #[test]
     #[serial]
     fn version_check() -> Result<(), Box<dyn error::Error>> {
+        unsafe {
+            aeron_randomised_int32();
+        }
         let alloc_count = current_allocs();
 
         {
