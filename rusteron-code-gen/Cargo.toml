@@ -1,28 +1,28 @@
 [package]
 name = "rusteron-code-gen"
 version = "0.1.145"
-authors = ["Mohammed Imran <mimran1980@gmail.com>", "Mohammed Imran <mohammed.imran@gsr.io"]
-repository = "https://github.com/gsrxyz/rusteron"
-documentation = "https://gsrxyz.github.io/rusteron/rusteron_code_gen"
-description = "Code generator for aeron c bindings"
-license = "Apache-2.0"
 edition = "2021"
+authors = ["GSR devs <dev@gsr.io>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/gsrxyz/rusteron"
+homepage = "https://github.com/gsrxyz/rusteron"
 readme = "README.md"
+documentation = "https://gsrxyz.github.io/rusteron/rusteron_code_gen"
+description = "Code generator for Aeron C bindings"
 
 [dependencies]
-syn = { version = "2.0", features = ["full"] }
-proc-macro2 = "1.0"
-quote = "1.0"
-itertools = "0.14"
-regex = "1.11"
-log = "0.4"
+itertools     = "0.14"
+log           = "0.4"
+proc-macro2   = "1.0"
+quote         = "1.0"
+regex         = "1.11"
+syn           = { version = "2.0", features = ["full"] }
 
 [dev-dependencies]
 trybuild = "1.0"
 
 [features]
-default = []
-static = []
-# logs the backtrace on each AeronCError
-backtrace = []
-extra-logging = []
+default        = []
+static         = []
+backtrace      = []     # logs the backtrace on each AeronCError
+extra-logging  = []

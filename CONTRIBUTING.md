@@ -1,46 +1,53 @@
 # Contributing to rusteron
 
-Thank you for considering contributing to **rusteron**! Contributions are an integral part of improving this project and making it more useful for everyone. Below are some simple guidelines to help you get started.
+Thanks for your interest in contributing to **rusteron**! Whether you're fixing bugs, improving docs, or adding features, contributions are welcome.
 
-## How Can You Contribute?
+## Before You Start
 
-### 1. Reporting Issues
-If you find a bug, have a question, or want to request a new feature, please open an issue in our [GitHub Issues page](https://github.com/gsrxyz/rusteron/issues). When reporting a bug, be as specific as possible about how to reproduce the issue, including any code snippets or error messages that may help.
+- Submit changes via pull requests from a fork.
+- Run `cargo fmt` and `cargo test` before submitting.
+- All contributions are dual-licensed under MIT and Apache-2.0.
 
-### 2. Submitting Pull Requests
-If you'd like to fix a bug or add a feature yourself, follow these steps:
+## Reporting Issues
 
-1. **Fork the Repository**: Create a personal copy of the repository by clicking the "Fork" button.
-2. **Clone the Fork**: Clone your forked repository to your local machine.
-   ```sh
+Use [GitHub Issues](https://github.com/gsrxyz/rusteron/issues) to report bugs, request features, or ask questions. Include clear steps to reproduce and any relevant error messages or context.
+
+## Pull Request Workflow
+
+1. Fork the repo and clone it:
+   ```bash
    git clone https://github.com/your-username/rusteron.git
+   cd rusteron
+````
+
+2. Create a new branch:
+
+   ```bash
+   git checkout -b your-branch-name
    ```
-3. **Create a Branch**: Create a new branch for your work.
-   ```sh
-   git checkout -b feature-name
+
+3. Make changes, run tests, and format:
+
+   ```bash
+   cargo test
+   cargo fmt
    ```
-4. **Make Changes**: Add your improvements or bug fixes.
-5. **Test Your Changes**: Ensure that your changes do not break existing functionality by running tests.
-6. **Commit and Push**: Commit your changes and push them to your fork.
-   ```sh
-   git commit -m "Add feature or fix bug"
-   git push origin feature-name
+
+4. Commit and push:
+
+   ```bash
+   git commit -m "Describe your change"
+   git push origin your-branch-name
    ```
-7. **Open a Pull Request**: Submit a pull request to the original repository for review.
 
-### 3. Improving Documentation
-Good documentation helps everyone. If you notice missing information or something that could be explained better, feel free to submit a pull request to update the documentation.
+5. Open a pull request on GitHub.
 
-## Guidelines
+## Documentation
 
-- **Code Style**: Follow Rust's conventions for code formatting. Run `cargo fmt` before committing.
-- **Testing**: Ensure new features and bug fixes are covered by tests. Use `cargo test` to run all tests.
-- **Commit Messages**: Use clear and concise commit messages. For example: "Fix buffer allocation bug in Aeron context".
-- **License**: By contributing, you agree that your contributions will be licensed under both the MIT and Apache-2.0 licenses.
+Typos, clarifications, or missing details? Feel free to open a PR. No test coverage required for doc-only changes.
 
-## Contact
+## Code Style & Commit Tips
 
-If you have any questions or need further assistance, feel free to reach out by opening an issue on GitHub.
-
-Thank you for helping to improve **rusteron**!
-
+* Keep PRs focused and scoped.
+* Use clear commit messages (e.g. `"Fix: prevent panic on empty buffer"`).
+* Test coverage is expected for fixes or new features.

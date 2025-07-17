@@ -12,48 +12,47 @@ resolver = "2"
 compression = "best"
 
 [workspace.dependencies]
+bindgen         = "0.72"
+cmake           = "0.1"
+criterion       = "0.6"
+ctrlc           = "3.4"
+dunce           = "1.0"
+flate2          = { version = "1.1" }
+hdrhistogram    = "7.5"
+itertools       = "0.14"
+log             = "0.4"
+num-format      = "0.4"
+pkg-config      = "0.3"
+proc-macro2     = "1.0"
+quote           = "1.0"
+regex           = "1.11"
+reqwest         = { version = "0.12", features = ["blocking", "default-tls"] }
 rusteron-code-gen = { path = "rusteron-code-gen", version = "=0.1.145" }
-ctrlc = "3.4"
-bindgen = "0.72"
-cmake = "0.1"
-dunce = "1.0"
-pkg-config = "0.3"
-syn = { version = "2.0", features = ["full"] }
-proc-macro2 = "1.0"
-quote = "1.0"
-itertools = "0.14"
-num-format = "0.4"
-hdrhistogram = "7.5"
-criterion = "0.6"
-serial_test = "3.2"
-regex = "1.11"
-log = "0.4"
-walkdir = "2.5"
-reqwest = { version = "0.12", features = ["blocking", "default-tls"] }
-flate2 = { version = "1.1"}
-tar    = "0.4"
-
+serial_test     = "3.2"
+syn             = { version = "2.0", features = ["full"] }
+tar             = "0.4"
+walkdir         = "2.5"
 
 [release]
-bump = "auto"
-update_dependencies = true
-publish = true
-workspace = true
-auto_publish = true
-push = true
-tag = false
-dependency_version = "update"
-consolidate_commits = true
-allow_dirty = true
-no_confirm = true
-update_crates_index = true
-verify = false
-compression = "best"
+bump                   = "auto"
+update_dependencies    = true
+publish                = true
+workspace              = true
+auto_publish           = true
+push                   = true
+tag                    = false
+dependency_version     = "update"
+consolidate_commits    = true
+allow_dirty            = true
+no_confirm             = true
+update_crates_index    = true
+verify                 = false
+compression            = "best"
 
 [profile.release]
 debug = false
 panic = "unwind"
 
 #[profile.bench]
-#debug = true
+#debug     = true
 #opt-level = 0

@@ -1,71 +1,87 @@
-# Dummy Example for Docker and Kubernetes Configuration
+# Containerized Aeron Example with Podman and Kubernetes
 
-This repository provides a simple example to demonstrate containerization and orchestration using **Docker**, **Podman**, and **Kubernetes**. While not intended as production-ready, it serves as a helpful starting point.
+This repository provides a minimal setup for containerizing and orchestrating Aeron-based components using **Docker**, **Podman**, and **Kubernetes**.  
+While not production-ready, it serves as a clean starting point for development, testing, and integration of Aeron-based workflows.
+
+---
 
 ## Overview
 
 The setup includes:
 
-1. **Aeron Media Driver**: A containerized Aeron Archive Media Driver.
-2. **Ticker Writer**: Publishes and archives Binance ticker JSON messages.
-3. **Ticker Reader**: Periodically publishes stats about the archive and live ticker channel.
+1. **Aeron Media Driver** – A containerized Aeron Archive Media Driver.
+2. **Ticker Writer** – Publishes simulated Binance ticker data and archives it.
+3. **Ticker Reader** – Reads from both the archive and live channel, publishing periodic stats.
+
+Together, these components demonstrate a minimal end-to-end Aeron pipeline using shared memory and volumes.
+
+---
 
 ## Quick Start for Local Testing
 
-For local testing, Podman is recommended for its lightweight nature and ease of use. If you have a Kubernetes cluster, you can deploy using Kubernetes configurations.
+### Prerequisites
 
-### Podman Local Testing
+* **Podman** or **Docker** installed for image building and container runtime.
+* **Kubernetes** (optional) for orchestration. If using Docker Desktop, ensure Kubernetes is enabled.
 
-1. **Build the Podman Images**  
-   Build all required images using Podman:
+### Podman (Recommended for Local Testing)
+
+Podman is preferred for its simplicity and lack of daemon dependency.
+
+1. **Build Podman Images**
    ```bash
    just podman-build
-   ```
+   # Builds all container images using Podman.
+````
 
-2. **Deploy Using Podman**  
-   Deploy the example configuration with:
+2. **Deploy Locally with Podman**
+
    ```bash
    just podman-deploy
+   # Launches the Aeron media driver, writer, and reader using pod definitions.
    ```
 
-3. **Stop and Clean Up Podman Resources**  
-   To stop the deployment:
+3. **Stop and Clean Up**
+
    ```bash
    just podman-stop
+   # Gracefully stops and removes all running containers and shared volumes.
    ```
+
+---
 
 ### Kubernetes Deployment (Alternative)
 
-If you have a Kubernetes cluster, you can use it for deployment:
+If you have a Kubernetes cluster available (e.g. via Docker Desktop or Minikube), you can use the provided manifests.
 
-1. **Build Docker Images**  
-   Ensure the images are built:
+1. **Build Docker Images**
+
    ```bash
    just docker-build
+   # Builds all required images using Docker (for Kubernetes use).
    ```
 
-2. **Deploy to Kubernetes**  
-   Apply the pod configuration to your Kubernetes cluster:
+2. **Deploy to Kubernetes**
+
    ```bash
    just k8s-deploy
+   # Applies the Kubernetes manifests to your current cluster context.
    ```
 
-3. **Clean Up Kubernetes Resources**  
-   Remove the deployed pod:
+3. **Clean Up**
+
    ```bash
    just k8s-clean
+   # Deletes deployed Kubernetes resources and persistent volumes.
    ```
 
-## Prerequisites
-
-- **Podman** or **Docker** for container management.
-- **Kubernetes** (optional) for orchestration. Ensure it's enabled if using Docker Desktop.
-- **just** for task automation. Install `just` from its [GitHub repository](https://github.com/casey/just).
+---
 
 ## Key Features Demonstrated
 
-- Shared memory (`/dev/shm`) and data (`/data`) volumes for container interaction.
-- Configurable arguments and shared environments using `pod.yml`.
-- Task automation for building, deploying, and cleaning with `just`.
+* **Shared Memory (`/dev/shm`)**: Enables zero-copy Aeron message passing between containers.
+* **Shared Volumes (`/data`)**: Used for persistent archive storage between writer and reader.
+* **Configurable Task Automation**: Easily build, deploy, and clean with `just` recipes.
+* **Minimal Real-Time Feed Simulation**: Simulated publisher/reader interaction using Aeron archive APIs.
 
-> Note: This example is designed for experimentation and learning. For production, additional configuration, security, and testing are required.
+> This example is designed for experimentation and learning. For production use, additional security, orchestration policies, monitoring, and failover logic are required.

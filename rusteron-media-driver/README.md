@@ -1,87 +1,92 @@
 # rusteron-media-driver
 
-**rusteron-media-driver** is a module in the **rusteron** project that provides an interface to the Aeron Media Driver in a Rust environment. This module is crucial for managing the messaging infrastructure between producers and consumers, allowing for efficient low-latency communication.
+**rusteron-media-driver** is a Rust interface to the Aeron Media Driver, responsible for managing low-latency messaging infrastructure between producers and consumers. It's part of the [Rusteron](https://github.com/gsrxyz/rusteron) project and provides both standalone and embedded driver support.
 
-## Overview
+> For production deployments, we recommend using the Aeron **Java** or **C** media driver.  
+> The embedded version provided here is best suited for integration tests or lightweight environments.
 
-The **rusteron-media-driver** module is designed to help Rust developers interact with the Aeron Media Driver, which is responsible for managing the communication between different Aeron clients. This module provides a wrapper around the Aeron C Media Driver API and offers both standard and embedded driver options for use in different environments.
-
-The media driver can be used to set up the messaging directory and manage data streams. The embedded media driver is particularly useful for testing purposes or for simplifying deployment scenarios where a separate media driver process is not needed.
-
-## Usage Note
-
-It is recommended to run the media driver using the Aeron Java or C version for production use. This crate can also be used to start the media driver embedded within unit or integration tests.
+---
 
 ## Installation
 
-To use **rusteron-media-driver**, add it to your `Cargo.toml`:
+To use `rusteron-media-driver`, add the appropriate dependency to your `Cargo.toml`:
 
-dynamic lib
+<details>
+<summary>Dynamic</summary>
+
 ```toml
 [dependencies]
 rusteron-media-driver = "0.1"
-```
+````
 
-static lib
+</details>
+
+<details>
+<summary>Static</summary>
+
 ```toml
 [dependencies]
-rusteron-media-driver = { version = "0.1", features= ["static"] }
+rusteron-media-driver = { version = "0.1", features = ["static"] }
 ```
 
-static lib with precompiled c libs (mac os x only)
+</details>
+
+<details>
+<summary>Static with precompiled C libs (macOS only)</summary>
+
 ```toml
 [dependencies]
-rusteron-media-driver = { version = "0.1", features= ["static", "precompile"] }
+rusteron-media-driver = { version = "0.1", features = ["static", "precompile"] }
 ```
 
-Ensure that you have also set up the necessary Aeron C libraries required by **rusteron-media-driver**.
+</details>
 
-## Features
+Ensure the Aeron C libraries are properly installed and available on your system.
 
-- **Media Driver Management**: Start, stop, and configure an Aeron Media Driver instance.
-- **Embedded Media Driver**: Launch an embedded media driver directly from your code for testing purposes.
+---
 
 ## Usage Examples
 
-### Standard Media Driver Example
+<details>
+<summary>Standard Media Driver</summary>
 
-```rust,no_ignore
+```rust
+// Launches a standalone Aeron Media Driver
 use rusteron_media_driver::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let aeron_context = AeronDriverContext::new()?;
     aeron_context.set_dir(&"target/test".into_c_string())?;
 
-    // Create Aeron driver
     let aeron_driver = AeronDriver::new(&aeron_context)?;
     aeron_driver.start(false)?;
     println!("Aeron Media Driver started");
-    
+
     Ok(())
 }
 ```
 
-### Embedded Media Driver Example
+</details>
 
-```rust,no_ignore
+<details>
+<summary>Embedded Media Driver</summary>
+
+```rust
+// Embeds the media driver directly into the current process
 use rusteron_media_driver::*;
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use std::thread;
 use std::time::Duration;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create and launch an embedded media driver
     let media_driver_ctx = AeronDriverContext::new()?;
     let (stop, driver_handle) = AeronDriver::launch_embedded(media_driver_ctx.clone(), false);
 
-    // Create Aeron context and link with the embedded driver
     let ctx = AeronContext::new()?;
     ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
-    
-    // Wait a bit for demonstration purposes
-    thread::sleep(Duration::from_secs(3));
 
-    // Stop the driver
+    thread::sleep(Duration::from_secs(3)); // Simulated workload
+
     stop.store(true, Ordering::SeqCst);
     driver_handle.join().expect("Failed to join driver thread");
     println!("Embedded Aeron Media Driver stopped");
@@ -90,32 +95,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-## 🚀 Sponsorship & Adoption
-
-🏢 Sponsored by GSR
-
-This project is proudly sponsored and maintained by *GSR*, a global leader in algorithmic trading and market making in digital assets.
-Rusteron plays a foundational role in GSR’s trading platform technology stack, providing critical infrastructure for performance-sensitive, real-time systems. As part of our commitment to engineering excellence and open collaboration, the project is now developed and maintained under GSR’s official GitHub organization.
-We believe in sharing robust, production-tested tools with the broader community and welcome external contributions, feedback, and discussion.
-If you're interested in contributing or partnering with us, feel free to reach out or open an issue!
-
-## Building This Project Instructions
-
-For detailed instructions on how to build **rusteron**, please refer to the [HOW_TO_BUILD.md](../HOW_TO_BUILD.md) file.
-
-## Contributing
-
-Contributions are more than welcome! Please see our [contributing guidelines](https://github.com/gsrxyz/rusteron/blob/main/CONTRIBUTING.md) for more information on how to get involved.
-
-## License
-
-This project is dual-licensed under either the [MIT License](https://opensource.org/licenses/MIT) or [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0). You may choose which one to use.
-
-## Links
-
-- [Documentation on docs.rs](https://docs.rs/rusteron-media-driver/)
-- [API Reference on github](https://gsrxyz.github.io/rusteron/rusteron_media_driver)
-- [GitHub Repository](https://github.com/gsrxyz/rusteron)
-
-Feel free to reach out with any questions or suggestions via GitHub Issues!
-
+</details>

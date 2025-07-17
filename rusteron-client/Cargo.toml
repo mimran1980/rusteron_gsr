@@ -2,15 +2,15 @@
 name = "rusteron-client"
 version = "0.1.145"
 edition = "2021"
-authors = ["Mo Imran <mimran1980@gmail.com>", "Mo Imran <mohammed.imran@gsr.io"]
+authors = ["GSR devs <dev@gsr.io>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/gsrxyz/rusteron"
 homepage = "https://github.com/gsrxyz/rusteron"
-keywords = ["aeron", "low-latency", "aeron-client", "aeron-c-bindings", "networking"]
-categories = ["network-programming"]
+readme = "README.md"
 documentation = "https://gsrxyz.github.io/rusteron/rusteron_client/index.html"
 description = "Provides core client functionalities for interacting with the Aeron protocol, such as establishing connections, subscribing, and publishing. It uses the Aeron C bindings from aeron-client module."
-readme = "README.md"
+keywords = ["aeron", "low-latency", "aeron-client", "aeron-c-bindings", "networking"]
+categories = ["network-programming"]
 
 exclude = [
     "aeron/.gradle/**",
@@ -26,57 +26,52 @@ exclude = [
     "aeron/aeron-samples/build/**",
     "aeron/aeron-system-tests/build/**",
     "aeron/aeron-test-support/build/**",
-    "aeron/buildSrc/build/**",
+    "aeron/buildSrc/build/**"
 ]
 
-
 [dependencies]
-ctrlc = { workspace = true }
-num-format = {  workspace = true }
-hdrhistogram = { workspace = true}
-log = { workspace = true}
-regex = { workspace = true}
-
+ctrlc         = { workspace = true }
+hdrhistogram  = { workspace = true }
+log           = { workspace = true }
+num-format    = { workspace = true }
+regex         = { workspace = true }
 
 [build-dependencies]
-bindgen = {  workspace = true }
-cmake = {  workspace = true }
-dunce = {  workspace = true }
-pkg-config = {  workspace = true }
-proc-macro2 = {  workspace = true }
+bindgen          = { workspace = true }
+cmake            = { workspace = true }
+dunce            = { workspace = true }
+flate2           = { workspace = true }
+log              = { workspace = true }
+pkg-config       = { workspace = true }
+proc-macro2      = { workspace = true }
+regex            = { workspace = true }
+reqwest          = { workspace = true }
 rusteron-code-gen = { workspace = true }
-log = { workspace = true}
-regex = { workspace = true}
-walkdir = { workspace = true}
-reqwest = {workspace = true}
-flate2 = {workspace = true}
-tar    = {workspace = true}
-
-
+tar              = { workspace = true }
+walkdir          = { workspace = true }
 
 [dev-dependencies]
-rusteron-media-driver = {path = "../rusteron-media-driver"}
-serial_test = { workspace = true }
-criterion = {workspace = true}
-env_logger = "0.11"
+criterion             = { workspace = true }
+env_logger            = "0.11"
+rusteron-media-driver = { path = "../rusteron-media-driver" }
+serial_test           = { workspace = true }
 
 [features]
 # using static as different modules have different versions of aeron which don't seem to play nicely
-default = []
-static = ["rusteron-media-driver/static"]
-# logs the backtrace on each AeronCError
-backtrace = []
-extra-logging = []
-precompile = []
+default        = []
+static         = ["rusteron-media-driver/static"]
+backtrace      = []   # logs the backtrace on each AeronCError
+extra-logging  = []
+precompile     = []
 
 [[bench]]
-name = "ping_pong"
+name    = "ping_pong"
 harness = false
 
 [[bench]]
-name = "ping_pong_ipc"
+name    = "ping_pong_ipc"
 harness = false
 
 [package.metadata.docs.rs]
-features = ["static", "precompile"]
-default-target = "aarch64-apple-darwin"
+features        = ["static", "precompile"]
+default-target  = "aarch64-apple-darwin"
