@@ -1,40 +1,39 @@
 # rusteron-code-gen
 
-**rusteron-code-gen** is a module in the **rusteron** project that is responsible for generating Rust code by analyzing the Aeron C bindings. It plays a crucial role in automating the generation of the Rust wrappers that make it possible for developers to interact with the Aeron APIs in an idiomatic Rust way.
+`rusteron-code-gen` is an internal code generation tool used within the [Rusteron](https://github.com/gsrxyz/rusteron) project.  
+It automates the creation of Rust bindings from Aeron’s C APIs, reducing manual effort and ensuring consistent wrapper interfaces across the `rusteron-*` crates.
 
-## Overview
+---
 
-The **rusteron-code-gen** module is an internal tool used to generate Rust code based on Aeron's C bindings. Aeron follows certain patterns in its API, and **rusteron-code-gen** takes advantage of these predictable structures to automate much of the code generation process. By automating the conversion of C bindings to Rust, **rusteron-code-gen** helps reduce the time and effort required for maintaining and updating the Rust interface as the Aeron API evolves.
+## Purpose
 
-This module is used internally within the **rusteron** project and is not intended for direct use by developers integrating Aeron functionalities into their projects.
+Aeron's C APIs follow predictable structural patterns. This tool parses those C headers and uses templates to emit Rust wrappers around the raw FFI layer. It is primarily used to generate:
+
+- `rusteron-client`
+- `rusteron-archive`
+- `rusteron-media-driver`
+
+By automating this step, we reduce maintenance cost and improve reliability when tracking upstream changes in Aeron.
+
+> **Note**: This crate is not intended for standalone use outside the Rusteron project.
+
+---
 
 ## Features
 
-- **Automated Code Generation**: Generates Rust wrappers for the Aeron C bindings.
-- **Pattern-Based Conversion**: Leverages Aeron's consistent API patterns to simplify Rust code generation.
+- **Automated Code Generation** – Converts Aeron C headers into Rust-safe APIs.
+- **Pattern-Based Templating** – Leverages Aeron’s consistent structure to minimize boilerplate.
+- **Integration-Friendly** – Output is directly used in production modules of the Rusteron stack.
 
-## Project Status
+---
 
-**rusteron-code-gen** is in active use for generating and maintaining the Rust wrappers for other **rusteron** modules, such as **rusteron-client** and **rusteron-archive**. As the primary focus is on the client and archive modules, **rusteron-code-gen** does not have its own extensive testing beyond ensuring the generated code integrates smoothly into the rest of the **rusteron** project.
+## Usage
 
-## Installation
+This crate is used via internal tooling (e.g. in `just` scripts or CI pipelines) and is not meant to be added as a dependency in consumer projects.
 
-**rusteron-code-gen** is used internally and is not intended to be added directly to other projects.
+---
 
 ## Safety Considerations
 
-Since **rusteron-code-gen** operates on C bindings, the generated code can include `unsafe` blocks to ensure compatibility with the low-level Aeron API. The automated process requires careful review and occasional manual intervention to ensure safety and correctness.
-
-## Contributing
-
-Contributions are more than welcome! Please see our [contributing guidelines](https://github.com/gsrxyz/rusteron/blob/main/CONTRIBUTING.md) for more information on how to get involved. Improvements to **rusteron-code-gen** could significantly enhance the automation and reliability of the Rust code generation process.
-
-## License
-
-This project is dual-licensed under either the [MIT License](https://opensource.org/licenses/MIT) or [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0). You may choose which one to use.
-
-## Links
-
-- [GitHub Repository](https://github.com/gsrxyz/rusteron)
-
-Feel free to reach out with any questions or suggestions via GitHub Issues!
+Generated code includes `unsafe` blocks where necessary to interface with Aeron’s low-level constructs.  
+While much of the generation is automated, occasional manual review and patching may be required to ensure correctness, especially when Aeron introduces API changes.
