@@ -48,3 +48,4 @@ impl AeronErrorHandlerCallback for MyErrorHandler {
         eprintln!("Aeron error ({}): {}", code, msg);
     }
 }
+```
