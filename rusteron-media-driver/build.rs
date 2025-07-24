@@ -391,7 +391,7 @@ fn publish_artifacts(out_path: &Path, cmake_build_path: &Path) -> std::io::Resul
 #[cfg(all(feature = "precompile", feature = "static"))]
 fn download_precompiled_binaries(artifacts_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let version = env::var("CARGO_PKG_VERSION").unwrap();
-    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap(); // e.g., "macos", "linux", "windows"
+    let mut target_os = env::var("CARGO_CFG_TARGET_OS").unwrap(); // e.g., "macos", "linux", "windows"
     let arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap(); // e.g., "x86_64", "aarch64"
     let feature = if LinkType::detect() == LinkType::Static {
         "static"
@@ -405,6 +405,9 @@ fn download_precompiled_binaries(artifacts_dir: &Path) -> Result<(), Box<dyn std
         "latest"
     };
 
+    if target_os == "linux" {
+        target_os = "ubuntu".to_string();
+    }
     let asset = format!("https://github.com/gsrxyz/rusteron/releases/download/v{version}/artifacts-{target_os}-{image}-{feature}.tar.gz");
 
     println!("downloading from {asset}");
