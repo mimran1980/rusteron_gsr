@@ -103,8 +103,10 @@ jobs:
           Remove-Item -LiteralPath 'rusteron-archive/artifacts','rusteron-client/artifacts','rusteron-media-driver/artifacts' -Recurse -Force -ErrorAction SilentlyContinue
 
       - name: Build and Test
+        env:
+          PUBLISH_ARTIFACTS: true
         run: |
-          PUBLISH_ARTIFACTS=true cargo build --release --workspace ${{ env.feature-flags }}
+          cargo build --release --workspace ${{ env.feature-flags }}
           cargo test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
 
 
