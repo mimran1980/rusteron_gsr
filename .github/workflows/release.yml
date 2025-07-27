@@ -132,7 +132,7 @@ jobs:
             [ -d "$artifact_dir" ] || continue
             archive="$artifact_dir.tar.gz"
             echo "📦 Creating archive $archive"
-            tar -czfv "$archive" -C artifacts "$(basename "$artifact_dir")"
+            tar -czf "$archive" -C artifacts "$(basename "$artifact_dir")"
           done
 
       - name: Extract version
