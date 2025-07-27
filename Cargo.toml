@@ -27,7 +27,7 @@ proc-macro2     = "1.0"
 quote           = "1.0"
 regex           = "1.11"
 reqwest         = { version = "0.12", features = ["blocking", "default-tls"] }
-rusteron-code-gen = { path = "rusteron-code-gen", version = "=0.1.149" }
+rusteron-code-gen = { path = "rusteron-code-gen", version = "=0.1.150" }
 serial_test     = "3.2"
 syn             = { version = "2.0", features = ["full"] }
 tar             = "0.4"
