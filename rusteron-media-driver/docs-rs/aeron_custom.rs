@@ -493,6 +493,12 @@ impl Default for AeronUriStringBuilder {
     }
 }
 
+impl AeronCError {
+    pub fn get_last_err_message(&self) -> &str {
+        Aeron::errmsg()
+    }
+}
+
 const PARSE_CSTR_ERROR_CODE: i32 = -132131;
 
 impl AeronUriStringBuilder {

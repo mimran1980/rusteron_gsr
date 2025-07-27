@@ -366,7 +366,7 @@ impl AeronErrorType {
 /// Represents an Aeron-specific error with a code and an optional message.
 ///
 /// The error code is derived from Aeron C API calls.
-/// Use `get_message()` to retrieve a human-readable message, if available.
+/// Use `get_last_err_message()` to retrieve the last human-readable message, if available.
 #[derive(Eq, PartialEq, Clone)]
 pub struct AeronCError {
     pub code: i32,

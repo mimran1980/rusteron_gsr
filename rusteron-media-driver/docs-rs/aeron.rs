@@ -445,7 +445,7 @@ impl AeronErrorType {
 #[doc = " Represents an Aeron-specific error with a code and an optional message."]
 #[doc = ""]
 #[doc = " The error code is derived from Aeron C API calls."]
-#[doc = " Use `get_message()` to retrieve a human-readable message, if available."]
+#[doc = " Use `get_last_err_message()` to retrieve the last human-readable message, if available."]
 #[derive(Eq, PartialEq, Clone)]
 pub struct AeronCError {
     pub code: i32,
