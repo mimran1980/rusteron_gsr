@@ -579,6 +579,9 @@ impl ControlMode {
 #[allow(dead_code)]
 pub(crate) mod test_alloc {
     use std::alloc::{GlobalAlloc, Layout, System};
+    use std::env;
+    use std::fs::OpenOptions;
+    use std::os::unix::fs::OpenOptionsExt;
     use std::sync::atomic::{AtomicIsize, Ordering};
 
     /// A simple global allocator that tracks the net allocation count.
@@ -618,6 +621,36 @@ pub(crate) mod test_alloc {
     /// Returns the current allocation counter value.
     pub fn current_allocs() -> isize {
         GLOBAL.current()
+    }
+
+    /// Asserts that no allocations occur within the provided closure.
+    /// Uses a file lock to ensure exclusive access across threads/tests.
+    pub fn assert_no_allocation<F: FnOnce()>(f: F) {
+        // need to use filelock as this must run mutually exclusive,
+        // serial_test does not work across modules
+        let tmp = env::temp_dir().join("rusteron_allocation.lck");
+
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .mode(0o600)
+            .open(&tmp)
+            .expect("Failed to open allocation lock file");
+
+        let mut lock = fd_lock::RwLock::new(file);
+        let lock = lock.write().expect("Failed to acquire file lock");
+
+        let before = current_allocs();
+        f();
+        let after = current_allocs();
+        assert_eq!(
+            before, after,
+            "Expected no allocation, but alloc count changed from {} to {}",
+            before, after
+        );
+
+        drop(lock)
     }
 }
 

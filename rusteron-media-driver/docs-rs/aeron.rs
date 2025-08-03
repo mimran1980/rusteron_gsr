@@ -1,4 +1,3 @@
-
 type aeron_client_registering_resource_t = aeron_client_registering_resource_stct;
 #[derive(Clone)]
 pub struct DarwinPthreadHandlerRec {
@@ -627,6 +626,9 @@ impl ControlMode {
 #[allow(dead_code)]
 pub(crate) mod test_alloc {
     use std::alloc::{GlobalAlloc, Layout, System};
+    use std::env;
+    use std::fs::OpenOptions;
+    use std::os::unix::fs::OpenOptionsExt;
     use std::sync::atomic::{AtomicIsize, Ordering};
     #[doc = " A simple global allocator that tracks the net allocation count."]
     #[doc = " For very simple examples can do allocation count before and after your test."]
@@ -662,6 +664,29 @@ pub(crate) mod test_alloc {
     pub fn current_allocs() -> isize {
         GLOBAL.current()
     }
+    #[doc = " Asserts that no allocations occur within the provided closure."]
+    #[doc = " Uses a file lock to ensure exclusive access across threads/tests."]
+    pub fn assert_no_allocation<F: FnOnce()>(f: F) {
+        let tmp = env::temp_dir().join("rusteron_allocation.lck");
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .mode(0o600)
+            .open(&tmp)
+            .expect("Failed to open allocation lock file");
+        let mut lock = fd_lock::RwLock::new(file);
+        let lock = lock.write().expect("Failed to acquire file lock");
+        let before = current_allocs();
+        f();
+        let after = current_allocs();
+        assert_eq!(
+            before, after,
+            "Expected no allocation, but alloc count changed from {} to {}",
+            before, after
+        );
+        drop(lock)
+    }
 }
 pub trait IntoCString {
     fn into_c_string(self) -> std::ffi::CString;
@@ -683,6 +708,20 @@ impl IntoCString for String {
         #[cfg(feature = "extra-logging")]
         log::info!("created c string on heap: {:?}", self);
         std::ffi::CString::new(self).expect("failed to create CString")
+    }
+}
+#[cfg(test)]
+mod __darwin_pthread_handler_rec_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = DarwinPthreadHandlerRec::new_zeroed_on_stack();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -801,6 +840,20 @@ impl From<_opaque_pthread_attr_t> for OpaquePthreadAttr {
         }
     }
 }
+#[cfg(test)]
+mod _opaque_pthread_attr_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = OpaquePthreadAttr::new_zeroed_on_stack();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct OpaquePthreadCond {
     inner: CResource<_opaque_pthread_cond_t>,
@@ -915,6 +968,20 @@ impl From<_opaque_pthread_cond_t> for OpaquePthreadCond {
         OpaquePthreadCond {
             inner: CResource::Borrowed(&mut value as *mut _opaque_pthread_cond_t),
         }
+    }
+}
+#[cfg(test)]
+mod _opaque_pthread_cond_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = OpaquePthreadCond::new_zeroed_on_stack();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -1033,6 +1100,20 @@ impl From<_opaque_pthread_mutex_t> for OpaquePthreadMutex {
         }
     }
 }
+#[cfg(test)]
+mod _opaque_pthread_mutex_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = OpaquePthreadMutex::new_zeroed_on_stack();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct OpaquePthread {
     inner: CResource<_opaque_pthread_t>,
@@ -1147,6 +1228,20 @@ impl From<_opaque_pthread_t> for OpaquePthread {
         OpaquePthread {
             inner: CResource::Borrowed(&mut value as *mut _opaque_pthread_t),
         }
+    }
+}
+#[cfg(test)]
+mod _opaque_pthread_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = OpaquePthread::new_zeroed_on_stack();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -1361,6 +1456,29 @@ impl Addrinfo {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod addrinfo_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = Addrinfo::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = Addrinfo::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -1717,6 +1835,29 @@ impl AeronAgentRunner {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_agent_runner_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronAgentRunner::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronAgentRunner::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -2883,6 +3024,20 @@ impl From<aeron_async_destination_by_id_t> for AeronAsyncDestinationById {
         }
     }
 }
+#[cfg(test)]
+mod aeron_async_destination_by_id_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronAsyncDestinationById::new_zeroed_on_stack();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronAsyncDestination {
     inner: CResource<aeron_async_destination_t>,
@@ -3237,6 +3392,20 @@ impl From<aeron_atomic_counter_t> for AeronAtomicCounter {
         AeronAtomicCounter {
             inner: CResource::Borrowed(&mut value as *mut aeron_atomic_counter_t),
         }
+    }
+}
+#[cfg(test)]
+mod aeron_atomic_counter_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronAtomicCounter::new_zeroed_on_stack();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -3634,6 +3803,29 @@ impl AeronBroadcastDescriptor {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_broadcast_descriptor_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronBroadcastDescriptor::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronBroadcastDescriptor::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronBroadcastRecordDescriptor {
     inner: CResource<aeron_broadcast_record_descriptor_t>,
@@ -3801,6 +3993,29 @@ impl AeronBroadcastRecordDescriptor {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_broadcast_record_descriptor_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronBroadcastRecordDescriptor::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronBroadcastRecordDescriptor::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -4023,6 +4238,29 @@ impl AeronBroadcastTransmitter {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_broadcast_transmitter_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronBroadcastTransmitter::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronBroadcastTransmitter::default();
+            }
+        });
+    }
+}
 #[doc = "Structure used to hold information for a try_claim function call."]
 #[derive(Clone)]
 pub struct AeronBufferClaim {
@@ -4229,6 +4467,29 @@ impl AeronBufferClaim {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_buffer_claim_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronBufferClaim::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronBufferClaim::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronChannelEndpointStatusKeyLayout {
     inner: CResource<aeron_channel_endpoint_status_key_layout_t>,
@@ -4407,6 +4668,29 @@ impl AeronChannelEndpointStatusKeyLayout {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_channel_endpoint_status_key_layout_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronChannelEndpointStatusKeyLayout::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronChannelEndpointStatusKeyLayout::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronClientRegisteringResource {
     inner: CResource<aeron_client_registering_resource_t>,
@@ -4522,6 +4806,20 @@ impl From<aeron_client_registering_resource_t> for AeronClientRegisteringResourc
         AeronClientRegisteringResource {
             inner: CResource::Borrowed(&mut value as *mut aeron_client_registering_resource_t),
         }
+    }
+}
+#[cfg(test)]
+mod aeron_client_registering_resource_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronClientRegisteringResource::new_zeroed_on_stack();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -4737,6 +5035,29 @@ impl AeronClient {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_client_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronClient::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronClient::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronClientTimeout {
     inner: CResource<aeron_client_timeout_t>,
@@ -4896,6 +5217,29 @@ impl AeronClientTimeout {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_client_timeout_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronClientTimeout::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronClientTimeout::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -5331,6 +5675,29 @@ impl AeronCncConstants {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_cnc_constants_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronCncConstants::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronCncConstants::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronCncMetadata {
     inner: CResource<aeron_cnc_metadata_t>,
@@ -5580,6 +5947,29 @@ impl AeronCncMetadata {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_cnc_metadata_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronCncMetadata::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronCncMetadata::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -7338,6 +7728,29 @@ impl AeronCorrelatedCommand {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_correlated_command_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronCorrelatedCommand::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronCorrelatedCommand::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronCounterCommand {
     inner: CResource<aeron_counter_command_t>,
@@ -7503,6 +7916,29 @@ impl AeronCounterCommand {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_counter_command_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronCounterCommand::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronCounterCommand::default();
+            }
+        });
     }
 }
 #[doc = "Configuration for a counter that does not change during it's lifetime."]
@@ -7673,6 +8109,29 @@ impl AeronCounterConstants {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_counter_constants_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronCounterConstants::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronCounterConstants::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronCounterLink {
     inner: CResource<aeron_counter_link_t>,
@@ -7838,6 +8297,29 @@ impl AeronCounterLink {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_counter_link_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronCounterLink::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronCounterLink::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -8039,6 +8521,29 @@ impl AeronCounterMetadataDescriptor {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_counter_metadata_descriptor_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronCounterMetadataDescriptor::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronCounterMetadataDescriptor::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -8449,6 +8954,29 @@ impl AeronCounterUpdate {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_counter_update_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronCounterUpdate::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronCounterUpdate::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronCounterValueDescriptor {
     inner: CResource<aeron_counter_value_descriptor_t>,
@@ -8639,6 +9167,29 @@ impl AeronCounterValueDescriptor {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_counter_value_descriptor_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronCounterValueDescriptor::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronCounterValueDescriptor::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -9057,6 +9608,29 @@ impl AeronCountersManager {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_counters_manager_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronCountersManager::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronCountersManager::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronCountersReaderBuffers {
     inner: CResource<aeron_counters_reader_buffers_t>,
@@ -9237,6 +9811,29 @@ impl AeronCountersReaderBuffers {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_counters_reader_buffers_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronCountersReaderBuffers::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronCountersReaderBuffers::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -9854,6 +10451,29 @@ impl AeronDataHeaderAsLongs {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_data_header_as_longs_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDataHeaderAsLongs::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDataHeaderAsLongs::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronDataHeader {
     inner: CResource<aeron_data_header_t>,
@@ -10050,6 +10670,29 @@ impl AeronDataHeader {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_data_header_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDataHeader::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDataHeader::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -10259,6 +10902,29 @@ impl AeronDataPacketDispatcherStreamInterest {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_data_packet_dispatcher_stream_interest_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDataPacketDispatcherStreamInterest::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDataPacketDispatcherStreamInterest::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -10749,6 +11415,29 @@ impl AeronDataPacketDispatcher {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_data_packet_dispatcher_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDataPacketDispatcher::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDataPacketDispatcher::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronDeque {
     inner: CResource<aeron_deque_t>,
@@ -10999,6 +11688,29 @@ impl AeronDeque {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_deque_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDeque::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDeque::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronDestinationByIdCommand {
     inner: CResource<aeron_destination_by_id_command_t>,
@@ -11184,6 +11896,29 @@ impl AeronDestinationByIdCommand {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_destination_by_id_command_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDestinationByIdCommand::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDestinationByIdCommand::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronDestinationCommand {
     inner: CResource<aeron_destination_command_t>,
@@ -11359,6 +12094,29 @@ impl AeronDestinationCommand {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_destination_command_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDestinationCommand::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDestinationCommand::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -11542,6 +12300,29 @@ impl AeronDistinctErrorLogObservationList {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_distinct_error_log_observation_list_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDistinctErrorLogObservationList::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDistinctErrorLogObservationList::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -11796,6 +12577,29 @@ impl AeronDistinctErrorLog {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_distinct_error_log_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDistinctErrorLog::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDistinctErrorLog::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronDistinctObservation {
     inner: CResource<aeron_distinct_observation_t>,
@@ -11982,6 +12786,29 @@ impl AeronDistinctObservation {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_distinct_observation_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDistinctObservation::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDistinctObservation::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronDlLoadedLibsState {
     inner: CResource<aeron_dl_loaded_libs_state_t>,
@@ -12096,6 +12923,20 @@ impl From<aeron_dl_loaded_libs_state_t> for AeronDlLoadedLibsState {
         AeronDlLoadedLibsState {
             inner: CResource::Borrowed(&mut value as *mut aeron_dl_loaded_libs_state_t),
         }
+    }
+}
+#[cfg(test)]
+mod aeron_dl_loaded_libs_state_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDlLoadedLibsState::new_zeroed_on_stack();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -12453,6 +13294,29 @@ impl AeronDriverConductorProxy {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_driver_conductor_proxy_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDriverConductorProxy::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDriverConductorProxy::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -13952,6 +14816,29 @@ impl AeronDriverConductor {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_driver_conductor_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDriverConductor::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDriverConductor::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronDriverContextBindingsClientdEntry {
     inner: CResource<aeron_driver_context_bindings_clientd_entry_t>,
@@ -14139,6 +15026,29 @@ impl AeronDriverContextBindingsClientdEntry {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_driver_context_bindings_clientd_entry_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDriverContextBindingsClientdEntry::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDriverContextBindingsClientdEntry::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -17983,6 +18893,29 @@ impl AeronDriverManagedResource {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_driver_managed_resource_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDriverManagedResource::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDriverManagedResource::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronDriverReceiverImageEntry {
     inner: CResource<aeron_driver_receiver_image_entry_t>,
@@ -18144,6 +19077,29 @@ impl AeronDriverReceiverImageEntry {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_driver_receiver_image_entry_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDriverReceiverImageEntry::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDriverReceiverImageEntry::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -18365,6 +19321,29 @@ impl AeronDriverReceiverPendingSetupEntry {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_driver_receiver_pending_setup_entry_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDriverReceiverPendingSetupEntry::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDriverReceiverPendingSetupEntry::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -18727,6 +19706,20 @@ impl From<aeron_driver_receiver_proxy_t> for AeronDriverReceiverProxy {
         AeronDriverReceiverProxy {
             inner: CResource::Borrowed(&mut value as *mut aeron_driver_receiver_proxy_t),
         }
+    }
+}
+#[cfg(test)]
+mod aeron_driver_receiver_proxy_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDriverReceiverProxy::new_zeroed_on_stack();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -19196,6 +20189,29 @@ impl AeronDriverReceiver {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_driver_receiver_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDriverReceiver::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDriverReceiver::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronDriverSenderNetworkPublicationEntry {
     inner: CResource<aeron_driver_sender_network_publication_entry_t>,
@@ -19374,6 +20390,29 @@ impl AeronDriverSenderNetworkPublicationEntry {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_driver_sender_network_publication_entry_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDriverSenderNetworkPublicationEntry::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDriverSenderNetworkPublicationEntry::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -19666,6 +20705,29 @@ impl AeronDriverSenderProxy {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_driver_sender_proxy_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDriverSenderProxy::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDriverSenderProxy::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -20118,6 +21180,29 @@ impl AeronDriverSender {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_driver_sender_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDriverSender::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDriverSender::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -20701,6 +21786,29 @@ impl AeronDriverUriPublicationParams {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_driver_uri_publication_params_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDriverUriPublicationParams::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDriverUriPublicationParams::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronDriverUriSubscriptionParams {
     inner: CResource<aeron_driver_uri_subscription_params_t>,
@@ -20954,6 +22062,29 @@ impl AeronDriverUriSubscriptionParams {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_driver_uri_subscription_params_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDriverUriSubscriptionParams::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDriverUriSubscriptionParams::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronDutyCycleStallTracker {
     inner: CResource<aeron_duty_cycle_stall_tracker_t>,
@@ -21160,6 +22291,29 @@ impl AeronDutyCycleStallTracker {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_duty_cycle_stall_tracker_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDutyCycleStallTracker::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDutyCycleStallTracker::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronDutyCycleTracker {
     inner: CResource<aeron_duty_cycle_tracker_t>,
@@ -21349,6 +22503,29 @@ impl AeronDutyCycleTracker {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_duty_cycle_tracker_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDutyCycleTracker::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronDutyCycleTracker::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronEndOfLifeResource {
     inner: CResource<aeron_end_of_life_resource_t>,
@@ -21515,6 +22692,29 @@ impl AeronEndOfLifeResource {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_end_of_life_resource_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronEndOfLifeResource::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronEndOfLifeResource::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -21707,6 +22907,29 @@ impl AeronErrorLogEntry {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_error_log_entry_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronErrorLogEntry::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronErrorLogEntry::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronErrorResponse {
     inner: CResource<aeron_error_response_t>,
@@ -21888,6 +23111,29 @@ impl AeronErrorResponse {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_error_response_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronErrorResponse::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronErrorResponse::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -22105,6 +23351,29 @@ impl AeronError {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_error_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronError::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronError::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -22891,6 +24160,29 @@ impl AeronFeedbackDelayGeneratorState {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_feedback_delay_generator_state_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronFeedbackDelayGeneratorState::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronFeedbackDelayGeneratorState::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronFlowControlMaxOptions {
     inner: CResource<aeron_flow_control_max_options_t>,
@@ -23055,6 +24347,29 @@ impl AeronFlowControlMaxOptions {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_flow_control_max_options_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronFlowControlMaxOptions::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronFlowControlMaxOptions::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -23246,6 +24561,29 @@ impl AeronFlowControlStrategySupplierFuncTableEntry {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_flow_control_strategy_supplier_func_table_entry_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronFlowControlStrategySupplierFuncTableEntry::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronFlowControlStrategySupplierFuncTableEntry::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -23702,6 +25040,29 @@ impl AeronFlowControlTaggedOptions {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_flow_control_tagged_options_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronFlowControlTaggedOptions::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronFlowControlTaggedOptions::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronFragmentAssembler {
     inner: CResource<aeron_fragment_assembler_t>,
@@ -24028,6 +25389,29 @@ impl AeronFrameHeader {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_frame_header_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronFrameHeader::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronFrameHeader::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronHeader {
     inner: CResource<aeron_header_t>,
@@ -24207,6 +25591,20 @@ impl From<aeron_header_t> for AeronHeader {
         AeronHeader {
             inner: CResource::Borrowed(&mut value as *mut aeron_header_t),
         }
+    }
+}
+#[cfg(test)]
+mod aeron_header_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronHeader::new_zeroed_on_stack();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -24426,6 +25824,29 @@ impl AeronHeaderValuesFrame {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_header_values_frame_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronHeaderValuesFrame::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronHeaderValuesFrame::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronHeaderValues {
     inner: CResource<aeron_header_values_t>,
@@ -24606,6 +26027,29 @@ impl AeronHeaderValues {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_header_values_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronHeaderValues::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronHeaderValues::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronHeartbeatTimestampKeyLayout {
     inner: CResource<aeron_heartbeat_timestamp_key_layout_t>,
@@ -24767,6 +26211,29 @@ impl AeronHeartbeatTimestampKeyLayout {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_heartbeat_timestamp_key_layout_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronHeartbeatTimestampKeyLayout::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronHeartbeatTimestampKeyLayout::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -25137,6 +26604,29 @@ impl AeronImageBuffersReady {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_image_buffers_ready_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronImageBuffersReady::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronImageBuffersReady::default();
+            }
+        });
+    }
+}
 #[doc = "Configuration for an image that does not change during it's lifetime."]
 #[derive(Clone)]
 pub struct AeronImageConstants {
@@ -25375,6 +26865,29 @@ impl AeronImageConstants {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_image_constants_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronImageConstants::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronImageConstants::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -25881,6 +27394,29 @@ impl AeronImageMessage {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_image_message_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronImageMessage::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronImageMessage::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -26607,6 +28143,20 @@ impl From<aeron_image_t> for AeronImage {
         }
     }
 }
+#[cfg(test)]
+mod aeron_image_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronImage::new_zeroed_on_stack();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronInt64CounterMap {
     inner: CResource<aeron_int64_counter_map_t>,
@@ -26802,6 +28352,29 @@ impl AeronInt64CounterMap {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_int64_counter_map_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronInt64CounterMap::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronInt64CounterMap::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -27000,6 +28573,29 @@ impl AeronInt64ToPtrHashMap {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_int64_to_ptr_hash_map_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronInt64ToPtrHashMap::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronInt64ToPtrHashMap::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronInt64ToTaggedPtrEntry {
     inner: CResource<aeron_int64_to_tagged_ptr_entry_t>,
@@ -27176,6 +28772,29 @@ impl AeronInt64ToTaggedPtrEntry {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_int64_to_tagged_ptr_entry_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronInt64ToTaggedPtrEntry::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronInt64ToTaggedPtrEntry::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -27377,6 +28996,29 @@ impl AeronInt64ToTaggedPtrHashMap {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_int64_to_tagged_ptr_hash_map_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronInt64ToTaggedPtrHashMap::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronInt64ToTaggedPtrHashMap::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronIovec {
     inner: CResource<aeron_iovec_t>,
@@ -27541,6 +29183,29 @@ impl AeronIovec {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_iovec_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronIovec::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronIovec::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -27726,6 +29391,29 @@ impl AeronIpcChannelParams {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_ipc_channel_params_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronIpcChannelParams::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronIpcChannelParams::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronIpcPublicationEntry {
     inner: CResource<aeron_ipc_publication_entry_t>,
@@ -27885,6 +29573,29 @@ impl AeronIpcPublicationEntry {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_ipc_publication_entry_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronIpcPublicationEntry::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronIpcPublicationEntry::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -28424,6 +30135,29 @@ impl AeronLingerResourceEntry {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_linger_resource_entry_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronLingerResourceEntry::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronLingerResourceEntry::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronLinkedQueueNode {
     inner: CResource<aeron_linked_queue_node_t>,
@@ -28549,6 +30283,20 @@ impl From<aeron_linked_queue_node_t> for AeronLinkedQueueNode {
         AeronLinkedQueueNode {
             inner: CResource::Borrowed(&mut value as *mut aeron_linked_queue_node_t),
         }
+    }
+}
+#[cfg(test)]
+mod aeron_linked_queue_node_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronLinkedQueueNode::new_zeroed_on_stack();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -28919,6 +30667,29 @@ impl AeronLocalSockaddrKeyLayout {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_local_sockaddr_key_layout_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronLocalSockaddrKeyLayout::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronLocalSockaddrKeyLayout::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronLogBuffer {
     inner: CResource<aeron_log_buffer_t>,
@@ -29033,6 +30804,20 @@ impl From<aeron_log_buffer_t> for AeronLogBuffer {
         AeronLogBuffer {
             inner: CResource::Borrowed(&mut value as *mut aeron_log_buffer_t),
         }
+    }
+}
+#[cfg(test)]
+mod aeron_log_buffer_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronLogBuffer::new_zeroed_on_stack();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -29495,6 +31280,29 @@ impl AeronLogbufferMetadata {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_logbuffer_metadata_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronLogbufferMetadata::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronLogbufferMetadata::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronLossDetectorGap {
     inner: CResource<aeron_loss_detector_gap_t>,
@@ -29666,6 +31474,29 @@ impl AeronLossDetectorGap {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_loss_detector_gap_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronLossDetectorGap::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronLossDetectorGap::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -29957,6 +31788,29 @@ impl AeronLossDetector {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_loss_detector_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronLossDetector::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronLossDetector::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronLossReporterEntry {
     inner: CResource<aeron_loss_reporter_entry_t>,
@@ -30159,6 +32013,29 @@ impl AeronLossReporterEntry {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_loss_reporter_entry_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronLossReporterEntry::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronLossReporterEntry::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -30467,6 +32344,29 @@ impl AeronLossReporter {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_loss_reporter_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronLossReporter::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronLossReporter::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronMappedBuffer {
     inner: CResource<aeron_mapped_buffer_t>,
@@ -30637,6 +32537,29 @@ impl AeronMappedBuffer {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_mapped_buffer_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronMappedBuffer::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronMappedBuffer::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -30858,6 +32781,29 @@ impl AeronMappedFile {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_mapped_file_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronMappedFile::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronMappedFile::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -31100,6 +33046,29 @@ impl AeronMappedRawLog {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_mapped_raw_log_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronMappedRawLog::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronMappedRawLog::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronMpscConcurrentArrayQueue {
     inner: CResource<aeron_mpsc_concurrent_array_queue_t>,
@@ -31319,6 +33288,29 @@ impl AeronMpscConcurrentArrayQueue {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_mpsc_concurrent_array_queue_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronMpscConcurrentArrayQueue::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronMpscConcurrentArrayQueue::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -31698,6 +33690,29 @@ impl AeronMpscRb {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_mpsc_rb_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronMpscRb::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronMpscRb::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronNakHeader {
     inner: CResource<aeron_nak_header_t>,
@@ -31896,6 +33911,29 @@ impl AeronNakHeader {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_nak_header_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronNakHeader::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronNakHeader::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronNetworkPublicationEntry {
     inner: CResource<aeron_network_publication_entry_t>,
@@ -32057,6 +34095,29 @@ impl AeronNetworkPublicationEntry {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_network_publication_entry_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronNetworkPublicationEntry::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronNetworkPublicationEntry::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -32923,6 +34984,29 @@ impl AeronAvailableCounterPair {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_on_available_counter_pair_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronAvailableCounterPair::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronAvailableCounterPair::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronCloseClientPair {
     inner: CResource<aeron_on_close_client_pair_t>,
@@ -33097,6 +35181,29 @@ impl AeronCloseClientPair {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_on_close_client_pair_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronCloseClientPair::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronCloseClientPair::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -33281,6 +35388,29 @@ impl AeronUnavailableCounterPair {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_on_unavailable_counter_pair_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronUnavailableCounterPair::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronUnavailableCounterPair::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronOperationSucceeded {
     inner: CResource<aeron_operation_succeeded_t>,
@@ -33440,6 +35570,29 @@ impl AeronOperationSucceeded {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_operation_succeeded_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronOperationSucceeded::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronOperationSucceeded::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -33607,6 +35760,29 @@ impl AeronOptionHeader {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_option_header_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronOptionHeader::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronOptionHeader::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -33781,6 +35957,29 @@ impl AeronParsedAddress {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_parsed_address_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronParsedAddress::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronParsedAddress::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -33963,6 +36162,29 @@ impl AeronParsedInterface {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_parsed_interface_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronParsedInterface::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronParsedInterface::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronPerThreadError {
     inner: CResource<aeron_per_thread_error_t>,
@@ -34136,6 +36358,29 @@ impl AeronPerThreadError {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_per_thread_error_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronPerThreadError::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronPerThreadError::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -34327,6 +36572,29 @@ impl AeronPortManager {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_port_manager_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronPortManager::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronPortManager::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronPosition {
     inner: CResource<aeron_position_t>,
@@ -34491,6 +36759,29 @@ impl AeronPosition {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_position_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronPosition::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronPosition::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -34706,6 +36997,29 @@ impl AeronPublicationBuffersReady {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_publication_buffers_ready_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronPublicationBuffersReady::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronPublicationBuffersReady::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronPublicationCommand {
     inner: CResource<aeron_publication_command_t>,
@@ -34881,6 +37195,29 @@ impl AeronPublicationCommand {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_publication_command_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronPublicationCommand::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronPublicationCommand::default();
+            }
+        });
     }
 }
 #[doc = "Configuration for a publication that does not change during it's lifetime."]
@@ -35149,6 +37486,29 @@ impl AeronPublicationConstants {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_publication_constants_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronPublicationConstants::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronPublicationConstants::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronPublicationError {
     inner: CResource<aeron_publication_error_t>,
@@ -35391,6 +37751,29 @@ impl AeronPublicationError {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_publication_error_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronPublicationError::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronPublicationError::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -35813,6 +38196,29 @@ impl AeronPublicationImageConnection {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_publication_image_connection_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronPublicationImageConnection::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronPublicationImageConnection::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronPublicationImageEntry {
     inner: CResource<aeron_publication_image_entry_t>,
@@ -35972,6 +38378,29 @@ impl AeronPublicationImageEntry {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_publication_image_entry_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronPublicationImageEntry::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronPublicationImageEntry::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -36817,6 +39246,29 @@ impl AeronPublicationLink {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_publication_link_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronPublicationLink::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronPublicationLink::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronPublication {
     inner: CResource<aeron_publication_t>,
@@ -37561,6 +40013,29 @@ impl AeronRbDescriptor {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_rb_descriptor_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronRbDescriptor::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronRbDescriptor::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronRbRecordDescriptor {
     inner: CResource<aeron_rb_record_descriptor_t>,
@@ -37728,6 +40203,29 @@ impl AeronRbRecordDescriptor {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_rb_record_descriptor_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronRbRecordDescriptor::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronRbRecordDescriptor::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronReceiveChannelEndpointEntry {
     inner: CResource<aeron_receive_channel_endpoint_entry_t>,
@@ -37889,6 +40387,29 @@ impl AeronReceiveChannelEndpointEntry {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_receive_channel_endpoint_entry_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronReceiveChannelEndpointEntry::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronReceiveChannelEndpointEntry::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -38918,6 +41439,29 @@ impl AeronReceiveDestinationEntry {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_receive_destination_entry_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronReceiveDestinationEntry::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronReceiveDestinationEntry::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronReceiveDestination {
     inner: CResource<aeron_receive_destination_t>,
@@ -39296,6 +41840,29 @@ impl AeronRejectImageCommand {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_reject_image_command_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronRejectImageCommand::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronRejectImageCommand::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronRemoveCounterCommand {
     inner: CResource<aeron_remove_counter_command_t>,
@@ -39464,6 +42031,29 @@ impl AeronRemoveCounterCommand {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_remove_counter_command_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronRemoveCounterCommand::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronRemoveCounterCommand::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -39645,6 +42235,29 @@ impl AeronRemovePublicationCommand {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_remove_publication_command_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronRemovePublicationCommand::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronRemovePublicationCommand::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronRemoveSubscriptionCommand {
     inner: CResource<aeron_remove_subscription_command_t>,
@@ -39815,6 +42428,29 @@ impl AeronRemoveSubscriptionCommand {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_remove_subscription_command_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronRemoveSubscriptionCommand::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronRemoveSubscriptionCommand::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -40000,6 +42636,29 @@ impl AeronResolutionHeaderIpv4 {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_resolution_header_ipv4_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronResolutionHeaderIpv4::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronResolutionHeaderIpv4::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronResolutionHeaderIpv6 {
     inner: CResource<aeron_resolution_header_ipv6_t>,
@@ -40181,6 +42840,29 @@ impl AeronResolutionHeaderIpv6 {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_resolution_header_ipv6_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronResolutionHeaderIpv6::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronResolutionHeaderIpv6::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -40365,6 +43047,29 @@ impl AeronResolutionHeader {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_resolution_header_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronResolutionHeader::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronResolutionHeader::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronResponseSetupHeader {
     inner: CResource<aeron_response_setup_header_t>,
@@ -40547,6 +43252,29 @@ impl AeronResponseSetupHeader {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_response_setup_header_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronResponseSetupHeader::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronResponseSetupHeader::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -40737,6 +43465,29 @@ impl AeronRetransmitAction {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_retransmit_action_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronRetransmitAction::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronRetransmitAction::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -41139,6 +43890,29 @@ impl AeronRetransmitHandler {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_retransmit_handler_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronRetransmitHandler::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronRetransmitHandler::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronRttmHeader {
     inner: CResource<aeron_rttm_header_t>,
@@ -41337,6 +44111,29 @@ impl AeronRttmHeader {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_rttm_header_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronRttmHeader::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronRttmHeader::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronSendChannelEndpointEntry {
     inner: CResource<aeron_send_channel_endpoint_entry_t>,
@@ -41498,6 +44295,29 @@ impl AeronSendChannelEndpointEntry {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_send_channel_endpoint_entry_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronSendChannelEndpointEntry::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronSendChannelEndpointEntry::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -42162,6 +44982,29 @@ impl AeronSetupHeader {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_setup_header_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronSetupHeader::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronSetupHeader::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronSpscConcurrentArrayQueue {
     inner: CResource<aeron_spsc_concurrent_array_queue_t>,
@@ -42383,6 +45226,29 @@ impl AeronSpscConcurrentArrayQueue {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_spsc_concurrent_array_queue_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronSpscConcurrentArrayQueue::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronSpscConcurrentArrayQueue::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronStaticCounterCommand {
     inner: CResource<aeron_static_counter_command_t>,
@@ -42560,6 +45426,29 @@ impl AeronStaticCounterCommand {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_static_counter_command_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronStaticCounterCommand::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronStaticCounterCommand::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronStaticCounterResponse {
     inner: CResource<aeron_static_counter_response_t>,
@@ -42725,6 +45614,29 @@ impl AeronStaticCounterResponse {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_static_counter_response_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronStaticCounterResponse::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronStaticCounterResponse::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -42947,6 +45859,29 @@ impl AeronStatusMessageHeader {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_status_message_header_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronStatusMessageHeader::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronStatusMessageHeader::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronStatusMessageOptionalHeader {
     inner: CResource<aeron_status_message_optional_header_t>,
@@ -43108,6 +46043,29 @@ impl AeronStatusMessageOptionalHeader {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_status_message_optional_header_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronStatusMessageOptionalHeader::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronStatusMessageOptionalHeader::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -43288,6 +46246,29 @@ impl AeronStrToPtrHashMapKey {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_str_to_ptr_hash_map_key_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronStrToPtrHashMapKey::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronStrToPtrHashMapKey::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -43485,6 +46466,29 @@ impl AeronStrToPtrHashMap {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_str_to_ptr_hash_map_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronStrToPtrHashMap::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronStrToPtrHashMap::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -43686,6 +46690,29 @@ impl AeronStreamPositionCounterKeyLayout {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_stream_position_counter_key_layout_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronStreamPositionCounterKeyLayout::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronStreamPositionCounterKeyLayout::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronSubscribableListEntry {
     inner: CResource<aeron_subscribable_list_entry_t>,
@@ -43851,6 +46878,29 @@ impl AeronSubscribableListEntry {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_subscribable_list_entry_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronSubscribableListEntry::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronSubscribableListEntry::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -44113,6 +47163,29 @@ impl AeronSubscribable {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_subscribable_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronSubscribable::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronSubscribable::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronSubscriptionCommand {
     inner: CResource<aeron_subscription_command_t>,
@@ -44298,6 +47371,29 @@ impl AeronSubscriptionCommand {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_subscription_command_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronSubscriptionCommand::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronSubscriptionCommand::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -44500,6 +47596,29 @@ impl AeronSubscriptionConstants {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_subscription_constants_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronSubscriptionConstants::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronSubscriptionConstants::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -44780,6 +47899,29 @@ impl AeronSubscriptionLink {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_subscription_link_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronSubscriptionLink::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronSubscriptionLink::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronSubscriptionReady {
     inner: CResource<aeron_subscription_ready_t>,
@@ -44948,6 +48090,29 @@ impl AeronSubscriptionReady {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_subscription_ready_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronSubscriptionReady::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronSubscriptionReady::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -45850,6 +49015,29 @@ impl AeronSystemCounter {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_system_counter_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronSystemCounter::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronSystemCounter::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronSystemCounters {
     inner: CResource<aeron_system_counters_t>,
@@ -46035,6 +49223,29 @@ impl AeronSystemCounters {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_system_counters_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronSystemCounters::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronSystemCounters::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -47884,6 +51095,29 @@ impl AeronTerminateDriverCommand {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_terminate_driver_command_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronTerminateDriverCommand::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronTerminateDriverCommand::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronTetherablePosition {
     inner: CResource<aeron_tetherable_position_t>,
@@ -48105,6 +51339,29 @@ impl AeronTetherablePosition {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_tetherable_position_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronTetherablePosition::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronTetherablePosition::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronUdpChannelAsyncParse {
     inner: CResource<aeron_udp_channel_async_parse_t>,
@@ -48270,6 +51527,29 @@ impl AeronUdpChannelAsyncParse {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_udp_channel_async_parse_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronUdpChannelAsyncParse::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronUdpChannelAsyncParse::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -48595,6 +51875,29 @@ impl AeronUdpChannelDataPaths {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_udp_channel_data_paths_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronUdpChannelDataPaths::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronUdpChannelDataPaths::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronUdpChannelIncomingInterceptor {
     inner: CResource<aeron_udp_channel_incoming_interceptor_t>,
@@ -48802,6 +52105,29 @@ impl AeronUdpChannelIncomingInterceptor {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_udp_channel_incoming_interceptor_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronUdpChannelIncomingInterceptor::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronUdpChannelIncomingInterceptor::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -49068,6 +52394,29 @@ impl AeronUdpChannelInterceptorBindings {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_udp_channel_interceptor_bindings_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronUdpChannelInterceptorBindings::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronUdpChannelInterceptorBindings::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronUdpChannelOutgoingInterceptor {
     inner: CResource<aeron_udp_channel_outgoing_interceptor_t>,
@@ -49275,6 +52624,29 @@ impl AeronUdpChannelOutgoingInterceptor {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_udp_channel_outgoing_interceptor_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronUdpChannelOutgoingInterceptor::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronUdpChannelOutgoingInterceptor::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -49516,6 +52888,29 @@ impl AeronUdpChannelParams {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_udp_channel_params_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronUdpChannelParams::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronUdpChannelParams::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -50041,6 +53436,29 @@ impl AeronUdpDestinationEntry {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_udp_destination_entry_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronUdpDestinationEntry::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronUdpDestinationEntry::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronUdpDestinationTracker {
     inner: CResource<aeron_udp_destination_tracker_t>,
@@ -50519,6 +53937,29 @@ impl AeronUriParam {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_uri_param_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronUriParam::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronUriParam::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronUriParams {
     inner: CResource<aeron_uri_params_t>,
@@ -50804,6 +54245,29 @@ impl AeronUriParams {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_uri_params_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronUriParams::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronUriParams::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronUriStringBuilder {
     inner: CResource<aeron_uri_string_builder_t>,
@@ -51077,6 +54541,20 @@ impl From<aeron_uri_string_builder_t> for AeronUriStringBuilder {
         AeronUriStringBuilder {
             inner: CResource::Borrowed(&mut value as *mut aeron_uri_string_builder_t),
         }
+    }
+}
+#[cfg(test)]
+mod aeron_uri_string_builder_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronUriStringBuilder::new_zeroed_on_stack();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -51467,6 +54945,29 @@ impl AeronUri {
         copy
     }
 }
+#[cfg(test)]
+mod aeron_uri_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronUri::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronUri::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct AeronWildcardPortManager {
     inner: CResource<aeron_wildcard_port_manager_t>,
@@ -51731,6 +55232,29 @@ impl AeronWildcardPortManager {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod aeron_wildcard_port_manager_t_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronWildcardPortManager::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = AeronWildcardPortManager::default();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -52019,6 +55543,20 @@ impl From<in6_addr> for In6Addr {
         }
     }
 }
+#[cfg(test)]
+mod in6_addr_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = In6Addr::new_zeroed_on_stack();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct Iovec {
     inner: CResource<iovec>,
@@ -52185,6 +55723,29 @@ impl Iovec {
         copy
     }
 }
+#[cfg(test)]
+mod iovec_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = Iovec::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = Iovec::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct Mmsghdr {
     inner: CResource<mmsghdr>,
@@ -52299,6 +55860,20 @@ impl From<mmsghdr> for Mmsghdr {
         Mmsghdr {
             inner: CResource::Borrowed(&mut value as *mut mmsghdr),
         }
+    }
+}
+#[cfg(test)]
+mod mmsghdr_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = Mmsghdr::new_zeroed_on_stack();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -52500,6 +56075,29 @@ impl Msghdr {
         copy
     }
 }
+#[cfg(test)]
+mod msghdr_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = Msghdr::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = Msghdr::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct Pollfd {
     inner: CResource<pollfd>,
@@ -52689,6 +56287,29 @@ impl Pollfd {
         copy
     }
 }
+#[cfg(test)]
+mod pollfd_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = Pollfd::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = Pollfd::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct Sockaddr {
     inner: CResource<sockaddr>,
@@ -52863,6 +56484,29 @@ impl Sockaddr {
         copy
     }
 }
+#[cfg(test)]
+mod sockaddr_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = Sockaddr::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = Sockaddr::default();
+            }
+        });
+    }
+}
 #[derive(Clone)]
 pub struct SockaddrStorage {
     inner: CResource<sockaddr_storage>,
@@ -53033,6 +56677,20 @@ impl From<sockaddr_storage> for SockaddrStorage {
         SockaddrStorage {
             inner: CResource::Borrowed(&mut value as *mut sockaddr_storage),
         }
+    }
+}
+#[cfg(test)]
+mod sockaddr_storage_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = SockaddrStorage::new_zeroed_on_stack();
+            }
+        });
     }
 }
 #[derive(Clone)]
@@ -53215,6 +56873,29 @@ impl Timespec {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
         copy
+    }
+}
+#[cfg(test)]
+mod timespec_allocation_tests {
+    use super::*;
+    use serial_test::file_serial;
+    #[test]
+    #[file_serial(global)]
+    fn test_new_on_stack() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = Timespec::new_zeroed_on_stack();
+            }
+        });
+    }
+    #[test]
+    #[file_serial(global)]
+    fn test_default() {
+        crate::test_alloc::assert_no_allocation(|| {
+            for _ in 0..1000 {
+                let _ = Timespec::default();
+            }
+        });
     }
 }
 #[doc = "The error handler to be called when an error occurs."]
@@ -57897,4 +61578,3 @@ unsafe extern "C" fn aeron_end_of_life_resource_free_t_callback_for_once_closure
     let closure: &mut F = &mut *(resource as *mut F);
     closure()
 }
-

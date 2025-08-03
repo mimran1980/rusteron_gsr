@@ -55,6 +55,7 @@ criterion             = { workspace = true }
 env_logger            = "0.11"
 rusteron-media-driver = { path = "../rusteron-media-driver" }
 serial_test           = { workspace = true }
+fd-lock               = { workspace = true}
 
 [features]
 # using static as different modules have different versions of aeron which don't seem to play nicely

@@ -1457,6 +1457,94 @@ impl CWrapper {
             && !self.fields.iter().any(|arg| arg.name.starts_with("_"))
             && !self.fields.is_empty()
     }
+
+    fn generate_allocation_test(&self) -> TokenStream {
+        let class_name = format_ident!("{}", self.class_name);
+
+        let has_c_constructor = self
+            .methods
+            .iter()
+            .any(|m| m.arguments.iter().any(|arg| arg.is_double_mut_pointer()));
+        let has_empty_new_constructor = self.methods.iter().any(|m| {
+            m.fn_name.contains("_init_")
+                && m.arguments.iter().any(|arg| arg.is_double_mut_pointer())
+                && m.arguments.len() == 1
+        });
+
+        let mut tests = vec![];
+
+        if !has_c_constructor {
+            tests.push(quote! {
+                #[test]
+                #[file_serial(global)]
+                fn test_new_on_stack() {
+                    crate::test_alloc::assert_no_allocation(|| {
+                        for _ in 0..1000 {
+                            let _ = #class_name::new_zeroed_on_stack();
+                        }
+                    });
+                }
+            });
+        }
+
+        if has_empty_new_constructor {
+            tests.push(quote! {
+                #[test]
+                #[file_serial(global)]
+                fn test_new() {
+                    crate::test_alloc::assert_no_allocation(|| {
+                        for _ in 0..1000 {
+                            let _ = #class_name::new();
+                        }
+                    });
+                }
+            });
+        }
+
+        // TODO get segfault for aeron_image
+        // if !has_c_constructor {
+        //     tests.push(quote! {
+        //         #[test]
+        //         #[file_serial(global)]
+        //         fn test_new_on_heap() {
+        //             crate::test_alloc::assert_no_allocation(|| {
+        //                 for _ in 0..1000 {
+        //                     let _ = #class_name::new_zeroed_on_heap();
+        //                 }
+        //             });
+        //         }
+        //     });
+        // }
+
+        if self.has_default_method() {
+            tests.push(quote! {
+                #[test]
+                #[file_serial(global)]
+                fn test_default() {
+                    crate::test_alloc::assert_no_allocation(|| {
+                        for _ in 0..1000 {
+                            let _ = #class_name::default();
+                        }
+                    });
+                }
+            });
+        }
+
+        let mod_name = format_ident!("{}_allocation_tests", self.type_name);
+
+        if tests.is_empty() {
+            quote! {}
+        } else {
+            quote! {
+                #[cfg(test)]
+                mod #mod_name {
+                    use super::*;
+                    use serial_test::file_serial;
+                    #(#tests)*
+                }
+            }
+        }
+    }
 }
 
 fn get_docs(
@@ -2242,6 +2330,8 @@ pub fn generate_rust_code(
 
     let is_closed_method = wrapper.get_is_closed_method_quote();
 
+    let allocation_tests = wrapper.generate_allocation_test();
+
     quote! {
         #warning_code
 
@@ -2352,5 +2442,6 @@ pub fn generate_rust_code(
         #async_impls
         #default_impl
        #common_code
+                #allocation_tests
     }
 }

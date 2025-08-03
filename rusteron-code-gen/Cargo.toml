@@ -17,6 +17,7 @@ proc-macro2   = "1.0"
 quote         = "1.0"
 regex         = "1.11"
 syn           = { version = "2.0", features = ["full"] }
+fd-lock       = { workspace = true}
 
 [dev-dependencies]
 trybuild = "1.0"

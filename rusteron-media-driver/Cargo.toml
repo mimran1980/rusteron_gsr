@@ -35,7 +35,9 @@ log = { workspace = true }
 regex = { workspace = true }
 
 [dev-dependencies]
-env_logger = "0.11"
+env_logger  = "0.11"
+serial_test = { workspace = true }
+fd-lock     = { workspace = true}
 
 [build-dependencies]
 bindgen          = { workspace = true }
@@ -62,6 +64,7 @@ precompile = []
 [[bin]]
 name = "media_driver"
 path = "src/bin/media_driver.rs"
+
 
 [package.metadata.docs.rs]
 features = ["static", "precompile"]
