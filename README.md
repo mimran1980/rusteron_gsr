@@ -64,7 +64,8 @@ rusteron-client = "0.1"
 rusteron-client = { version = "0.1", features = ["static"] }
 ```
 
-**macOS-only precompiled static libs:**
+**macOS and Linux precompiled static libs:**
+If you have this feature on and still want to force build from source, set `RUSTERON_BUILD_FROM_SOURCE=1` in your environment.
 
 ```toml
 [dependencies]
