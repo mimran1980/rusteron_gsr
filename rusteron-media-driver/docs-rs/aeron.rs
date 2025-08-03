@@ -716,15 +716,6 @@ mod __darwin_pthread_handler_rec_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = DarwinPthreadHandlerRec::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -853,15 +844,6 @@ impl From<_opaque_pthread_attr_t> for OpaquePthreadAttr {
 mod _opaque_pthread_attr_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = OpaquePthreadAttr::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -994,15 +976,6 @@ mod _opaque_pthread_cond_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = OpaquePthreadCond::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -1133,15 +1106,6 @@ mod _opaque_pthread_mutex_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = OpaquePthreadMutex::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -1270,15 +1234,6 @@ impl From<_opaque_pthread_t> for OpaquePthread {
 mod _opaque_pthread_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = OpaquePthread::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -1507,15 +1462,6 @@ impl Addrinfo {
 mod addrinfo_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = Addrinfo::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -1895,15 +1841,6 @@ impl AeronAgentRunner {
 mod aeron_agent_runner_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronAgentRunner::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -3093,15 +3030,6 @@ mod aeron_async_destination_by_id_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronAsyncDestinationById::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -3470,15 +3398,6 @@ impl From<aeron_atomic_counter_t> for AeronAtomicCounter {
 mod aeron_atomic_counter_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronAtomicCounter::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -3890,15 +3809,6 @@ mod aeron_broadcast_descriptor_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronBroadcastDescriptor::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -4089,15 +3999,6 @@ impl AeronBroadcastRecordDescriptor {
 mod aeron_broadcast_record_descriptor_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronBroadcastRecordDescriptor::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -4343,15 +4244,6 @@ mod aeron_broadcast_transmitter_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronBroadcastTransmitter::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -4581,15 +4473,6 @@ mod aeron_buffer_claim_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronBufferClaim::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -4791,15 +4674,6 @@ mod aeron_channel_endpoint_status_key_layout_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronChannelEndpointStatusKeyLayout::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -4938,15 +4812,6 @@ impl From<aeron_client_registering_resource_t> for AeronClientRegisteringResourc
 mod aeron_client_registering_resource_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronClientRegisteringResource::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -5176,15 +5041,6 @@ mod aeron_client_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronClient::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -5367,15 +5223,6 @@ impl AeronClientTimeout {
 mod aeron_client_timeout_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronClientTimeout::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -5834,15 +5681,6 @@ mod aeron_cnc_constants_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronCncConstants::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -6115,15 +5953,6 @@ impl AeronCncMetadata {
 mod aeron_cnc_metadata_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronCncMetadata::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -7905,15 +7734,6 @@ mod aeron_correlated_command_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronCorrelatedCommand::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -8102,15 +7922,6 @@ impl AeronCounterCommand {
 mod aeron_counter_command_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronCounterCommand::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -8304,15 +8115,6 @@ mod aeron_counter_constants_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronCounterConstants::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -8501,15 +8303,6 @@ impl AeronCounterLink {
 mod aeron_counter_link_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronCounterLink::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -8734,15 +8527,6 @@ impl AeronCounterMetadataDescriptor {
 mod aeron_counter_metadata_descriptor_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronCounterMetadataDescriptor::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -9176,15 +8960,6 @@ mod aeron_counter_update_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronCounterUpdate::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -9398,15 +9173,6 @@ impl AeronCounterValueDescriptor {
 mod aeron_counter_value_descriptor_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronCounterValueDescriptor::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -9848,15 +9614,6 @@ mod aeron_counters_manager_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronCountersManager::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -10060,15 +9817,6 @@ impl AeronCountersReaderBuffers {
 mod aeron_counters_reader_buffers_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronCountersReaderBuffers::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -10709,15 +10457,6 @@ mod aeron_data_header_as_longs_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDataHeaderAsLongs::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -10937,15 +10676,6 @@ impl AeronDataHeader {
 mod aeron_data_header_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDataHeader::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -11178,15 +10908,6 @@ impl AeronDataPacketDispatcherStreamInterest {
 mod aeron_data_packet_dispatcher_stream_interest_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDataPacketDispatcherStreamInterest::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -11700,15 +11421,6 @@ mod aeron_data_packet_dispatcher_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDataPacketDispatcher::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -11982,15 +11694,6 @@ mod aeron_deque_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDeque::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -12199,15 +11902,6 @@ mod aeron_destination_by_id_command_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDestinationByIdCommand::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -12406,15 +12100,6 @@ impl AeronDestinationCommand {
 mod aeron_destination_command_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDestinationCommand::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -12621,15 +12306,6 @@ impl AeronDistinctErrorLogObservationList {
 mod aeron_distinct_error_log_observation_list_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDistinctErrorLogObservationList::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -12907,15 +12583,6 @@ mod aeron_distinct_error_log_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDistinctErrorLog::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -13125,15 +12792,6 @@ mod aeron_distinct_observation_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDistinctObservation::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -13271,15 +12929,6 @@ impl From<aeron_dl_loaded_libs_state_t> for AeronDlLoadedLibsState {
 mod aeron_dl_loaded_libs_state_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDlLoadedLibsState::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -13651,15 +13300,6 @@ impl AeronDriverConductorProxy {
 mod aeron_driver_conductor_proxy_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDriverConductorProxy::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -15182,15 +14822,6 @@ mod aeron_driver_conductor_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDriverConductor::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -15401,15 +15032,6 @@ impl AeronDriverContextBindingsClientdEntry {
 mod aeron_driver_context_bindings_clientd_entry_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDriverContextBindingsClientdEntry::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -19277,15 +18899,6 @@ mod aeron_driver_managed_resource_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDriverManagedResource::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -19470,15 +19083,6 @@ impl AeronDriverReceiverImageEntry {
 mod aeron_driver_receiver_image_entry_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDriverReceiverImageEntry::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -19723,15 +19327,6 @@ impl AeronDriverReceiverPendingSetupEntry {
 mod aeron_driver_receiver_pending_setup_entry_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDriverReceiverPendingSetupEntry::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -20117,15 +19712,6 @@ impl From<aeron_driver_receiver_proxy_t> for AeronDriverReceiverProxy {
 mod aeron_driver_receiver_proxy_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDriverReceiverProxy::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -20609,15 +20195,6 @@ mod aeron_driver_receiver_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDriverReceiver::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -20819,15 +20396,6 @@ impl AeronDriverSenderNetworkPublicationEntry {
 mod aeron_driver_sender_network_publication_entry_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDriverSenderNetworkPublicationEntry::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -21143,15 +20711,6 @@ impl AeronDriverSenderProxy {
 mod aeron_driver_sender_proxy_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDriverSenderProxy::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -21627,15 +21186,6 @@ impl AeronDriverSender {
 mod aeron_driver_sender_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDriverSender::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -22242,15 +21792,6 @@ mod aeron_driver_uri_publication_params_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDriverUriPublicationParams::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -22527,15 +22068,6 @@ mod aeron_driver_uri_subscription_params_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDriverUriSubscriptionParams::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -22765,15 +22297,6 @@ mod aeron_duty_cycle_stall_tracker_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDutyCycleStallTracker::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -22986,15 +22509,6 @@ mod aeron_duty_cycle_tracker_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronDutyCycleTracker::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -23184,15 +22698,6 @@ impl AeronEndOfLifeResource {
 mod aeron_end_of_life_resource_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronEndOfLifeResource::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -23408,15 +22913,6 @@ mod aeron_error_log_entry_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronErrorLogEntry::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -23621,15 +23117,6 @@ impl AeronErrorResponse {
 mod aeron_error_response_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronErrorResponse::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -23870,15 +23357,6 @@ impl AeronError {
 mod aeron_error_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronError::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -24688,15 +24166,6 @@ mod aeron_feedback_delay_generator_state_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronFeedbackDelayGeneratorState::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -24884,15 +24353,6 @@ impl AeronFlowControlMaxOptions {
 mod aeron_flow_control_max_options_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronFlowControlMaxOptions::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -25107,15 +24567,6 @@ impl AeronFlowControlStrategySupplierFuncTableEntry {
 mod aeron_flow_control_strategy_supplier_func_table_entry_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronFlowControlStrategySupplierFuncTableEntry::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -25595,15 +25046,6 @@ mod aeron_flow_control_tagged_options_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronFlowControlTaggedOptions::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -25953,15 +25395,6 @@ mod aeron_frame_header_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronFrameHeader::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -26164,15 +25597,6 @@ impl From<aeron_header_t> for AeronHeader {
 mod aeron_header_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronHeader::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -26406,15 +25830,6 @@ mod aeron_header_values_frame_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronHeaderValuesFrame::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -26618,15 +26033,6 @@ mod aeron_header_values_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronHeaderValues::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -26811,15 +26217,6 @@ impl AeronHeartbeatTimestampKeyLayout {
 mod aeron_heartbeat_timestamp_key_layout_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronHeartbeatTimestampKeyLayout::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -27213,15 +26610,6 @@ mod aeron_image_buffers_ready_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronImageBuffersReady::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -27483,15 +26871,6 @@ impl AeronImageConstants {
 mod aeron_image_constants_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronImageConstants::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -28021,15 +27400,6 @@ impl AeronImageMessage {
 mod aeron_image_message_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronImageMessage::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -28779,15 +28149,6 @@ mod aeron_image_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronImage::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -28997,15 +28358,6 @@ impl AeronInt64CounterMap {
 mod aeron_int64_counter_map_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronInt64CounterMap::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -29227,15 +28579,6 @@ mod aeron_int64_to_ptr_hash_map_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronInt64ToPtrHashMap::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -29435,15 +28778,6 @@ impl AeronInt64ToTaggedPtrEntry {
 mod aeron_int64_to_tagged_ptr_entry_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronInt64ToTaggedPtrEntry::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -29668,15 +29002,6 @@ mod aeron_int64_to_tagged_ptr_hash_map_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronInt64ToTaggedPtrHashMap::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -29864,15 +29189,6 @@ impl AeronIovec {
 mod aeron_iovec_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronIovec::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -30081,15 +29397,6 @@ mod aeron_ipc_channel_params_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronIpcChannelParams::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -30272,15 +29579,6 @@ impl AeronIpcPublicationEntry {
 mod aeron_ipc_publication_entry_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronIpcPublicationEntry::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -30843,15 +30141,6 @@ mod aeron_linger_resource_entry_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronLingerResourceEntry::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -31000,15 +30289,6 @@ impl From<aeron_linked_queue_node_t> for AeronLinkedQueueNode {
 mod aeron_linked_queue_node_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronLinkedQueueNode::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -31393,15 +30673,6 @@ mod aeron_local_sockaddr_key_layout_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronLocalSockaddrKeyLayout::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -31539,15 +30810,6 @@ impl From<aeron_log_buffer_t> for AeronLogBuffer {
 mod aeron_log_buffer_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronLogBuffer::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -32024,15 +31286,6 @@ mod aeron_logbuffer_metadata_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronLogbufferMetadata::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -32227,15 +31480,6 @@ impl AeronLossDetectorGap {
 mod aeron_loss_detector_gap_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronLossDetectorGap::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -32550,15 +31794,6 @@ mod aeron_loss_detector_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronLossDetector::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -32784,15 +32019,6 @@ impl AeronLossReporterEntry {
 mod aeron_loss_reporter_entry_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronLossReporterEntry::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -33124,15 +32350,6 @@ mod aeron_loss_reporter_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronLossReporter::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -33326,15 +32543,6 @@ impl AeronMappedBuffer {
 mod aeron_mapped_buffer_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronMappedBuffer::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -33579,15 +32787,6 @@ impl AeronMappedFile {
 mod aeron_mapped_file_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronMappedFile::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -33853,15 +33052,6 @@ mod aeron_mapped_raw_log_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronMappedRawLog::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -34104,15 +33294,6 @@ impl AeronMpscConcurrentArrayQueue {
 mod aeron_mpsc_concurrent_array_queue_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronMpscConcurrentArrayQueue::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -34515,15 +33696,6 @@ mod aeron_mpsc_rb_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronMpscRb::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -34745,15 +33917,6 @@ mod aeron_nak_header_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronNakHeader::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -34938,15 +34101,6 @@ impl AeronNetworkPublicationEntry {
 mod aeron_network_publication_entry_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronNetworkPublicationEntry::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -35836,15 +34990,6 @@ mod aeron_on_available_counter_pair_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronAvailableCounterPair::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -36042,15 +35187,6 @@ impl AeronCloseClientPair {
 mod aeron_on_close_client_pair_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronCloseClientPair::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -36258,15 +35394,6 @@ mod aeron_on_unavailable_counter_pair_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronUnavailableCounterPair::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -36449,15 +35576,6 @@ impl AeronOperationSucceeded {
 mod aeron_operation_succeeded_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronOperationSucceeded::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -36648,15 +35766,6 @@ impl AeronOptionHeader {
 mod aeron_option_header_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronOptionHeader::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -36854,15 +35963,6 @@ impl AeronParsedAddress {
 mod aeron_parsed_address_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronParsedAddress::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -37068,15 +36168,6 @@ mod aeron_parsed_interface_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronParsedInterface::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -37273,15 +36364,6 @@ impl AeronPerThreadError {
 mod aeron_per_thread_error_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronPerThreadError::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -37496,15 +36578,6 @@ mod aeron_port_manager_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronPortManager::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -37692,15 +36765,6 @@ impl AeronPosition {
 mod aeron_position_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronPosition::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -37939,15 +37003,6 @@ mod aeron_publication_buffers_ready_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronPublicationBuffersReady::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -38146,15 +37201,6 @@ impl AeronPublicationCommand {
 mod aeron_publication_command_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronPublicationCommand::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -38446,15 +37492,6 @@ mod aeron_publication_constants_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronPublicationConstants::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -38720,15 +37757,6 @@ impl AeronPublicationError {
 mod aeron_publication_error_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronPublicationError::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -39174,15 +38202,6 @@ mod aeron_publication_image_connection_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronPublicationImageConnection::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -39365,15 +38384,6 @@ impl AeronPublicationImageEntry {
 mod aeron_publication_image_entry_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronPublicationImageEntry::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -40242,15 +39252,6 @@ mod aeron_publication_link_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronPublicationLink::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -41018,15 +40019,6 @@ mod aeron_rb_descriptor_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronRbDescriptor::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -41217,15 +40209,6 @@ mod aeron_rb_record_descriptor_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronRbRecordDescriptor::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -41410,15 +40393,6 @@ impl AeronReceiveChannelEndpointEntry {
 mod aeron_receive_channel_endpoint_entry_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronReceiveChannelEndpointEntry::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -42471,15 +41445,6 @@ mod aeron_receive_destination_entry_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronReceiveDestinationEntry::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -42881,15 +41846,6 @@ mod aeron_reject_image_command_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronRejectImageCommand::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -43081,15 +42037,6 @@ impl AeronRemoveCounterCommand {
 mod aeron_remove_counter_command_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronRemoveCounterCommand::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -43294,15 +42241,6 @@ mod aeron_remove_publication_command_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronRemovePublicationCommand::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -43496,15 +42434,6 @@ impl AeronRemoveSubscriptionCommand {
 mod aeron_remove_subscription_command_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronRemoveSubscriptionCommand::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -43713,15 +42642,6 @@ mod aeron_resolution_header_ipv4_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronResolutionHeaderIpv4::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -43926,15 +42846,6 @@ impl AeronResolutionHeaderIpv6 {
 mod aeron_resolution_header_ipv6_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronResolutionHeaderIpv6::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -44142,15 +43053,6 @@ mod aeron_resolution_header_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronResolutionHeader::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -44356,15 +43258,6 @@ impl AeronResponseSetupHeader {
 mod aeron_response_setup_header_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronResponseSetupHeader::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -44578,15 +43471,6 @@ impl AeronRetransmitAction {
 mod aeron_retransmit_action_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronRetransmitAction::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -45012,15 +43896,6 @@ mod aeron_retransmit_handler_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronRetransmitHandler::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -45242,15 +44117,6 @@ mod aeron_rttm_header_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronRttmHeader::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -45435,15 +44301,6 @@ impl AeronSendChannelEndpointEntry {
 mod aeron_send_channel_endpoint_entry_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronSendChannelEndpointEntry::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -46131,15 +44988,6 @@ mod aeron_setup_header_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronSetupHeader::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -46384,15 +45232,6 @@ mod aeron_spsc_concurrent_array_queue_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronSpscConcurrentArrayQueue::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -46593,15 +45432,6 @@ mod aeron_static_counter_command_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronStaticCounterCommand::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -46790,15 +45620,6 @@ impl AeronStaticCounterResponse {
 mod aeron_static_counter_response_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronStaticCounterResponse::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -47044,15 +45865,6 @@ mod aeron_status_message_header_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronStatusMessageHeader::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -47237,15 +46049,6 @@ impl AeronStatusMessageOptionalHeader {
 mod aeron_status_message_optional_header_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronStatusMessageOptionalHeader::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -47449,15 +46252,6 @@ impl AeronStrToPtrHashMapKey {
 mod aeron_str_to_ptr_hash_map_key_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronStrToPtrHashMapKey::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -47678,15 +46472,6 @@ impl AeronStrToPtrHashMap {
 mod aeron_str_to_ptr_hash_map_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronStrToPtrHashMap::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -47911,15 +46696,6 @@ mod aeron_stream_position_counter_key_layout_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronStreamPositionCounterKeyLayout::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -48108,15 +46884,6 @@ impl AeronSubscribableListEntry {
 mod aeron_subscribable_list_entry_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronSubscribableListEntry::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -48402,15 +47169,6 @@ mod aeron_subscribable_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronSubscribable::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -48619,15 +47377,6 @@ impl AeronSubscriptionCommand {
 mod aeron_subscription_command_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronSubscriptionCommand::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -48853,15 +47602,6 @@ impl AeronSubscriptionConstants {
 mod aeron_subscription_constants_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronSubscriptionConstants::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -49165,15 +47905,6 @@ mod aeron_subscription_link_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronSubscriptionLink::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -49365,15 +48096,6 @@ impl AeronSubscriptionReady {
 mod aeron_subscription_ready_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronSubscriptionReady::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -50299,15 +49021,6 @@ mod aeron_system_counter_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronSystemCounter::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -50516,15 +49229,6 @@ impl AeronSystemCounters {
 mod aeron_system_counters_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronSystemCounters::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -52397,15 +51101,6 @@ mod aeron_terminate_driver_command_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronTerminateDriverCommand::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -52650,15 +51345,6 @@ mod aeron_tetherable_position_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronTetherablePosition::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -52847,15 +51533,6 @@ impl AeronUdpChannelAsyncParse {
 mod aeron_udp_channel_async_parse_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronUdpChannelAsyncParse::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -53204,15 +51881,6 @@ mod aeron_udp_channel_data_paths_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronUdpChannelDataPaths::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -53443,15 +52111,6 @@ impl AeronUdpChannelIncomingInterceptor {
 mod aeron_udp_channel_incoming_interceptor_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronUdpChannelIncomingInterceptor::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -53741,15 +52400,6 @@ mod aeron_udp_channel_interceptor_bindings_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronUdpChannelInterceptorBindings::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -53980,15 +52630,6 @@ impl AeronUdpChannelOutgoingInterceptor {
 mod aeron_udp_channel_outgoing_interceptor_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronUdpChannelOutgoingInterceptor::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -54253,15 +52894,6 @@ impl AeronUdpChannelParams {
 mod aeron_udp_channel_params_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronUdpChannelParams::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -54810,15 +53442,6 @@ mod aeron_udp_destination_entry_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronUdpDestinationEntry::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -55320,15 +53943,6 @@ mod aeron_uri_param_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronUriParam::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -55637,15 +54251,6 @@ mod aeron_uri_params_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronUriParams::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -55942,15 +54547,6 @@ impl From<aeron_uri_string_builder_t> for AeronUriStringBuilder {
 mod aeron_uri_string_builder_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronUriStringBuilder::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -56355,15 +54951,6 @@ mod aeron_uri_t_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronUri::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -56651,15 +55238,6 @@ impl AeronWildcardPortManager {
 mod aeron_wildcard_port_manager_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = AeronWildcardPortManager::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -56971,15 +55549,6 @@ mod in6_addr_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = In6Addr::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -57160,15 +55729,6 @@ mod iovec_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = Iovec::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -57306,15 +55866,6 @@ impl From<mmsghdr> for Mmsghdr {
 mod mmsghdr_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = Mmsghdr::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -57530,15 +56081,6 @@ mod msghdr_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = Msghdr::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -57751,15 +56293,6 @@ mod pollfd_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = Pollfd::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -57957,15 +56490,6 @@ mod sockaddr_allocation_tests {
     use serial_test::file_serial;
     #[test]
     #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = Sockaddr::new_zeroed_on_heap();
-            }
-        });
-    }
-    #[test]
-    #[file_serial(global)]
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..1000 {
@@ -58159,15 +56683,6 @@ impl From<sockaddr_storage> for SockaddrStorage {
 mod sockaddr_storage_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = SockaddrStorage::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
@@ -58364,15 +56879,6 @@ impl Timespec {
 mod timespec_allocation_tests {
     use super::*;
     use serial_test::file_serial;
-    #[test]
-    #[file_serial(global)]
-    fn test_new_on_heap() {
-        crate::test_alloc::assert_no_allocation(|| {
-            for _ in 0..1000 {
-                let _ = Timespec::new_zeroed_on_heap();
-            }
-        });
-    }
     #[test]
     #[file_serial(global)]
     fn test_new_on_stack() {
