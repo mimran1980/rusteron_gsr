@@ -1474,11 +1474,10 @@ impl CWrapper {
         let mut tests = vec![];
 
         if !has_c_constructor {
-            let test_name = format_ident!("test_new_on_heap{}", self.type_name);
             tests.push(quote! {
                 #[test]
                 #[file_serial(global)]
-                fn #test_name() {
+                fn test_new_on_heap() {
                     crate::test_alloc::assert_no_allocation(|| {
                         for _ in 0..1000 {
                             let _ = #class_name::new_zeroed_on_heap();
@@ -1486,11 +1485,10 @@ impl CWrapper {
                     });
                 }
             });
-            let test_name = format_ident!("test_new_on_stack{}", self.type_name);
             tests.push(quote! {
                 #[test]
                 #[file_serial(global)]
-                fn #test_name() {
+                fn test_new_on_stack() {
                     crate::test_alloc::assert_no_allocation(|| {
                         for _ in 0..1000 {
                             let _ = #class_name::new_zeroed_on_stack();
@@ -1505,7 +1503,7 @@ impl CWrapper {
             tests.push(quote! {
                 #[test]
                 #[file_serial(global)]
-                fn #test_name() {
+                fn test_new() {
                     crate::test_alloc::assert_no_allocation(|| {
                         for _ in 0..1000 {
                             let _ = #class_name::new();
@@ -1516,12 +1514,10 @@ impl CWrapper {
         }
 
         if self.has_default_method() {
-            // It has default()
-            let test_name = format_ident!("test_default{}", self.type_name);
             tests.push(quote! {
                 #[test]
                 #[file_serial(global)]
-                fn #test_name() {
+                fn test_default() {
                     crate::test_alloc::assert_no_allocation(|| {
                         for _ in 0..1000 {
                             let _ = #class_name::default();
