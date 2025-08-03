@@ -18,6 +18,7 @@ criterion       = "0.6"
 ctrlc           = "3.4"
 dunce           = "1.0"
 flate2          = { version = "1.1" }
+fd-lock         = "4.0"
 hdrhistogram    = "7.5"
 itertools       = "0.14"
 log             = "0.4"
@@ -28,7 +29,7 @@ quote           = "1.0"
 regex           = "1.11"
 reqwest         = { version = "0.12", features = ["blocking", "default-tls"] }
 rusteron-code-gen = { path = "rusteron-code-gen", version = "=0.1.150" }
-serial_test     = "3.2"
+serial_test     = { version = "3.2", features = ["file_locks"] }
 syn             = { version = "2.0", features = ["full"] }
 tar             = "0.4"
 walkdir         = "2.5"
