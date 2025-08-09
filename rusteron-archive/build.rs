@@ -130,6 +130,7 @@ pub fn main() {
         if pkg_config::probe_library("uuid").is_err() {
             eprintln!("uuid lib not found in path");
         }
+
         if let LinkType::Static = link_type {
             // On Windows, there are some extra libraries needed for static link
             // that aren't included by Aeron.
@@ -139,6 +140,7 @@ pub fn main() {
             }
             if cfg!(target_os = "linux") {
                 println!("cargo:rustc-link-lib=uuid");
+                println!("cargo:rustc-link-lib=bsd");
             }
         }
 
@@ -201,6 +203,12 @@ pub fn main() {
         if cfg!(target_os = "linux") {
             println!("cargo:rustc-link-lib=uuid");
         }
+    }
+
+    if cfg!(target_os = "linux") {
+        println!("cargo:rustc-link-arg=-Wl,--no-as-needed");
+        println!("cargo:rustc-link-lib=bsd");
+        println!("cargo:rustc-link-arg=-Wl,--as-needed");
     }
 
     let mut config = Config::new(&aeron_path);
@@ -476,7 +484,7 @@ fn download_precompiled_binaries(artifacts_dir: &Path) -> Result<(), Box<dyn std
         "default"
     };
 
-    let image = if target_os == "macos" && arch == "x86_64" {
+    let mut image = if target_os == "macos" && arch == "x86_64" {
         "13"
     } else {
         "latest"
@@ -484,6 +492,7 @@ fn download_precompiled_binaries(artifacts_dir: &Path) -> Result<(), Box<dyn std
 
     if target_os == "linux" {
         target_os = "ubuntu".to_string();
+        image = "22.04";
     }
 
     let asset = format!("https://github.com/gsrxyz/rusteron/releases/download/v{version}/artifacts-{target_os}-{image}-{feature}.tar.gz");
