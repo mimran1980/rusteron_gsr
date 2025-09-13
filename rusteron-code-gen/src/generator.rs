@@ -961,18 +961,7 @@ impl CWrapper {
                     );
                     return_type = rt.get_new_return_type(false, false);
                 }
-                // if its a complete struct e.g. header: aeron_header_t, need to pass the reference cannot do a temporary copy
-                let is_complete_struct =
-                    !rt.original.is_any_pointer() && cwrappers.contains_key(&rt.original.c_type);
-                let converter = rt.handle_c_to_rs_return(
-                    if is_complete_struct {
-                        quote! { (*const _ as &self.#fn_name) }
-                    } else {
-                        quote! { self.#fn_name }
-                    },
-                    false,
-                    true,
-                );
+                let converter = rt.handle_c_to_rs_return(quote! { self.#fn_name }, false, true);
 
                 if rt.original.is_primitive()
                     || rt.original.is_c_string_any()
@@ -2350,9 +2339,9 @@ pub fn generate_rust_code(
 
         impl From<#type_name> for #class_name {
             #[inline]
-            fn from(mut value: #type_name) -> Self {
+            fn from(value: #type_name) -> Self {
                 #class_name {
-                    inner: CResource::Borrowed(&mut value as *mut #type_name),
+                    inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
                     #(#new_ref_set_none)*
                 }
             }
