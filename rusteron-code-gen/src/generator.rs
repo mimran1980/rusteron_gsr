@@ -961,7 +961,18 @@ impl CWrapper {
                     );
                     return_type = rt.get_new_return_type(false, false);
                 }
-                let converter = rt.handle_c_to_rs_return(quote! { self.#fn_name }, false, true);
+                // if its a complete struct e.g. header: aeron_header_t, need to pass the reference cannot do a temporary copy
+                let is_complete_struct =
+                    !rt.original.is_any_pointer() && cwrappers.contains_key(&rt.original.c_type);
+                let converter = rt.handle_c_to_rs_return(
+                    if is_complete_struct {
+                        quote! { (*const _ as &self.#fn_name) }
+                    } else {
+                        quote! { self.#fn_name }
+                    },
+                    false,
+                    true,
+                );
 
                 if rt.original.is_primitive()
                     || rt.original.is_c_string_any()
