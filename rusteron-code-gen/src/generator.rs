@@ -2339,9 +2339,9 @@ pub fn generate_rust_code(
 
         impl From<#type_name> for #class_name {
             #[inline]
-            fn from(mut value: #type_name) -> Self {
+            fn from(value: #type_name) -> Self {
                 #class_name {
-                    inner: CResource::Borrowed(&mut value as *mut #type_name),
+                    inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
                     #(#new_ref_set_none)*
                 }
             }
