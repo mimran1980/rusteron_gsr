@@ -1,4 +1,3 @@
-
 type aeron_client_registering_resource_t = aeron_client_registering_resource_stct;
 #[derive(Clone)]
 pub struct DarwinPthreadHandlerRec {
@@ -110,9 +109,9 @@ impl From<*const __darwin_pthread_handler_rec> for DarwinPthreadHandlerRec {
 }
 impl From<__darwin_pthread_handler_rec> for DarwinPthreadHandlerRec {
     #[inline]
-    fn from(mut value: __darwin_pthread_handler_rec) -> Self {
+    fn from(value: __darwin_pthread_handler_rec) -> Self {
         DarwinPthreadHandlerRec {
-            inner: CResource::Borrowed(&mut value as *mut __darwin_pthread_handler_rec),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -795,9 +794,9 @@ impl From<*const _opaque_pthread_attr_t> for OpaquePthreadAttr {
 }
 impl From<_opaque_pthread_attr_t> for OpaquePthreadAttr {
     #[inline]
-    fn from(mut value: _opaque_pthread_attr_t) -> Self {
+    fn from(value: _opaque_pthread_attr_t) -> Self {
         OpaquePthreadAttr {
-            inner: CResource::Borrowed(&mut value as *mut _opaque_pthread_attr_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -911,9 +910,9 @@ impl From<*const _opaque_pthread_cond_t> for OpaquePthreadCond {
 }
 impl From<_opaque_pthread_cond_t> for OpaquePthreadCond {
     #[inline]
-    fn from(mut value: _opaque_pthread_cond_t) -> Self {
+    fn from(value: _opaque_pthread_cond_t) -> Self {
         OpaquePthreadCond {
-            inner: CResource::Borrowed(&mut value as *mut _opaque_pthread_cond_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -1027,9 +1026,9 @@ impl From<*const _opaque_pthread_mutex_t> for OpaquePthreadMutex {
 }
 impl From<_opaque_pthread_mutex_t> for OpaquePthreadMutex {
     #[inline]
-    fn from(mut value: _opaque_pthread_mutex_t) -> Self {
+    fn from(value: _opaque_pthread_mutex_t) -> Self {
         OpaquePthreadMutex {
-            inner: CResource::Borrowed(&mut value as *mut _opaque_pthread_mutex_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -1143,9 +1142,9 @@ impl From<*const _opaque_pthread_t> for OpaquePthread {
 }
 impl From<_opaque_pthread_t> for OpaquePthread {
     #[inline]
-    fn from(mut value: _opaque_pthread_t) -> Self {
+    fn from(value: _opaque_pthread_t) -> Self {
         OpaquePthread {
-            inner: CResource::Borrowed(&mut value as *mut _opaque_pthread_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -1336,9 +1335,9 @@ impl From<*const addrinfo> for Addrinfo {
 }
 impl From<addrinfo> for Addrinfo {
     #[inline]
-    fn from(mut value: addrinfo) -> Self {
+    fn from(value: addrinfo) -> Self {
         Addrinfo {
-            inner: CResource::Borrowed(&mut value as *mut addrinfo),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -1692,9 +1691,9 @@ impl From<*const aeron_agent_runner_t> for AeronAgentRunner {
 }
 impl From<aeron_agent_runner_t> for AeronAgentRunner {
     #[inline]
-    fn from(mut value: aeron_agent_runner_t) -> Self {
+    fn from(value: aeron_agent_runner_t) -> Self {
         AeronAgentRunner {
-            inner: CResource::Borrowed(&mut value as *mut aeron_agent_runner_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -1840,9 +1839,9 @@ impl From<*const aeron_async_add_counter_t> for AeronAsyncAddCounter {
 }
 impl From<aeron_async_add_counter_t> for AeronAsyncAddCounter {
     #[inline]
-    fn from(mut value: aeron_async_add_counter_t) -> Self {
+    fn from(value: aeron_async_add_counter_t) -> Self {
         AeronAsyncAddCounter {
-            inner: CResource::Borrowed(&mut value as *mut aeron_async_add_counter_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -2104,9 +2103,9 @@ impl From<*const aeron_async_add_exclusive_publication_t> for AeronAsyncAddExclu
 }
 impl From<aeron_async_add_exclusive_publication_t> for AeronAsyncAddExclusivePublication {
     #[inline]
-    fn from(mut value: aeron_async_add_exclusive_publication_t) -> Self {
+    fn from(value: aeron_async_add_exclusive_publication_t) -> Self {
         AeronAsyncAddExclusivePublication {
-            inner: CResource::Borrowed(&mut value as *mut aeron_async_add_exclusive_publication_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -2346,9 +2345,9 @@ impl From<*const aeron_async_add_publication_t> for AeronAsyncAddPublication {
 }
 impl From<aeron_async_add_publication_t> for AeronAsyncAddPublication {
     #[inline]
-    fn from(mut value: aeron_async_add_publication_t) -> Self {
+    fn from(value: aeron_async_add_publication_t) -> Self {
         AeronAsyncAddPublication {
-            inner: CResource::Borrowed(&mut value as *mut aeron_async_add_publication_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -2586,9 +2585,9 @@ impl From<*const aeron_async_add_subscription_t> for AeronAsyncAddSubscription {
 }
 impl From<aeron_async_add_subscription_t> for AeronAsyncAddSubscription {
     #[inline]
-    fn from(mut value: aeron_async_add_subscription_t) -> Self {
+    fn from(value: aeron_async_add_subscription_t) -> Self {
         AeronAsyncAddSubscription {
-            inner: CResource::Borrowed(&mut value as *mut aeron_async_add_subscription_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -2877,9 +2876,9 @@ impl From<*const aeron_async_destination_by_id_t> for AeronAsyncDestinationById 
 }
 impl From<aeron_async_destination_by_id_t> for AeronAsyncDestinationById {
     #[inline]
-    fn from(mut value: aeron_async_destination_by_id_t) -> Self {
+    fn from(value: aeron_async_destination_by_id_t) -> Self {
         AeronAsyncDestinationById {
-            inner: CResource::Borrowed(&mut value as *mut aeron_async_destination_by_id_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -3117,9 +3116,9 @@ impl From<*const aeron_async_destination_t> for AeronAsyncDestination {
 }
 impl From<aeron_async_destination_t> for AeronAsyncDestination {
     #[inline]
-    fn from(mut value: aeron_async_destination_t) -> Self {
+    fn from(value: aeron_async_destination_t) -> Self {
         AeronAsyncDestination {
-            inner: CResource::Borrowed(&mut value as *mut aeron_async_destination_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -3233,9 +3232,9 @@ impl From<*const aeron_atomic_counter_t> for AeronAtomicCounter {
 }
 impl From<aeron_atomic_counter_t> for AeronAtomicCounter {
     #[inline]
-    fn from(mut value: aeron_atomic_counter_t) -> Self {
+    fn from(value: aeron_atomic_counter_t) -> Self {
         AeronAtomicCounter {
-            inner: CResource::Borrowed(&mut value as *mut aeron_atomic_counter_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -3445,9 +3444,9 @@ impl From<*const aeron_blocking_linked_queue_t> for AeronBlockingLinkedQueue {
 }
 impl From<aeron_blocking_linked_queue_t> for AeronBlockingLinkedQueue {
     #[inline]
-    fn from(mut value: aeron_blocking_linked_queue_t) -> Self {
+    fn from(value: aeron_blocking_linked_queue_t) -> Self {
         AeronBlockingLinkedQueue {
-            inner: CResource::Borrowed(&mut value as *mut aeron_blocking_linked_queue_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -3607,9 +3606,9 @@ impl From<*const aeron_broadcast_descriptor_t> for AeronBroadcastDescriptor {
 }
 impl From<aeron_broadcast_descriptor_t> for AeronBroadcastDescriptor {
     #[inline]
-    fn from(mut value: aeron_broadcast_descriptor_t) -> Self {
+    fn from(value: aeron_broadcast_descriptor_t) -> Self {
         AeronBroadcastDescriptor {
-            inner: CResource::Borrowed(&mut value as *mut aeron_broadcast_descriptor_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -3776,9 +3775,9 @@ impl From<*const aeron_broadcast_record_descriptor_t> for AeronBroadcastRecordDe
 }
 impl From<aeron_broadcast_record_descriptor_t> for AeronBroadcastRecordDescriptor {
     #[inline]
-    fn from(mut value: aeron_broadcast_record_descriptor_t) -> Self {
+    fn from(value: aeron_broadcast_record_descriptor_t) -> Self {
         AeronBroadcastRecordDescriptor {
-            inner: CResource::Borrowed(&mut value as *mut aeron_broadcast_record_descriptor_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -3996,9 +3995,9 @@ impl From<*const aeron_broadcast_transmitter_t> for AeronBroadcastTransmitter {
 }
 impl From<aeron_broadcast_transmitter_t> for AeronBroadcastTransmitter {
     #[inline]
-    fn from(mut value: aeron_broadcast_transmitter_t) -> Self {
+    fn from(value: aeron_broadcast_transmitter_t) -> Self {
         AeronBroadcastTransmitter {
-            inner: CResource::Borrowed(&mut value as *mut aeron_broadcast_transmitter_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -4202,9 +4201,9 @@ impl From<*const aeron_buffer_claim_t> for AeronBufferClaim {
 }
 impl From<aeron_buffer_claim_t> for AeronBufferClaim {
     #[inline]
-    fn from(mut value: aeron_buffer_claim_t) -> Self {
+    fn from(value: aeron_buffer_claim_t) -> Self {
         AeronBufferClaim {
-            inner: CResource::Borrowed(&mut value as *mut aeron_buffer_claim_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -4378,11 +4377,9 @@ impl From<*const aeron_channel_endpoint_status_key_layout_t>
 }
 impl From<aeron_channel_endpoint_status_key_layout_t> for AeronChannelEndpointStatusKeyLayout {
     #[inline]
-    fn from(mut value: aeron_channel_endpoint_status_key_layout_t) -> Self {
+    fn from(value: aeron_channel_endpoint_status_key_layout_t) -> Self {
         AeronChannelEndpointStatusKeyLayout {
-            inner: CResource::Borrowed(
-                &mut value as *mut aeron_channel_endpoint_status_key_layout_t,
-            ),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -4518,9 +4515,9 @@ impl From<*const aeron_client_registering_resource_t> for AeronClientRegistering
 }
 impl From<aeron_client_registering_resource_t> for AeronClientRegisteringResource {
     #[inline]
-    fn from(mut value: aeron_client_registering_resource_t) -> Self {
+    fn from(value: aeron_client_registering_resource_t) -> Self {
         AeronClientRegisteringResource {
-            inner: CResource::Borrowed(&mut value as *mut aeron_client_registering_resource_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -4710,9 +4707,9 @@ impl From<*const aeron_client_t> for AeronClient {
 }
 impl From<aeron_client_t> for AeronClient {
     #[inline]
-    fn from(mut value: aeron_client_t) -> Self {
+    fn from(value: aeron_client_t) -> Self {
         AeronClient {
-            inner: CResource::Borrowed(&mut value as *mut aeron_client_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -4871,9 +4868,9 @@ impl From<*const aeron_client_timeout_t> for AeronClientTimeout {
 }
 impl From<aeron_client_timeout_t> for AeronClientTimeout {
     #[inline]
-    fn from(mut value: aeron_client_timeout_t) -> Self {
+    fn from(value: aeron_client_timeout_t) -> Self {
         AeronClientTimeout {
-            inner: CResource::Borrowed(&mut value as *mut aeron_client_timeout_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -5081,9 +5078,9 @@ impl From<*const aeron_clock_cache_t> for AeronClockCache {
 }
 impl From<aeron_clock_cache_t> for AeronClockCache {
     #[inline]
-    fn from(mut value: aeron_clock_cache_t) -> Self {
+    fn from(value: aeron_clock_cache_t) -> Self {
         AeronClockCache {
-            inner: CResource::Borrowed(&mut value as *mut aeron_clock_cache_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -5304,9 +5301,9 @@ impl From<*const aeron_cnc_constants_t> for AeronCncConstants {
 }
 impl From<aeron_cnc_constants_t> for AeronCncConstants {
     #[inline]
-    fn from(mut value: aeron_cnc_constants_t) -> Self {
+    fn from(value: aeron_cnc_constants_t) -> Self {
         AeronCncConstants {
-            inner: CResource::Borrowed(&mut value as *mut aeron_cnc_constants_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -5555,9 +5552,9 @@ impl From<*const aeron_cnc_metadata_t> for AeronCncMetadata {
 }
 impl From<aeron_cnc_metadata_t> for AeronCncMetadata {
     #[inline]
-    fn from(mut value: aeron_cnc_metadata_t) -> Self {
+    fn from(value: aeron_cnc_metadata_t) -> Self {
         AeronCncMetadata {
-            inner: CResource::Borrowed(&mut value as *mut aeron_cnc_metadata_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -5917,9 +5914,9 @@ impl From<*const aeron_cnc_t> for AeronCnc {
 }
 impl From<aeron_cnc_t> for AeronCnc {
     #[inline]
-    fn from(mut value: aeron_cnc_t) -> Self {
+    fn from(value: aeron_cnc_t) -> Self {
         AeronCnc {
-            inner: CResource::Borrowed(&mut value as *mut aeron_cnc_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -6079,9 +6076,9 @@ impl From<*const aeron_congestion_control_strategy_t> for AeronCongestionControl
 }
 impl From<aeron_congestion_control_strategy_t> for AeronCongestionControlStrategy {
     #[inline]
-    fn from(mut value: aeron_congestion_control_strategy_t) -> Self {
+    fn from(value: aeron_congestion_control_strategy_t) -> Self {
         AeronCongestionControlStrategy {
-            inner: CResource::Borrowed(&mut value as *mut aeron_congestion_control_strategy_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -7009,9 +7006,9 @@ impl From<*const aeron_context_t> for AeronContext {
 }
 impl From<aeron_context_t> for AeronContext {
     #[inline]
-    fn from(mut value: aeron_context_t) -> Self {
+    fn from(value: aeron_context_t) -> Self {
         AeronContext {
-            inner: CResource::Borrowed(&mut value as *mut aeron_context_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -7165,9 +7162,9 @@ impl From<*const aeron_controlled_fragment_assembler_t> for AeronControlledFragm
 }
 impl From<aeron_controlled_fragment_assembler_t> for AeronControlledFragmentAssembler {
     #[inline]
-    fn from(mut value: aeron_controlled_fragment_assembler_t) -> Self {
+    fn from(value: aeron_controlled_fragment_assembler_t) -> Self {
         AeronControlledFragmentAssembler {
-            inner: CResource::Borrowed(&mut value as *mut aeron_controlled_fragment_assembler_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -7311,9 +7308,9 @@ impl From<*const aeron_correlated_command_t> for AeronCorrelatedCommand {
 }
 impl From<aeron_correlated_command_t> for AeronCorrelatedCommand {
     #[inline]
-    fn from(mut value: aeron_correlated_command_t) -> Self {
+    fn from(value: aeron_correlated_command_t) -> Self {
         AeronCorrelatedCommand {
-            inner: CResource::Borrowed(&mut value as *mut aeron_correlated_command_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -7478,9 +7475,9 @@ impl From<*const aeron_counter_command_t> for AeronCounterCommand {
 }
 impl From<aeron_counter_command_t> for AeronCounterCommand {
     #[inline]
-    fn from(mut value: aeron_counter_command_t) -> Self {
+    fn from(value: aeron_counter_command_t) -> Self {
         AeronCounterCommand {
-            inner: CResource::Borrowed(&mut value as *mut aeron_counter_command_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -7646,9 +7643,9 @@ impl From<*const aeron_counter_constants_t> for AeronCounterConstants {
 }
 impl From<aeron_counter_constants_t> for AeronCounterConstants {
     #[inline]
-    fn from(mut value: aeron_counter_constants_t) -> Self {
+    fn from(value: aeron_counter_constants_t) -> Self {
         AeronCounterConstants {
-            inner: CResource::Borrowed(&mut value as *mut aeron_counter_constants_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -7813,9 +7810,9 @@ impl From<*const aeron_counter_link_t> for AeronCounterLink {
 }
 impl From<aeron_counter_link_t> for AeronCounterLink {
     #[inline]
-    fn from(mut value: aeron_counter_link_t) -> Self {
+    fn from(value: aeron_counter_link_t) -> Self {
         AeronCounterLink {
-            inner: CResource::Borrowed(&mut value as *mut aeron_counter_link_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -8014,9 +8011,9 @@ impl From<*const aeron_counter_metadata_descriptor_t> for AeronCounterMetadataDe
 }
 impl From<aeron_counter_metadata_descriptor_t> for AeronCounterMetadataDescriptor {
     #[inline]
-    fn from(mut value: aeron_counter_metadata_descriptor_t) -> Self {
+    fn from(value: aeron_counter_metadata_descriptor_t) -> Self {
         AeronCounterMetadataDescriptor {
-            inner: CResource::Borrowed(&mut value as *mut aeron_counter_metadata_descriptor_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -8257,9 +8254,9 @@ impl From<*const aeron_counter_t> for AeronCounter {
 }
 impl From<aeron_counter_t> for AeronCounter {
     #[inline]
-    fn from(mut value: aeron_counter_t) -> Self {
+    fn from(value: aeron_counter_t) -> Self {
         AeronCounter {
-            inner: CResource::Borrowed(&mut value as *mut aeron_counter_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -8422,9 +8419,9 @@ impl From<*const aeron_counter_update_t> for AeronCounterUpdate {
 }
 impl From<aeron_counter_update_t> for AeronCounterUpdate {
     #[inline]
-    fn from(mut value: aeron_counter_update_t) -> Self {
+    fn from(value: aeron_counter_update_t) -> Self {
         AeronCounterUpdate {
-            inner: CResource::Borrowed(&mut value as *mut aeron_counter_update_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -8614,9 +8611,9 @@ impl From<*const aeron_counter_value_descriptor_t> for AeronCounterValueDescript
 }
 impl From<aeron_counter_value_descriptor_t> for AeronCounterValueDescriptor {
     #[inline]
-    fn from(mut value: aeron_counter_value_descriptor_t) -> Self {
+    fn from(value: aeron_counter_value_descriptor_t) -> Self {
         AeronCounterValueDescriptor {
-            inner: CResource::Borrowed(&mut value as *mut aeron_counter_value_descriptor_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -9030,9 +9027,9 @@ impl From<*const aeron_counters_manager_t> for AeronCountersManager {
 }
 impl From<aeron_counters_manager_t> for AeronCountersManager {
     #[inline]
-    fn from(mut value: aeron_counters_manager_t) -> Self {
+    fn from(value: aeron_counters_manager_t) -> Self {
         AeronCountersManager {
-            inner: CResource::Borrowed(&mut value as *mut aeron_counters_manager_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -9212,9 +9209,9 @@ impl From<*const aeron_counters_reader_buffers_t> for AeronCountersReaderBuffers
 }
 impl From<aeron_counters_reader_buffers_t> for AeronCountersReaderBuffers {
     #[inline]
-    fn from(mut value: aeron_counters_reader_buffers_t) -> Self {
+    fn from(value: aeron_counters_reader_buffers_t) -> Self {
         AeronCountersReaderBuffers {
-            inner: CResource::Borrowed(&mut value as *mut aeron_counters_reader_buffers_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -9690,9 +9687,9 @@ impl From<*const aeron_counters_reader_t> for AeronCountersReader {
 }
 impl From<aeron_counters_reader_t> for AeronCountersReader {
     #[inline]
-    fn from(mut value: aeron_counters_reader_t) -> Self {
+    fn from(value: aeron_counters_reader_t) -> Self {
         AeronCountersReader {
-            inner: CResource::Borrowed(&mut value as *mut aeron_counters_reader_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -9827,9 +9824,9 @@ impl From<*const aeron_data_header_as_longs_t> for AeronDataHeaderAsLongs {
 }
 impl From<aeron_data_header_as_longs_t> for AeronDataHeaderAsLongs {
     #[inline]
-    fn from(mut value: aeron_data_header_as_longs_t) -> Self {
+    fn from(value: aeron_data_header_as_longs_t) -> Self {
         AeronDataHeaderAsLongs {
-            inner: CResource::Borrowed(&mut value as *mut aeron_data_header_as_longs_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -10025,9 +10022,9 @@ impl From<*const aeron_data_header_t> for AeronDataHeader {
 }
 impl From<aeron_data_header_t> for AeronDataHeader {
     #[inline]
-    fn from(mut value: aeron_data_header_t) -> Self {
+    fn from(value: aeron_data_header_t) -> Self {
         AeronDataHeader {
-            inner: CResource::Borrowed(&mut value as *mut aeron_data_header_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -10232,11 +10229,9 @@ impl From<aeron_data_packet_dispatcher_stream_interest_t>
     for AeronDataPacketDispatcherStreamInterest
 {
     #[inline]
-    fn from(mut value: aeron_data_packet_dispatcher_stream_interest_t) -> Self {
+    fn from(value: aeron_data_packet_dispatcher_stream_interest_t) -> Self {
         AeronDataPacketDispatcherStreamInterest {
-            inner: CResource::Borrowed(
-                &mut value as *mut aeron_data_packet_dispatcher_stream_interest_t,
-            ),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -10722,9 +10717,9 @@ impl From<*const aeron_data_packet_dispatcher_t> for AeronDataPacketDispatcher {
 }
 impl From<aeron_data_packet_dispatcher_t> for AeronDataPacketDispatcher {
     #[inline]
-    fn from(mut value: aeron_data_packet_dispatcher_t) -> Self {
+    fn from(value: aeron_data_packet_dispatcher_t) -> Self {
         AeronDataPacketDispatcher {
-            inner: CResource::Borrowed(&mut value as *mut aeron_data_packet_dispatcher_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -10972,9 +10967,9 @@ impl From<*const aeron_deque_t> for AeronDeque {
 }
 impl From<aeron_deque_t> for AeronDeque {
     #[inline]
-    fn from(mut value: aeron_deque_t) -> Self {
+    fn from(value: aeron_deque_t) -> Self {
         AeronDeque {
-            inner: CResource::Borrowed(&mut value as *mut aeron_deque_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -11157,9 +11152,9 @@ impl From<*const aeron_destination_by_id_command_t> for AeronDestinationByIdComm
 }
 impl From<aeron_destination_by_id_command_t> for AeronDestinationByIdCommand {
     #[inline]
-    fn from(mut value: aeron_destination_by_id_command_t) -> Self {
+    fn from(value: aeron_destination_by_id_command_t) -> Self {
         AeronDestinationByIdCommand {
-            inner: CResource::Borrowed(&mut value as *mut aeron_destination_by_id_command_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -11334,9 +11329,9 @@ impl From<*const aeron_destination_command_t> for AeronDestinationCommand {
 }
 impl From<aeron_destination_command_t> for AeronDestinationCommand {
     #[inline]
-    fn from(mut value: aeron_destination_command_t) -> Self {
+    fn from(value: aeron_destination_command_t) -> Self {
         AeronDestinationCommand {
-            inner: CResource::Borrowed(&mut value as *mut aeron_destination_command_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -11515,11 +11510,9 @@ impl From<*const aeron_distinct_error_log_observation_list_t>
 }
 impl From<aeron_distinct_error_log_observation_list_t> for AeronDistinctErrorLogObservationList {
     #[inline]
-    fn from(mut value: aeron_distinct_error_log_observation_list_t) -> Self {
+    fn from(value: aeron_distinct_error_log_observation_list_t) -> Self {
         AeronDistinctErrorLogObservationList {
-            inner: CResource::Borrowed(
-                &mut value as *mut aeron_distinct_error_log_observation_list_t,
-            ),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -11769,9 +11762,9 @@ impl From<*const aeron_distinct_error_log_t> for AeronDistinctErrorLog {
 }
 impl From<aeron_distinct_error_log_t> for AeronDistinctErrorLog {
     #[inline]
-    fn from(mut value: aeron_distinct_error_log_t) -> Self {
+    fn from(value: aeron_distinct_error_log_t) -> Self {
         AeronDistinctErrorLog {
-            inner: CResource::Borrowed(&mut value as *mut aeron_distinct_error_log_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -11955,9 +11948,9 @@ impl From<*const aeron_distinct_observation_t> for AeronDistinctObservation {
 }
 impl From<aeron_distinct_observation_t> for AeronDistinctObservation {
     #[inline]
-    fn from(mut value: aeron_distinct_observation_t) -> Self {
+    fn from(value: aeron_distinct_observation_t) -> Self {
         AeronDistinctObservation {
-            inner: CResource::Borrowed(&mut value as *mut aeron_distinct_observation_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -12092,9 +12085,9 @@ impl From<*const aeron_dl_loaded_libs_state_t> for AeronDlLoadedLibsState {
 }
 impl From<aeron_dl_loaded_libs_state_t> for AeronDlLoadedLibsState {
     #[inline]
-    fn from(mut value: aeron_dl_loaded_libs_state_t) -> Self {
+    fn from(value: aeron_dl_loaded_libs_state_t) -> Self {
         AeronDlLoadedLibsState {
-            inner: CResource::Borrowed(&mut value as *mut aeron_dl_loaded_libs_state_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -12428,9 +12421,9 @@ impl From<*const aeron_driver_conductor_proxy_t> for AeronDriverConductorProxy {
 }
 impl From<aeron_driver_conductor_proxy_t> for AeronDriverConductorProxy {
     #[inline]
-    fn from(mut value: aeron_driver_conductor_proxy_t) -> Self {
+    fn from(value: aeron_driver_conductor_proxy_t) -> Self {
         AeronDriverConductorProxy {
-            inner: CResource::Borrowed(&mut value as *mut aeron_driver_conductor_proxy_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -13925,9 +13918,9 @@ impl From<*const aeron_driver_conductor_t> for AeronDriverConductor {
 }
 impl From<aeron_driver_conductor_t> for AeronDriverConductor {
     #[inline]
-    fn from(mut value: aeron_driver_conductor_t) -> Self {
+    fn from(value: aeron_driver_conductor_t) -> Self {
         AeronDriverConductor {
-            inner: CResource::Borrowed(&mut value as *mut aeron_driver_conductor_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -14112,11 +14105,9 @@ impl From<aeron_driver_context_bindings_clientd_entry_t>
     for AeronDriverContextBindingsClientdEntry
 {
     #[inline]
-    fn from(mut value: aeron_driver_context_bindings_clientd_entry_t) -> Self {
+    fn from(value: aeron_driver_context_bindings_clientd_entry_t) -> Self {
         AeronDriverContextBindingsClientdEntry {
-            inner: CResource::Borrowed(
-                &mut value as *mut aeron_driver_context_bindings_clientd_entry_t,
-            ),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -17780,9 +17771,9 @@ impl From<*const aeron_driver_context_t> for AeronDriverContext {
 }
 impl From<aeron_driver_context_t> for AeronDriverContext {
     #[inline]
-    fn from(mut value: aeron_driver_context_t) -> Self {
+    fn from(value: aeron_driver_context_t) -> Self {
         AeronDriverContext {
-            inner: CResource::Borrowed(&mut value as *mut aeron_driver_context_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -17956,9 +17947,9 @@ impl From<*const aeron_driver_managed_resource_t> for AeronDriverManagedResource
 }
 impl From<aeron_driver_managed_resource_t> for AeronDriverManagedResource {
     #[inline]
-    fn from(mut value: aeron_driver_managed_resource_t) -> Self {
+    fn from(value: aeron_driver_managed_resource_t) -> Self {
         AeronDriverManagedResource {
-            inner: CResource::Borrowed(&mut value as *mut aeron_driver_managed_resource_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -18119,9 +18110,9 @@ impl From<*const aeron_driver_receiver_image_entry_t> for AeronDriverReceiverIma
 }
 impl From<aeron_driver_receiver_image_entry_t> for AeronDriverReceiverImageEntry {
     #[inline]
-    fn from(mut value: aeron_driver_receiver_image_entry_t) -> Self {
+    fn from(value: aeron_driver_receiver_image_entry_t) -> Self {
         AeronDriverReceiverImageEntry {
-            inner: CResource::Borrowed(&mut value as *mut aeron_driver_receiver_image_entry_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -18338,11 +18329,9 @@ impl From<*const aeron_driver_receiver_pending_setup_entry_t>
 }
 impl From<aeron_driver_receiver_pending_setup_entry_t> for AeronDriverReceiverPendingSetupEntry {
     #[inline]
-    fn from(mut value: aeron_driver_receiver_pending_setup_entry_t) -> Self {
+    fn from(value: aeron_driver_receiver_pending_setup_entry_t) -> Self {
         AeronDriverReceiverPendingSetupEntry {
-            inner: CResource::Borrowed(
-                &mut value as *mut aeron_driver_receiver_pending_setup_entry_t,
-            ),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -18723,9 +18712,9 @@ impl From<*const aeron_driver_receiver_proxy_t> for AeronDriverReceiverProxy {
 }
 impl From<aeron_driver_receiver_proxy_t> for AeronDriverReceiverProxy {
     #[inline]
-    fn from(mut value: aeron_driver_receiver_proxy_t) -> Self {
+    fn from(value: aeron_driver_receiver_proxy_t) -> Self {
         AeronDriverReceiverProxy {
-            inner: CResource::Borrowed(&mut value as *mut aeron_driver_receiver_proxy_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -19169,9 +19158,9 @@ impl From<*const aeron_driver_receiver_t> for AeronDriverReceiver {
 }
 impl From<aeron_driver_receiver_t> for AeronDriverReceiver {
     #[inline]
-    fn from(mut value: aeron_driver_receiver_t) -> Self {
+    fn from(value: aeron_driver_receiver_t) -> Self {
         AeronDriverReceiver {
-            inner: CResource::Borrowed(&mut value as *mut aeron_driver_receiver_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -19347,11 +19336,9 @@ impl From<aeron_driver_sender_network_publication_entry_t>
     for AeronDriverSenderNetworkPublicationEntry
 {
     #[inline]
-    fn from(mut value: aeron_driver_sender_network_publication_entry_t) -> Self {
+    fn from(value: aeron_driver_sender_network_publication_entry_t) -> Self {
         AeronDriverSenderNetworkPublicationEntry {
-            inner: CResource::Borrowed(
-                &mut value as *mut aeron_driver_sender_network_publication_entry_t,
-            ),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -19641,9 +19628,9 @@ impl From<*const aeron_driver_sender_proxy_t> for AeronDriverSenderProxy {
 }
 impl From<aeron_driver_sender_proxy_t> for AeronDriverSenderProxy {
     #[inline]
-    fn from(mut value: aeron_driver_sender_proxy_t) -> Self {
+    fn from(value: aeron_driver_sender_proxy_t) -> Self {
         AeronDriverSenderProxy {
-            inner: CResource::Borrowed(&mut value as *mut aeron_driver_sender_proxy_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -20093,9 +20080,9 @@ impl From<*const aeron_driver_sender_t> for AeronDriverSender {
 }
 impl From<aeron_driver_sender_t> for AeronDriverSender {
     #[inline]
-    fn from(mut value: aeron_driver_sender_t) -> Self {
+    fn from(value: aeron_driver_sender_t) -> Self {
         AeronDriverSender {
-            inner: CResource::Borrowed(&mut value as *mut aeron_driver_sender_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -20324,9 +20311,9 @@ impl From<*const aeron_driver_t> for AeronDriver {
 }
 impl From<aeron_driver_t> for AeronDriver {
     #[inline]
-    fn from(mut value: aeron_driver_t) -> Self {
+    fn from(value: aeron_driver_t) -> Self {
         AeronDriver {
-            inner: CResource::Borrowed(&mut value as *mut aeron_driver_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
             _context: None,
         }
     }
@@ -20674,9 +20661,9 @@ impl From<*const aeron_driver_uri_publication_params_t> for AeronDriverUriPublic
 }
 impl From<aeron_driver_uri_publication_params_t> for AeronDriverUriPublicationParams {
     #[inline]
-    fn from(mut value: aeron_driver_uri_publication_params_t) -> Self {
+    fn from(value: aeron_driver_uri_publication_params_t) -> Self {
         AeronDriverUriPublicationParams {
-            inner: CResource::Borrowed(&mut value as *mut aeron_driver_uri_publication_params_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -20927,9 +20914,9 @@ impl From<*const aeron_driver_uri_subscription_params_t> for AeronDriverUriSubsc
 }
 impl From<aeron_driver_uri_subscription_params_t> for AeronDriverUriSubscriptionParams {
     #[inline]
-    fn from(mut value: aeron_driver_uri_subscription_params_t) -> Self {
+    fn from(value: aeron_driver_uri_subscription_params_t) -> Self {
         AeronDriverUriSubscriptionParams {
-            inner: CResource::Borrowed(&mut value as *mut aeron_driver_uri_subscription_params_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -21133,9 +21120,9 @@ impl From<*const aeron_duty_cycle_stall_tracker_t> for AeronDutyCycleStallTracke
 }
 impl From<aeron_duty_cycle_stall_tracker_t> for AeronDutyCycleStallTracker {
     #[inline]
-    fn from(mut value: aeron_duty_cycle_stall_tracker_t) -> Self {
+    fn from(value: aeron_duty_cycle_stall_tracker_t) -> Self {
         AeronDutyCycleStallTracker {
-            inner: CResource::Borrowed(&mut value as *mut aeron_duty_cycle_stall_tracker_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -21322,9 +21309,9 @@ impl From<*const aeron_duty_cycle_tracker_t> for AeronDutyCycleTracker {
 }
 impl From<aeron_duty_cycle_tracker_t> for AeronDutyCycleTracker {
     #[inline]
-    fn from(mut value: aeron_duty_cycle_tracker_t) -> Self {
+    fn from(value: aeron_duty_cycle_tracker_t) -> Self {
         AeronDutyCycleTracker {
-            inner: CResource::Borrowed(&mut value as *mut aeron_duty_cycle_tracker_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -21490,9 +21477,9 @@ impl From<*const aeron_end_of_life_resource_t> for AeronEndOfLifeResource {
 }
 impl From<aeron_end_of_life_resource_t> for AeronEndOfLifeResource {
     #[inline]
-    fn from(mut value: aeron_end_of_life_resource_t) -> Self {
+    fn from(value: aeron_end_of_life_resource_t) -> Self {
         AeronEndOfLifeResource {
-            inner: CResource::Borrowed(&mut value as *mut aeron_end_of_life_resource_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -21680,9 +21667,9 @@ impl From<*const aeron_error_log_entry_t> for AeronErrorLogEntry {
 }
 impl From<aeron_error_log_entry_t> for AeronErrorLogEntry {
     #[inline]
-    fn from(mut value: aeron_error_log_entry_t) -> Self {
+    fn from(value: aeron_error_log_entry_t) -> Self {
         AeronErrorLogEntry {
-            inner: CResource::Borrowed(&mut value as *mut aeron_error_log_entry_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -21863,9 +21850,9 @@ impl From<*const aeron_error_response_t> for AeronErrorResponse {
 }
 impl From<aeron_error_response_t> for AeronErrorResponse {
     #[inline]
-    fn from(mut value: aeron_error_response_t) -> Self {
+    fn from(value: aeron_error_response_t) -> Self {
         AeronErrorResponse {
-            inner: CResource::Borrowed(&mut value as *mut aeron_error_response_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -22080,9 +22067,9 @@ impl From<*const aeron_error_t> for AeronError {
 }
 impl From<aeron_error_t> for AeronError {
     #[inline]
-    fn from(mut value: aeron_error_t) -> Self {
+    fn from(value: aeron_error_t) -> Self {
         AeronError {
-            inner: CResource::Borrowed(&mut value as *mut aeron_error_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -22659,9 +22646,9 @@ impl From<*const aeron_exclusive_publication_t> for AeronExclusivePublication {
 }
 impl From<aeron_exclusive_publication_t> for AeronExclusivePublication {
     #[inline]
-    fn from(mut value: aeron_exclusive_publication_t) -> Self {
+    fn from(value: aeron_exclusive_publication_t) -> Self {
         AeronExclusivePublication {
-            inner: CResource::Borrowed(&mut value as *mut aeron_exclusive_publication_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -22864,9 +22851,9 @@ impl From<*const aeron_feedback_delay_generator_state_t> for AeronFeedbackDelayG
 }
 impl From<aeron_feedback_delay_generator_state_t> for AeronFeedbackDelayGeneratorState {
     #[inline]
-    fn from(mut value: aeron_feedback_delay_generator_state_t) -> Self {
+    fn from(value: aeron_feedback_delay_generator_state_t) -> Self {
         AeronFeedbackDelayGeneratorState {
-            inner: CResource::Borrowed(&mut value as *mut aeron_feedback_delay_generator_state_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -23030,9 +23017,9 @@ impl From<*const aeron_flow_control_max_options_t> for AeronFlowControlMaxOption
 }
 impl From<aeron_flow_control_max_options_t> for AeronFlowControlMaxOptions {
     #[inline]
-    fn from(mut value: aeron_flow_control_max_options_t) -> Self {
+    fn from(value: aeron_flow_control_max_options_t) -> Self {
         AeronFlowControlMaxOptions {
-            inner: CResource::Borrowed(&mut value as *mut aeron_flow_control_max_options_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -23219,11 +23206,9 @@ impl From<aeron_flow_control_strategy_supplier_func_table_entry_t>
     for AeronFlowControlStrategySupplierFuncTableEntry
 {
     #[inline]
-    fn from(mut value: aeron_flow_control_strategy_supplier_func_table_entry_t) -> Self {
+    fn from(value: aeron_flow_control_strategy_supplier_func_table_entry_t) -> Self {
         AeronFlowControlStrategySupplierFuncTableEntry {
-            inner: CResource::Borrowed(
-                &mut value as *mut aeron_flow_control_strategy_supplier_func_table_entry_t,
-            ),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -23486,9 +23471,9 @@ impl From<*const aeron_flow_control_strategy_t> for AeronFlowControlStrategy {
 }
 impl From<aeron_flow_control_strategy_t> for AeronFlowControlStrategy {
     #[inline]
-    fn from(mut value: aeron_flow_control_strategy_t) -> Self {
+    fn from(value: aeron_flow_control_strategy_t) -> Self {
         AeronFlowControlStrategy {
-            inner: CResource::Borrowed(&mut value as *mut aeron_flow_control_strategy_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -23675,9 +23660,9 @@ impl From<*const aeron_flow_control_tagged_options_t> for AeronFlowControlTagged
 }
 impl From<aeron_flow_control_tagged_options_t> for AeronFlowControlTaggedOptions {
     #[inline]
-    fn from(mut value: aeron_flow_control_tagged_options_t) -> Self {
+    fn from(value: aeron_flow_control_tagged_options_t) -> Self {
         AeronFlowControlTaggedOptions {
-            inner: CResource::Borrowed(&mut value as *mut aeron_flow_control_tagged_options_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -23845,9 +23830,9 @@ impl From<*const aeron_fragment_assembler_t> for AeronFragmentAssembler {
 }
 impl From<aeron_fragment_assembler_t> for AeronFragmentAssembler {
     #[inline]
-    fn from(mut value: aeron_fragment_assembler_t) -> Self {
+    fn from(value: aeron_fragment_assembler_t) -> Self {
         AeronFragmentAssembler {
-            inner: CResource::Borrowed(&mut value as *mut aeron_fragment_assembler_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -24001,9 +23986,9 @@ impl From<*const aeron_frame_header_t> for AeronFrameHeader {
 }
 impl From<aeron_frame_header_t> for AeronFrameHeader {
     #[inline]
-    fn from(mut value: aeron_frame_header_t) -> Self {
+    fn from(value: aeron_frame_header_t) -> Self {
         AeronFrameHeader {
-            inner: CResource::Borrowed(&mut value as *mut aeron_frame_header_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -24203,9 +24188,9 @@ impl From<*const aeron_header_t> for AeronHeader {
 }
 impl From<aeron_header_t> for AeronHeader {
     #[inline]
-    fn from(mut value: aeron_header_t) -> Self {
+    fn from(value: aeron_header_t) -> Self {
         AeronHeader {
-            inner: CResource::Borrowed(&mut value as *mut aeron_header_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -24399,9 +24384,9 @@ impl From<*const aeron_header_values_frame_t> for AeronHeaderValuesFrame {
 }
 impl From<aeron_header_values_frame_t> for AeronHeaderValuesFrame {
     #[inline]
-    fn from(mut value: aeron_header_values_frame_t) -> Self {
+    fn from(value: aeron_header_values_frame_t) -> Self {
         AeronHeaderValuesFrame {
-            inner: CResource::Borrowed(&mut value as *mut aeron_header_values_frame_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -24579,9 +24564,9 @@ impl From<*const aeron_header_values_t> for AeronHeaderValues {
 }
 impl From<aeron_header_values_t> for AeronHeaderValues {
     #[inline]
-    fn from(mut value: aeron_header_values_t) -> Self {
+    fn from(value: aeron_header_values_t) -> Self {
         AeronHeaderValues {
-            inner: CResource::Borrowed(&mut value as *mut aeron_header_values_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -24742,9 +24727,9 @@ impl From<*const aeron_heartbeat_timestamp_key_layout_t> for AeronHeartbeatTimes
 }
 impl From<aeron_heartbeat_timestamp_key_layout_t> for AeronHeartbeatTimestampKeyLayout {
     #[inline]
-    fn from(mut value: aeron_heartbeat_timestamp_key_layout_t) -> Self {
+    fn from(value: aeron_heartbeat_timestamp_key_layout_t) -> Self {
         AeronHeartbeatTimestampKeyLayout {
-            inner: CResource::Borrowed(&mut value as *mut aeron_heartbeat_timestamp_key_layout_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -24934,9 +24919,9 @@ impl From<*const aeron_idle_strategy_t> for AeronIdleStrategy {
 }
 impl From<aeron_idle_strategy_t> for AeronIdleStrategy {
     #[inline]
-    fn from(mut value: aeron_idle_strategy_t) -> Self {
+    fn from(value: aeron_idle_strategy_t) -> Self {
         AeronIdleStrategy {
-            inner: CResource::Borrowed(&mut value as *mut aeron_idle_strategy_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -25110,9 +25095,9 @@ impl From<*const aeron_image_buffers_ready_t> for AeronImageBuffersReady {
 }
 impl From<aeron_image_buffers_ready_t> for AeronImageBuffersReady {
     #[inline]
-    fn from(mut value: aeron_image_buffers_ready_t) -> Self {
+    fn from(value: aeron_image_buffers_ready_t) -> Self {
         AeronImageBuffersReady {
-            inner: CResource::Borrowed(&mut value as *mut aeron_image_buffers_ready_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -25350,9 +25335,9 @@ impl From<*const aeron_image_constants_t> for AeronImageConstants {
 }
 impl From<aeron_image_constants_t> for AeronImageConstants {
     #[inline]
-    fn from(mut value: aeron_image_constants_t) -> Self {
+    fn from(value: aeron_image_constants_t) -> Self {
         AeronImageConstants {
-            inner: CResource::Borrowed(&mut value as *mut aeron_image_constants_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -25539,11 +25524,9 @@ impl From<*const aeron_image_controlled_fragment_assembler_t>
 }
 impl From<aeron_image_controlled_fragment_assembler_t> for AeronImageControlledFragmentAssembler {
     #[inline]
-    fn from(mut value: aeron_image_controlled_fragment_assembler_t) -> Self {
+    fn from(value: aeron_image_controlled_fragment_assembler_t) -> Self {
         AeronImageControlledFragmentAssembler {
-            inner: CResource::Borrowed(
-                &mut value as *mut aeron_image_controlled_fragment_assembler_t,
-            ),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -25690,9 +25673,9 @@ impl From<*const aeron_image_fragment_assembler_t> for AeronImageFragmentAssembl
 }
 impl From<aeron_image_fragment_assembler_t> for AeronImageFragmentAssembler {
     #[inline]
-    fn from(mut value: aeron_image_fragment_assembler_t) -> Self {
+    fn from(value: aeron_image_fragment_assembler_t) -> Self {
         AeronImageFragmentAssembler {
-            inner: CResource::Borrowed(&mut value as *mut aeron_image_fragment_assembler_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -25856,9 +25839,9 @@ impl From<*const aeron_image_message_t> for AeronImageMessage {
 }
 impl From<aeron_image_message_t> for AeronImageMessage {
     #[inline]
-    fn from(mut value: aeron_image_message_t) -> Self {
+    fn from(value: aeron_image_message_t) -> Self {
         AeronImageMessage {
-            inner: CResource::Borrowed(&mut value as *mut aeron_image_message_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -26601,9 +26584,9 @@ impl From<*const aeron_image_t> for AeronImage {
 }
 impl From<aeron_image_t> for AeronImage {
     #[inline]
-    fn from(mut value: aeron_image_t) -> Self {
+    fn from(value: aeron_image_t) -> Self {
         AeronImage {
-            inner: CResource::Borrowed(&mut value as *mut aeron_image_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -26777,9 +26760,9 @@ impl From<*const aeron_int64_counter_map_t> for AeronInt64CounterMap {
 }
 impl From<aeron_int64_counter_map_t> for AeronInt64CounterMap {
     #[inline]
-    fn from(mut value: aeron_int64_counter_map_t) -> Self {
+    fn from(value: aeron_int64_counter_map_t) -> Self {
         AeronInt64CounterMap {
-            inner: CResource::Borrowed(&mut value as *mut aeron_int64_counter_map_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -26973,9 +26956,9 @@ impl From<*const aeron_int64_to_ptr_hash_map_t> for AeronInt64ToPtrHashMap {
 }
 impl From<aeron_int64_to_ptr_hash_map_t> for AeronInt64ToPtrHashMap {
     #[inline]
-    fn from(mut value: aeron_int64_to_ptr_hash_map_t) -> Self {
+    fn from(value: aeron_int64_to_ptr_hash_map_t) -> Self {
         AeronInt64ToPtrHashMap {
-            inner: CResource::Borrowed(&mut value as *mut aeron_int64_to_ptr_hash_map_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -27151,9 +27134,9 @@ impl From<*const aeron_int64_to_tagged_ptr_entry_t> for AeronInt64ToTaggedPtrEnt
 }
 impl From<aeron_int64_to_tagged_ptr_entry_t> for AeronInt64ToTaggedPtrEntry {
     #[inline]
-    fn from(mut value: aeron_int64_to_tagged_ptr_entry_t) -> Self {
+    fn from(value: aeron_int64_to_tagged_ptr_entry_t) -> Self {
         AeronInt64ToTaggedPtrEntry {
-            inner: CResource::Borrowed(&mut value as *mut aeron_int64_to_tagged_ptr_entry_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -27350,9 +27333,9 @@ impl From<*const aeron_int64_to_tagged_ptr_hash_map_t> for AeronInt64ToTaggedPtr
 }
 impl From<aeron_int64_to_tagged_ptr_hash_map_t> for AeronInt64ToTaggedPtrHashMap {
     #[inline]
-    fn from(mut value: aeron_int64_to_tagged_ptr_hash_map_t) -> Self {
+    fn from(value: aeron_int64_to_tagged_ptr_hash_map_t) -> Self {
         AeronInt64ToTaggedPtrHashMap {
-            inner: CResource::Borrowed(&mut value as *mut aeron_int64_to_tagged_ptr_hash_map_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -27516,9 +27499,9 @@ impl From<*const aeron_iovec_t> for AeronIovec {
 }
 impl From<aeron_iovec_t> for AeronIovec {
     #[inline]
-    fn from(mut value: aeron_iovec_t) -> Self {
+    fn from(value: aeron_iovec_t) -> Self {
         AeronIovec {
-            inner: CResource::Borrowed(&mut value as *mut aeron_iovec_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -27699,9 +27682,9 @@ impl From<*const aeron_ipc_channel_params_t> for AeronIpcChannelParams {
 }
 impl From<aeron_ipc_channel_params_t> for AeronIpcChannelParams {
     #[inline]
-    fn from(mut value: aeron_ipc_channel_params_t) -> Self {
+    fn from(value: aeron_ipc_channel_params_t) -> Self {
         AeronIpcChannelParams {
-            inner: CResource::Borrowed(&mut value as *mut aeron_ipc_channel_params_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -27860,9 +27843,9 @@ impl From<*const aeron_ipc_publication_entry_t> for AeronIpcPublicationEntry {
 }
 impl From<aeron_ipc_publication_entry_t> for AeronIpcPublicationEntry {
     #[inline]
-    fn from(mut value: aeron_ipc_publication_entry_t) -> Self {
+    fn from(value: aeron_ipc_publication_entry_t) -> Self {
         AeronIpcPublicationEntry {
-            inner: CResource::Borrowed(&mut value as *mut aeron_ipc_publication_entry_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -28239,9 +28222,9 @@ impl From<*const aeron_ipc_publication_t> for AeronIpcPublication {
 }
 impl From<aeron_ipc_publication_t> for AeronIpcPublication {
     #[inline]
-    fn from(mut value: aeron_ipc_publication_t) -> Self {
+    fn from(value: aeron_ipc_publication_t) -> Self {
         AeronIpcPublication {
-            inner: CResource::Borrowed(&mut value as *mut aeron_ipc_publication_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -28397,9 +28380,9 @@ impl From<*const aeron_linger_resource_entry_t> for AeronLingerResourceEntry {
 }
 impl From<aeron_linger_resource_entry_t> for AeronLingerResourceEntry {
     #[inline]
-    fn from(mut value: aeron_linger_resource_entry_t) -> Self {
+    fn from(value: aeron_linger_resource_entry_t) -> Self {
         AeronLingerResourceEntry {
-            inner: CResource::Borrowed(&mut value as *mut aeron_linger_resource_entry_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -28545,9 +28528,9 @@ impl From<*const aeron_linked_queue_node_t> for AeronLinkedQueueNode {
 }
 impl From<aeron_linked_queue_node_t> for AeronLinkedQueueNode {
     #[inline]
-    fn from(mut value: aeron_linked_queue_node_t) -> Self {
+    fn from(value: aeron_linked_queue_node_t) -> Self {
         AeronLinkedQueueNode {
-            inner: CResource::Borrowed(&mut value as *mut aeron_linked_queue_node_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -28735,9 +28718,9 @@ impl From<*const aeron_linked_queue_t> for AeronLinkedQueue {
 }
 impl From<aeron_linked_queue_t> for AeronLinkedQueue {
     #[inline]
-    fn from(mut value: aeron_linked_queue_t) -> Self {
+    fn from(value: aeron_linked_queue_t) -> Self {
         AeronLinkedQueue {
-            inner: CResource::Borrowed(&mut value as *mut aeron_linked_queue_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -28892,9 +28875,9 @@ impl From<*const aeron_local_sockaddr_key_layout_t> for AeronLocalSockaddrKeyLay
 }
 impl From<aeron_local_sockaddr_key_layout_t> for AeronLocalSockaddrKeyLayout {
     #[inline]
-    fn from(mut value: aeron_local_sockaddr_key_layout_t) -> Self {
+    fn from(value: aeron_local_sockaddr_key_layout_t) -> Self {
         AeronLocalSockaddrKeyLayout {
-            inner: CResource::Borrowed(&mut value as *mut aeron_local_sockaddr_key_layout_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -29029,9 +29012,9 @@ impl From<*const aeron_log_buffer_t> for AeronLogBuffer {
 }
 impl From<aeron_log_buffer_t> for AeronLogBuffer {
     #[inline]
-    fn from(mut value: aeron_log_buffer_t) -> Self {
+    fn from(value: aeron_log_buffer_t) -> Self {
         AeronLogBuffer {
-            inner: CResource::Borrowed(&mut value as *mut aeron_log_buffer_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -29468,9 +29451,9 @@ impl From<*const aeron_logbuffer_metadata_t> for AeronLogbufferMetadata {
 }
 impl From<aeron_logbuffer_metadata_t> for AeronLogbufferMetadata {
     #[inline]
-    fn from(mut value: aeron_logbuffer_metadata_t) -> Self {
+    fn from(value: aeron_logbuffer_metadata_t) -> Self {
         AeronLogbufferMetadata {
-            inner: CResource::Borrowed(&mut value as *mut aeron_logbuffer_metadata_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -29641,9 +29624,9 @@ impl From<*const aeron_loss_detector_gap_t> for AeronLossDetectorGap {
 }
 impl From<aeron_loss_detector_gap_t> for AeronLossDetectorGap {
     #[inline]
-    fn from(mut value: aeron_loss_detector_gap_t) -> Self {
+    fn from(value: aeron_loss_detector_gap_t) -> Self {
         AeronLossDetectorGap {
-            inner: CResource::Borrowed(&mut value as *mut aeron_loss_detector_gap_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -29930,9 +29913,9 @@ impl From<*const aeron_loss_detector_t> for AeronLossDetector {
 }
 impl From<aeron_loss_detector_t> for AeronLossDetector {
     #[inline]
-    fn from(mut value: aeron_loss_detector_t) -> Self {
+    fn from(value: aeron_loss_detector_t) -> Self {
         AeronLossDetector {
-            inner: CResource::Borrowed(&mut value as *mut aeron_loss_detector_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -30134,9 +30117,9 @@ impl From<*const aeron_loss_reporter_entry_t> for AeronLossReporterEntry {
 }
 impl From<aeron_loss_reporter_entry_t> for AeronLossReporterEntry {
     #[inline]
-    fn from(mut value: aeron_loss_reporter_entry_t) -> Self {
+    fn from(value: aeron_loss_reporter_entry_t) -> Self {
         AeronLossReporterEntry {
-            inner: CResource::Borrowed(&mut value as *mut aeron_loss_reporter_entry_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -30440,9 +30423,9 @@ impl From<*const aeron_loss_reporter_t> for AeronLossReporter {
 }
 impl From<aeron_loss_reporter_t> for AeronLossReporter {
     #[inline]
-    fn from(mut value: aeron_loss_reporter_t) -> Self {
+    fn from(value: aeron_loss_reporter_t) -> Self {
         AeronLossReporter {
-            inner: CResource::Borrowed(&mut value as *mut aeron_loss_reporter_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -30612,9 +30595,9 @@ impl From<*const aeron_mapped_buffer_t> for AeronMappedBuffer {
 }
 impl From<aeron_mapped_buffer_t> for AeronMappedBuffer {
     #[inline]
-    fn from(mut value: aeron_mapped_buffer_t) -> Self {
+    fn from(value: aeron_mapped_buffer_t) -> Self {
         AeronMappedBuffer {
-            inner: CResource::Borrowed(&mut value as *mut aeron_mapped_buffer_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -30833,9 +30816,9 @@ impl From<*const aeron_mapped_file_t> for AeronMappedFile {
 }
 impl From<aeron_mapped_file_t> for AeronMappedFile {
     #[inline]
-    fn from(mut value: aeron_mapped_file_t) -> Self {
+    fn from(value: aeron_mapped_file_t) -> Self {
         AeronMappedFile {
-            inner: CResource::Borrowed(&mut value as *mut aeron_mapped_file_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -31073,9 +31056,9 @@ impl From<*const aeron_mapped_raw_log_t> for AeronMappedRawLog {
 }
 impl From<aeron_mapped_raw_log_t> for AeronMappedRawLog {
     #[inline]
-    fn from(mut value: aeron_mapped_raw_log_t) -> Self {
+    fn from(value: aeron_mapped_raw_log_t) -> Self {
         AeronMappedRawLog {
-            inner: CResource::Borrowed(&mut value as *mut aeron_mapped_raw_log_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -31294,9 +31277,9 @@ impl From<*const aeron_mpsc_concurrent_array_queue_t> for AeronMpscConcurrentArr
 }
 impl From<aeron_mpsc_concurrent_array_queue_t> for AeronMpscConcurrentArrayQueue {
     #[inline]
-    fn from(mut value: aeron_mpsc_concurrent_array_queue_t) -> Self {
+    fn from(value: aeron_mpsc_concurrent_array_queue_t) -> Self {
         AeronMpscConcurrentArrayQueue {
-            inner: CResource::Borrowed(&mut value as *mut aeron_mpsc_concurrent_array_queue_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -31671,9 +31654,9 @@ impl From<*const aeron_mpsc_rb_t> for AeronMpscRb {
 }
 impl From<aeron_mpsc_rb_t> for AeronMpscRb {
     #[inline]
-    fn from(mut value: aeron_mpsc_rb_t) -> Self {
+    fn from(value: aeron_mpsc_rb_t) -> Self {
         AeronMpscRb {
-            inner: CResource::Borrowed(&mut value as *mut aeron_mpsc_rb_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -31869,9 +31852,9 @@ impl From<*const aeron_nak_header_t> for AeronNakHeader {
 }
 impl From<aeron_nak_header_t> for AeronNakHeader {
     #[inline]
-    fn from(mut value: aeron_nak_header_t) -> Self {
+    fn from(value: aeron_nak_header_t) -> Self {
         AeronNakHeader {
-            inner: CResource::Borrowed(&mut value as *mut aeron_nak_header_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -32032,9 +32015,9 @@ impl From<*const aeron_network_publication_entry_t> for AeronNetworkPublicationE
 }
 impl From<aeron_network_publication_entry_t> for AeronNetworkPublicationEntry {
     #[inline]
-    fn from(mut value: aeron_network_publication_entry_t) -> Self {
+    fn from(value: aeron_network_publication_entry_t) -> Self {
         AeronNetworkPublicationEntry {
-            inner: CResource::Borrowed(&mut value as *mut aeron_network_publication_entry_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -32735,9 +32718,9 @@ impl From<*const aeron_network_publication_t> for AeronNetworkPublication {
 }
 impl From<aeron_network_publication_t> for AeronNetworkPublication {
     #[inline]
-    fn from(mut value: aeron_network_publication_t) -> Self {
+    fn from(value: aeron_network_publication_t) -> Self {
         AeronNetworkPublication {
-            inner: CResource::Borrowed(&mut value as *mut aeron_network_publication_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -32896,9 +32879,9 @@ impl From<*const aeron_on_available_counter_pair_t> for AeronAvailableCounterPai
 }
 impl From<aeron_on_available_counter_pair_t> for AeronAvailableCounterPair {
     #[inline]
-    fn from(mut value: aeron_on_available_counter_pair_t) -> Self {
+    fn from(value: aeron_on_available_counter_pair_t) -> Self {
         AeronAvailableCounterPair {
-            inner: CResource::Borrowed(&mut value as *mut aeron_on_available_counter_pair_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -33072,9 +33055,9 @@ impl From<*const aeron_on_close_client_pair_t> for AeronCloseClientPair {
 }
 impl From<aeron_on_close_client_pair_t> for AeronCloseClientPair {
     #[inline]
-    fn from(mut value: aeron_on_close_client_pair_t) -> Self {
+    fn from(value: aeron_on_close_client_pair_t) -> Self {
         AeronCloseClientPair {
-            inner: CResource::Borrowed(&mut value as *mut aeron_on_close_client_pair_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -33254,9 +33237,9 @@ impl From<*const aeron_on_unavailable_counter_pair_t> for AeronUnavailableCounte
 }
 impl From<aeron_on_unavailable_counter_pair_t> for AeronUnavailableCounterPair {
     #[inline]
-    fn from(mut value: aeron_on_unavailable_counter_pair_t) -> Self {
+    fn from(value: aeron_on_unavailable_counter_pair_t) -> Self {
         AeronUnavailableCounterPair {
-            inner: CResource::Borrowed(&mut value as *mut aeron_on_unavailable_counter_pair_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -33415,9 +33398,9 @@ impl From<*const aeron_operation_succeeded_t> for AeronOperationSucceeded {
 }
 impl From<aeron_operation_succeeded_t> for AeronOperationSucceeded {
     #[inline]
-    fn from(mut value: aeron_operation_succeeded_t) -> Self {
+    fn from(value: aeron_operation_succeeded_t) -> Self {
         AeronOperationSucceeded {
-            inner: CResource::Borrowed(&mut value as *mut aeron_operation_succeeded_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -33582,9 +33565,9 @@ impl From<*const aeron_option_header_t> for AeronOptionHeader {
 }
 impl From<aeron_option_header_t> for AeronOptionHeader {
     #[inline]
-    fn from(mut value: aeron_option_header_t) -> Self {
+    fn from(value: aeron_option_header_t) -> Self {
         AeronOptionHeader {
-            inner: CResource::Borrowed(&mut value as *mut aeron_option_header_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -33756,9 +33739,9 @@ impl From<*const aeron_parsed_address_t> for AeronParsedAddress {
 }
 impl From<aeron_parsed_address_t> for AeronParsedAddress {
     #[inline]
-    fn from(mut value: aeron_parsed_address_t) -> Self {
+    fn from(value: aeron_parsed_address_t) -> Self {
         AeronParsedAddress {
-            inner: CResource::Borrowed(&mut value as *mut aeron_parsed_address_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -33936,9 +33919,9 @@ impl From<*const aeron_parsed_interface_t> for AeronParsedInterface {
 }
 impl From<aeron_parsed_interface_t> for AeronParsedInterface {
     #[inline]
-    fn from(mut value: aeron_parsed_interface_t) -> Self {
+    fn from(value: aeron_parsed_interface_t) -> Self {
         AeronParsedInterface {
-            inner: CResource::Borrowed(&mut value as *mut aeron_parsed_interface_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -34111,9 +34094,9 @@ impl From<*const aeron_per_thread_error_t> for AeronPerThreadError {
 }
 impl From<aeron_per_thread_error_t> for AeronPerThreadError {
     #[inline]
-    fn from(mut value: aeron_per_thread_error_t) -> Self {
+    fn from(value: aeron_per_thread_error_t) -> Self {
         AeronPerThreadError {
-            inner: CResource::Borrowed(&mut value as *mut aeron_per_thread_error_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -34300,9 +34283,9 @@ impl From<*const aeron_port_manager_t> for AeronPortManager {
 }
 impl From<aeron_port_manager_t> for AeronPortManager {
     #[inline]
-    fn from(mut value: aeron_port_manager_t) -> Self {
+    fn from(value: aeron_port_manager_t) -> Self {
         AeronPortManager {
-            inner: CResource::Borrowed(&mut value as *mut aeron_port_manager_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -34466,9 +34449,9 @@ impl From<*const aeron_position_t> for AeronPosition {
 }
 impl From<aeron_position_t> for AeronPosition {
     #[inline]
-    fn from(mut value: aeron_position_t) -> Self {
+    fn from(value: aeron_position_t) -> Self {
         AeronPosition {
-            inner: CResource::Borrowed(&mut value as *mut aeron_position_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -34679,9 +34662,9 @@ impl From<*const aeron_publication_buffers_ready_t> for AeronPublicationBuffersR
 }
 impl From<aeron_publication_buffers_ready_t> for AeronPublicationBuffersReady {
     #[inline]
-    fn from(mut value: aeron_publication_buffers_ready_t) -> Self {
+    fn from(value: aeron_publication_buffers_ready_t) -> Self {
         AeronPublicationBuffersReady {
-            inner: CResource::Borrowed(&mut value as *mut aeron_publication_buffers_ready_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -34856,9 +34839,9 @@ impl From<*const aeron_publication_command_t> for AeronPublicationCommand {
 }
 impl From<aeron_publication_command_t> for AeronPublicationCommand {
     #[inline]
-    fn from(mut value: aeron_publication_command_t) -> Self {
+    fn from(value: aeron_publication_command_t) -> Self {
         AeronPublicationCommand {
-            inner: CResource::Borrowed(&mut value as *mut aeron_publication_command_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -35122,9 +35105,9 @@ impl From<*const aeron_publication_constants_t> for AeronPublicationConstants {
 }
 impl From<aeron_publication_constants_t> for AeronPublicationConstants {
     #[inline]
-    fn from(mut value: aeron_publication_constants_t) -> Self {
+    fn from(value: aeron_publication_constants_t) -> Self {
         AeronPublicationConstants {
-            inner: CResource::Borrowed(&mut value as *mut aeron_publication_constants_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -35366,9 +35349,9 @@ impl From<*const aeron_publication_error_t> for AeronPublicationError {
 }
 impl From<aeron_publication_error_t> for AeronPublicationError {
     #[inline]
-    fn from(mut value: aeron_publication_error_t) -> Self {
+    fn from(value: aeron_publication_error_t) -> Self {
         AeronPublicationError {
-            inner: CResource::Borrowed(&mut value as *mut aeron_publication_error_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -35577,9 +35560,9 @@ impl From<*const aeron_publication_error_values_t> for AeronPublicationErrorValu
 }
 impl From<aeron_publication_error_values_t> for AeronPublicationErrorValues {
     #[inline]
-    fn from(mut value: aeron_publication_error_values_t) -> Self {
+    fn from(value: aeron_publication_error_values_t) -> Self {
         AeronPublicationErrorValues {
-            inner: CResource::Borrowed(&mut value as *mut aeron_publication_error_values_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -35786,9 +35769,9 @@ impl From<*const aeron_publication_image_connection_t> for AeronPublicationImage
 }
 impl From<aeron_publication_image_connection_t> for AeronPublicationImageConnection {
     #[inline]
-    fn from(mut value: aeron_publication_image_connection_t) -> Self {
+    fn from(value: aeron_publication_image_connection_t) -> Self {
         AeronPublicationImageConnection {
-            inner: CResource::Borrowed(&mut value as *mut aeron_publication_image_connection_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -35947,9 +35930,9 @@ impl From<*const aeron_publication_image_entry_t> for AeronPublicationImageEntry
 }
 impl From<aeron_publication_image_entry_t> for AeronPublicationImageEntry {
     #[inline]
-    fn from(mut value: aeron_publication_image_entry_t) -> Self {
+    fn from(value: aeron_publication_image_entry_t) -> Self {
         AeronPublicationImageEntry {
-            inner: CResource::Borrowed(&mut value as *mut aeron_publication_image_entry_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -36641,9 +36624,9 @@ impl From<*const aeron_publication_image_t> for AeronPublicationImage {
 }
 impl From<aeron_publication_image_t> for AeronPublicationImage {
     #[inline]
-    fn from(mut value: aeron_publication_image_t) -> Self {
+    fn from(value: aeron_publication_image_t) -> Self {
         AeronPublicationImage {
-            inner: CResource::Borrowed(&mut value as *mut aeron_publication_image_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -36790,9 +36773,9 @@ impl From<*const aeron_publication_link_t> for AeronPublicationLink {
 }
 impl From<aeron_publication_link_t> for AeronPublicationLink {
     #[inline]
-    fn from(mut value: aeron_publication_link_t) -> Self {
+    fn from(value: aeron_publication_link_t) -> Self {
         AeronPublicationLink {
-            inner: CResource::Borrowed(&mut value as *mut aeron_publication_link_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -37309,9 +37292,9 @@ impl From<*const aeron_publication_t> for AeronPublication {
 }
 impl From<aeron_publication_t> for AeronPublication {
     #[inline]
-    fn from(mut value: aeron_publication_t) -> Self {
+    fn from(value: aeron_publication_t) -> Self {
         AeronPublication {
-            inner: CResource::Borrowed(&mut value as *mut aeron_publication_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -37534,9 +37517,9 @@ impl From<*const aeron_rb_descriptor_t> for AeronRbDescriptor {
 }
 impl From<aeron_rb_descriptor_t> for AeronRbDescriptor {
     #[inline]
-    fn from(mut value: aeron_rb_descriptor_t) -> Self {
+    fn from(value: aeron_rb_descriptor_t) -> Self {
         AeronRbDescriptor {
-            inner: CResource::Borrowed(&mut value as *mut aeron_rb_descriptor_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -37701,9 +37684,9 @@ impl From<*const aeron_rb_record_descriptor_t> for AeronRbRecordDescriptor {
 }
 impl From<aeron_rb_record_descriptor_t> for AeronRbRecordDescriptor {
     #[inline]
-    fn from(mut value: aeron_rb_record_descriptor_t) -> Self {
+    fn from(value: aeron_rb_record_descriptor_t) -> Self {
         AeronRbRecordDescriptor {
-            inner: CResource::Borrowed(&mut value as *mut aeron_rb_record_descriptor_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -37864,9 +37847,9 @@ impl From<*const aeron_receive_channel_endpoint_entry_t> for AeronReceiveChannel
 }
 impl From<aeron_receive_channel_endpoint_entry_t> for AeronReceiveChannelEndpointEntry {
     #[inline]
-    fn from(mut value: aeron_receive_channel_endpoint_entry_t) -> Self {
+    fn from(value: aeron_receive_channel_endpoint_entry_t) -> Self {
         AeronReceiveChannelEndpointEntry {
-            inner: CResource::Borrowed(&mut value as *mut aeron_receive_channel_endpoint_entry_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -38730,9 +38713,9 @@ impl From<*const aeron_receive_channel_endpoint_t> for AeronReceiveChannelEndpoi
 }
 impl From<aeron_receive_channel_endpoint_t> for AeronReceiveChannelEndpoint {
     #[inline]
-    fn from(mut value: aeron_receive_channel_endpoint_t) -> Self {
+    fn from(value: aeron_receive_channel_endpoint_t) -> Self {
         AeronReceiveChannelEndpoint {
-            inner: CResource::Borrowed(&mut value as *mut aeron_receive_channel_endpoint_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -38891,9 +38874,9 @@ impl From<*const aeron_receive_destination_entry_t> for AeronReceiveDestinationE
 }
 impl From<aeron_receive_destination_entry_t> for AeronReceiveDestinationEntry {
     #[inline]
-    fn from(mut value: aeron_receive_destination_entry_t) -> Self {
+    fn from(value: aeron_receive_destination_entry_t) -> Self {
         AeronReceiveDestinationEntry {
-            inner: CResource::Borrowed(&mut value as *mut aeron_receive_destination_entry_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -39097,9 +39080,9 @@ impl From<*const aeron_receive_destination_t> for AeronReceiveDestination {
 }
 impl From<aeron_receive_destination_t> for AeronReceiveDestination {
     #[inline]
-    fn from(mut value: aeron_receive_destination_t) -> Self {
+    fn from(value: aeron_receive_destination_t) -> Self {
         AeronReceiveDestination {
-            inner: CResource::Borrowed(&mut value as *mut aeron_receive_destination_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -39269,9 +39252,9 @@ impl From<*const aeron_reject_image_command_t> for AeronRejectImageCommand {
 }
 impl From<aeron_reject_image_command_t> for AeronRejectImageCommand {
     #[inline]
-    fn from(mut value: aeron_reject_image_command_t) -> Self {
+    fn from(value: aeron_reject_image_command_t) -> Self {
         AeronRejectImageCommand {
-            inner: CResource::Borrowed(&mut value as *mut aeron_reject_image_command_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -39439,9 +39422,9 @@ impl From<*const aeron_remove_counter_command_t> for AeronRemoveCounterCommand {
 }
 impl From<aeron_remove_counter_command_t> for AeronRemoveCounterCommand {
     #[inline]
-    fn from(mut value: aeron_remove_counter_command_t) -> Self {
+    fn from(value: aeron_remove_counter_command_t) -> Self {
         AeronRemoveCounterCommand {
-            inner: CResource::Borrowed(&mut value as *mut aeron_remove_counter_command_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -39618,9 +39601,9 @@ impl From<*const aeron_remove_publication_command_t> for AeronRemovePublicationC
 }
 impl From<aeron_remove_publication_command_t> for AeronRemovePublicationCommand {
     #[inline]
-    fn from(mut value: aeron_remove_publication_command_t) -> Self {
+    fn from(value: aeron_remove_publication_command_t) -> Self {
         AeronRemovePublicationCommand {
-            inner: CResource::Borrowed(&mut value as *mut aeron_remove_publication_command_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -39790,9 +39773,9 @@ impl From<*const aeron_remove_subscription_command_t> for AeronRemoveSubscriptio
 }
 impl From<aeron_remove_subscription_command_t> for AeronRemoveSubscriptionCommand {
     #[inline]
-    fn from(mut value: aeron_remove_subscription_command_t) -> Self {
+    fn from(value: aeron_remove_subscription_command_t) -> Self {
         AeronRemoveSubscriptionCommand {
-            inner: CResource::Borrowed(&mut value as *mut aeron_remove_subscription_command_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -39973,9 +39956,9 @@ impl From<*const aeron_resolution_header_ipv4_t> for AeronResolutionHeaderIpv4 {
 }
 impl From<aeron_resolution_header_ipv4_t> for AeronResolutionHeaderIpv4 {
     #[inline]
-    fn from(mut value: aeron_resolution_header_ipv4_t) -> Self {
+    fn from(value: aeron_resolution_header_ipv4_t) -> Self {
         AeronResolutionHeaderIpv4 {
-            inner: CResource::Borrowed(&mut value as *mut aeron_resolution_header_ipv4_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -40156,9 +40139,9 @@ impl From<*const aeron_resolution_header_ipv6_t> for AeronResolutionHeaderIpv6 {
 }
 impl From<aeron_resolution_header_ipv6_t> for AeronResolutionHeaderIpv6 {
     #[inline]
-    fn from(mut value: aeron_resolution_header_ipv6_t) -> Self {
+    fn from(value: aeron_resolution_header_ipv6_t) -> Self {
         AeronResolutionHeaderIpv6 {
-            inner: CResource::Borrowed(&mut value as *mut aeron_resolution_header_ipv6_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -40338,9 +40321,9 @@ impl From<*const aeron_resolution_header_t> for AeronResolutionHeader {
 }
 impl From<aeron_resolution_header_t> for AeronResolutionHeader {
     #[inline]
-    fn from(mut value: aeron_resolution_header_t) -> Self {
+    fn from(value: aeron_resolution_header_t) -> Self {
         AeronResolutionHeader {
-            inner: CResource::Borrowed(&mut value as *mut aeron_resolution_header_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -40522,9 +40505,9 @@ impl From<*const aeron_response_setup_header_t> for AeronResponseSetupHeader {
 }
 impl From<aeron_response_setup_header_t> for AeronResponseSetupHeader {
     #[inline]
-    fn from(mut value: aeron_response_setup_header_t) -> Self {
+    fn from(value: aeron_response_setup_header_t) -> Self {
         AeronResponseSetupHeader {
-            inner: CResource::Borrowed(&mut value as *mut aeron_response_setup_header_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -40712,9 +40695,9 @@ impl From<*const aeron_retransmit_action_t> for AeronRetransmitAction {
 }
 impl From<aeron_retransmit_action_t> for AeronRetransmitAction {
     #[inline]
-    fn from(mut value: aeron_retransmit_action_t) -> Self {
+    fn from(value: aeron_retransmit_action_t) -> Self {
         AeronRetransmitAction {
-            inner: CResource::Borrowed(&mut value as *mut aeron_retransmit_action_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -41112,9 +41095,9 @@ impl From<*const aeron_retransmit_handler_t> for AeronRetransmitHandler {
 }
 impl From<aeron_retransmit_handler_t> for AeronRetransmitHandler {
     #[inline]
-    fn from(mut value: aeron_retransmit_handler_t) -> Self {
+    fn from(value: aeron_retransmit_handler_t) -> Self {
         AeronRetransmitHandler {
-            inner: CResource::Borrowed(&mut value as *mut aeron_retransmit_handler_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -41310,9 +41293,9 @@ impl From<*const aeron_rttm_header_t> for AeronRttmHeader {
 }
 impl From<aeron_rttm_header_t> for AeronRttmHeader {
     #[inline]
-    fn from(mut value: aeron_rttm_header_t) -> Self {
+    fn from(value: aeron_rttm_header_t) -> Self {
         AeronRttmHeader {
-            inner: CResource::Borrowed(&mut value as *mut aeron_rttm_header_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -41473,9 +41456,9 @@ impl From<*const aeron_send_channel_endpoint_entry_t> for AeronSendChannelEndpoi
 }
 impl From<aeron_send_channel_endpoint_entry_t> for AeronSendChannelEndpointEntry {
     #[inline]
-    fn from(mut value: aeron_send_channel_endpoint_entry_t) -> Self {
+    fn from(value: aeron_send_channel_endpoint_entry_t) -> Self {
         AeronSendChannelEndpointEntry {
-            inner: CResource::Borrowed(&mut value as *mut aeron_send_channel_endpoint_entry_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -41918,9 +41901,9 @@ impl From<*const aeron_send_channel_endpoint_t> for AeronSendChannelEndpoint {
 }
 impl From<aeron_send_channel_endpoint_t> for AeronSendChannelEndpoint {
     #[inline]
-    fn from(mut value: aeron_send_channel_endpoint_t) -> Self {
+    fn from(value: aeron_send_channel_endpoint_t) -> Self {
         AeronSendChannelEndpoint {
-            inner: CResource::Borrowed(&mut value as *mut aeron_send_channel_endpoint_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -42135,9 +42118,9 @@ impl From<*const aeron_setup_header_t> for AeronSetupHeader {
 }
 impl From<aeron_setup_header_t> for AeronSetupHeader {
     #[inline]
-    fn from(mut value: aeron_setup_header_t) -> Self {
+    fn from(value: aeron_setup_header_t) -> Self {
         AeronSetupHeader {
-            inner: CResource::Borrowed(&mut value as *mut aeron_setup_header_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -42356,9 +42339,9 @@ impl From<*const aeron_spsc_concurrent_array_queue_t> for AeronSpscConcurrentArr
 }
 impl From<aeron_spsc_concurrent_array_queue_t> for AeronSpscConcurrentArrayQueue {
     #[inline]
-    fn from(mut value: aeron_spsc_concurrent_array_queue_t) -> Self {
+    fn from(value: aeron_spsc_concurrent_array_queue_t) -> Self {
         AeronSpscConcurrentArrayQueue {
-            inner: CResource::Borrowed(&mut value as *mut aeron_spsc_concurrent_array_queue_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -42533,9 +42516,9 @@ impl From<*const aeron_static_counter_command_t> for AeronStaticCounterCommand {
 }
 impl From<aeron_static_counter_command_t> for AeronStaticCounterCommand {
     #[inline]
-    fn from(mut value: aeron_static_counter_command_t) -> Self {
+    fn from(value: aeron_static_counter_command_t) -> Self {
         AeronStaticCounterCommand {
-            inner: CResource::Borrowed(&mut value as *mut aeron_static_counter_command_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -42700,9 +42683,9 @@ impl From<*const aeron_static_counter_response_t> for AeronStaticCounterResponse
 }
 impl From<aeron_static_counter_response_t> for AeronStaticCounterResponse {
     #[inline]
-    fn from(mut value: aeron_static_counter_response_t) -> Self {
+    fn from(value: aeron_static_counter_response_t) -> Self {
         AeronStaticCounterResponse {
-            inner: CResource::Borrowed(&mut value as *mut aeron_static_counter_response_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -42920,9 +42903,9 @@ impl From<*const aeron_status_message_header_t> for AeronStatusMessageHeader {
 }
 impl From<aeron_status_message_header_t> for AeronStatusMessageHeader {
     #[inline]
-    fn from(mut value: aeron_status_message_header_t) -> Self {
+    fn from(value: aeron_status_message_header_t) -> Self {
         AeronStatusMessageHeader {
-            inner: CResource::Borrowed(&mut value as *mut aeron_status_message_header_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -43083,9 +43066,9 @@ impl From<*const aeron_status_message_optional_header_t> for AeronStatusMessageO
 }
 impl From<aeron_status_message_optional_header_t> for AeronStatusMessageOptionalHeader {
     #[inline]
-    fn from(mut value: aeron_status_message_optional_header_t) -> Self {
+    fn from(value: aeron_status_message_optional_header_t) -> Self {
         AeronStatusMessageOptionalHeader {
-            inner: CResource::Borrowed(&mut value as *mut aeron_status_message_optional_header_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -43263,9 +43246,9 @@ impl From<*const aeron_str_to_ptr_hash_map_key_t> for AeronStrToPtrHashMapKey {
 }
 impl From<aeron_str_to_ptr_hash_map_key_t> for AeronStrToPtrHashMapKey {
     #[inline]
-    fn from(mut value: aeron_str_to_ptr_hash_map_key_t) -> Self {
+    fn from(value: aeron_str_to_ptr_hash_map_key_t) -> Self {
         AeronStrToPtrHashMapKey {
-            inner: CResource::Borrowed(&mut value as *mut aeron_str_to_ptr_hash_map_key_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -43460,9 +43443,9 @@ impl From<*const aeron_str_to_ptr_hash_map_t> for AeronStrToPtrHashMap {
 }
 impl From<aeron_str_to_ptr_hash_map_t> for AeronStrToPtrHashMap {
     #[inline]
-    fn from(mut value: aeron_str_to_ptr_hash_map_t) -> Self {
+    fn from(value: aeron_str_to_ptr_hash_map_t) -> Self {
         AeronStrToPtrHashMap {
-            inner: CResource::Borrowed(&mut value as *mut aeron_str_to_ptr_hash_map_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -43657,11 +43640,9 @@ impl From<*const aeron_stream_position_counter_key_layout_t>
 }
 impl From<aeron_stream_position_counter_key_layout_t> for AeronStreamPositionCounterKeyLayout {
     #[inline]
-    fn from(mut value: aeron_stream_position_counter_key_layout_t) -> Self {
+    fn from(value: aeron_stream_position_counter_key_layout_t) -> Self {
         AeronStreamPositionCounterKeyLayout {
-            inner: CResource::Borrowed(
-                &mut value as *mut aeron_stream_position_counter_key_layout_t,
-            ),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -43826,9 +43807,9 @@ impl From<*const aeron_subscribable_list_entry_t> for AeronSubscribableListEntry
 }
 impl From<aeron_subscribable_list_entry_t> for AeronSubscribableListEntry {
     #[inline]
-    fn from(mut value: aeron_subscribable_list_entry_t) -> Self {
+    fn from(value: aeron_subscribable_list_entry_t) -> Self {
         AeronSubscribableListEntry {
-            inner: CResource::Borrowed(&mut value as *mut aeron_subscribable_list_entry_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -44086,9 +44067,9 @@ impl From<*const aeron_subscribable_t> for AeronSubscribable {
 }
 impl From<aeron_subscribable_t> for AeronSubscribable {
     #[inline]
-    fn from(mut value: aeron_subscribable_t) -> Self {
+    fn from(value: aeron_subscribable_t) -> Self {
         AeronSubscribable {
-            inner: CResource::Borrowed(&mut value as *mut aeron_subscribable_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -44273,9 +44254,9 @@ impl From<*const aeron_subscription_command_t> for AeronSubscriptionCommand {
 }
 impl From<aeron_subscription_command_t> for AeronSubscriptionCommand {
     #[inline]
-    fn from(mut value: aeron_subscription_command_t) -> Self {
+    fn from(value: aeron_subscription_command_t) -> Self {
         AeronSubscriptionCommand {
-            inner: CResource::Borrowed(&mut value as *mut aeron_subscription_command_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -44475,9 +44456,9 @@ impl From<*const aeron_subscription_constants_t> for AeronSubscriptionConstants 
 }
 impl From<aeron_subscription_constants_t> for AeronSubscriptionConstants {
     #[inline]
-    fn from(mut value: aeron_subscription_constants_t) -> Self {
+    fn from(value: aeron_subscription_constants_t) -> Self {
         AeronSubscriptionConstants {
-            inner: CResource::Borrowed(&mut value as *mut aeron_subscription_constants_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -44753,9 +44734,9 @@ impl From<*const aeron_subscription_link_t> for AeronSubscriptionLink {
 }
 impl From<aeron_subscription_link_t> for AeronSubscriptionLink {
     #[inline]
-    fn from(mut value: aeron_subscription_link_t) -> Self {
+    fn from(value: aeron_subscription_link_t) -> Self {
         AeronSubscriptionLink {
-            inner: CResource::Borrowed(&mut value as *mut aeron_subscription_link_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -44923,9 +44904,9 @@ impl From<*const aeron_subscription_ready_t> for AeronSubscriptionReady {
 }
 impl From<aeron_subscription_ready_t> for AeronSubscriptionReady {
     #[inline]
-    fn from(mut value: aeron_subscription_ready_t) -> Self {
+    fn from(value: aeron_subscription_ready_t) -> Self {
         AeronSubscriptionReady {
-            inner: CResource::Borrowed(&mut value as *mut aeron_subscription_ready_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -45655,9 +45636,9 @@ impl From<*const aeron_subscription_t> for AeronSubscription {
 }
 impl From<aeron_subscription_t> for AeronSubscription {
     #[inline]
-    fn from(mut value: aeron_subscription_t) -> Self {
+    fn from(value: aeron_subscription_t) -> Self {
         AeronSubscription {
-            inner: CResource::Borrowed(&mut value as *mut aeron_subscription_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -45823,9 +45804,9 @@ impl From<*const aeron_system_counter_t> for AeronSystemCounter {
 }
 impl From<aeron_system_counter_t> for AeronSystemCounter {
     #[inline]
-    fn from(mut value: aeron_system_counter_t) -> Self {
+    fn from(value: aeron_system_counter_t) -> Self {
         AeronSystemCounter {
-            inner: CResource::Borrowed(&mut value as *mut aeron_system_counter_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -46010,9 +45991,9 @@ impl From<*const aeron_system_counters_t> for AeronSystemCounters {
 }
 impl From<aeron_system_counters_t> for AeronSystemCounters {
     #[inline]
-    fn from(mut value: aeron_system_counters_t) -> Self {
+    fn from(value: aeron_system_counters_t) -> Self {
         AeronSystemCounters {
-            inner: CResource::Borrowed(&mut value as *mut aeron_system_counters_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -47708,9 +47689,9 @@ impl From<*const aeron_t> for Aeron {
 }
 impl From<aeron_t> for Aeron {
     #[inline]
-    fn from(mut value: aeron_t) -> Self {
+    fn from(value: aeron_t) -> Self {
         Aeron {
-            inner: CResource::Borrowed(&mut value as *mut aeron_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
             _context: None,
         }
     }
@@ -47857,9 +47838,9 @@ impl From<*const aeron_terminate_driver_command_t> for AeronTerminateDriverComma
 }
 impl From<aeron_terminate_driver_command_t> for AeronTerminateDriverCommand {
     #[inline]
-    fn from(mut value: aeron_terminate_driver_command_t) -> Self {
+    fn from(value: aeron_terminate_driver_command_t) -> Self {
         AeronTerminateDriverCommand {
-            inner: CResource::Borrowed(&mut value as *mut aeron_terminate_driver_command_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -48078,9 +48059,9 @@ impl From<*const aeron_tetherable_position_t> for AeronTetherablePosition {
 }
 impl From<aeron_tetherable_position_t> for AeronTetherablePosition {
     #[inline]
-    fn from(mut value: aeron_tetherable_position_t) -> Self {
+    fn from(value: aeron_tetherable_position_t) -> Self {
         AeronTetherablePosition {
-            inner: CResource::Borrowed(&mut value as *mut aeron_tetherable_position_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -48245,9 +48226,9 @@ impl From<*const aeron_udp_channel_async_parse_t> for AeronUdpChannelAsyncParse 
 }
 impl From<aeron_udp_channel_async_parse_t> for AeronUdpChannelAsyncParse {
     #[inline]
-    fn from(mut value: aeron_udp_channel_async_parse_t) -> Self {
+    fn from(value: aeron_udp_channel_async_parse_t) -> Self {
         AeronUdpChannelAsyncParse {
-            inner: CResource::Borrowed(&mut value as *mut aeron_udp_channel_async_parse_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -48568,9 +48549,9 @@ impl From<*const aeron_udp_channel_data_paths_t> for AeronUdpChannelDataPaths {
 }
 impl From<aeron_udp_channel_data_paths_t> for AeronUdpChannelDataPaths {
     #[inline]
-    fn from(mut value: aeron_udp_channel_data_paths_t) -> Self {
+    fn from(value: aeron_udp_channel_data_paths_t) -> Self {
         AeronUdpChannelDataPaths {
-            inner: CResource::Borrowed(&mut value as *mut aeron_udp_channel_data_paths_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -48777,9 +48758,9 @@ impl From<*const aeron_udp_channel_incoming_interceptor_t> for AeronUdpChannelIn
 }
 impl From<aeron_udp_channel_incoming_interceptor_t> for AeronUdpChannelIncomingInterceptor {
     #[inline]
-    fn from(mut value: aeron_udp_channel_incoming_interceptor_t) -> Self {
+    fn from(value: aeron_udp_channel_incoming_interceptor_t) -> Self {
         AeronUdpChannelIncomingInterceptor {
-            inner: CResource::Borrowed(&mut value as *mut aeron_udp_channel_incoming_interceptor_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -49041,9 +49022,9 @@ impl From<*const aeron_udp_channel_interceptor_bindings_t> for AeronUdpChannelIn
 }
 impl From<aeron_udp_channel_interceptor_bindings_t> for AeronUdpChannelInterceptorBindings {
     #[inline]
-    fn from(mut value: aeron_udp_channel_interceptor_bindings_t) -> Self {
+    fn from(value: aeron_udp_channel_interceptor_bindings_t) -> Self {
         AeronUdpChannelInterceptorBindings {
-            inner: CResource::Borrowed(&mut value as *mut aeron_udp_channel_interceptor_bindings_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -49250,9 +49231,9 @@ impl From<*const aeron_udp_channel_outgoing_interceptor_t> for AeronUdpChannelOu
 }
 impl From<aeron_udp_channel_outgoing_interceptor_t> for AeronUdpChannelOutgoingInterceptor {
     #[inline]
-    fn from(mut value: aeron_udp_channel_outgoing_interceptor_t) -> Self {
+    fn from(value: aeron_udp_channel_outgoing_interceptor_t) -> Self {
         AeronUdpChannelOutgoingInterceptor {
-            inner: CResource::Borrowed(&mut value as *mut aeron_udp_channel_outgoing_interceptor_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -49491,9 +49472,9 @@ impl From<*const aeron_udp_channel_params_t> for AeronUdpChannelParams {
 }
 impl From<aeron_udp_channel_params_t> for AeronUdpChannelParams {
     #[inline]
-    fn from(mut value: aeron_udp_channel_params_t) -> Self {
+    fn from(value: aeron_udp_channel_params_t) -> Self {
         AeronUdpChannelParams {
-            inner: CResource::Borrowed(&mut value as *mut aeron_udp_channel_params_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -49809,9 +49790,9 @@ impl From<*const aeron_udp_channel_t> for AeronUdpChannel {
 }
 impl From<aeron_udp_channel_t> for AeronUdpChannel {
     #[inline]
-    fn from(mut value: aeron_udp_channel_t) -> Self {
+    fn from(value: aeron_udp_channel_t) -> Self {
         AeronUdpChannel {
-            inner: CResource::Borrowed(&mut value as *mut aeron_udp_channel_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -50014,9 +49995,9 @@ impl From<*const aeron_udp_destination_entry_t> for AeronUdpDestinationEntry {
 }
 impl From<aeron_udp_destination_entry_t> for AeronUdpDestinationEntry {
     #[inline]
-    fn from(mut value: aeron_udp_destination_entry_t) -> Self {
+    fn from(value: aeron_udp_destination_entry_t) -> Self {
         AeronUdpDestinationEntry {
-            inner: CResource::Borrowed(&mut value as *mut aeron_udp_destination_entry_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -50340,9 +50321,9 @@ impl From<*const aeron_udp_destination_tracker_t> for AeronUdpDestinationTracker
 }
 impl From<aeron_udp_destination_tracker_t> for AeronUdpDestinationTracker {
     #[inline]
-    fn from(mut value: aeron_udp_destination_tracker_t) -> Self {
+    fn from(value: aeron_udp_destination_tracker_t) -> Self {
         AeronUdpDestinationTracker {
-            inner: CResource::Borrowed(&mut value as *mut aeron_udp_destination_tracker_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -50492,9 +50473,9 @@ impl From<*const aeron_uri_param_t> for AeronUriParam {
 }
 impl From<aeron_uri_param_t> for AeronUriParam {
     #[inline]
-    fn from(mut value: aeron_uri_param_t) -> Self {
+    fn from(value: aeron_uri_param_t) -> Self {
         AeronUriParam {
-            inner: CResource::Borrowed(&mut value as *mut aeron_uri_param_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -50777,9 +50758,9 @@ impl From<*const aeron_uri_params_t> for AeronUriParams {
 }
 impl From<aeron_uri_params_t> for AeronUriParams {
     #[inline]
-    fn from(mut value: aeron_uri_params_t) -> Self {
+    fn from(value: aeron_uri_params_t) -> Self {
         AeronUriParams {
-            inner: CResource::Borrowed(&mut value as *mut aeron_uri_params_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -51073,9 +51054,9 @@ impl From<*const aeron_uri_string_builder_t> for AeronUriStringBuilder {
 }
 impl From<aeron_uri_string_builder_t> for AeronUriStringBuilder {
     #[inline]
-    fn from(mut value: aeron_uri_string_builder_t) -> Self {
+    fn from(value: aeron_uri_string_builder_t) -> Self {
         AeronUriStringBuilder {
-            inner: CResource::Borrowed(&mut value as *mut aeron_uri_string_builder_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -51421,9 +51402,9 @@ impl From<*const aeron_uri_t> for AeronUri {
 }
 impl From<aeron_uri_t> for AeronUri {
     #[inline]
-    fn from(mut value: aeron_uri_t) -> Self {
+    fn from(value: aeron_uri_t) -> Self {
         AeronUri {
-            inner: CResource::Borrowed(&mut value as *mut aeron_uri_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -51706,9 +51687,9 @@ impl From<*const aeron_wildcard_port_manager_t> for AeronWildcardPortManager {
 }
 impl From<aeron_wildcard_port_manager_t> for AeronWildcardPortManager {
     #[inline]
-    fn from(mut value: aeron_wildcard_port_manager_t) -> Self {
+    fn from(value: aeron_wildcard_port_manager_t) -> Self {
         AeronWildcardPortManager {
-            inner: CResource::Borrowed(&mut value as *mut aeron_wildcard_port_manager_t),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -51882,9 +51863,9 @@ impl From<*const ifaddrs> for Ifaddrs {
 }
 impl From<ifaddrs> for Ifaddrs {
     #[inline]
-    fn from(mut value: ifaddrs) -> Self {
+    fn from(value: ifaddrs) -> Self {
         Ifaddrs {
-            inner: CResource::Borrowed(&mut value as *mut ifaddrs),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -52013,9 +51994,9 @@ impl From<*const in6_addr> for In6Addr {
 }
 impl From<in6_addr> for In6Addr {
     #[inline]
-    fn from(mut value: in6_addr) -> Self {
+    fn from(value: in6_addr) -> Self {
         In6Addr {
-            inner: CResource::Borrowed(&mut value as *mut in6_addr),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -52158,9 +52139,9 @@ impl From<*const iovec> for Iovec {
 }
 impl From<iovec> for Iovec {
     #[inline]
-    fn from(mut value: iovec) -> Self {
+    fn from(value: iovec) -> Self {
         Iovec {
-            inner: CResource::Borrowed(&mut value as *mut iovec),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -52295,9 +52276,9 @@ impl From<*const mmsghdr> for Mmsghdr {
 }
 impl From<mmsghdr> for Mmsghdr {
     #[inline]
-    fn from(mut value: mmsghdr) -> Self {
+    fn from(value: mmsghdr) -> Self {
         Mmsghdr {
-            inner: CResource::Borrowed(&mut value as *mut mmsghdr),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -52473,9 +52454,9 @@ impl From<*const msghdr> for Msghdr {
 }
 impl From<msghdr> for Msghdr {
     #[inline]
-    fn from(mut value: msghdr) -> Self {
+    fn from(value: msghdr) -> Self {
         Msghdr {
-            inner: CResource::Borrowed(&mut value as *mut msghdr),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -52662,9 +52643,9 @@ impl From<*const pollfd> for Pollfd {
 }
 impl From<pollfd> for Pollfd {
     #[inline]
-    fn from(mut value: pollfd) -> Self {
+    fn from(value: pollfd) -> Self {
         Pollfd {
-            inner: CResource::Borrowed(&mut value as *mut pollfd),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -52836,9 +52817,9 @@ impl From<*const sockaddr> for Sockaddr {
 }
 impl From<sockaddr> for Sockaddr {
     #[inline]
-    fn from(mut value: sockaddr) -> Self {
+    fn from(value: sockaddr) -> Self {
         Sockaddr {
-            inner: CResource::Borrowed(&mut value as *mut sockaddr),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -53029,9 +53010,9 @@ impl From<*const sockaddr_storage> for SockaddrStorage {
 }
 impl From<sockaddr_storage> for SockaddrStorage {
     #[inline]
-    fn from(mut value: sockaddr_storage) -> Self {
+    fn from(value: sockaddr_storage) -> Self {
         SockaddrStorage {
-            inner: CResource::Borrowed(&mut value as *mut sockaddr_storage),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -53190,9 +53171,9 @@ impl From<*const timespec> for Timespec {
 }
 impl From<timespec> for Timespec {
     #[inline]
-    fn from(mut value: timespec) -> Self {
+    fn from(value: timespec) -> Self {
         Timespec {
-            inner: CResource::Borrowed(&mut value as *mut timespec),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -57897,4 +57878,3 @@ unsafe extern "C" fn aeron_end_of_life_resource_free_t_callback_for_once_closure
     let closure: &mut F = &mut *(resource as *mut F);
     closure()
 }
-

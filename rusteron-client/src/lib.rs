@@ -310,12 +310,14 @@ mod tests {
 
         aeron.start()?;
         info!("client started");
-        let publisher = aeron.add_publication(AERON_IPC_STREAM, 123, Duration::from_secs(5))?;
+        const STREAM_ID: i32 = 123;
+        let publisher =
+            aeron.add_publication(AERON_IPC_STREAM, STREAM_ID, Duration::from_secs(5))?;
         info!("created publisher");
 
         let subscription = aeron.add_subscription(
             AERON_IPC_STREAM,
-            123,
+            STREAM_ID,
             Handlers::no_available_image_handler(),
             Handlers::no_unavailable_image_handler(),
             Duration::from_secs(5),
@@ -365,6 +367,12 @@ mod tests {
 
         impl AeronFragmentHandlerCallback for FragmentHandler {
             fn handle_aeron_fragment_handler(&mut self, buffer: &[u8], header: AeronHeader) {
+                assert_eq!(STREAM_ID, header.get_values().unwrap().frame.stream_id);
+                let header = header.get_values().unwrap();
+                let frame = header.frame();
+                let stream_id = frame.stream_id();
+                assert_eq!(STREAM_ID, stream_id);
+
                 self.count_copy.fetch_add(1, Ordering::SeqCst);
 
                 if buffer.len() != self.string_len {
