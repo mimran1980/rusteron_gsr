@@ -103,12 +103,21 @@ jobs:
         run: |
           Remove-Item -LiteralPath 'rusteron-archive/artifacts','rusteron-client/artifacts','rusteron-media-driver/artifacts' -Recurse -Force -ErrorAction SilentlyContinue
 
-      - name: Build and Test
+      - name: Build
         env:
           PUBLISH_ARTIFACTS: true
         run: |
           cargo build --release --workspace ${{ env.feature-flags }}
+
+      - name: Test on Linux with ASan
+        if: runner.os == 'Linux'
+        run: |
           CFLAGS="-fsanitize=address" RUSTFLAGS="-Zsanitizer=address" cargo +nightly test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
+
+      - name: Test on non-Linux
+        if: runner.os != 'Linux'
+        run: |
+          cargo test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
 
 
       - name: Upload Artifacts
