@@ -108,7 +108,7 @@ jobs:
           PUBLISH_ARTIFACTS: true
         run: |
           cargo build --release --workspace ${{ env.feature-flags }}
-          cargo test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
+          CFLAGS="-fsanitize=address" RUSTFLAGS="-Zsanitizer=address" cargo +nightly test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
 
 
       - name: Upload Artifacts
