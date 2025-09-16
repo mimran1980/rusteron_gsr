@@ -14,6 +14,7 @@
 //! - **`extra-logging`** - When enabled will log when resource is created and destroyed. useful if your seeing a segfault due to a resource being closed
 //! - **`precompile`** - When enabled will use precompiled c code instead of requiring cmake and java to me installed
 
+#[allow(improper_ctypes_definitions)]
 pub mod bindings {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
