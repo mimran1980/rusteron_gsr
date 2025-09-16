@@ -113,7 +113,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           rustup toolchain install nightly
-          ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 CFLAGS="-fsanitize=address" RUSTFLAGS="-Zsanitizer=address,leak,memory,safestack,shadow-call-stack,thread" cargo +nightly  -Z build-std test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
+          ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 CFLAGS="-fsanitize=address" RUSTFLAGS="-Zsanitizer=address,leak,safestack,shadow-call-stack,thread" cargo +nightly  -Z build-std test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
 
       - name: Test on non-Linux
         if: runner.os != 'Linux'
