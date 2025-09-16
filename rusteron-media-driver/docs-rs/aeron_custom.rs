@@ -1,3 +1,4 @@
+
 // code here is included in all modules and extends generated classes
 pub static AERON_IPC_STREAM: &std::ffi::CStr =
     unsafe { std::ffi::CStr::from_bytes_with_nul_unchecked(b"aeron:ipc\0") };
@@ -484,9 +485,8 @@ impl Default for AeronUriStringBuilder {
                 aeron_uri_string_builder_close(*ctx_field)
             })),
             true,
-            Some(|ctx| unsafe { (*ctx).closed }),
-        )
-        .expect("should not happen");
+            Some(|ctx| unsafe { (*ctx).closed })
+        ).expect("should not happen");
         Self {
             inner: CResource::OwnedOnHeap(std::rc::Rc::new(r_constructor)),
         }
@@ -1004,7 +1004,9 @@ impl FnMutMessageHandler {
     }
 
     #[inline]
-    fn wrap<T>(f: fn(&mut T, &[u8], AeronHeader)) -> fn(*mut (), &[u8], AeronHeader) {
+    fn wrap<T>(
+        f: fn(&mut T, &[u8], AeronHeader)
+    ) -> fn(*mut (), &[u8], AeronHeader) {
         // SAFETY: `fn(&mut T,…)` and `fn(*mut(),…)` have the same ABI/representation
         unsafe { std::mem::transmute(f) }
     }
@@ -1033,11 +1035,7 @@ impl AeronFragmentClosureAssembler {
         })
     }
 
-    pub fn process<T>(
-        &mut self,
-        ctx: &mut T,
-        func: fn(&mut T, &[u8], AeronHeader),
-    ) -> Option<&Handler<AeronFragmentAssembler>> {
+    pub fn process<T>(&mut self, ctx: &mut T, func: fn(&mut T, &[u8], AeronHeader)) -> Option<&Handler<AeronFragmentAssembler>> {
         self.handler.set(ctx, func);
         self.assembler_handler.raw_ptr = &mut self.assembler as *mut _;
         Some(&self.assembler_handler)
@@ -1056,10 +1054,7 @@ pub struct FnMutControlledMessageHandler {
 
 impl FnMutControlledMessageHandler {
     pub fn new() -> Self {
-        Self {
-            func: Self::noop,
-            ctx: std::ptr::null_mut(),
-        }
+        Self { func: Self::noop, ctx: std::ptr::null_mut() }
     }
 
     #[inline]
@@ -1075,11 +1070,7 @@ impl FnMutControlledMessageHandler {
     }
 
     #[inline(always)]
-    pub fn call(
-        &mut self,
-        msg: &[u8],
-        header: AeronHeader,
-    ) -> aeron_controlled_fragment_handler_action_t {
+    pub fn call(&mut self, msg: &[u8], header: AeronHeader) -> aeron_controlled_fragment_handler_action_t {
         (self.func)(self.ctx, msg, header)
     }
 
@@ -1117,10 +1108,7 @@ impl AeronControlledFragmentClosureAssembler {
         Ok(Self {
             assembler: AeronControlledFragmentAssembler::new(Some(&handler))?,
             handler,
-            assembler_handler: Handler {
-                raw_ptr: std::ptr::null_mut(),
-                should_drop: false,
-            },
+            assembler_handler: Handler { raw_ptr: std::ptr::null_mut(), should_drop: false },
         })
     }
 
@@ -1143,13 +1131,7 @@ impl Drop for AeronControlledFragmentClosureAssembler {
 
 impl std::fmt::Display for AeronCError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Aeron error {}: {:?} - [lastErrMsg={}]",
-            self.code,
-            self.kind(),
-            Aeron::errmsg()
-        )
+        write!(f, "Aeron error {}: {:?} - [lastErrMsg={}]", self.code, self.kind(), Aeron::errmsg())
     }
 }
 
@@ -1164,3 +1146,4 @@ impl std::fmt::Debug for AeronCError {
 }
 
 impl std::error::Error for AeronCError {}
+
