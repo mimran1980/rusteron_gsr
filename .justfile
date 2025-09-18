@@ -105,8 +105,10 @@ test-asan:
   rustup toolchain install nightly
   #  rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
   rustup component add rust-src --toolchain nightly-aarch64-apple-darwin
-  #  ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 CFLAGS="-fsanitize=address" RUSTFLAGS="-Zsanitizer=address" cargo +nightly  -Z build-std test --workspace --all --all-targets -- --nocapture
-  RUSTFLAGS="-Zsanitizer=address" cargo +nightly -Z build-std test --workspace --all --all-targets -- --nocapture
+  rustup default nightly
+  #  ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 CFLAGS="-fsanitize=address" RUSTFLAGS="-Zsanitizer=address" cargo  -Z build-std test --workspace --all --all-targets -- --nocapture
+  CFLAGS="-fsanitize=address" RUSTFLAGS="-Zsanitizer=address" cargo  -Z build-std test --workspace --all --all-targets -- --nocapture
+  rustup default stable
 
 # Run unit tests
 test:

@@ -82,7 +82,9 @@ jobs:
       - name: Test on Linux with ASan
         run: |
           rustup component add rust-src --toolchain "$NIGHTLY_TOOLCHAIN"
-          ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 CFLAGS="-fsanitize=address" cargo +"$NIGHTLY_TOOLCHAIN" -Z build-std=std,panic_abort -Z sanitizer=address test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
+          unset RUSTFLAGS
+          export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-Zsanitizer=address -Cforce-frame-pointers=yes"
+          ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 CFLAGS="-fsanitize=address" cargo +"$NIGHTLY_TOOLCHAIN" -Z build-std=std,panic_abort test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
 
   build:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
