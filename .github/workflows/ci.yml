@@ -57,8 +57,6 @@ jobs:
     name: AddressSanitiser
     runs-on: ubuntu-22.04
     timeout-minutes: 15
-    env:
-      NIGHTLY_TOOLCHAIN: nightly-2024-12-05
 
     steps:
       - name: Checkout
@@ -69,7 +67,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: ${{ env.NIGHTLY_TOOLCHAIN }}
+          toolchain: nightly-2024-12-05
           components: clippy, rustfmt
 
       # aeron archive cmake for some reason starts java
@@ -81,8 +79,8 @@ jobs:
 
       - name: Test on Linux with ASan
         run: |
-          rustup component add rust-src --toolchain "$NIGHTLY_TOOLCHAIN"
-          ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 CFLAGS="-fsanitize=address" RUSTFLAGS="-Zsanitizer=address,leak" cargo +"$NIGHTLY_TOOLCHAIN" -Z build-std test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
+          rustup component add rust-src --toolchain "nightly-2024-12-05"
+          ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 CFLAGS="-fsanitize=address" RUSTFLAGS="-Zsanitizer=address,leak" cargo +"nightly-2024-12-05" -Z build-std test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
 
   build:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
