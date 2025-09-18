@@ -94,6 +94,20 @@ docs:
   cargo test  --workspace --doc
   cargo doc --workspace --no-deps --open
 
+# CANNOT USE MIRI due to ffi :(
+#check-miri:
+#  rustup toolchain install nightly --component miri
+#  rustup run nightly cargo miri setup
+#  MIRIFLAGS="" rustup run nightly cargo miri test -p rusteron-code-gen --lib -- test_drop_
+
+# On macOS: run with nightly + AddressSanitizer and extra assertions
+test-asan:
+  rustup toolchain install nightly
+  #  rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
+  rustup component add rust-src --toolchain nightly-aarch64-apple-darwin
+  #  ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 CFLAGS="-fsanitize=address" RUSTFLAGS="-Zsanitizer=address" cargo +nightly  -Z build-std test --workspace --all --all-targets -- --nocapture
+  RUSTFLAGS="-Zsanitizer=address" cargo +nightly -Z build-std test --workspace --all --all-targets -- --nocapture
+
 # Run unit tests
 test:
   cargo test --workspace -- --nocapture

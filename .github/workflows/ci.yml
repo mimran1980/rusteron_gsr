@@ -80,11 +80,9 @@ jobs:
           java-version: '17'
 
       - name: Test on Linux with ASan
-        env:
-          CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS: -Zsanitizer=address,leak
         run: |
           rustup component add rust-src --toolchain "$NIGHTLY_TOOLCHAIN"
-          ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 CFLAGS="-fsanitize=address" cargo +"$NIGHTLY_TOOLCHAIN" -Z build-std test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
+          ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 CFLAGS="-fsanitize=address" cargo +"$NIGHTLY_TOOLCHAIN" -Z build-std=std,panic_abort -Z sanitizer=address test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
 
   build:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
@@ -93,7 +91,7 @@ jobs:
     timeout-minutes: 45
 
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
 #        os: [ubuntu-latest, macos-latest, macos-13, windows-latest]
         os: [ubuntu-22.04, macos-latest, macos-13]
