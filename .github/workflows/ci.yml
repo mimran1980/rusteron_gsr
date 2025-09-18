@@ -52,9 +52,9 @@ jobs:
           sudo apt-get update && sudo apt-get install -y uuid-dev libbsd-dev
           cargo test --doc
 
-  asan:
+  AddressSanitiser:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
-    name: asan
+    name: AddressSanitiser
     runs-on: ubuntu-22.04
     timeout-minutes: 15
 
@@ -80,6 +80,7 @@ jobs:
       - name: Test on Linux with ASan
         run: |
           rustup toolchain install nightly
+          rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
           ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 CFLAGS="-fsanitize=address" RUSTFLAGS="-Zsanitizer=address,leak" cargo +nightly  -Z build-std test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
 
   build:
