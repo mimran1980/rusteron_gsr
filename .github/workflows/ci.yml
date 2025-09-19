@@ -71,7 +71,6 @@ jobs:
         uses: dtolnay/rust-toolchain@nightly
         with:
           toolchain: nightly-2024-12-05
-          profile: minimal
           components: rust-src
 
       # aeron archive cmake for some reason starts java
@@ -83,13 +82,16 @@ jobs:
 
       - name: Test on Linux with ASan
         run: |
-          rustup component add rust-src --toolchain "nightly-2024-12-05"
-          unset RUSTFLAGS
-          export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-Zsanitizer=address -Cforce-frame-pointers=yes"
-          export RUSTFLAGS="-Zsanitizer=address -Cforce-frame-pointers=yes" 
-          export ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 
-          export CFLAGS="-fsanitize=address" 
-          cargo +nightly-2024-12-05 -Z build-std=std,panic_abort test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
+          rustup toolchain install nightly-2024-12-05
+          rustup component add rust-src --toolchain nightly-2024-12-05
+          # Use explicit toolchain and binaries to avoid PATH/override issues
+          export RUSTUP_TOOLCHAIN=nightly-2024-12-05
+          export RUSTC="$(rustup which rustc --toolchain nightly-2024-12-05)"
+          export CARGO_BIN="$(rustup which cargo --toolchain nightly-2024-12-05)"
+          export RUSTFLAGS="-Zsanitizer=address -Cforce-frame-pointers=yes"
+          export ASAN_OPTIONS=detect_leaks=1,abort_on_error=1
+          export CFLAGS="-fsanitize=address"
+          "$CARGO_BIN" -Z build-std=std,panic_abort test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
 
   build:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
