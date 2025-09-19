@@ -91,10 +91,10 @@ jobs:
           unset RUSTDOCFLAGS
           export RUSTUP_TOOLCHAIN=nightly-2024-12-05
           export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-Zsanitizer=address -Cforce-frame-pointers=yes"
-          export ASAN_OPTIONS=detect_leaks=1,abort_on_error=1
-          export CFLAGS="-fsanitize=address"
-
-          cargo +nightly-2024-12-05 test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
+          export RUSTC="$(rustup which rustc --toolchain nightly-2024-12-05)" 
+          export ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 
+          export CFLAGS="-fsanitize=address" RUSTFLAGS="-Zsanitizer=address" 
+          "$(rustup which cargo --toolchain nightly-2024-12-05)" -Z build-std test --workspace --all --all-targets -- --nocapture
 
   build:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
