@@ -88,16 +88,13 @@ jobs:
           # Use explicit cargo via +toolchain, but DO NOT override RUSTC (breaks host proc-macro builds)
           # Also avoid global RUSTFLAGS so host tools (proc-macros/build scripts) are not ASan-instrumented.
           unset RUSTFLAGS
+          unset RUSTDOCFLAGS
           export RUSTUP_TOOLCHAIN=nightly-2024-12-05
-
-          # Target-only sanitizer flags
           export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-Zsanitizer=address -Cforce-frame-pointers=yes"
-
-          # Sanitizer runtime settings
           export ASAN_OPTIONS=detect_leaks=1,abort_on_error=1
           export CFLAGS="-fsanitize=address"
 
-          cargo +nightly-2024-12-05 -Z build-std=std,panic_abort test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
+          cargo +nightly-2024-12-05 test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
 
   build:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
