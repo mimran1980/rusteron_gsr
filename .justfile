@@ -102,11 +102,10 @@ docs:
 
 # On macOS: run with nightly + AddressSanitizer and extra assertions
 test-asan:
-  rustup toolchain install nightly-2024-12-05
-  #  rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
-  rustup component add rust-src --toolchain nightly-aarch64-apple-darwin
-  rustup default nightly-2024-12-05
-  ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 CFLAGS="-fsanitize=address" RUSTFLAGS="-Zsanitizer=address" cargo  -Z build-std test --workspace --all --all-targets -- --nocapture
+    rustup toolchain install nightly-2024-12-05
+    #  rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
+    rustup component add rust-src --toolchain nightly-2024-12-05-aarch64-apple-darwin
+    RUSTUP_TOOLCHAIN=nightly-2024-12-05 RUSTC="$(rustup which rustc --toolchain nightly-2024-12-05)" ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 CFLAGS="-fsanitize=address" RUSTFLAGS="-Zsanitizer=address" "$(rustup which cargo --toolchain nightly-2024-12-05)" -Z build-std test --workspace --all --all-targets -- --nocapture
 #  CFLAGS="-fsanitize=address" RUSTFLAGS="-Zsanitizer=address" cargo  -Z build-std test --workspace --all --all-targets -- --nocapture
 #  rustup default stable
 
