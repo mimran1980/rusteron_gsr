@@ -64,11 +64,15 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y curl pkg-config libssl-dev libbsd-dev uuid-dev ca-certificates make cmake gcc g++ clang zlib1g-dev libbsd-dev
+
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@nightly
         with:
           toolchain: nightly-2024-12-05
-          components: clippy, rustfmt
+          profile: minimal
+          components: rust-src
 
       # aeron archive cmake for some reason starts java
       - name: Install Java
@@ -85,7 +89,7 @@ jobs:
           export RUSTFLAGS="-Zsanitizer=address -Cforce-frame-pointers=yes" 
           export ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 
           export CFLAGS="-fsanitize=address" 
-          cargo +"nightly-2024-12-05" -Z build-std=std,panic_abort test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
+          cargo +nightly-2024-12-05 -Z build-std=std,panic_abort test --workspace --all --all-targets ${{ env.feature-flags }} -- --nocapture
 
   build:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
