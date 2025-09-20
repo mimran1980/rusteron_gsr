@@ -102,12 +102,19 @@ docs:
 
 # On macOS: run with nightly + AddressSanitizer and extra assertions
 test-asan:
-    rustup toolchain install nightly-2024-12-05
-    #  rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
-    rustup component add rust-src --toolchain nightly-2024-12-05-aarch64-apple-darwin
-    RUSTUP_TOOLCHAIN=nightly-2024-12-05 RUSTC="$(rustup which rustc --toolchain nightly-2024-12-05)" ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 CFLAGS="-fsanitize=address" RUSTFLAGS="-Zsanitizer=address" "$(rustup which cargo --toolchain nightly-2024-12-05)" -Z build-std test --workspace --all --all-targets -- --nocapture
-#  CFLAGS="-fsanitize=address" RUSTFLAGS="-Zsanitizer=address" cargo  -Z build-std test --workspace --all --all-targets -- --nocapture
-#  rustup default stable
+    docker build --platform=linux/amd64 -f Dockerfile -t rusteron-asan .
+    docker run --rm --platform=linux/amd64 \
+      -e HOME=/work/target/asan \
+      -e TMP=/work/target/asan/tmp \
+      -e TEMP=/work/target/asan/tmp \
+      -e GRADLE_USER_HOME=/work/target/asan/gradle \
+      -e CARGO_HOME=/work/target/asan/cargo-home \
+      -e CARGO_TARGET_DIR=/work/target/asan/target \
+      -e ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 \
+      -v "$PWD:/work" \
+      -w /work \
+      rusteron-asan \
+      cargo +nightly test --workspace --all --all-targets -- --nocapture
 
 # Run unit tests
 test:
