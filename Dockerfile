@@ -10,6 +10,9 @@ RUN apt-get update \
         openssh-server \
     && rm -rf /var/lib/apt/lists/*
 
+COPY rustc-asan-wrapper.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/rustc-asan-wrapper.sh
+
 #RUN rustup toolchain install nightly-2024-12-05-x86_64-unknown-linux-gnu \
 #    && rustup component add rust-src --toolchain nightly-2024-12-05-x86_64-unknown-linux-gnu \
 #    && rustup component add rustfmt --toolchain nightly-2024-12-05-x86_64-unknown-linux-gnu \
@@ -28,7 +31,9 @@ COPY id_ed25519.pub /root/.ssh/authorized_keys
 RUN chmod 600 /root/.ssh/authorized_keys && chown -R root:root /root/.ssh
 EXPOSE 22
 # Runtime env only applies to final container runtime
-ENV HOME=/work/target/asan \
+ENV RUSTC_WRAPPER=/usr/local/bin/rustc-asan-wrapper.sh \
+    RUSTC_REAL=/usr/local/rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustc \
+    HOME=/work/target/asan \
     TMP=/work/target/asan/tmp \
     TEMP=/work/target/asan/tmp \
     GRADLE_USER_HOME=/work/target/asan/gradle \
@@ -43,4 +48,4 @@ ENV HOME=/work/target/asan \
     ASAN_OPTIONS="detect_leaks=1,abort_on_error=1,verify_asan_link_order=0,detect_odr_violation=0"
 #CMD ["/usr/sbin/sshd", "-D"]
 
-CMD ["cargo", "+nightly", "test", "-Z", "build-std", "--workspace", "--all", "--all-targets", "--", "--nocapture", "--test-threads=1"]
+CMD ["cargo", "+nightly", "test", "--workspace", "--all", "--all-targets", "--", "--nocapture", "--test-threads=1"]

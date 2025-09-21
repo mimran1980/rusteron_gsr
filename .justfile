@@ -109,6 +109,19 @@ test-asan:
       -v "$PWD:/work" \
       rusteron-asan
 
+test-valgrind:
+    test -f ./id_ed25519 || ssh-keygen -t ed25519 -N "" -C "container@$(hostname)" -f ./id_ed25519
+    docker build --platform=linux/amd64 -f Dockerfile -t rusteron-asan .
+    docker run --rm --platform=linux/amd64 \
+      --shm-size=2g \
+      -v "$PWD:/work" \
+      --entrypoint valgrind \
+      rusteron-asan \
+      --tool=memcheck \
+      --error-exitcode=1 \
+      --leak-check=full \
+      cargo +nightly test --workspace --all-targets -- --test-threads=1
+
 # Run unit tests
 test:
   cargo test --workspace -- --nocapture
