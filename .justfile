@@ -4,8 +4,6 @@
 
 set shell := ["bash", "-cu"]
 
-toolchain := "nightly-2024-08-15"
-
 is_mac := if os() == "macos" { 'true' } else { 'false' }
 
 version := if `git rev-parse --git-dir 2>/dev/null; echo $?` == "0" {
@@ -102,19 +100,9 @@ docs:
 #  rustup run nightly cargo miri setup
 #  MIRIFLAGS="" rustup run nightly cargo miri test -p rusteron-code-gen --lib -- test_drop_
 
-# On macOS: run with nightly + AddressSanitizer and extra assertions
-test-asan:
-    test -f ./id_ed25519 || ssh-keygen -t ed25519 -N "" -C "container@$(hostname)" -f ./id_ed25519
-    docker build --platform=linux/amd64 --target asan -f Dockerfile -t rusteron-asan .
-    docker run --rm --platform=linux/amd64 \
-      --shm-size=2g \
-      -v "$PWD:/work" \
-      rusteron-asan \
-      cargo +{{toolchain}} test -Zbuild-std=std,panic_abort --target x86_64-unknown-linux-gnu --workspace --all-targets -- --test-threads=1
-
 test-valgrind:
     test -f ./id_ed25519 || ssh-keygen -t ed25519 -N "" -C "container@$(hostname)" -f ./id_ed25519
-    docker build --platform=linux/amd64 --target valgrind -f Dockerfile -t rusteron-valgrind .
+    docker build --platform=linux/amd64 -f Dockerfile -t rusteron-valgrind .
     docker run --rm --platform=linux/amd64 \
       --shm-size=2g \
       -v "$PWD:/work" \
@@ -123,7 +111,7 @@ test-valgrind:
       --tool=memcheck \
       --error-exitcode=1 \
       --leak-check=full \
-      cargo +{{toolchain}} test --workspace -- --test-threads=1
+      cargo test --workspace -- --test-threads=1
 
 # Run unit tests
 test:

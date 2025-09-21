@@ -52,11 +52,11 @@ jobs:
           sudo apt-get update && sudo apt-get install -y uuid-dev libbsd-dev
           cargo test --doc
 
-  AddressSanitiser:
+  memory-check:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
-    name: AddressSanitiser
+    name: Memory Check (Valgrind)
     runs-on: ubuntu-22.04
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -65,13 +65,10 @@ jobs:
           submodules: recursive
 
       - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y curl pkg-config libssl-dev libbsd-dev uuid-dev ca-certificates make cmake gcc g++ clang zlib1g-dev libbsd-dev
+        run: sudo apt-get update && sudo apt-get install -y curl pkg-config libssl-dev libbsd-dev uuid-dev ca-certificates make cmake gcc g++ clang zlib1g-dev libbsd-dev valgrind
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@nightly
-        with:
-          toolchain: nightly-2024-12-05
-          components: rust-src
+        uses: dtolnay/rust-toolchain@stable
 
       # aeron archive cmake for some reason starts java
       - name: Install Java
@@ -80,21 +77,12 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Test on Linux with ASan
+      - name: Run tests under Valgrind
         run: |
-          rustup toolchain install nightly-2024-12-05
-          rustup component add rust-src --toolchain nightly-2024-12-05
-
-          # Use explicit cargo via +toolchain, but DO NOT override RUSTC (breaks host proc-macro builds)
-          # Also avoid global RUSTFLAGS so host tools (proc-macros/build scripts) are not ASan-instrumented.
-          unset RUSTFLAGS
-          unset RUSTDOCFLAGS
-          export RUSTUP_TOOLCHAIN=nightly-2024-12-05
-          export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-Zsanitizer=address -Cforce-frame-pointers=yes"
-          export RUSTC="$(rustup which rustc --toolchain nightly-2024-12-05)" 
-          export ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 
-          export CFLAGS="-fsanitize=address" RUSTFLAGS="-Zsanitizer=address" 
-          "$(rustup which cargo --toolchain nightly-2024-12-05)" -Z build-std test --workspace --all --all-targets -- --nocapture
+          valgrind --tool=memcheck \
+           --error-exitcode=1 \
+           --leak-check=full \
+           cargo test --workspace -- --test-threads=1
 
   build:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
