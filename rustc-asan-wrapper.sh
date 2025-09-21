@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-real_rustc_env="${RUSTC_REAL:-}"
+toolchain_name="${RUSTUP_TOOLCHAIN:-nightly-2024-08-15-x86_64-unknown-linux-gnu}"
+default_rustc="/usr/local/rustup/toolchains/${toolchain_name}/bin/rustc"
+real_rustc_env="${RUSTC_REAL:-$default_rustc}"
 first_arg=""
 if [[ $# -gt 0 ]]; then
   first_arg="$1"
@@ -59,6 +61,23 @@ for arg in "$@"; do
   fi
   args+=("$arg")
 done
+
+strip_sanitizer=""
+case "$crate_name" in
+  zerofrom|zerofrom_derive|zerovec|zerovec_derive)
+    strip_sanitizer=1
+    ;;
+esac
+
+if [[ -n "$strip_sanitizer" ]]; then
+  filtered=()
+  for arg in "${args[@]}"; do
+    [[ $arg == -Zsanitizer=address ]] && continue
+    filtered+=("$arg")
+  done
+  args=("${filtered[@]}")
+  [[ -n "${WRAP_DEBUG:-}" ]] && echo "wrapper stripping sanitizer for crate $crate_name" >&2
+fi
 
 extra_args=()
 if [[ $crate_type == proc-macro ]]; then
