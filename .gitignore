@@ -4,3 +4,5 @@ Cargo.lock
 **/target/
 .aid*
 .coding*
+/id_ed25519
+/id_ed25519.pub

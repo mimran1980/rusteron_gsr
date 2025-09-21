@@ -102,9 +102,10 @@ docs:
 
 # On macOS: run with nightly + AddressSanitizer and extra assertions
 test-asan:
+    test -f ./id_ed25519 || ssh-keygen -t ed25519 -N "" -C "container@$(hostname)" -f ./id_ed25519
     docker build --platform=linux/amd64 -f Dockerfile -t rusteron-asan .
     docker run --rm --platform=linux/amd64 \
-      --shm-size=4g \
+      --shm-size=2g \
       -v "$PWD:/work" \
       rusteron-asan
 

@@ -1,2 +1,10 @@
 [build]
 rustflags = ["-C", "target-cpu=native"]
+
+[target.'cfg(proc_macro)']
+linker = "clang"
+rustflags = ["-C", "target-cpu=native"]
+
+[target.'cfg(not(proc_macro))']
+linker = "clang"
+rustflags = ["-Z", "sanitizer=address"]
