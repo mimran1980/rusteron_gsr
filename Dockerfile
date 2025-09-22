@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.4
-
 ARG RUST_VERSION=nightly
 FROM --platform=linux/amd64 rustlang/rust:${RUST_VERSION}
 
