@@ -1992,6 +1992,7 @@ pub fn generate_rust_code(
                 .filter(|t| !t.is_empty())
                 .collect();
 
+            let is_closed_method = wrapper.get_is_closed_method_quote();
             quote! {
                     impl #main_class_name {
                         #[inline]
@@ -2056,7 +2057,7 @@ pub fn generate_rust_code(
                                 },
                                 None,
                                 false,
-                                None,
+                                #is_closed_method,
                             )?;
                             let result = Self {
                                 inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource_async)),
@@ -2078,7 +2079,7 @@ pub fn generate_rust_code(
                             }
 
                             match result {
-                                Ok(result) => Ok(Some(result)),
+                                Ok(result) => {Ok(Some(result))},
                                 Err(AeronCError {code }) if code == 0 => {
                                   Ok(None) // try again
                                 }

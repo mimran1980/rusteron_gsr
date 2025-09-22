@@ -101,17 +101,38 @@ docs:
 #  MIRIFLAGS="" rustup run nightly cargo miri test -p rusteron-code-gen --lib -- test_drop_
 
 test-valgrind:
-    test -f ./id_ed25519 || ssh-keygen -t ed25519 -N "" -C "container@$(hostname)" -f ./id_ed25519
     docker build --platform=linux/amd64 -f Dockerfile -t rusteron-valgrind .
     docker run --rm --platform=linux/amd64 \
       --shm-size=2g \
+      -e HOME=/work/target/asan \
+      -e TMP=/work/target/asan/tmp \
+      -e TEMP=/work/target/asan/tmp \
+      -e GRADLE_USER_HOME=/work/target/asan/gradle \
+      -e CARGO_HOME=/work/target/asan/cargo-home \
+      -e CARGO_TARGET_DIR=/work/target/asan/target \
+      -e RUST_TEST_THREADS=1 \
       -v "$PWD:/work" \
       --entrypoint valgrind \
       rusteron-valgrind \
       --tool=memcheck \
       --error-exitcode=1 \
+      --track-origins=yes \
       --leak-check=full \
       cargo test --workspace -- --test-threads=1
+
+# starts docker image with valgrind and ssh, can ssh with ssh -i $PWD/id_ed25519 -p 2222 root@localhost
+start-valgrind-sshd:
+    test -f ./id_ed25519 || ssh-keygen -t ed25519 -N "" -C "container@$(hostname)" -f ./id_ed25519
+    docker build --platform=linux/amd64 -f Dockerfile -t rusteron-valgrind .
+    docker rm -f rusteron-valgrind-sshd >/dev/null 2>&1 || true
+    docker run --rm --platform=linux/amd64 \
+      --shm-size=2g \
+      -v "$PWD:/work" \
+      -p 2222:22 \
+      --name rusteron-valgrind-sshd \
+      --entrypoint /bin/sh \
+      rusteron-valgrind \
+      -c "sed -i '/^ListenAddress /d' /etc/ssh/sshd_config && exec /usr/sbin/sshd -D -e -o ListenAddress=0.0.0.0"
 
 # Run unit tests
 test:
