@@ -101,6 +101,7 @@ docs:
 #  MIRIFLAGS="" rustup run nightly cargo miri test -p rusteron-code-gen --lib -- test_drop_
 
 test-valgrind:
+    test -f ./id_ed25519 || ssh-keygen -t ed25519 -N "" -C "container@$(hostname)" -f ./id_ed25519
     docker build --platform=linux/amd64 -f Dockerfile -t rusteron-valgrind .
     docker run --rm --platform=linux/amd64 \
       --shm-size=2g \
@@ -118,6 +119,15 @@ test-valgrind:
       --error-exitcode=1 \
       --track-origins=yes \
       --leak-check=full \
+      --show-leak-kinds=all \
+      --track-origins=yes \
+      --track-fds=yes \
+      --show-reachable=yes \
+      --show-possibly-lost=yes \
+      --errors-for-leak-kinds=all \
+      --gen-suppressions=no \
+      --num-callers=30 \
+      --suppressions=/dev/null \
       cargo test --workspace -- --test-threads=1
 
 # starts docker image with valgrind and ssh, can ssh with ssh -i $PWD/id_ed25519 -p 2222 root@localhost
