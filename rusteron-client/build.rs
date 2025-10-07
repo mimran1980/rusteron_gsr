@@ -329,15 +329,12 @@ pub fn main() {
             panic!("rustfmt returned empty output - likely syntax error in generated code");
         }
         Err(e) => {
-            eprintln!("WARNING: rustfmt failed with error: {}", e);
+            eprintln!("WARNING: rustfmt failed with error: {e}");
             eprintln!(
                 "First 1000 chars of generated code: {}",
                 &generated_code[..generated_code.len().min(1000)]
             );
-            panic!(
-                "rustfmt failed - likely syntax error in generated code: {}",
-                e
-            );
+            panic!("rustfmt failed - likely syntax error in generated code: {e}");
         }
     };
 
