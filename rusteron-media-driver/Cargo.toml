@@ -1,6 +1,6 @@
 [package]
 name = "rusteron-media-driver"
-version = "0.1.154"
+version = "0.1.155"
 edition = "2021"
 authors = ["GSR devs <dev@gsr.io>"]
 license = "MIT OR Apache-2.0"
@@ -54,10 +54,11 @@ walkdir          = { workspace = true }
 [features]
 # using static as different modules have different versions of aeron which don't seem to play nicely
 default = []
-static = []
-backtrace = []       # logs the backtrace on each AeronCError
-extra-logging = []
-precompile = []
+static = []              # Statically links the Aeron C code
+backtrace = []           # Logs the backtrace on each AeronCError
+extra-logging = []       # Logs when resources are created and destroyed
+log-c-bindings = []      # Logs every C binding call with arguments and return values
+precompile = []          # Uses precompiled C code instead of requiring cmake and java
 
 [[bin]]
 name = "media_driver"
