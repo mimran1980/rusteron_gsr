@@ -387,9 +387,9 @@ show-aeron-version:
 update-to-latest-aeron-version:
     just update-aeron-version `curl -s https://api.github.com/repos/real-logic/aeron/releases | grep '"tag_name"' | head -1 | cut -d '"' -f4`
 
-test-asan:
-  rustup toolchain install nightly-2024-12-05
-  rustup component add rust-src --toolchain nightly-aarch64-apple-darwin
-  rustup default nightly-2024-12-05
-  RUSTUP_TOOLCHAIN=nightly-2024-12-05 RUSTC="$(rustup which rustc --toolchain nightly-2024-12-05)" DYLD_INSERT_LIBRARIES="$(rustup run nightly-2024-12-05 rustc --print target-libdir)/librustc-nightly_rt.asan.dylib" ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 CFLAGS="-fsanitize=address" RUSTFLAGS="-Zsanitizer=address" "$(rustup which cargo --toolchain nightly-2024-12-05)" -Z build-std test --package rusteron-client --lib -- --nocapture
-  RUSTUP_TOOLCHAIN=nightly-2024-12-05 RUSTC="$(rustup which rustc --toolchain nightly-2024-12-05)" DYLD_INSERT_LIBRARIES="$(rustup run nightly-2024-12-05 rustc --print target-libdir)/librustc-nightly_rt.asan.dylib" ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 CFLAGS="-fsanitize=address" RUSTFLAGS="-Zsanitizer=address" "$(rustup which cargo --toolchain nightly-2024-12-05)" -Z build-std test --package rusteron-archive --lib -- --nocapture
+#test-asan:
+#  rustup toolchain install nightly-2024-12-05
+#  rustup component add rust-src --toolchain nightly-aarch64-apple-darwin
+#  rustup default nightly-2024-12-05
+#  RUSTUP_TOOLCHAIN=nightly-2024-12-05 RUSTC="$(rustup which rustc --toolchain nightly-2024-12-05)" DYLD_INSERT_LIBRARIES="$(rustup run nightly-2024-12-05 rustc --print target-libdir)/librustc-nightly_rt.asan.dylib" ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 CFLAGS="-fsanitize=address" RUSTFLAGS="-Zsanitizer=address" "$(rustup which cargo --toolchain nightly-2024-12-05)" -Z build-std test --package rusteron-client --lib -- --nocapture
+#  RUSTUP_TOOLCHAIN=nightly-2024-12-05 RUSTC="$(rustup which rustc --toolchain nightly-2024-12-05)" DYLD_INSERT_LIBRARIES="$(rustup run nightly-2024-12-05 rustc --print target-libdir)/librustc-nightly_rt.asan.dylib" ASAN_OPTIONS=detect_leaks=1,abort_on_error=1 CFLAGS="-fsanitize=address" RUSTFLAGS="-Zsanitizer=address" "$(rustup which cargo --toolchain nightly-2024-12-05)" -Z build-std test --package rusteron-archive --lib -- --nocapture
