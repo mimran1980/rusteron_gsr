@@ -2244,16 +2244,21 @@ pub fn generate_rust_code(
                                     for d in (&mut *self.inner.as_owned().unwrap().dependencies.get()).iter_mut() {
                                       result.inner.add_dependency(d.clone());
                                     }
-                                    result.inner.as_owned().unwrap().auto_close.set(true);
                                 }
                             }
 
                             match result {
-                                Ok(result) => Ok(Some(result)),
+                                Ok(result) => {
+                                    result.inner.as_owned().unwrap().auto_close.set(true);
+                                    Ok(Some(result))
+                                }
                                 Err(AeronCError {code }) if code == 0 => {
                                   Ok(None) // try again
                                 }
-                                Err(e) => Err(e)
+                                Err(e) => {
+                                    // result.inner.as_owned().unwrap().auto_close.set(true);
+                                    Err(e)
+                                }
                             }
                         }
 
