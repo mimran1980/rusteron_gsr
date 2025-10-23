@@ -206,6 +206,8 @@ pub struct ManagedCResource<T> {
     check_for_is_closed: Option<fn(*mut T) -> bool>,
     #[doc = " this will be called if closed hasn't already happened even if its borrowed"]
     auto_close: std::cell::Cell<bool>,
+    #[doc = " indicates if the underlying resource has already been handed off and should not be re-polled"]
+    resource_released: std::cell::Cell<bool>,
     #[doc = " to prevent the dependencies from being dropped as you have a copy here,"]
     #[doc = " for example, you want to have a dependency to aeron for any async jobs so aeron doesnt get dropped first"]
     #[doc = " when you have a publication/subscription"]
@@ -250,6 +252,7 @@ impl<T> ManagedCResource<T> {
             close_already_called: std::cell::Cell::new(false),
             check_for_is_closed,
             auto_close: std::cell::Cell::new(false),
+            resource_released: std::cell::Cell::new(false),
             dependencies: UnsafeCell::new(vec![]),
         };
         #[cfg(feature = "extra-logging")]
@@ -305,6 +308,14 @@ impl<T> ManagedCResource<T> {
                 .filter_map(|x| x.as_ref().downcast_ref::<V>().cloned())
                 .next()
         }
+    }
+    #[inline]
+    pub fn is_resource_released(&self) -> bool {
+        self.resource_released.get()
+    }
+    #[inline]
+    pub fn mark_resource_released(&self) {
+        self.resource_released.set(true);
     }
     #[doc = " Closes the resource by calling the cleanup function."]
     #[doc = ""]
@@ -1368,19 +1379,34 @@ impl AeronArchiveAsyncConnect {
         Ok(result)
     }
     pub fn poll(&self) -> Result<Option<AeronArchive>, AeronCError> {
+        if let Some(inner) = self.inner.as_owned() {
+            if inner.is_resource_released() {
+                return Ok(None);
+            }
+        }
         let mut result = AeronArchive::new(self);
         if let Ok(result) = &mut result {
             unsafe {
                 for d in (&mut *self.inner.as_owned().unwrap().dependencies.get()).iter_mut() {
                     result.inner.add_dependency(d.clone());
                 }
-                result.inner.as_owned().unwrap().auto_close.set(true);
             }
         }
         match result {
-            Ok(result) => Ok(Some(result)),
+            Ok(result) => {
+                if let Some(inner) = self.inner.as_owned() {
+                    inner.mark_resource_released();
+                }
+                result.inner.as_owned().unwrap().auto_close.set(true);
+                Ok(Some(result))
+            }
             Err(AeronCError { code }) if code == 0 => Ok(None),
-            Err(e) => Err(e),
+            Err(e) => {
+                if let Some(inner) = self.inner.as_owned() {
+                    inner.mark_resource_released();
+                }
+                Err(e)
+            }
         }
     }
     pub fn poll_blocking(&self, timeout: std::time::Duration) -> Result<AeronArchive, AeronCError> {
@@ -1412,6 +1438,22 @@ impl core::fmt::Debug for AeronArchiveContext {
         } else {
             f.debug_struct(stringify!(AeronArchiveContext))
                 .field("inner", &self.inner)
+                .field(
+                    stringify!(get_aeron_directory_name),
+                    &self.get_aeron_directory_name(),
+                )
+                .field(
+                    stringify!(get_control_request_channel),
+                    &self.get_control_request_channel(),
+                )
+                .field(
+                    stringify!(get_control_response_channel),
+                    &self.get_control_response_channel(),
+                )
+                .field(
+                    stringify!(get_recording_events_channel),
+                    &self.get_recording_events_channel(),
+                )
                 .finish()
         }
     }
@@ -2700,9 +2742,14 @@ impl core::fmt::Debug for AeronArchiveControlResponsePoller {
                     &self.recording_signal_code(),
                 )
                 .field(stringify!(version), &self.version())
+                .field(stringify!(error_message), &self.error_message())
                 .field(
                     stringify!(error_message_malloced_len),
                     &self.error_message_malloced_len(),
+                )
+                .field(
+                    stringify!(encoded_challenge_buffer),
+                    &self.encoded_challenge_buffer(),
                 )
                 .field(
                     stringify!(encoded_challenge_buffer_malloced_len),
@@ -2992,10 +3039,7 @@ impl Drop for AeronArchiveControlResponsePoller {
                 && !inner.is_closed_already_called()
             {
                 if inner.auto_close.get() {
-                    log::info!(
-                        "auto closing {}",
-                        stringify!(AeronArchiveControlResponsePoller)
-                    );
+                    log::info!("auto closing {self:?}");
                     let result = self.close();
                     log::debug!("result {:?}", result);
                 } else {
@@ -3022,6 +3066,7 @@ impl core::fmt::Debug for AeronArchiveEncodedCredentials {
         } else {
             f.debug_struct(stringify!(AeronArchiveEncodedCredentials))
                 .field("inner", &self.inner)
+                .field(stringify!(data), &self.data())
                 .field(stringify!(length), &self.length())
                 .finish()
         }
@@ -4940,10 +4985,7 @@ impl Drop for AeronArchiveRecordingDescriptorPoller {
                 && !inner.is_closed_already_called()
             {
                 if inner.auto_close.get() {
-                    log::info!(
-                        "auto closing {}",
-                        stringify!(AeronArchiveRecordingDescriptorPoller)
-                    );
+                    log::info!("auto closing {self:?}");
                     let result = self.close();
                     log::debug!("result {:?}", result);
                 } else {
@@ -4984,14 +5026,17 @@ impl core::fmt::Debug for AeronArchiveRecordingDescriptor {
                 .field(stringify!(mtu_length), &self.mtu_length())
                 .field(stringify!(session_id), &self.session_id())
                 .field(stringify!(stream_id), &self.stream_id())
+                .field(stringify!(stripped_channel), &self.stripped_channel())
                 .field(
                     stringify!(stripped_channel_length),
                     &self.stripped_channel_length(),
                 )
+                .field(stringify!(original_channel), &self.original_channel())
                 .field(
                     stringify!(original_channel_length),
                     &self.original_channel_length(),
                 )
+                .field(stringify!(source_identity), &self.source_identity())
                 .field(
                     stringify!(source_identity_length),
                     &self.source_identity_length(),
@@ -5833,10 +5878,7 @@ impl Drop for AeronArchiveRecordingSubscriptionDescriptorPoller {
                 && !inner.is_closed_already_called()
             {
                 if inner.auto_close.get() {
-                    log::info!(
-                        "auto closing {}",
-                        stringify!(AeronArchiveRecordingSubscriptionDescriptorPoller)
-                    );
+                    log::info!("auto closing {self:?}");
                     let result = self.close();
                     log::debug!("result {:?}", result);
                 } else {
@@ -5868,6 +5910,7 @@ impl core::fmt::Debug for AeronArchiveRecordingSubscriptionDescriptor {
                 .field(stringify!(correlation_id), &self.correlation_id())
                 .field(stringify!(subscription_id), &self.subscription_id())
                 .field(stringify!(stream_id), &self.stream_id())
+                .field(stringify!(stripped_channel), &self.stripped_channel())
                 .field(
                     stringify!(stripped_channel_length),
                     &self.stripped_channel_length(),
@@ -6799,6 +6842,12 @@ impl core::fmt::Debug for AeronArchiveReplicationParams {
                 .field("inner", &self.inner)
                 .field(stringify!(stop_position), &self.stop_position())
                 .field(stringify!(dst_recording_id), &self.dst_recording_id())
+                .field(stringify!(live_destination), &self.live_destination())
+                .field(stringify!(replication_channel), &self.replication_channel())
+                .field(
+                    stringify!(src_response_channel),
+                    &self.src_response_channel(),
+                )
                 .field(stringify!(channel_tag_id), &self.channel_tag_id())
                 .field(stringify!(subscription_tag_id), &self.subscription_tag_id())
                 .field(stringify!(file_io_max_length), &self.file_io_max_length())
@@ -9368,7 +9417,7 @@ impl Drop for AeronArchive {
                 && !inner.is_closed_already_called()
             {
                 if inner.auto_close.get() {
-                    log::info!("auto closing {}", stringify!(AeronArchive));
+                    log::info!("auto closing {self:?}");
                     let result = self.close();
                     log::debug!("result {:?}", result);
                 } else {
@@ -9539,7 +9588,7 @@ impl AeronCounter {
             },
             None,
             false,
-            None,
+            Some(|c| unsafe { aeron_counter_is_closed(c) }),
         )?;
         Ok(Self {
             inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
@@ -9642,19 +9691,34 @@ impl AeronAsyncAddCounter {
         Ok(result)
     }
     pub fn poll(&self) -> Result<Option<AeronCounter>, AeronCError> {
+        if let Some(inner) = self.inner.as_owned() {
+            if inner.is_resource_released() {
+                return Ok(None);
+            }
+        }
         let mut result = AeronCounter::new(self);
         if let Ok(result) = &mut result {
             unsafe {
                 for d in (&mut *self.inner.as_owned().unwrap().dependencies.get()).iter_mut() {
                     result.inner.add_dependency(d.clone());
                 }
-                result.inner.as_owned().unwrap().auto_close.set(true);
             }
         }
         match result {
-            Ok(result) => Ok(Some(result)),
+            Ok(result) => {
+                if let Some(inner) = self.inner.as_owned() {
+                    inner.mark_resource_released();
+                }
+                result.inner.as_owned().unwrap().auto_close.set(true);
+                Ok(Some(result))
+            }
             Err(AeronCError { code }) if code == 0 => Ok(None),
-            Err(e) => Err(e),
+            Err(e) => {
+                if let Some(inner) = self.inner.as_owned() {
+                    inner.mark_resource_released();
+                }
+                Err(e)
+            }
         }
     }
     pub fn poll_blocking(&self, timeout: std::time::Duration) -> Result<AeronCounter, AeronCError> {
@@ -9877,7 +9941,7 @@ impl AeronExclusivePublication {
             },
             None,
             false,
-            None,
+            Some(|c| unsafe { aeron_exclusive_publication_is_closed(c) }),
         )?;
         Ok(Self {
             inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
@@ -9969,19 +10033,34 @@ impl AeronAsyncAddExclusivePublication {
         Ok(result)
     }
     pub fn poll(&self) -> Result<Option<AeronExclusivePublication>, AeronCError> {
+        if let Some(inner) = self.inner.as_owned() {
+            if inner.is_resource_released() {
+                return Ok(None);
+            }
+        }
         let mut result = AeronExclusivePublication::new(self);
         if let Ok(result) = &mut result {
             unsafe {
                 for d in (&mut *self.inner.as_owned().unwrap().dependencies.get()).iter_mut() {
                     result.inner.add_dependency(d.clone());
                 }
-                result.inner.as_owned().unwrap().auto_close.set(true);
             }
         }
         match result {
-            Ok(result) => Ok(Some(result)),
+            Ok(result) => {
+                if let Some(inner) = self.inner.as_owned() {
+                    inner.mark_resource_released();
+                }
+                result.inner.as_owned().unwrap().auto_close.set(true);
+                Ok(Some(result))
+            }
             Err(AeronCError { code }) if code == 0 => Ok(None),
-            Err(e) => Err(e),
+            Err(e) => {
+                if let Some(inner) = self.inner.as_owned() {
+                    inner.mark_resource_released();
+                }
+                Err(e)
+            }
         }
     }
     pub fn poll_blocking(
@@ -10176,7 +10255,7 @@ impl AeronPublication {
             },
             None,
             false,
-            None,
+            Some(|c| unsafe { aeron_publication_is_closed(c) }),
         )?;
         Ok(Self {
             inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
@@ -10264,19 +10343,34 @@ impl AeronAsyncAddPublication {
         Ok(result)
     }
     pub fn poll(&self) -> Result<Option<AeronPublication>, AeronCError> {
+        if let Some(inner) = self.inner.as_owned() {
+            if inner.is_resource_released() {
+                return Ok(None);
+            }
+        }
         let mut result = AeronPublication::new(self);
         if let Ok(result) = &mut result {
             unsafe {
                 for d in (&mut *self.inner.as_owned().unwrap().dependencies.get()).iter_mut() {
                     result.inner.add_dependency(d.clone());
                 }
-                result.inner.as_owned().unwrap().auto_close.set(true);
             }
         }
         match result {
-            Ok(result) => Ok(Some(result)),
+            Ok(result) => {
+                if let Some(inner) = self.inner.as_owned() {
+                    inner.mark_resource_released();
+                }
+                result.inner.as_owned().unwrap().auto_close.set(true);
+                Ok(Some(result))
+            }
             Err(AeronCError { code }) if code == 0 => Ok(None),
-            Err(e) => Err(e),
+            Err(e) => {
+                if let Some(inner) = self.inner.as_owned() {
+                    inner.mark_resource_released();
+                }
+                Err(e)
+            }
         }
     }
     pub fn poll_blocking(
@@ -10471,7 +10565,7 @@ impl AeronSubscription {
             },
             None,
             false,
-            None,
+            Some(|c| unsafe { aeron_subscription_is_closed(c) }),
         )?;
         Ok(Self {
             inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
@@ -10627,19 +10721,34 @@ impl AeronAsyncAddSubscription {
         Ok(result)
     }
     pub fn poll(&self) -> Result<Option<AeronSubscription>, AeronCError> {
+        if let Some(inner) = self.inner.as_owned() {
+            if inner.is_resource_released() {
+                return Ok(None);
+            }
+        }
         let mut result = AeronSubscription::new(self);
         if let Ok(result) = &mut result {
             unsafe {
                 for d in (&mut *self.inner.as_owned().unwrap().dependencies.get()).iter_mut() {
                     result.inner.add_dependency(d.clone());
                 }
-                result.inner.as_owned().unwrap().auto_close.set(true);
             }
         }
         match result {
-            Ok(result) => Ok(Some(result)),
+            Ok(result) => {
+                if let Some(inner) = self.inner.as_owned() {
+                    inner.mark_resource_released();
+                }
+                result.inner.as_owned().unwrap().auto_close.set(true);
+                Ok(Some(result))
+            }
             Err(AeronCError { code }) if code == 0 => Ok(None),
-            Err(e) => Err(e),
+            Err(e) => {
+                if let Some(inner) = self.inner.as_owned() {
+                    inner.mark_resource_released();
+                }
+                Err(e)
+            }
         }
     }
     pub fn poll_blocking(
@@ -12056,6 +12165,8 @@ impl core::fmt::Debug for AeronCnc {
         } else {
             f.debug_struct(stringify!(AeronCnc))
                 .field("inner", &self.inner)
+                .field(stringify!(constants), &self.get_constants())
+                .field(stringify!(filename), &self.filename())
                 .finish()
         }
     }
@@ -12523,6 +12634,8 @@ impl core::fmt::Debug for AeronContext {
         } else {
             f.debug_struct(stringify!(AeronContext))
                 .field("inner", &self.inner)
+                .field(stringify!(get_dir), &self.get_dir())
+                .field(stringify!(get_client_name), &self.get_client_name())
                 .finish()
         }
     }
@@ -14620,6 +14733,7 @@ impl core::fmt::Debug for AeronCounter {
         } else {
             f.debug_struct(stringify!(AeronCounter))
                 .field("inner", &self.inner)
+                .field(stringify!(constants), &self.get_constants())
                 .finish()
         }
     }
@@ -14896,7 +15010,7 @@ impl Drop for AeronCounter {
                 && !inner.is_closed_already_called()
             {
                 if inner.auto_close.get() {
-                    log::info!("auto closing {}", stringify!(AeronCounter));
+                    log::info!("auto closing {self:?}");
                     let result = self.close_with_no_args();
                     log::debug!("result {:?}", result);
                 } else {
@@ -16662,6 +16776,7 @@ impl core::fmt::Debug for AeronExclusivePublication {
         } else {
             f.debug_struct(stringify!(AeronExclusivePublication))
                 .field("inner", &self.inner)
+                .field(stringify!(constants), &self.get_constants())
                 .finish()
         }
     }
@@ -17561,7 +17676,7 @@ impl Drop for AeronExclusivePublication {
                 && !inner.is_closed_already_called()
             {
                 if inner.auto_close.get() {
-                    log::info!("auto closing {}", stringify!(AeronExclusivePublication));
+                    log::info!("auto closing {self:?}");
                     let result = self.close_with_no_args();
                     log::debug!("result {:?}", result);
                 } else {
@@ -17975,6 +18090,7 @@ impl core::fmt::Debug for AeronHeader {
         } else {
             f.debug_struct(stringify!(AeronHeader))
                 .field("inner", &self.inner)
+                .field(stringify!(values), &self.get_values())
                 .finish()
         }
     }
@@ -18598,6 +18714,7 @@ impl core::fmt::Debug for AeronImageConstants {
         } else {
             f.debug_struct(stringify!(AeronImageConstants))
                 .field("inner", &self.inner)
+                .field(stringify!(source_identity), &self.source_identity())
                 .field(stringify!(correlation_id), &self.correlation_id())
                 .field(stringify!(join_position), &self.join_position())
                 .field(
@@ -19287,6 +19404,7 @@ impl core::fmt::Debug for AeronImage {
         } else {
             f.debug_struct(stringify!(AeronImage))
                 .field("inner", &self.inner)
+                .field(stringify!(constants), &self.get_constants())
                 .finish()
         }
     }
@@ -20442,6 +20560,8 @@ impl core::fmt::Debug for AeronIpcChannelParams {
         } else {
             f.debug_struct(stringify!(AeronIpcChannelParams))
                 .field("inner", &self.inner)
+                .field(stringify!(channel_tag), &self.channel_tag())
+                .field(stringify!(entity_tag), &self.entity_tag())
                 .field(stringify!(additional_params), &self.additional_params())
                 .finish()
         }
@@ -23626,6 +23746,7 @@ impl core::fmt::Debug for AeronPublicationConstants {
         } else {
             f.debug_struct(stringify!(AeronPublicationConstants))
                 .field("inner", &self.inner)
+                .field(stringify!(channel), &self.channel())
                 .field(
                     stringify!(original_registration_id),
                     &self.original_registration_id(),
@@ -24095,6 +24216,8 @@ impl core::fmt::Debug for AeronPublication {
         } else {
             f.debug_struct(stringify!(AeronPublication))
                 .field("inner", &self.inner)
+                .field(stringify!(constants), &self.get_constants())
+                .field(stringify!(channel), &self.channel())
                 .finish()
         }
     }
@@ -24838,7 +24961,7 @@ impl Drop for AeronPublication {
                 && !inner.is_closed_already_called()
             {
                 if inner.auto_close.get() {
-                    log::info!("auto closing {}", stringify!(AeronPublication));
+                    log::info!("auto closing {self:?}");
                     let result = self.close_with_no_args();
                     log::debug!("result {:?}", result);
                 } else {
@@ -26434,6 +26557,7 @@ impl core::fmt::Debug for AeronStrToPtrHashMapKey {
         } else {
             f.debug_struct(stringify!(AeronStrToPtrHashMapKey))
                 .field("inner", &self.inner)
+                .field(stringify!(str_), &self.str_())
                 .field(stringify!(hash_code), &self.hash_code())
                 .field(stringify!(str_length), &self.str_length())
                 .finish()
@@ -26811,6 +26935,7 @@ impl core::fmt::Debug for AeronSubscriptionConstants {
         } else {
             f.debug_struct(stringify!(AeronSubscriptionConstants))
                 .field("inner", &self.inner)
+                .field(stringify!(channel), &self.channel())
                 .field(stringify!(registration_id), &self.registration_id())
                 .field(stringify!(stream_id), &self.stream_id())
                 .field(
@@ -27013,6 +27138,7 @@ impl core::fmt::Debug for AeronSubscription {
         } else {
             f.debug_struct(stringify!(AeronSubscription))
                 .field("inner", &self.inner)
+                .field(stringify!(constants), &self.get_constants())
                 .finish()
         }
     }
@@ -28021,7 +28147,7 @@ impl Drop for AeronSubscription {
                 && !inner.is_closed_already_called()
             {
                 if inner.auto_close.get() {
-                    log::info!("auto closing {}", stringify!(AeronSubscription));
+                    log::info!("auto closing {self:?}");
                     let result = self.close_with_no_args();
                     log::debug!("result {:?}", result);
                 } else {
@@ -29675,6 +29801,13 @@ impl core::fmt::Debug for AeronUdpChannelParams {
         } else {
             f.debug_struct(stringify!(AeronUdpChannelParams))
                 .field("inner", &self.inner)
+                .field(stringify!(endpoint), &self.endpoint())
+                .field(stringify!(bind_interface), &self.bind_interface())
+                .field(stringify!(control), &self.control())
+                .field(stringify!(control_mode), &self.control_mode())
+                .field(stringify!(channel_tag), &self.channel_tag())
+                .field(stringify!(entity_tag), &self.entity_tag())
+                .field(stringify!(ttl), &self.ttl())
                 .field(stringify!(additional_params), &self.additional_params())
                 .finish()
         }
@@ -29916,6 +30049,8 @@ impl core::fmt::Debug for AeronUriParam {
         } else {
             f.debug_struct(stringify!(AeronUriParam))
                 .field("inner", &self.inner)
+                .field(stringify!(key), &self.key())
+                .field(stringify!(value), &self.value())
                 .finish()
         }
     }
@@ -31241,7 +31376,7 @@ impl Drop for AeronUri {
                 && !inner.is_closed_already_called()
             {
                 if inner.auto_close.get() {
-                    log::info!("auto closing {}", stringify!(AeronUri));
+                    log::info!("auto closing {self:?}");
                     let result = self.close();
                     log::debug!("result {:?}", result);
                 } else {

@@ -2,7 +2,6 @@ use crate::get_possible_wrappers;
 #[allow(unused_imports)]
 use crate::snake_to_pascal_case;
 use itertools::Itertools;
-use log::info;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote, ToTokens};
 use std::collections::{BTreeMap, BTreeSet};
@@ -567,14 +566,12 @@ impl CWrapper {
         wrappers: &BTreeMap<String, CWrapper>,
         closure_handlers: &Vec<CHandler>,
         additional_outer_impls: &mut Vec<TokenStream>,
+        debug_fields: &mut Vec<TokenStream>,
     ) -> Vec<TokenStream> {
         self.methods
             .iter()
             .filter(|m| !m.arguments.iter().any(|arg| arg.is_double_mut_pointer()))
             .map(|method| {
-                if method.struct_method_name.contains("errmsg") {
-                    info!("{}", method.fn_name);
-                }
                 let set_closed = if method.struct_method_name == "close" {
                     quote! {
                         if let Some(inner) = self.inner.as_owned() {
@@ -684,6 +681,13 @@ impl CWrapper {
                 // Generate logging expression for arguments
                 let args_log_expr = Self::generate_arg_logging(&method.arguments, &arg_names);
 
+                if uses_self && method.return_type.is_c_string_any() && method.arguments.len() == 1 {
+                    let name = format_ident!("{}", method.struct_method_name);
+                    debug_fields.push( quote! {
+                            .field(stringify!(#name), &self.#name() )
+                        } );
+                }
+
                 let possible_self = if uses_self  {
                     quote! { &self, }
                 } else {
@@ -701,7 +705,7 @@ impl CWrapper {
                 Self::add_mut_string_methods_if_applicable(method, &fn_name, uses_self, &method_docs, &mut additional_methods);
 
                 // getter methods
-                Self::add_getter_instead_of_mut_arg_if_applicable(wrappers, method, &fn_name, &where_clause, &possible_self, &method_docs, &mut additional_methods);
+                Self::add_getter_instead_of_mut_arg_if_applicable(wrappers, method, &fn_name, &where_clause, &possible_self, &method_docs, &mut additional_methods, debug_fields);
 
                 Self::add_once_methods_for_handlers(closure_handlers, method, &fn_name, &return_type, &ffi_call, &where_clause, &fn_arguments, &mut arg_names, &converter, &possible_self, &method_docs, &mut additional_methods, &set_closed);
 
@@ -752,6 +756,7 @@ impl CWrapper {
                             .map(|s| TokenStream::from_str(s.to_string().replace("# Parameters\n", "").as_str()).unwrap())
                             .collect_vec();
                     }
+
 
                     quote! {
                         #[inline]
@@ -947,6 +952,7 @@ impl CWrapper {
         possible_self: &TokenStream,
         method_docs: &Vec<TokenStream>,
         additional_methods: &mut Vec<TokenStream>,
+        debug_fields: &mut Vec<TokenStream>,
     ) {
         if ["constants", "buffers", "values"]
             .iter()
@@ -970,6 +976,9 @@ impl CWrapper {
                             Ok(result)
                         }
                     });
+            debug_fields.push(quote! {
+                .field(stringify!(#fn_name), &self.#getter_method() )
+            });
         }
     }
 
@@ -1077,7 +1086,7 @@ impl CWrapper {
                     || rt.original.is_byte_array()
                     || cwrappers.contains_key(&rt.original.c_type)
                 {
-                    if !rt.original.is_any_pointer() {
+                    if !rt.original.is_any_pointer() || rt.original.is_c_string_any() {
                         debug_fields
                             .push(quote! { .field(stringify!(#fn_name), &self.#fn_name()) });
                     }
@@ -1938,8 +1947,14 @@ pub fn generate_rust_code(
     let type_name = Ident::new(&wrapper.type_name, proc_macro2::Span::call_site());
 
     let mut additional_outer_impls = vec![];
+    let mut debug_fields = vec![];
 
-    let methods = wrapper.generate_methods(wrappers, closure_handlers, &mut additional_outer_impls);
+    let methods = wrapper.generate_methods(
+        wrappers,
+        closure_handlers,
+        &mut additional_outer_impls,
+        &mut debug_fields,
+    );
     let mut constructor_fields = vec![];
     let mut new_ref_set_none = vec![];
     let constructor =
@@ -2322,7 +2337,7 @@ pub fn generate_rust_code(
                         if let Some(inner) = self.inner.as_owned() {
                             if (inner.cleanup.is_none() ) && std::rc::Rc::strong_count(inner) == 1 && !inner.is_closed_already_called() {
                                 if inner.auto_close.get() {
-                                    log::info!("auto closing {} {:?}", stringify!(#class_name), self.inner.get());
+                                    log::info!("auto closing {self:?}");
                                     let result = self.#close_method_call();
                                     log::debug!("result {:?}", result);
                                 } else {
@@ -2379,7 +2394,6 @@ pub fn generate_rust_code(
         })
         .collect();
 
-    let mut debug_fields = vec![];
     let fields = wrapper.generate_fields(&wrappers, &mut debug_fields);
 
     let default_impl = if wrapper.has_default_method()
