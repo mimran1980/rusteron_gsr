@@ -100,7 +100,6 @@ mod tests {
             .filter_level(log::LevelFilter::Info)
             .try_init();
 
-        // Start embedded media driver with a unique dir
         let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
         media_driver_ctx.set_dir_delete_on_shutdown(true)?;
         media_driver_ctx.set_dir_delete_on_start(true)?;
@@ -110,16 +109,12 @@ mod tests {
         let (stop, driver_handle) =
             rusteron_media_driver::AeronDriver::launch_embedded(media_driver_ctx.clone(), false);
 
-        // Client setup
         let ctx = AeronContext::new()?;
         ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
         ctx.set_error_handler(Some(&Handler::leak(ErrorCount::default())))?;
         let aeron = Aeron::new(&ctx)?;
         aeron.start()?;
 
-        // Choose a UDP channel with an endpoint that is not owned locally.
-        // 203.0.113.1 is a TEST-NET-3 address that should not exist locally.
-        // No interface is set to mirror the reported scenario.
         let channel = String::from("aeron:udp?endpoint=203.0.113.1:54321");
 
         // Create async publication and subscription pollers on the same invalid channel and
@@ -159,7 +154,6 @@ mod tests {
         info!("subscription: {:?}", subscription);
 
         if let (Some(publisher), Some(subscription)) = (publication, subscription) {
-            // If resources actually got created, try a tiny send/receive.
             let payload = b"hello-aeron";
             let send_start = Instant::now();
             let mut sent = false;
@@ -209,7 +203,6 @@ mod tests {
             .filter_level(log::LevelFilter::Info)
             .try_init();
 
-        // Start embedded media driver with a unique dir
         let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
         media_driver_ctx.set_dir_delete_on_shutdown(true)?;
         media_driver_ctx.set_dir_delete_on_start(true)?;
@@ -219,7 +212,6 @@ mod tests {
         let (stop, driver_handle) =
             rusteron_media_driver::AeronDriver::launch_embedded(media_driver_ctx.clone(), false);
 
-        // Client setup
         let ctx = AeronContext::new()?;
         ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
         ctx.set_error_handler(Some(&Handler::leak(ErrorCount::default())))?;
@@ -268,7 +260,6 @@ mod tests {
             .filter_level(log::LevelFilter::Info)
             .try_init();
 
-        // Start embedded media driver with a unique dir
         let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
         media_driver_ctx.set_dir_delete_on_shutdown(true)?;
         media_driver_ctx.set_dir_delete_on_start(true)?;
@@ -278,7 +269,6 @@ mod tests {
         let (stop, driver_handle) =
             rusteron_media_driver::AeronDriver::launch_embedded(media_driver_ctx.clone(), false);
 
-        // Client setup
         let ctx = AeronContext::new()?;
         ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
         ctx.set_error_handler(Some(&Handler::leak(ErrorCount::default())))?;
@@ -317,7 +307,6 @@ mod tests {
             .filter_level(log::LevelFilter::Info)
             .try_init();
 
-        // Start embedded media driver with a unique dir
         let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
         media_driver_ctx.set_dir_delete_on_shutdown(true)?;
         media_driver_ctx.set_dir_delete_on_start(true)?;
@@ -327,7 +316,6 @@ mod tests {
         let (stop, driver_handle) =
             rusteron_media_driver::AeronDriver::launch_embedded(media_driver_ctx.clone(), false);
 
-        // Client setup
         let ctx = AeronContext::new()?;
         ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
         ctx.set_error_handler(Some(&Handler::leak(ErrorCount::default())))?;
