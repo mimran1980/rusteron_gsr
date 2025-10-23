@@ -2152,6 +2152,7 @@ pub fn generate_rust_code(
             // Generate logging for poll method arguments (as token stream)
             let poll_log_expr_tokens =
                 CWrapper::generate_arg_logging(&poll_method.arguments, &init_args);
+            let is_closed_method = main.get_is_closed_method_quote();
 
             quote! {
                     impl #main_class_name {
@@ -2168,7 +2169,7 @@ pub fn generate_rust_code(
                                 },
                                 None,
                                 false,
-                                None,
+                                #is_closed_method,
                             )?;
                             Ok(Self {
                                 inner: CResource::OwnedOnHeap(std::rc::Rc::new(resource)),
@@ -2238,6 +2239,12 @@ pub fn generate_rust_code(
 
                         pub fn poll(&self) -> Result<Option<#main_class_name>, AeronCError> {
 
+                            if let Some(inner) = self.inner.as_owned() {
+                                if inner.is_resource_released() {
+                                    return Ok(None);
+                                }
+                            }
+
                             let mut result = #main_class_name::new(self);
                             if let Ok(result) = &mut result {
                                 unsafe {
@@ -2249,6 +2256,9 @@ pub fn generate_rust_code(
 
                             match result {
                                 Ok(result) => {
+                                    if let Some(inner) = self.inner.as_owned() {
+                                        inner.mark_resource_released();
+                                    }
                                     result.inner.as_owned().unwrap().auto_close.set(true);
                                     Ok(Some(result))
                                 }
@@ -2256,7 +2266,9 @@ pub fn generate_rust_code(
                                   Ok(None) // try again
                                 }
                                 Err(e) => {
-                                    // result.inner.as_owned().unwrap().auto_close.set(true);
+                                    if let Some(inner) = self.inner.as_owned() {
+                                        inner.mark_resource_released();
+                                    }
                                     Err(e)
                                 }
                             }
@@ -2310,7 +2322,7 @@ pub fn generate_rust_code(
                         if let Some(inner) = self.inner.as_owned() {
                             if (inner.cleanup.is_none() ) && std::rc::Rc::strong_count(inner) == 1 && !inner.is_closed_already_called() {
                                 if inner.auto_close.get() {
-                                    log::info!("auto closing {}", stringify!(#class_name));
+                                    log::info!("auto closing {} {:?}", stringify!(#class_name), self.inner.get());
                                     let result = self.#close_method_call();
                                     log::debug!("result {:?}", result);
                                 } else {
