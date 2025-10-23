@@ -104,6 +104,36 @@ docs:
 test-valgrind:
     test -f ./id_ed25519 || ssh-keygen -t ed25519 -N "" -C "container@$(hostname)" -f ./id_ed25519
     docker build --platform=linux/amd64 -f Dockerfile -t rusteron-valgrind .
+    docker run --rm --platform=linux/amd64 \
+      --shm-size=2g \
+      -e HOME=/work/target/asan \
+      -e TMP=/work/target/asan/tmp \
+      -e TEMP=/work/target/asan/tmp \
+      -e GRADLE_USER_HOME=/work/target/asan/gradle \
+      -e CARGO_HOME=/work/target/asan/cargo-home \
+      -e CARGO_TARGET_DIR=/work/target/asan/target \
+      -e RUST_TEST_THREADS=1 \
+      -v "$PWD:/work" \
+      --entrypoint valgrind \
+      rusteron-valgrind \
+      --tool=memcheck \
+      --error-exitcode=1 \
+      --track-origins=yes \
+      --leak-check=full \
+      --show-leak-kinds=all \
+      --track-origins=yes \
+      --track-fds=yes \
+      --show-reachable=yes \
+      --show-possibly-lost=yes \
+      --errors-for-leak-kinds=all \
+      --gen-suppressions=no \
+      --num-callers=30 \
+      --suppressions=/dev/null \
+      cargo test --workspace -- --test-threads=1
+
+test-valgrind2:
+    test -f ./id_ed25519 || ssh-keygen -t ed25519 -N "" -C "container@$(hostname)" -f ./id_ed25519
+    docker build --platform=linux/amd64 -f Dockerfile -t rusteron-valgrind .
     docker container inspect rusteron-valgrind-test >/dev/null 2>&1 || \
       docker create --platform=linux/amd64 \
         --name rusteron-valgrind-test \
