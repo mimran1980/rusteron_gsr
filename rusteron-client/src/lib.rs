@@ -94,7 +94,6 @@ mod tests {
 
     #[test]
     #[serial]
-    // #[ignore] // TODO FIXME broken test
     fn async_publication_invalid_interface_poll_then_drop() -> Result<(), Box<dyn error::Error>> {
         let _ = env_logger::Builder::new()
             .is_test(true)
@@ -204,7 +203,6 @@ mod tests {
 
     #[test]
     #[serial]
-    // #[ignore] // TODO FIXME broken test
     fn async_pub_sub_invalid_endpoint_create_drop_stress() -> Result<(), Box<dyn error::Error>> {
         let _ = env_logger::Builder::new()
             .is_test(true)
@@ -313,7 +311,6 @@ mod tests {
 
     #[test]
     #[serial]
-    // #[ignore] // TODO FIXME broken test
     fn blocking_add_subscription_invalid_interface_timeout() -> Result<(), Box<dyn error::Error>> {
         let _ = env_logger::Builder::new()
             .is_test(true)
@@ -356,7 +353,6 @@ mod tests {
 
     #[test]
     #[serial]
-    // #[ignore] // TODO FIXME broken test
     fn async_publication_invalid_bind_poll_then_drop() -> Result<(), Box<dyn error::Error>> {
         let _ = env_logger::Builder::new()
             .is_test(true)
