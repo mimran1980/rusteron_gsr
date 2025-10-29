@@ -286,7 +286,7 @@ impl ReturnType {
                 let length = &args[1].as_ident();
                 return quote! { if #result.is_null() { ""} else { std::str::from_utf8_unchecked(std::slice::from_raw_parts(#result as *const u8, #length.try_into().unwrap()))}};
             } else {
-                return quote! { if #result.is_null() { ""} else { unsafe { std::ffi::CStr::from_ptr(#result).to_str().unwrap() } } };
+                return quote! { if #result.is_null() { ""} else { unsafe { std::ffi::CStr::from_ptr(#result).to_str().unwrap_or("") } } };
             }
         } else if self.original.is_single_mut_pointer() && self.original.is_primitive() {
             return quote! {
@@ -2429,8 +2429,8 @@ pub fn generate_rust_code(
                 /// NOTE: if the struct has references to other structs these will not be copied
                 ///
                 /// Must be only used on structs which has no init/clean up methods.
-                /// So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription
-                /// More intended for AeronArchiveRecordingDescriptor
+                /// So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription
+                /// More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)
                 pub fn clone_struct(&self) -> Self {
                     let copy = Self::default();
                     copy.get_inner_mut().clone_from(self.deref());

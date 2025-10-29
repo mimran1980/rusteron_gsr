@@ -2675,8 +2675,8 @@ impl AeronBufferClaim {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -3036,8 +3036,8 @@ impl AeronCncConstants {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -3296,8 +3296,8 @@ impl AeronCncMetadata {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -3414,7 +3414,7 @@ impl AeronCnc {
             if result.is_null() {
                 ""
             } else {
-                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap() }
+                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap_or("") }
             }
         }
     }
@@ -3866,7 +3866,7 @@ impl AeronContext {
             if result.is_null() {
                 ""
             } else {
-                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap() }
+                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap_or("") }
             }
         }
     }
@@ -4099,7 +4099,7 @@ impl AeronContext {
             if result.is_null() {
                 ""
             } else {
-                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap() }
+                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap_or("") }
             }
         }
     }
@@ -5663,8 +5663,8 @@ impl AeronCounterConstants {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -5864,8 +5864,8 @@ impl AeronCounterMetadataDescriptor {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -6357,8 +6357,8 @@ impl AeronCounterValueDescriptor {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -6539,8 +6539,8 @@ impl AeronCountersReaderBuffers {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -7311,8 +7311,8 @@ impl AeronDataHeaderAsLongs {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -7509,8 +7509,8 @@ impl AeronDataHeader {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -7714,8 +7714,8 @@ impl AeronError {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -9028,8 +9028,8 @@ impl AeronFrameHeader {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -9471,8 +9471,8 @@ impl AeronHeaderValuesFrame {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -9651,8 +9651,8 @@ impl AeronHeaderValues {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -9782,7 +9782,7 @@ impl AeronImageConstants {
             unsafe {
                 std::ffi::CStr::from_ptr(self.source_identity)
                     .to_str()
-                    .unwrap()
+                    .unwrap_or("")
             }
         }
     }
@@ -9892,8 +9892,8 @@ impl AeronImageConstants {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -11498,8 +11498,8 @@ impl AeronIovec {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -11594,7 +11594,11 @@ impl AeronIpcChannelParams {
         if self.channel_tag.is_null() {
             ""
         } else {
-            unsafe { std::ffi::CStr::from_ptr(self.channel_tag).to_str().unwrap() }
+            unsafe {
+                std::ffi::CStr::from_ptr(self.channel_tag)
+                    .to_str()
+                    .unwrap_or("")
+            }
         }
     }
     #[inline]
@@ -11602,7 +11606,11 @@ impl AeronIpcChannelParams {
         if self.entity_tag.is_null() {
             ""
         } else {
-            unsafe { std::ffi::CStr::from_ptr(self.entity_tag).to_str().unwrap() }
+            unsafe {
+                std::ffi::CStr::from_ptr(self.entity_tag)
+                    .to_str()
+                    .unwrap_or("")
+            }
         }
     }
     #[inline]
@@ -11683,8 +11691,8 @@ impl AeronIpcChannelParams {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -12259,8 +12267,8 @@ impl AeronLogbufferMetadata {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -12463,8 +12471,8 @@ impl AeronLossReporterEntry {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -12879,8 +12887,8 @@ impl AeronLossReporter {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -13051,8 +13059,8 @@ impl AeronMappedBuffer {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -13289,8 +13297,8 @@ impl AeronMappedFile {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -13603,8 +13611,8 @@ impl AeronMappedRawLog {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -13801,8 +13809,8 @@ impl AeronNakHeader {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -13983,8 +13991,8 @@ impl AeronAvailableCounterPair {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -14159,8 +14167,8 @@ impl AeronCloseClientPair {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -14341,8 +14349,8 @@ impl AeronUnavailableCounterPair {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -14508,8 +14516,8 @@ impl AeronOptionHeader {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -14683,8 +14691,8 @@ impl AeronPerThreadError {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -14825,7 +14833,11 @@ impl AeronPublicationConstants {
         if self.channel.is_null() {
             ""
         } else {
-            unsafe { std::ffi::CStr::from_ptr(self.channel).to_str().unwrap() }
+            unsafe {
+                std::ffi::CStr::from_ptr(self.channel)
+                    .to_str()
+                    .unwrap_or("")
+            }
         }
     }
     #[inline]
@@ -14950,8 +14962,8 @@ impl AeronPublicationConstants {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -15736,7 +15748,7 @@ impl AeronPublication {
             if result.is_null() {
                 ""
             } else {
-                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap() }
+                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap_or("") }
             }
         }
     }
@@ -16120,8 +16132,8 @@ impl AeronResolutionHeaderIpv4 {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -16317,8 +16329,8 @@ impl AeronResolutionHeaderIpv6 {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -16499,8 +16511,8 @@ impl AeronResolutionHeader {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -16683,8 +16695,8 @@ impl AeronResponseSetupHeader {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -16881,8 +16893,8 @@ impl AeronRttmHeader {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -17100,8 +17112,8 @@ impl AeronSetupHeader {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -17332,8 +17344,8 @@ impl AeronStatusMessageHeader {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -17495,8 +17507,8 @@ impl AeronStatusMessageOptionalHeader {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -17591,7 +17603,7 @@ impl AeronStrToPtrHashMapKey {
         if self.str_.is_null() {
             ""
         } else {
-            unsafe { std::ffi::CStr::from_ptr(self.str_).to_str().unwrap() }
+            unsafe { std::ffi::CStr::from_ptr(self.str_).to_str().unwrap_or("") }
         }
     }
     #[inline]
@@ -17676,8 +17688,8 @@ impl AeronStrToPtrHashMapKey {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -17873,8 +17885,8 @@ impl AeronStrToPtrHashMap {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -17979,7 +17991,11 @@ impl AeronSubscriptionConstants {
         if self.channel.is_null() {
             ""
         } else {
-            unsafe { std::ffi::CStr::from_ptr(self.channel).to_str().unwrap() }
+            unsafe {
+                std::ffi::CStr::from_ptr(self.channel)
+                    .to_str()
+                    .unwrap_or("")
+            }
         }
     }
     #[inline]
@@ -18076,8 +18092,8 @@ impl AeronSubscriptionConstants {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -19621,7 +19637,7 @@ impl Aeron {
             if result.is_null() {
                 ""
             } else {
-                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap() }
+                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap_or("") }
             }
         }
     }
@@ -19640,7 +19656,7 @@ impl Aeron {
             if result.is_null() {
                 ""
             } else {
-                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap() }
+                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap_or("") }
             }
         }
     }
@@ -19729,7 +19745,7 @@ impl Aeron {
             if result.is_null() {
                 ""
             } else {
-                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap() }
+                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap_or("") }
             }
         }
     }
@@ -19934,7 +19950,7 @@ impl Aeron {
             if result.is_null() {
                 ""
             } else {
-                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap() }
+                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap_or("") }
             }
         }
     }
@@ -20155,7 +20171,7 @@ impl Aeron {
             if result.is_null() {
                 ""
             } else {
-                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap() }
+                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap_or("") }
             }
         }
     }
@@ -20773,7 +20789,11 @@ impl AeronUdpChannelParams {
         if self.endpoint.is_null() {
             ""
         } else {
-            unsafe { std::ffi::CStr::from_ptr(self.endpoint).to_str().unwrap() }
+            unsafe {
+                std::ffi::CStr::from_ptr(self.endpoint)
+                    .to_str()
+                    .unwrap_or("")
+            }
         }
     }
     #[inline]
@@ -20784,7 +20804,7 @@ impl AeronUdpChannelParams {
             unsafe {
                 std::ffi::CStr::from_ptr(self.bind_interface)
                     .to_str()
-                    .unwrap()
+                    .unwrap_or("")
             }
         }
     }
@@ -20793,7 +20813,11 @@ impl AeronUdpChannelParams {
         if self.control.is_null() {
             ""
         } else {
-            unsafe { std::ffi::CStr::from_ptr(self.control).to_str().unwrap() }
+            unsafe {
+                std::ffi::CStr::from_ptr(self.control)
+                    .to_str()
+                    .unwrap_or("")
+            }
         }
     }
     #[inline]
@@ -20804,7 +20828,7 @@ impl AeronUdpChannelParams {
             unsafe {
                 std::ffi::CStr::from_ptr(self.control_mode)
                     .to_str()
-                    .unwrap()
+                    .unwrap_or("")
             }
         }
     }
@@ -20813,7 +20837,11 @@ impl AeronUdpChannelParams {
         if self.channel_tag.is_null() {
             ""
         } else {
-            unsafe { std::ffi::CStr::from_ptr(self.channel_tag).to_str().unwrap() }
+            unsafe {
+                std::ffi::CStr::from_ptr(self.channel_tag)
+                    .to_str()
+                    .unwrap_or("")
+            }
         }
     }
     #[inline]
@@ -20821,7 +20849,11 @@ impl AeronUdpChannelParams {
         if self.entity_tag.is_null() {
             ""
         } else {
-            unsafe { std::ffi::CStr::from_ptr(self.entity_tag).to_str().unwrap() }
+            unsafe {
+                std::ffi::CStr::from_ptr(self.entity_tag)
+                    .to_str()
+                    .unwrap_or("")
+            }
         }
     }
     #[inline]
@@ -20829,7 +20861,7 @@ impl AeronUdpChannelParams {
         if self.ttl.is_null() {
             ""
         } else {
-            unsafe { std::ffi::CStr::from_ptr(self.ttl).to_str().unwrap() }
+            unsafe { std::ffi::CStr::from_ptr(self.ttl).to_str().unwrap_or("") }
         }
     }
     #[inline]
@@ -20910,8 +20942,8 @@ impl AeronUdpChannelParams {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -21000,7 +21032,7 @@ impl AeronUriParam {
         if self.key.is_null() {
             ""
         } else {
-            unsafe { std::ffi::CStr::from_ptr(self.key).to_str().unwrap() }
+            unsafe { std::ffi::CStr::from_ptr(self.key).to_str().unwrap_or("") }
         }
     }
     #[inline]
@@ -21008,7 +21040,7 @@ impl AeronUriParam {
         if self.value.is_null() {
             ""
         } else {
-            unsafe { std::ffi::CStr::from_ptr(self.value).to_str().unwrap() }
+            unsafe { std::ffi::CStr::from_ptr(self.value).to_str().unwrap_or("") }
         }
     }
     #[inline(always)]
@@ -21085,8 +21117,8 @@ impl AeronUriParam {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -21201,7 +21233,7 @@ impl AeronUriParams {
             if result.is_null() {
                 ""
             } else {
-                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap() }
+                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap_or("") }
             }
         }
     }
@@ -21482,8 +21514,8 @@ impl AeronUriParams {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -21726,7 +21758,7 @@ impl AeronUriStringBuilder {
             if result.is_null() {
                 ""
             } else {
-                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap() }
+                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap_or("") }
             }
         }
     }
@@ -22282,8 +22314,8 @@ impl AeronUri {
     #[doc = r" NOTE: if the struct has references to other structs these will not be copied"]
     #[doc = r""]
     #[doc = r" Must be only used on structs which has no init/clean up methods."]
-    #[doc = r" So its danagerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
-    #[doc = r" More intended for AeronArchiveRecordingDescriptor"]
+    #[doc = r" So its dangerous to use with Aeron/AeronContext/AeronPublication/AeronSubscription"]
+    #[doc = r" More intended for AeronArchiveRecordingDescriptor (note strings will not work as its a shallow copy)"]
     pub fn clone_struct(&self) -> Self {
         let copy = Self::default();
         copy.get_inner_mut().clone_from(self.deref());
@@ -22352,7 +22384,7 @@ unsafe extern "C" fn aeron_error_handler_t_callback<F: AeronErrorHandlerCallback
         if message.is_null() {
             ""
         } else {
-            unsafe { std::ffi::CStr::from_ptr(message).to_str().unwrap() }
+            unsafe { std::ffi::CStr::from_ptr(message).to_str().unwrap_or("") }
         },
     )
 }
@@ -22393,7 +22425,7 @@ unsafe extern "C" fn aeron_error_handler_t_callback_for_once_closure<
         if message.is_null() {
             ""
         } else {
-            unsafe { std::ffi::CStr::from_ptr(message).to_str().unwrap() }
+            unsafe { std::ffi::CStr::from_ptr(message).to_str().unwrap_or("") }
         },
     )
 }
@@ -22678,7 +22710,7 @@ unsafe extern "C" fn aeron_on_new_publication_t_callback<F: AeronNewPublicationC
         if channel.is_null() {
             ""
         } else {
-            unsafe { std::ffi::CStr::from_ptr(channel).to_str().unwrap() }
+            unsafe { std::ffi::CStr::from_ptr(channel).to_str().unwrap_or("") }
         },
         stream_id.into(),
         session_id.into(),
@@ -22738,7 +22770,7 @@ unsafe extern "C" fn aeron_on_new_publication_t_callback_for_once_closure<
         if channel.is_null() {
             ""
         } else {
-            unsafe { std::ffi::CStr::from_ptr(channel).to_str().unwrap() }
+            unsafe { std::ffi::CStr::from_ptr(channel).to_str().unwrap_or("") }
         },
         stream_id.into(),
         session_id.into(),
@@ -22845,7 +22877,7 @@ unsafe extern "C" fn aeron_on_new_subscription_t_callback<F: AeronNewSubscriptio
         if channel.is_null() {
             ""
         } else {
-            unsafe { std::ffi::CStr::from_ptr(channel).to_str().unwrap() }
+            unsafe { std::ffi::CStr::from_ptr(channel).to_str().unwrap_or("") }
         },
         stream_id.into(),
         correlation_id.into(),
@@ -22902,7 +22934,7 @@ unsafe extern "C" fn aeron_on_new_subscription_t_callback_for_once_closure<
         if channel.is_null() {
             ""
         } else {
-            unsafe { std::ffi::CStr::from_ptr(channel).to_str().unwrap() }
+            unsafe { std::ffi::CStr::from_ptr(channel).to_str().unwrap_or("") }
         },
         stream_id.into(),
         correlation_id.into(),
@@ -23534,7 +23566,7 @@ unsafe extern "C" fn aeron_agent_on_start_func_t_callback<F: AeronAgentStartFunc
     closure.handle_aeron_agent_on_start_func(if role_name.is_null() {
         ""
     } else {
-        unsafe { std::ffi::CStr::from_ptr(role_name).to_str().unwrap() }
+        unsafe { std::ffi::CStr::from_ptr(role_name).to_str().unwrap_or("") }
     })
 }
 #[allow(dead_code)]
@@ -23567,7 +23599,7 @@ unsafe extern "C" fn aeron_agent_on_start_func_t_callback_for_once_closure<F: Fn
     closure(if role_name.is_null() {
         ""
     } else {
-        unsafe { std::ffi::CStr::from_ptr(role_name).to_str().unwrap() }
+        unsafe { std::ffi::CStr::from_ptr(role_name).to_str().unwrap_or("") }
     })
 }
 #[doc = "Function called by aeron_counters_reader_foreach_counter for each counter in the aeron_counters_reader_t."]
@@ -24856,12 +24888,12 @@ unsafe extern "C" fn aeron_uri_parse_callback_t_callback<F: AeronUriParseCallbac
         if key.is_null() {
             ""
         } else {
-            unsafe { std::ffi::CStr::from_ptr(key).to_str().unwrap() }
+            unsafe { std::ffi::CStr::from_ptr(key).to_str().unwrap_or("") }
         },
         if value.is_null() {
             ""
         } else {
-            unsafe { std::ffi::CStr::from_ptr(value).to_str().unwrap() }
+            unsafe { std::ffi::CStr::from_ptr(value).to_str().unwrap_or("") }
         },
     )
 }
@@ -24900,12 +24932,12 @@ unsafe extern "C" fn aeron_uri_parse_callback_t_callback_for_once_closure<
         if key.is_null() {
             ""
         } else {
-            unsafe { std::ffi::CStr::from_ptr(key).to_str().unwrap() }
+            unsafe { std::ffi::CStr::from_ptr(key).to_str().unwrap_or("") }
         },
         if value.is_null() {
             ""
         } else {
-            unsafe { std::ffi::CStr::from_ptr(value).to_str().unwrap() }
+            unsafe { std::ffi::CStr::from_ptr(value).to_str().unwrap_or("") }
         },
     )
 }
