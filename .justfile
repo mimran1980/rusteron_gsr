@@ -184,6 +184,10 @@ test:
   cargo test  --workspace --doc
   cargo test  --workspace --all-targets --all-features -- --nocapture
 
+# Run slow consumer tests (normally ignored)
+slow-tests:
+  cargo test --package rusteron-archive --lib --features "precompile static" -- --ignored --nocapture
+
 # =============================================================================
 # Aeron Drivers
 # =============================================================================
