@@ -153,10 +153,11 @@ mod tests {
                 seq += 1;
                 
                 if seq % 10000 == 0 {
-                    // info!("Published {} messages", seq);
+                    info!("Published {} messages", seq);
                 }
                 // No sleep to flood the buffer
             }
+            seq
         });
 
         // Wait a bit for some data to be recorded
@@ -167,12 +168,12 @@ mod tests {
         let replay_channel = format!("aeron:udp?endpoint=localhost:{}", replay_port);
         let replay_stream_id = 1002;
         let replay_params = AeronArchiveReplayParams::new(
+            -1, 
+            -1,
             0, 
-            i32::MAX, 
-            0, 
-            -1, // Follow mode
-            0, 
-            0
+            i64::MAX, // Follow mode
+            -1, 
+            -1
         )?;
 
         let replay_session_id = archive.start_replay(
@@ -214,8 +215,6 @@ mod tests {
                 } else {
                     self.expected_seq += 1;
                 }
-                // Simulate slow processing
-                sleep(Duration::from_secs(1));
             }
         }
 
@@ -226,19 +225,25 @@ mod tests {
         while start_check.elapsed() < test_duration {
             let _fragments = replay_subscription.poll(Some(&handler_box), 1)?;
             
+            // Simulate slow processing
+            sleep(Duration::from_millis(500));
+
             if handler_box.gaps > 0 {
                 break;
             }
         }
 
         running.store(false, Ordering::Release);
-        publisher_thread.join().unwrap();
+        let published_count = publisher_thread.join().unwrap();
 
         if handler_box.gaps > 0 {
             panic!("Test failed: Sequence gaps detected!");
         }
         
-        info!("Test passed: No sequence gaps detected.");
+        assert!(published_count > 1_000_000, "Published count {} is not > 1,000,000", published_count);
+        assert!(handler_box.expected_seq > 0, "No messages received");
+
+        info!("Test passed: No sequence gaps detected. Published: {}, Received: {}", published_count, handler_box.expected_seq);
         Ok(())
     }
 }
