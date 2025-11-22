@@ -24,34 +24,33 @@ mod tests {
         }
     }
 
-    pub const ARCHIVE_CONTROL_REQUEST: &str = "aeron:udp?endpoint=localhost:8010";
-    pub const ARCHIVE_CONTROL_RESPONSE: &str = "aeron:udp?endpoint=localhost:8011";
-    pub const ARCHIVE_RECORDING_EVENTS: &str = "aeron:udp?control-mode=dynamic|control=localhost:8012";
-
-    fn start_aeron_archive() -> Result<(Aeron, AeronArchiveContext, EmbeddedArchiveMediaDriverProcess), Box<dyn Error>> {
+    fn start_aeron_archive_with_config(
+        aeron_dir_suffix: &str,
+        start_port: u16
+    ) -> Result<(Aeron, AeronArchiveContext, EmbeddedArchiveMediaDriverProcess), Box<dyn Error>> {
         let id = Aeron::nano_clock();
-        let aeron_dir = format!("target/aeron/{}/shm", id);
-        let archive_dir = format!("target/aeron/{}/archive", id);
+        let aeron_dir = format!("target/aeron/{}_{}/shm", id, aeron_dir_suffix);
+        let archive_dir = format!("target/aeron/{}_{}/archive", id, aeron_dir_suffix);
 
-        let request_port = find_unused_udp_port(8000).expect("Could not find port");
+        let request_port = find_unused_udp_port(start_port).expect("Could not find port");
         let response_port = find_unused_udp_port(request_port + 1).expect("Could not find port");
         let recording_event_port = find_unused_udp_port(response_port + 1).expect("Could not find port");
         
-        let request_control_channel = &format!("aeron:udp?endpoint=localhost:{}", request_port);
-        let response_control_channel = &format!("aeron:udp?endpoint=localhost:{}", response_port);
-        let recording_events_channel = &format!("aeron:udp?endpoint=localhost:{}", recording_event_port);
+        let request_control_channel = format!("aeron:udp?endpoint=localhost:{}", request_port);
+        let response_control_channel = format!("aeron:udp?endpoint=localhost:{}", response_port);
+        let recording_events_channel = format!("aeron:udp?endpoint=localhost:{}", recording_event_port);
 
         let archive_media_driver = EmbeddedArchiveMediaDriverProcess::build_and_start(
             &aeron_dir,
             &archive_dir,
-            request_control_channel,
-            response_control_channel,
-            recording_events_channel,
+            &request_control_channel,
+            &response_control_channel,
+            &recording_events_channel,
         ).expect("Failed to start Java process");
 
         let aeron_context = AeronContext::new()?;
         aeron_context.set_dir(&aeron_dir.into_c_string())?;
-        aeron_context.set_client_name(&"test".into_c_string())?;
+        aeron_context.set_client_name(&format!("test-{}", aeron_dir_suffix).into_c_string())?;
         
         let error_handler = Handler::leak(ErrorCount::default());
         aeron_context.set_error_handler(Some(&error_handler))?;
@@ -61,9 +60,9 @@ mod tests {
 
         let archive_context = AeronArchiveContext::new_with_no_credentials_supplier(
             &aeron,
-            request_control_channel,
-            response_control_channel,
-            recording_events_channel,
+            &request_control_channel,
+            &response_control_channel,
+            &recording_events_channel,
         )?;
         archive_context.set_error_handler(Some(&error_handler))?;
         
@@ -79,9 +78,11 @@ mod tests {
         None
     }
 
-    #[test]
-    #[serial]
-    fn test_slow_consumer_replay() -> Result<(), Box<dyn Error>> {
+    fn run_slow_consumer_test(
+        recording_channel_params: &str,
+        source_location: SourceLocation,
+        replay_length: i64
+    ) -> Result<(), Box<dyn Error>> {
         let _ = env_logger::Builder::new()
             .is_test(true)
             .filter_level(log::LevelFilter::Info)
@@ -89,26 +90,39 @@ mod tests {
 
         EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().ok();
 
-        let (aeron, archive_context, _media_driver) = start_aeron_archive()?;
+        // 1. Start Archive/Publisher Driver
+        let (aeron_archive, archive_context, _media_driver_archive) = start_aeron_archive_with_config("archive", 8000)?;
         
-        let archive_connector = AeronArchiveAsyncConnect::new_with_aeron(&archive_context, &aeron)?;
+        let archive_connector = AeronArchiveAsyncConnect::new_with_aeron(&archive_context, &aeron_archive)?;
         let archive = archive_connector.poll_blocking(Duration::from_secs(30))
             .expect("failed to connect to archive");
 
-        let channel = "aeron:udp?endpoint=localhost:20121|term-length=65536";
+        // 2. Start Subscriber Driver
+        let (aeron_subscriber, _subscriber_archive_context, _media_driver_subscriber) = start_aeron_archive_with_config("subscriber", 9000)?;
+
+        let recording_port = find_unused_udp_port(20121).unwrap();
+        let control_port = find_unused_udp_port(recording_port + 1).unwrap();
+        
+        let channel = if recording_channel_params.contains("control-mode=dynamic") {
+            format!("aeron:udp?endpoint=localhost:{}|control=localhost:{}|term-length=65536{}", 
+                recording_port, control_port, recording_channel_params)
+        } else {
+            format!("aeron:udp?endpoint=localhost:{}|term-length=65536{}", 
+                recording_port, recording_channel_params)
+        };
         let stream_id = 1001;
 
-        // Start recording
+        // Start recording on Archive Driver
         let subscription_id = archive.start_recording(
-            &channel.into_c_string(),
+            &channel.clone().into_c_string(),
             stream_id,
-            SOURCE_LOCATION_LOCAL,
+            source_location,
             true
         )?;
         info!("Started recording subscription_id={}", subscription_id);
 
-        // Create publication
-        let publication = aeron.async_add_exclusive_publication(
+        // Create publication on Archive Driver
+        let publication = aeron_archive.async_add_exclusive_publication(
             &channel.into_c_string(),
             stream_id
         )?.poll_blocking(Duration::from_secs(5))?;
@@ -122,7 +136,7 @@ mod tests {
 
         // Find recording id
         let session_id = publication.get_constants()?.session_id;
-        let counters_reader = aeron.counters_reader();
+        let counters_reader = aeron_archive.counters_reader();
         let mut counter_id = -1;
         let start = Instant::now();
         while counter_id == -1 && start.elapsed() < Duration::from_secs(5) {
@@ -164,40 +178,47 @@ mod tests {
         sleep(Duration::from_secs(2));
 
         // Start Replay with length = -1 (follow mode)
-        let replay_port = find_unused_udp_port(20000).unwrap();
-        let replay_channel = format!("aeron:udp?endpoint=localhost:{}", replay_port);
+        // Use localhost:0 to let the OS pick a port, then resolve it
         let replay_stream_id = 1002;
         let replay_params = AeronArchiveReplayParams::new(
-            -1, 
-            -1,
             0, 
-            i64::MAX, // Follow mode
-            -1, 
-            -1
+            i32::MAX, 
+            0, 
+            replay_length, 
+            0, 
+            0
         )?;
 
+        // 3. Create Subscription on Subscriber Driver with localhost:0
+        let subscription_channel_template = "aeron:udp?endpoint=localhost:0";
+        let subscription = aeron_subscriber.async_add_subscription(
+            &subscription_channel_template.into_c_string(),
+            replay_stream_id,
+            Some(&Handler::leak(AeronAvailableImageLogger)),
+            Some(&Handler::leak(AeronUnavailableImageLogger))
+        )?.poll_blocking(Duration::from_secs(5))?;
+        
+        // 4. Resolve the port
+        let mut buffer = [0u8; 4096];
+        let len = subscription.try_resolve_channel_endpoint_port(
+            buffer.as_mut_ptr() as *mut i8,
+            buffer.len()
+        )?;
+        let resolved_channel = String::from_utf8_lossy(&buffer[..len as usize]).to_string();
+        info!("Resolved subscription channel: {}", resolved_channel);
+        
+        // 5. Start Replay on Archive Driver pointing to the resolved Subscriber port
         let replay_session_id = archive.start_replay(
             recording_id,
-            &replay_channel.clone().into_c_string(),
+            &resolved_channel.into_c_string(),
             replay_stream_id,
             &replay_params
         )?;
         info!("Started replay session_id={}", replay_session_id);
 
-        let replay_subscription_channel = format!("{}|session-id={}", replay_channel, replay_session_id as i32);
-        let replay_subscription = aeron.async_add_subscription(
-            &replay_subscription_channel.into_c_string(),
-            replay_stream_id,
-            Some(&Handler::leak(AeronAvailableImageLogger)),
-            Some(&Handler::leak(AeronUnavailableImageLogger))
-        )?.poll_blocking(Duration::from_secs(5))?;
-
         // Consumer loop
         let mut expected_seq = 0u64;
         let start_check = Instant::now();
-        // Run for 1 minute as requested (or shorter for quick check, but user asked for 1 min)
-        // I'll use 10 seconds for now to verify it works, then maybe bump it up or make it configurable.
-        // User said "After a minute if there is no seq gap then test passes".
         let test_duration = Duration::from_secs(60); 
         
         struct FragmentHandler {
@@ -215,6 +236,9 @@ mod tests {
                 } else {
                     self.expected_seq += 1;
                 }
+                
+                // Simulate slow processing
+                sleep(Duration::from_millis(500));
             }
         }
 
@@ -223,11 +247,8 @@ mod tests {
 
         info!("Starting slow consumer loop");
         while start_check.elapsed() < test_duration {
-            let _fragments = replay_subscription.poll(Some(&handler_box), 1)?;
+            let _fragments = subscription.poll(Some(&handler_box), 1)?;
             
-            // Simulate slow processing
-            sleep(Duration::from_millis(500));
-
             if handler_box.gaps > 0 {
                 break;
             }
@@ -245,5 +266,29 @@ mod tests {
 
         info!("Test passed: No sequence gaps detected. Published: {}, Received: {}", published_count, handler_box.expected_seq);
         Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn test_slow_consumer_replay_unicast_local_max() -> Result<(), Box<dyn Error>> {
+        run_slow_consumer_test("", SOURCE_LOCATION_LOCAL, i64::MAX)
+    }
+
+    #[test]
+    #[serial]
+    fn test_slow_consumer_replay_unicast_remote_neg1() -> Result<(), Box<dyn Error>> {
+        run_slow_consumer_test("", SOURCE_LOCATION_REMOTE, -1)
+    }
+
+    #[test]
+    #[serial]
+    fn test_slow_consumer_replay_gtag_local_max() -> Result<(), Box<dyn Error>> {
+        run_slow_consumer_test("|control-mode=dynamic|fc=tagged,g:123", SOURCE_LOCATION_LOCAL, i64::MAX)
+    }
+
+    #[test]
+    #[serial]
+    fn test_slow_consumer_replay_gtag_remote_neg1() -> Result<(), Box<dyn Error>> {
+        run_slow_consumer_test("|control-mode=dynamic|fc=tagged,g:123", SOURCE_LOCATION_REMOTE, -1)
     }
 }
