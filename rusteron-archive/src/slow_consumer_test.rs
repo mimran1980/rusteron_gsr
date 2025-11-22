@@ -95,7 +95,7 @@ mod tests {
         let archive = archive_connector.poll_blocking(Duration::from_secs(30))
             .expect("failed to connect to archive");
 
-        let channel = "aeron:udp?endpoint=localhost:20121";
+        let channel = "aeron:udp?endpoint=localhost:20121|term-length=65536";
         let stream_id = 1001;
 
         // Start recording
@@ -151,8 +151,11 @@ mod tests {
                     thread::yield_now();
                 }
                 seq += 1;
-                // Publish at a reasonable rate
-                sleep(Duration::from_millis(1)); 
+                
+                if seq % 10000 == 0 {
+                    // info!("Published {} messages", seq);
+                }
+                // No sleep to flood the buffer
             }
         });
 
