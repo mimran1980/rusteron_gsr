@@ -970,3 +970,6 @@ mod tests {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod slow_consumer_test;
