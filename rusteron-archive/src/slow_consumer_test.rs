@@ -244,7 +244,7 @@ mod tests {
         info!("Started replay session_id={}", replay_session_id);
 
         // Consumer loop
-        let mut expected_seq = 0u64;
+        let expected_seq = 0u64;
         let start_check = Instant::now();
         let test_duration = Duration::from_secs(60);
 
@@ -272,11 +272,11 @@ mod tests {
             }
         }
 
-        let mut handler = FragmentHandler {
+        let handler = FragmentHandler {
             expected_seq: 0,
             gaps: 0,
         };
-        let mut handler_box = Handler::leak(handler); // Leak to pass to C callback safely
+        let handler_box = Handler::leak(handler); // Leak to pass to C callback safely
 
         info!("Starting slow consumer loop");
         while start_check.elapsed() < test_duration {

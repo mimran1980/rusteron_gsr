@@ -2766,7 +2766,7 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn aeron_alloc(ptr: *mut *mut ::std::os::raw::c_void, size: usize)
-    -> ::std::os::raw::c_int;
+        -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
     pub fn aeron_alloc_aligned(
@@ -3118,6 +3118,21 @@ const _: () = {
 pub type aeron_status_message_header_t = aeron_status_message_header_stct;
 #[repr(C, packed(4))]
 #[derive(Debug, Default, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct aeron_status_message_optional_header_stct {
+    pub group_tag: i64,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of aeron_status_message_optional_header_stct"]
+        [::std::mem::size_of::<aeron_status_message_optional_header_stct>() - 8usize];
+    ["Alignment of aeron_status_message_optional_header_stct"]
+        [::std::mem::align_of::<aeron_status_message_optional_header_stct>() - 4usize];
+    ["Offset of field: aeron_status_message_optional_header_stct::group_tag"]
+        [::std::mem::offset_of!(aeron_status_message_optional_header_stct, group_tag) - 0usize];
+};
+pub type aeron_status_message_optional_header_t = aeron_status_message_optional_header_stct;
+#[repr(C, packed(4))]
+#[derive(Debug, Default, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct aeron_error_stct {
     pub frame_header: aeron_frame_header_t,
     pub session_id: i32,
@@ -3147,21 +3162,6 @@ const _: () = {
         [::std::mem::offset_of!(aeron_error_stct, error_length) - 36usize];
 };
 pub type aeron_error_t = aeron_error_stct;
-#[repr(C, packed(4))]
-#[derive(Debug, Default, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct aeron_status_message_optional_header_stct {
-    pub group_tag: i64,
-}
-#[allow(clippy::unnecessary_operation, clippy::identity_op)]
-const _: () = {
-    ["Size of aeron_status_message_optional_header_stct"]
-        [::std::mem::size_of::<aeron_status_message_optional_header_stct>() - 8usize];
-    ["Alignment of aeron_status_message_optional_header_stct"]
-        [::std::mem::align_of::<aeron_status_message_optional_header_stct>() - 4usize];
-    ["Offset of field: aeron_status_message_optional_header_stct::group_tag"]
-        [::std::mem::offset_of!(aeron_status_message_optional_header_stct, group_tag) - 0usize];
-};
-pub type aeron_status_message_optional_header_t = aeron_status_message_optional_header_stct;
 #[repr(C, packed(4))]
 #[derive(Debug, Default, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct aeron_rttm_header_stct {
@@ -3307,11 +3307,11 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn aeron_res_header_entry_length_ipv4(header: *mut aeron_resolution_header_ipv4_t)
-    -> usize;
+        -> usize;
 }
 unsafe extern "C" {
     pub fn aeron_res_header_entry_length_ipv6(header: *mut aeron_resolution_header_ipv6_t)
-    -> usize;
+        -> usize;
 }
 unsafe extern "C" {
     pub fn aeron_res_header_entry_length(

@@ -1,4 +1,3 @@
-
 type aeron_client_registering_resource_t = aeron_client_registering_resource_stct;
 #[derive(Clone)]
 pub struct DarwinPthreadHandlerRec {
@@ -42330,6 +42329,51 @@ impl AeronNetworkPublication {
             result.into()
         }
     }
+    #[inline]
+    pub fn add_subscriber_hook(clientd: *mut ::std::os::raw::c_void, value_addr: &mut i64) -> () {
+        unsafe {
+            #[cfg(feature = "log-c-bindings")]
+            log::info!(
+                "{}({})",
+                stringify!(aeron_network_publication_add_subscriber_hook),
+                [
+                    concat!("clientd", ": ", stringify!(*mut ::std::os::raw::c_void)).to_string(),
+                    concat!("value_addr", ": ", stringify!(*mut i64)).to_string()
+                ]
+                .join(", ")
+            );
+            let result =
+                aeron_network_publication_add_subscriber_hook(clientd.into(), value_addr as *mut _);
+            #[cfg(feature = "log-c-bindings")]
+            log::info!("  -> {:?}", result);
+            result.into()
+        }
+    }
+    #[inline]
+    pub fn remove_subscriber_hook(
+        clientd: *mut ::std::os::raw::c_void,
+        value_addr: &mut i64,
+    ) -> () {
+        unsafe {
+            #[cfg(feature = "log-c-bindings")]
+            log::info!(
+                "{}({})",
+                stringify!(aeron_network_publication_remove_subscriber_hook),
+                [
+                    concat!("clientd", ": ", stringify!(*mut ::std::os::raw::c_void)).to_string(),
+                    concat!("value_addr", ": ", stringify!(*mut i64)).to_string()
+                ]
+                .join(", ")
+            );
+            let result = aeron_network_publication_remove_subscriber_hook(
+                clientd.into(),
+                value_addr as *mut _,
+            );
+            #[cfg(feature = "log-c-bindings")]
+            log::info!("  -> {:?}", result);
+            result.into()
+        }
+    }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_network_publication_t {
         self.inner.get()
@@ -45682,12 +45726,12 @@ impl core::fmt::Debug for AeronPublicationImage {
                     stringify!(position_bits_to_shift),
                     &self.position_bits_to_shift(),
                 )
+                .field(stringify!(begin_loss_change), &self.begin_loss_change())
+                .field(stringify!(end_loss_change), &self.end_loss_change())
                 .field(
                     stringify!(last_loss_change_number),
                     &self.last_loss_change_number(),
                 )
-                .field(stringify!(begin_loss_change), &self.begin_loss_change())
-                .field(stringify!(end_loss_change), &self.end_loss_change())
                 .field(stringify!(loss_term_id), &self.loss_term_id())
                 .field(stringify!(loss_term_offset), &self.loss_term_offset())
                 .field(stringify!(loss_length), &self.loss_length())
@@ -45907,16 +45951,16 @@ impl AeronPublicationImage {
         self.log.into()
     }
     #[inline]
-    pub fn last_loss_change_number(&self) -> i64 {
-        self.last_loss_change_number.into()
-    }
-    #[inline]
     pub fn begin_loss_change(&self) -> i64 {
         self.begin_loss_change.into()
     }
     #[inline]
     pub fn end_loss_change(&self) -> i64 {
         self.end_loss_change.into()
+    }
+    #[inline]
+    pub fn last_loss_change_number(&self) -> i64 {
+        self.last_loss_change_number.into()
     }
     #[inline]
     pub fn loss_term_id(&self) -> i32 {
@@ -51820,7 +51864,7 @@ impl AeronRetransmitHandler {
         &self,
         term_id: i32,
         term_offset: i32,
-        length: usize,
+        length: i32,
         term_length: usize,
         mtu_length: usize,
         flow_control: &AeronFlowControlStrategy,
@@ -51901,7 +51945,7 @@ impl AeronRetransmitHandler {
         &self,
         term_id: i32,
         term_offset: i32,
-        length: usize,
+        length: i32,
         term_length: usize,
         mtu_length: usize,
         flow_control: &AeronFlowControlStrategy,
@@ -73179,4 +73223,3 @@ unsafe extern "C" fn aeron_end_of_life_resource_free_t_callback_for_once_closure
     let closure: &mut F = &mut *(resource as *mut F);
     closure()
 }
-
