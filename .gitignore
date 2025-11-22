@@ -1,6 +1,7 @@
 target/
 Cargo.lock
 .idea/
+.vscode/
 **/target/
 .aid*
 /id_ed25519
