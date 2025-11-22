@@ -214,6 +214,8 @@ mod tests {
                 } else {
                     self.expected_seq += 1;
                 }
+                // Simulate slow processing
+                sleep(Duration::from_secs(1));
             }
         }
 
@@ -222,11 +224,7 @@ mod tests {
 
         info!("Starting slow consumer loop");
         while start_check.elapsed() < test_duration {
-            let fragments = replay_subscription.poll(Some(&handler_box), 1)?;
-            if fragments > 0 {
-                // Simulate slow consumer
-                sleep(Duration::from_secs(1));
-            }
+            let _fragments = replay_subscription.poll(Some(&handler_box), 1)?;
             
             if handler_box.gaps > 0 {
                 break;
