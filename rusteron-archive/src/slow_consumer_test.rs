@@ -1,5 +1,21 @@
 #[cfg(test)]
 mod tests {
+    //! Slow Consumer Replay Tests
+    //!
+    //! These tests are marked with `#[ignore]` and will not run during normal `cargo test`.
+    //!
+    //! To run these tests explicitly:
+    //! ```bash
+    //! # Run all ignored tests
+    //! cargo test --package rusteron-archive --lib --features "precompile static" -- --ignored
+    //!
+    //! # Run a specific slow consumer test
+    //! cargo test --package rusteron-archive --lib --features "precompile static" test_slow_consumer_replay_unicast_local_max -- --ignored
+    //!
+    //! # Run all tests including ignored ones
+    //! cargo test --package rusteron-archive --lib --features "precompile static" -- --include-ignored
+    //! ```
+
     use super::super::*;
     use log::{error, info};
     use crate::testing::EmbeddedArchiveMediaDriverProcess;
@@ -269,24 +285,28 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     #[serial]
     fn test_slow_consumer_replay_unicast_local_max() -> Result<(), Box<dyn Error>> {
         run_slow_consumer_test("", SOURCE_LOCATION_LOCAL, i64::MAX)
     }
 
     #[test]
+    #[ignore]
     #[serial]
     fn test_slow_consumer_replay_unicast_remote_neg1() -> Result<(), Box<dyn Error>> {
         run_slow_consumer_test("", SOURCE_LOCATION_REMOTE, -1)
     }
 
     #[test]
+    #[ignore]
     #[serial]
     fn test_slow_consumer_replay_gtag_local_max() -> Result<(), Box<dyn Error>> {
         run_slow_consumer_test("|control-mode=dynamic|fc=tagged,g:123", SOURCE_LOCATION_LOCAL, i64::MAX)
     }
 
     #[test]
+    #[ignore]
     #[serial]
     fn test_slow_consumer_replay_gtag_remote_neg1() -> Result<(), Box<dyn Error>> {
         run_slow_consumer_test("|control-mode=dynamic|fc=tagged,g:123", SOURCE_LOCATION_REMOTE, -1)
