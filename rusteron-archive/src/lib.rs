@@ -622,7 +622,7 @@ mod tests {
 
         let aeron_version = format!("{}.{}.{}", major, minor, patch);
 
-        let cargo_version = "1.48.6";
+        let cargo_version = "1.49.1";
         assert_eq!(aeron_version, cargo_version);
     }
 
@@ -971,3 +971,7 @@ mod tests {
         Ok(())
     }
 }
+
+// run `just slow-tests`
+#[cfg(test)]
+mod slow_consumer_test;
