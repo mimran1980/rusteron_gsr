@@ -14,8 +14,8 @@ compression = "best"
 [workspace.dependencies]
 bindgen         = "0.72"
 cmake           = "0.1"
-criterion       = "0.6"
-ctrlc           = "3.4"
+criterion       = "0.7"
+ctrlc           = "3.5"
 dunce           = "1.0"
 flate2          = { version = "1.1" }
 hdrhistogram    = "7.5"
@@ -27,7 +27,7 @@ proc-macro2     = "1.0"
 quote           = "1.0"
 regex           = "1.11"
 reqwest         = { version = "0.12", features = ["blocking", "default-tls"] }
-rusteron-code-gen = { path = "rusteron-code-gen", version = "=0.1.155" }
+rusteron-code-gen = { path = "rusteron-code-gen", version = "=0.1.157" }
 serial_test     = "3.2"
 syn             = { version = "2.0", features = ["full"] }
 tar             = "0.4"

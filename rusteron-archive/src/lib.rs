@@ -15,6 +15,8 @@
 //! - **`log-c-bindings`**: When enabled will log every C binding call with arguments and return values. Useful for debugging FFI interactions
 //! - **`precompile`**: When enabled will use precompiled C code instead of requiring cmake and java to be installed
 
+#[allow(improper_ctypes_definitions)]
+#[allow(unpredictable_function_pointer_comparisons)]
 pub mod bindings {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }

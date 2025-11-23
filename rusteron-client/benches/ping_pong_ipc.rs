@@ -1,8 +1,9 @@
-use criterion::{black_box, Criterion};
+use criterion::Criterion;
 use rusteron_client::*;
 use rusteron_media_driver::{AeronDriver, AeronDriverContext};
 use std::clone::Clone;
 use std::ffi::CStr;
+use std::hint::black_box;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::Ordering;
 use std::time::Duration;
