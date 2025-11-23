@@ -166,7 +166,7 @@ impl JsonMesssageHandler for AeronRecorder {
         if result > 0 {
             self.published_count += 1;
 
-            if self.published_count % 1000 == 0 {
+            if self.published_count.is_multiple_of(1000) {
                 info!("published {} ticker messages so far", self.published_count);
             }
         }
