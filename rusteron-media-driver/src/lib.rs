@@ -74,9 +74,7 @@ impl AeronDriver {
 
             // Poll for work until Ctrl+C is pressed
             while !stop.load(Ordering::Acquire) {
-                while aeron_driver.main_do_work()? > 0 {
-                    // busy spin
-                }
+                aeron_driver.main_idle_strategy(aeron_driver.main_do_work()?);
             }
 
             info!("stopping media driver");
@@ -143,7 +141,7 @@ mod tests {
         let patch = unsafe { crate::aeron_version_patch() };
 
         let aeron_version = format!("{}.{}.{}", major, minor, patch);
-        let cargo_version = "1.49.1";
+        let cargo_version = "1.48.10";
         assert_eq!(aeron_version, cargo_version);
     }
 
