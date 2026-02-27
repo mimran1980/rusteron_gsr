@@ -3133,7 +3133,7 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn aeron_archive_context_get_control_mtu_length(ctx: *mut aeron_archive_context_t)
-    -> usize;
+        -> usize;
 }
 unsafe extern "C" {
     #[doc = " Specify the default MTU length for the control request/response channels."]
@@ -4893,7 +4893,7 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn aeron_alloc(ptr: *mut *mut ::std::os::raw::c_void, size: usize)
-    -> ::std::os::raw::c_int;
+        -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
     pub fn aeron_alloc_aligned(
@@ -5434,11 +5434,11 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn aeron_res_header_entry_length_ipv4(header: *mut aeron_resolution_header_ipv4_t)
-    -> usize;
+        -> usize;
 }
 unsafe extern "C" {
     pub fn aeron_res_header_entry_length_ipv6(header: *mut aeron_resolution_header_ipv6_t)
-    -> usize;
+        -> usize;
 }
 unsafe extern "C" {
     pub fn aeron_res_header_entry_length(

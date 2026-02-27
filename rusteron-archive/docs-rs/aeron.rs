@@ -1,4 +1,3 @@
-
 type aeron_client_registering_resource_t = aeron_client_registering_resource_stct;
 #[derive(Clone)]
 pub struct DarwinPthreadHandlerRec {
@@ -34776,4 +34775,3 @@ unsafe extern "C" fn aeron_uri_parse_callback_t_callback_for_once_closure<
         },
     )
 }
-
