@@ -1,11 +1,4 @@
-use bindgen::EnumVariation;
-use cmake::Config;
-use dunce::canonicalize;
-use log::info;
-use proc_macro2::TokenStream;
-use rusteron_code_gen::{append_to_file, format_with_rustfmt};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::{env, fs};
 use walkdir::WalkDir;
 
@@ -160,6 +153,20 @@ pub fn main() {
         // Exit early to skip rebuild since artifacts are already published.
         return;
     }
+
+    build_from_source(&docs_rs);
+}
+
+#[cfg(feature = "build-from-source")]
+fn build_from_source(docs_rs: &Path) {
+    use bindgen::EnumVariation;
+    use cmake::Config;
+    use dunce::canonicalize;
+    use log::info;
+    use proc_macro2::TokenStream;
+    use rusteron_code_gen::{append_to_file, format_with_rustfmt};
+    use std::process::{Command, Stdio};
+
     let publish_binaries = std::env::var("PUBLISH_ARTIFACTS").is_ok();
 
     let aeron_path = canonicalize(Path::new("./aeron")).unwrap();
@@ -310,19 +317,12 @@ pub fn main() {
 
     // include custom aeron code
     let aeron_custom = out_path.join("aeron_custom.rs");
-    // let rb_custom = out_path.join("rb_custom.rs");
     let _ = fs::remove_file(aeron_custom.clone());
-    // let _ = fs::remove_file(rb_custom.clone());
     append_to_file(
         aeron_custom.to_str().unwrap(),
         rusteron_code_gen::CUSTOM_AERON_CODE,
     )
     .unwrap();
-    // append_to_file(
-    //     rb_custom.to_str().unwrap(),
-    //     rusteron_code_gen::CUSTOM_RB_CODE,
-    // )
-    // .unwrap();
 
     let mut stream = TokenStream::new();
     let bindings_copy = bindings.clone();
@@ -363,12 +363,68 @@ pub fn main() {
     }
 
     // copy source code so docs-rs does not need to compile it
-    let docs_rs = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("docs-rs");
-    let _ = std::fs::create_dir_all(&docs_rs);
+    let _ = std::fs::create_dir_all(docs_rs);
 
     for rs in [&aeron, &aeron_custom, &out] {
         fs::copy(rs, docs_rs.join(rs.file_name().unwrap()))
             .expect("Failed to copy source code for docs-rs");
+    }
+
+    fn run_gradle_build_if_missing(aeron_path: &Path) {
+        if !aeron_path
+            .join("aeron-all")
+            .join("build")
+            .join("libs")
+            .exists()
+        {
+            let path = std::path::MAIN_SEPARATOR;
+            let gradle = if cfg!(target_os = "windows") {
+                &format!("{}{path}aeron{path}gradlew.bat", env!("CARGO_MANIFEST_DIR"),)
+            } else {
+                "./gradlew"
+            };
+            let dir = format!("{}{path}aeron", env!("CARGO_MANIFEST_DIR"),);
+            info!("running {gradle} in {dir}");
+
+            Command::new(gradle)
+                .current_dir(dir)
+                .args([
+                    ":aeron-agent:jar",
+                    ":aeron-samples:jar",
+                    ":aeron-archive:jar",
+                    ":aeron-all:jar",
+                    ":buildSrc:jar",
+                ])
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .spawn().expect("failed to run gradle, which is required to build aeron-archive c lib. Please refer to wiki page regarding build setup")
+                .wait().expect("gradle returned an error");
+        }
+        println!("cargo:rerun-if-changed=aeron/aeron-all/build/libs");
+    }
+}
+
+#[cfg(not(feature = "build-from-source"))]
+fn build_from_source(_docs_rs: &Path) {
+    panic!(
+        "No build method available: enable the `build-from-source` feature to build Aeron C from \
+         source, or enable `precompile` + `static` to use precompiled binaries."
+    );
+}
+
+#[cfg(feature = "build-from-source")]
+fn copy_binds(out: PathBuf) {
+    let cargo_base_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let custom_bindings_path = cargo_base_dir.join("../rusteron-code-gen/bindings/archive.rs");
+
+    if custom_bindings_path.exists() {
+        fs::copy(out.clone(), custom_bindings_path.clone())
+            .expect("Failed to override bindings.rs with custom bindings from archive.rs");
+    } else {
+        eprintln!(
+            "Warning: Custom bindings not found at: {}",
+            custom_bindings_path.display()
+        );
     }
 }
 
@@ -393,54 +449,7 @@ fn get_artifact_path() -> PathBuf {
     artifacts_dir
 }
 
-fn run_gradle_build_if_missing(aeron_path: &Path) {
-    if !aeron_path
-        .join("aeron-all")
-        .join("build")
-        .join("libs")
-        .exists()
-    {
-        let path = std::path::MAIN_SEPARATOR;
-        let gradle = if cfg!(target_os = "windows") {
-            &format!("{}{path}aeron{path}gradlew.bat", env!("CARGO_MANIFEST_DIR"),)
-        } else {
-            "./gradlew"
-        };
-        let dir = format!("{}{path}aeron", env!("CARGO_MANIFEST_DIR"),);
-        info!("running {gradle} in {dir}");
-
-        Command::new(gradle)
-            .current_dir(dir)
-            .args([
-                ":aeron-agent:jar",
-                ":aeron-samples:jar",
-                ":aeron-archive:jar",
-                ":aeron-all:jar",
-                ":buildSrc:jar",
-            ])
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .spawn().expect("failed to run gradle, which is required to build aeron-archive c lib. Please refer to wiki page regarding build setup")
-            .wait().expect("gradle returned an error");
-    }
-    println!("cargo:rerun-if-changed=aeron/aeron-all/build/libs");
-}
-
-fn copy_binds(out: PathBuf) {
-    let cargo_base_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let custom_bindings_path = cargo_base_dir.join("../rusteron-code-gen/bindings/archive.rs");
-
-    if custom_bindings_path.exists() {
-        fs::copy(out.clone(), custom_bindings_path.clone())
-            .expect("Failed to override bindings.rs with custom bindings from archive.rs");
-    } else {
-        eprintln!(
-            "Warning: Custom bindings not found at: {}",
-            custom_bindings_path.display()
-        );
-    }
-}
-
+#[cfg(feature = "build-from-source")]
 #[allow(dead_code)]
 fn publish_artifacts(cmake_build_path: &Path) -> std::io::Result<()> {
     let publish_dir = get_artifact_path();

@@ -1,8 +1,3 @@
-use bindgen::EnumVariation;
-use cmake::Config;
-use dunce::canonicalize;
-use proc_macro2::TokenStream;
-use rusteron_code_gen::{append_to_file, format_with_rustfmt};
 use std::path::{Path, PathBuf};
 use std::{env, fs};
 use walkdir::WalkDir;
@@ -65,6 +60,7 @@ pub fn main() {
 
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=bindings.h");
+
     // Determine the artifacts folder based on feature, OS, and architecture.
     #[cfg(all(feature = "precompile", feature = "static"))]
     let artifacts_dir = get_artifact_path();
@@ -142,6 +138,18 @@ pub fn main() {
         // Exit early to skip rebuild since artifacts are already published.
         return;
     }
+
+    build_from_source(&docs_rs);
+}
+
+#[cfg(feature = "build-from-source")]
+fn build_from_source(docs_rs: &Path) {
+    use bindgen::EnumVariation;
+    use cmake::Config;
+    use dunce::canonicalize;
+    use proc_macro2::TokenStream;
+    use rusteron_code_gen::{append_to_file, format_with_rustfmt};
+
     let publish_binaries = std::env::var("PUBLISH_ARTIFACTS").is_ok();
 
     println!("cargo:rerun-if-changed=build.rs");
@@ -269,20 +277,13 @@ pub fn main() {
 
     // include custom aeron code
     let aeron_custom = out_path.join("aeron_custom.rs");
-    // let rb_custom = out_path.join("rb_custom.rs");
 
     let _ = fs::remove_file(aeron_custom.clone());
-    // let _ = fs::remove_file(rb_custom.clone());
     append_to_file(
         aeron_custom.to_str().unwrap(),
         rusteron_code_gen::CUSTOM_AERON_CODE,
     )
     .unwrap();
-    // append_to_file(
-    //     rb_custom.to_str().unwrap(),
-    //     rusteron_code_gen::CUSTOM_RB_CODE,
-    // )
-    // .unwrap();
 
     let _ = fs::remove_file(aeron.clone());
     let mut stream = TokenStream::new();
@@ -354,8 +355,7 @@ pub fn main() {
     }
 
     // copy source code so docs-rs does not need to compile it
-    let docs_rs = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("docs-rs");
-    let _ = std::fs::create_dir_all(&docs_rs);
+    let _ = std::fs::create_dir_all(docs_rs);
 
     for rs in [&aeron, &aeron_custom, &out] {
         fs::copy(rs, docs_rs.join(rs.file_name().unwrap()))
@@ -363,7 +363,16 @@ pub fn main() {
     }
 }
 
+#[cfg(not(feature = "build-from-source"))]
+fn build_from_source(_docs_rs: &Path) {
+    panic!(
+        "No build method available: enable the `build-from-source` feature to build Aeron C from \
+         source, or enable `precompile` + `static` to use precompiled binaries."
+    );
+}
+
 // helps with easier testing
+#[cfg(feature = "build-from-source")]
 fn copy_binds(out: PathBuf) {
     let cargo_base_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let custom_bindings_path = cargo_base_dir.join("../rusteron-code-gen/bindings/client.rs");
@@ -400,6 +409,7 @@ fn get_artifact_path() -> PathBuf {
     artifacts_dir
 }
 
+#[cfg(feature = "build-from-source")]
 #[allow(dead_code)]
 fn publish_artifacts(cmake_build_path: &Path) -> std::io::Result<()> {
     let publish_dir = get_artifact_path();
