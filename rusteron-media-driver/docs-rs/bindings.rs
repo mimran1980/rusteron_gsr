@@ -395,7 +395,7 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn aeron_alloc(ptr: *mut *mut ::std::os::raw::c_void, size: usize)
-    -> ::std::os::raw::c_int;
+        -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
     pub fn aeron_alloc_aligned(
@@ -3068,7 +3068,7 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn aeron_distinct_error_log_num_observations(log: *mut aeron_distinct_error_log_t)
-    -> usize;
+        -> usize;
 }
 pub type aeron_idle_strategy_func_t = ::std::option::Option<
     unsafe extern "C" fn(state: *mut ::std::os::raw::c_void, work_count: ::std::os::raw::c_int),
@@ -3998,7 +3998,7 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn aeron_driver_context_get_socket_so_rcvbuf(context: *mut aeron_driver_context_t)
-    -> usize;
+        -> usize;
 }
 unsafe extern "C" {
     pub fn aeron_driver_context_set_socket_so_sndbuf(
@@ -4008,7 +4008,7 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn aeron_driver_context_get_socket_so_sndbuf(context: *mut aeron_driver_context_t)
-    -> usize;
+        -> usize;
 }
 unsafe extern "C" {
     pub fn aeron_driver_context_set_socket_multicast_ttl(
@@ -6627,11 +6627,11 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn aeron_res_header_entry_length_ipv4(header: *mut aeron_resolution_header_ipv4_t)
-    -> usize;
+        -> usize;
 }
 unsafe extern "C" {
     pub fn aeron_res_header_entry_length_ipv6(header: *mut aeron_resolution_header_ipv6_t)
-    -> usize;
+        -> usize;
 }
 unsafe extern "C" {
     pub fn aeron_res_header_entry_length(
@@ -10083,11 +10083,11 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn aeron_linked_queue_peek(queue: *mut aeron_linked_queue_t)
-    -> *mut ::std::os::raw::c_void;
+        -> *mut ::std::os::raw::c_void;
 }
 unsafe extern "C" {
     pub fn aeron_linked_queue_poll(queue: *mut aeron_linked_queue_t)
-    -> *mut ::std::os::raw::c_void;
+        -> *mut ::std::os::raw::c_void;
 }
 unsafe extern "C" {
     pub fn aeron_linked_queue_poll_ex(
