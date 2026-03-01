@@ -4,10 +4,10 @@ use crate::snake_to_pascal_case;
 use itertools::Itertools;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote, ToTokens};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ops::Deref;
 use std::str::FromStr;
-use syn::{parse_str, Type};
+use syn::{parse_str, ImplItem, Item, Type};
 
 pub const COMMON_CODE: &str = include_str!("common.rs");
 pub const CLIENT_BINDINGS: &str = include_str!("../bindings/client.rs");
@@ -450,6 +450,36 @@ pub struct CWrapper {
     pub fields: Vec<Arg>,
     pub methods: Vec<Method>,
     pub docs: BTreeSet<String>,
+    /// Method names manually implemented in aeron_custom.rs — the generator skips these
+    /// to avoid duplicate definitions.
+    pub skipped_methods: BTreeSet<String>,
+}
+
+/// Parse `aeron_custom.rs` source and return a map of `ClassName -> {method_names}`
+/// for every `impl ClassName { fn method_name ... }` block found.
+/// This lets the generator skip auto-generating methods that have hand-written overrides.
+pub fn parse_custom_methods(src: &str) -> HashMap<String, BTreeSet<String>> {
+    let mut result: HashMap<String, BTreeSet<String>> = HashMap::new();
+    let Ok(file) = syn::parse_file(src) else {
+        return result;
+    };
+    for item in &file.items {
+        if let Item::Impl(impl_block) = item {
+            // Only plain `impl TypeName { ... }` — no trait impls
+            if impl_block.trait_.is_some() {
+                continue;
+            }
+            let type_name = impl_block.self_ty.to_token_stream().to_string();
+            let type_name = type_name.trim().to_string();
+            let entry = result.entry(type_name).or_default();
+            for impl_item in &impl_block.items {
+                if let ImplItem::Fn(method) = impl_item {
+                    entry.insert(method.sig.ident.to_string());
+                }
+            }
+        }
+    }
+    result
 }
 
 impl CWrapper {
@@ -571,6 +601,7 @@ impl CWrapper {
         self.methods
             .iter()
             .filter(|m| !m.arguments.iter().any(|arg| arg.is_double_mut_pointer()))
+            .filter(|m| !self.skipped_methods.contains(&m.struct_method_name))
             .map(|method| {
                 let set_closed = if method.struct_method_name == "close" {
                     quote! {
@@ -1598,6 +1629,79 @@ impl CWrapper {
             && !self.fields.iter().any(|arg| arg.name.starts_with("_"))
             && !self.fields.is_empty()
     }
+
+    fn generate_allocation_test(&self) -> TokenStream {
+        let class_name = format_ident!("{}", self.class_name);
+
+        let has_c_constructor = self
+            .methods
+            .iter()
+            .any(|m| m.arguments.iter().any(|arg| arg.is_double_mut_pointer()));
+        let has_empty_new_constructor = self.methods.iter().any(|m| {
+            m.fn_name.contains("_init_")
+                && m.arguments.iter().any(|arg| arg.is_double_mut_pointer())
+                && m.arguments.len() == 1
+        });
+
+        let mut tests = vec![];
+
+        if !has_c_constructor {
+            tests.push(quote! {
+                #[test]
+                #[file_serial(global)]
+                fn test_new_on_stack() {
+                    crate::test_alloc::assert_no_allocation(|| {
+                        for _ in 0..100 {
+                            let _ = #class_name::new_zeroed_on_stack();
+                        }
+                    });
+                }
+            });
+        }
+
+        if has_empty_new_constructor {
+            tests.push(quote! {
+                #[test]
+                #[file_serial(global)]
+                fn test_new() {
+                    crate::test_alloc::assert_no_allocation(|| {
+                        for _ in 0..100 {
+                            let _ = #class_name::new();
+                        }
+                    });
+                }
+            });
+        }
+
+        if self.has_default_method() {
+            tests.push(quote! {
+                #[test]
+                #[file_serial(global)]
+                fn test_default() {
+                    crate::test_alloc::assert_no_allocation(|| {
+                        for _ in 0..100 {
+                            let _ = #class_name::default();
+                        }
+                    });
+                }
+            });
+        }
+
+        let mod_name = format_ident!("{}_allocation_tests", self.type_name);
+
+        if tests.is_empty() {
+            quote! {}
+        } else {
+            quote! {
+                #[cfg(test)]
+                mod #mod_name {
+                    use super::*;
+                    use serial_test::file_serial;
+                    #(#tests)*
+                }
+            }
+        }
+    }
 }
 
 fn get_docs(
@@ -1955,6 +2059,7 @@ pub fn generate_rust_code(
         &mut additional_outer_impls,
         &mut debug_fields,
     );
+    let tests = wrapper.generate_allocation_test();
     let mut constructor_fields = vec![];
     let mut new_ref_set_none = vec![];
     let constructor =
@@ -2553,6 +2658,7 @@ pub fn generate_rust_code(
 
         #async_impls
         #default_impl
-       #common_code
+        #tests
+        #common_code
     }
 }

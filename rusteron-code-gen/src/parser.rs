@@ -1,4 +1,4 @@
-use crate::generator::{CBinding, CWrapper, Method};
+use crate::generator::{parse_custom_methods, CBinding, CWrapper, Method};
 use crate::{Arg, ArgProcessing, CHandler};
 use itertools::Itertools;
 use quote::ToTokens;
@@ -46,7 +46,7 @@ pub fn parse_bindings(out: &PathBuf) -> CBinding {
           }
         }
     */
-    let bindings = CBinding {
+    let mut bindings = CBinding {
         wrappers: wrappers
             .into_iter()
             .filter(|(_, wrapper)| {
@@ -81,6 +81,14 @@ pub fn parse_bindings(out: &PathBuf) -> CBinding {
         .map(|(a, b)| (a.clone(), b.clone()))
         .collect_vec();
     assert_eq!(Vec::<(String, CWrapper)>::new(), mismatched_types);
+
+    let custom = parse_custom_methods(crate::CUSTOM_AERON_CODE);
+    for wrapper in bindings.wrappers.values_mut() {
+        if let Some(methods) = custom.get(&wrapper.class_name) {
+            wrapper.skipped_methods = methods.clone();
+        }
+    }
+
     bindings
 }
 

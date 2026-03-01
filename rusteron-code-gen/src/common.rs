@@ -444,19 +444,18 @@ impl AeronCError {
 ///
 /// `Handler` is a struct that wraps a raw pointer and a drop flag.
 ///
-/// **Important:** `Handler` *MAY* not get dropped automatically. It depends if aeron takes ownership.
-/// For example for global level handlers e.g. error handler aeron will release this handle when closing.
+/// Memory is freed automatically when `Handler` goes out of scope (via `Drop`).
+/// You must ensure the `Handler` outlives the Aeron session that uses it, since Aeron
+/// holds a raw `clientd` pointer to the boxed value and will call callbacks until closed.
 ///
-/// You need to call the `release` method if you want to clear the memory manually.
-/// Its important that you test this out as aeron may do it when closing aeron client.
+/// Call `release()` early if you want to free the memory before the `Handler` drops.
 ///
 /// ## Example
 ///
 /// ```no_compile
 /// use rusteron_code_gen::Handler;
 /// let handler = Handler::leak(your_value);
-/// // When you are done with the handler
-/// handler.release();
+/// // handler is freed automatically when it goes out of scope
 /// ```
 pub struct Handler<T> {
     raw_ptr: *mut T,
@@ -504,6 +503,12 @@ impl<T> Handler<T> {
             raw_ptr,
             should_drop,
         }
+    }
+}
+
+impl<T> Drop for Handler<T> {
+    fn drop(&mut self) {
+        self.release();
     }
 }
 
@@ -592,29 +597,30 @@ impl ControlMode {
 #[allow(dead_code)]
 pub(crate) mod test_alloc {
     use std::alloc::{GlobalAlloc, Layout, System};
+    use std::env;
+    use std::fs::OpenOptions;
+    #[allow(unused_imports)]
+    use std::os::unix::fs::OpenOptionsExt;
     use std::sync::atomic::{AtomicIsize, Ordering};
 
     /// A simple global allocator that tracks the net allocation count.
-    /// For very simple examples can do allocation count before and after your test.
-    /// This does not work well with logger, running media driver, etc. Only for the most
-    /// basic controlled examples
-    pub struct CountingAllocator {
+    /// Used mainly for testing memory leaks or unintended allocations.
+    pub struct TrackingAllocator {
         allocs: AtomicIsize,
     }
 
-    impl CountingAllocator {
+    impl TrackingAllocator {
         pub const fn new() -> Self {
             Self {
                 allocs: AtomicIsize::new(0),
             }
         }
-        /// Returns the current allocation counter value.
-        fn current(&self) -> isize {
+        pub fn current(&self) -> isize {
             self.allocs.load(Ordering::SeqCst)
         }
     }
 
-    unsafe impl GlobalAlloc for CountingAllocator {
+    unsafe impl GlobalAlloc for TrackingAllocator {
         unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
             self.allocs.fetch_add(1, Ordering::SeqCst);
             System.alloc(layout)
@@ -623,14 +629,61 @@ pub(crate) mod test_alloc {
             self.allocs.fetch_sub(1, Ordering::SeqCst);
             System.dealloc(ptr, layout)
         }
+        unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+            self.allocs.fetch_add(1, Ordering::SeqCst);
+            System.alloc_zeroed(layout)
+        }
+        unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+            System.realloc(ptr, layout, new_size)
+        }
     }
 
     #[global_allocator]
-    static GLOBAL: CountingAllocator = CountingAllocator::new();
+    static GLOBAL: TrackingAllocator = TrackingAllocator::new();
 
-    /// Returns the current allocation counter value.
+    /// Returns the current number of net allocations
     pub fn current_allocs() -> isize {
         GLOBAL.current()
+    }
+
+    /// Asserts that no allocations occur within the provided closure.
+    /// Uses a file lock to ensure exclusive access across threads/tests.
+    pub fn assert_no_allocation<F: FnOnce()>(f: F) {
+        let tmp = env::temp_dir().join("rusteron_allocation.lck");
+
+        #[cfg(unix)]
+        let file = {
+            OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .mode(0o600)
+                .open(&tmp)
+                .expect("Failed to open allocation lock file")
+        };
+        #[cfg(not(unix))]
+        let file = {
+            OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .open(&tmp)
+                .expect("Failed to open allocation lock file")
+        };
+
+        let mut lock = fd_lock::RwLock::new(file);
+        let lock = lock.write().expect("Failed to acquire file lock");
+
+        let before = current_allocs();
+        f();
+        let after = current_allocs();
+        assert_eq!(
+            before, after,
+            "Expected no allocation, but alloc count changed from {} to {}",
+            before, after
+        );
+
+        drop(lock)
     }
 }
 

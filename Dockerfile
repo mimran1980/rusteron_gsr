@@ -28,6 +28,7 @@ RUN apt-get update \
         valgrind \
         libclang-rt-19-dev \
         openssh-server \
+        jq \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /work

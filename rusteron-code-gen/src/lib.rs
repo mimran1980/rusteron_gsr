@@ -253,6 +253,7 @@ mod test {
             flag_clone.store(true, Ordering::SeqCst);
             // Set the resource to null to simulate cleanup.
             unsafe {
+                drop(Box::from_raw(*res));
                 *res = std::ptr::null_mut();
             }
             0
@@ -315,6 +316,7 @@ mod test {
         let cleanup = Some(Box::new(move |res: *mut *mut i32| -> i32 {
             flag_clone.store(true, Ordering::SeqCst);
             unsafe {
+                drop(Box::from_raw(*res));
                 *res = std::ptr::null_mut();
             }
             0
@@ -352,6 +354,7 @@ mod test {
         let cleanup = Some(Box::new(move |res: *mut *mut i32| -> i32 {
             flag_clone.store(true, Ordering::SeqCst);
             unsafe {
+                drop(Box::from_raw(*res));
                 *res = std::ptr::null_mut();
             }
             0
@@ -374,6 +377,9 @@ mod test {
             assert!(_resource.is_ok());
         }
         assert!(!flag.load(Ordering::SeqCst));
+        unsafe {
+            drop(Box::from_raw(resource_ptr));
+        }
     }
 
     #[test]
@@ -385,6 +391,7 @@ mod test {
         let cleanup = Some(Box::new(move |res: *mut *mut i32| -> i32 {
             flag_clone.store(true, Ordering::SeqCst);
             unsafe {
+                drop(Box::from_raw(*res));
                 *res = std::ptr::null_mut();
             }
             0
