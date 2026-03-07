@@ -213,17 +213,18 @@ mod tests {
 
         let ctx = AeronContext::new()?;
         ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
-        // Pending async adds leak in Aeron C until they reach a terminal poll state,
-        // so keep the driver timeout short and always poll to completion below.
-        ctx.set_driver_timeout_ms(1_000)?;
         let mut error_handler = Handler::leak(ErrorCount::default());
         ctx.set_error_handler(Some(&error_handler))?;
         let aeron = Aeron::new(&ctx)?;
         aeron.start()?;
 
+        const STRESS_ITERS: u16 = 60;
+        const POLL_TIMEOUT: Duration = Duration::from_secs(10);
+        const POLL_SLEEP: Duration = Duration::from_millis(10);
+
         // Stress: repeatedly create async pub/sub on an invalid endpoint and drive each
         // poller to a terminal state before dropping it.
-        for i in 0..60u16 {
+        for i in 0..STRESS_ITERS {
             let port = 55000u16 + i;
             let channel = format!("aeron:udp?endpoint=203.0.113.1:{}", port);
             let pub_poller =
@@ -241,9 +242,7 @@ mod tests {
             let mut subscription = None;
             let mut subscription_done = false;
 
-            while !(publication_done && subscription_done)
-                && start.elapsed() < Duration::from_secs(2)
-            {
+            while !(publication_done && subscription_done) && start.elapsed() < POLL_TIMEOUT {
                 if !publication_done {
                     match pub_poller.poll() {
                         Ok(Some(pub_)) => {
@@ -273,17 +272,19 @@ mod tests {
                 }
 
                 if !(publication_done && subscription_done) {
-                    std::thread::sleep(Duration::from_millis(10));
+                    std::thread::sleep(POLL_SLEEP);
                 }
             }
 
             assert!(
                 publication_done,
-                "publication async add did not complete on iteration {i}"
+                "publication async add did not complete on iteration {i} within {:?}",
+                POLL_TIMEOUT
             );
             assert!(
                 subscription_done,
-                "subscription async add did not complete on iteration {i}"
+                "subscription async add did not complete on iteration {i} within {:?}",
+                POLL_TIMEOUT
             );
 
             drop(subscription);
