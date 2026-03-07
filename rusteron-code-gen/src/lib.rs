@@ -77,7 +77,6 @@ mod tests {
     use std::fs;
 
     #[test]
-    #[ignore]
     #[cfg(not(target_os = "windows"))] // the generated bindings have different sizes
     fn client() {
         let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -132,7 +131,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     #[cfg(not(target_os = "windows"))] // the generated bindings have different sizes
     fn media_driver() {
         let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -186,7 +184,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     #[cfg(not(target_os = "windows"))] // the generated bindings have different sizes
     fn archive() {
         let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
