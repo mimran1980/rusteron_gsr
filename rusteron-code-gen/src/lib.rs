@@ -10,6 +10,7 @@
 mod common;
 mod generator;
 mod parser;
+pub mod test_logger;
 
 pub use common::*;
 pub use generator::*;
