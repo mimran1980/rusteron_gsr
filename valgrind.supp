@@ -1,6 +1,8 @@
 # Valgrind suppressions for known external/runtime issues.
 #
 # Keep this file present even when empty so `just test-valgrind` can run.
+
+# Rust test harness retains thread/runtime state until process exit.
 {
    rust_test_thread_context_possible_leak
    Memcheck:Leak
@@ -13,6 +15,7 @@
    fun:_ZN4test16test_main_static*
 }
 
+# `serial_test` + `scc` keep process-global lock state for the duration of the test binary.
 {
    serial_test_lock_map_possible_leak_archive
    Memcheck:Leak
@@ -63,6 +66,7 @@
    fun:_ZN4core3ops8function6FnOnce40call_once$u7b$$u7b$vtable.shim$u7d$$u7d$17hddcd7484a13fd793E
 }
 
+# Same `serial_test` global lock-map behaviour in the client test binary.
 {
    serial_test_lock_map_possible_leak_client
    Memcheck:Leak
@@ -113,6 +117,7 @@
    fun:_ZN4core3ops8function6FnOnce40call_once$u7b$$u7b$vtable.shim$u7d$$u7d$17hddcd7484a13fd793E
 }
 
+# Known Aeron driver shutdown false positive from Valgrind's view of mapped memory.
 {
    aeron_driver_conductor_msync_uninitialised
    Memcheck:Param
@@ -126,6 +131,9 @@
    ...
 }
 
+# Upstream Aeron C shutdown race: conductor idle strategy may read sleeping state
+# after context close frees it. This is a real memory-safety pattern, but it is
+# outside rusteron's Rust-owned lifecycle control, so it stays suppressed here.
 {
    aeron_idle_strategy_sleeping_after_context_close
    Memcheck:Addr8
