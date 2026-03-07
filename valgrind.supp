@@ -15,6 +15,44 @@
    fun:_ZN4test16test_main_static*
 }
 
+# Fallback for Rust runtime stack overflow thread metadata retained to process exit.
+{
+   rust_runtime_stack_overflow_thread_info_reachable
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   ...
+   fun:*stack_overflow*thread_info*set_current_info*
+   ...
+   fun:*lang_start_internal*
+   fun:main
+}
+
+# Fallback for `serial_test` + `scc` lock-map allocations where symbol hashes differ across toolchains.
+{
+   serial_test_lock_map_generic_malloc
+   Memcheck:Leak
+   match-leak-kinds: possible,reachable
+   fun:malloc
+   ...
+   fun:_ZN11serial_test9code_lock13check_new_key*
+   fun:_ZN11serial_test16serial_code_lock29local_serial_core_with_return*
+   ...
+   fun:run_test_in_process
+}
+
+{
+   serial_test_lock_map_generic_calloc
+   Memcheck:Leak
+   match-leak-kinds: possible,reachable
+   fun:calloc
+   ...
+   fun:_ZN11serial_test9code_lock13check_new_key*
+   fun:_ZN11serial_test16serial_code_lock29local_serial_core_with_return*
+   ...
+   fun:run_test_in_process
+}
+
 # `serial_test` + `scc` keep process-global lock state for the duration of the test binary.
 {
    serial_test_lock_map_possible_leak_archive
