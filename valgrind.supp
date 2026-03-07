@@ -19,7 +19,7 @@
 {
    serial_test_lock_map_possible_leak_archive
    Memcheck:Leak
-   match-leak-kinds: possible
+   match-leak-kinds: possible,reachable
    fun:calloc
    fun:_ZN3std3sys5alloc4unix81_$LT$impl$u20$core..alloc..global..GlobalAlloc$u20$for$u20$std..alloc..System$GT$12alloc_zeroed17hc569447a31655ef0E
    fun:_ZN100_$LT$rusteron_archive..test_alloc..TrackingAllocator$u20$as$u20$core..alloc..global..GlobalAlloc$GT$12alloc_zeroed17h4425f3a586c41142E
@@ -70,7 +70,7 @@
 {
    serial_test_lock_map_possible_leak_client
    Memcheck:Leak
-   match-leak-kinds: possible
+   match-leak-kinds: possible,reachable
    fun:calloc
    fun:_ZN3std3sys5alloc4unix81_$LT$impl$u20$core..alloc..global..GlobalAlloc$u20$for$u20$std..alloc..System$GT$12alloc_zeroed17h7c29577a3e08a123E
    fun:_ZN99_$LT$rusteron_client..test_alloc..TrackingAllocator$u20$as$u20$core..alloc..global..GlobalAlloc$GT$12alloc_zeroed17ha827320d0875d48cE

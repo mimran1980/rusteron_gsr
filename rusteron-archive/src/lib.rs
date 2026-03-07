@@ -353,10 +353,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_simple_replay_merge() -> Result<(), AeronCError> {
-        let _ = env_logger::Builder::new()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Info)
-            .try_init();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
 
         EmbeddedArchiveMediaDriverProcess::kill_all_java_processes()
             .expect("failed to kill all java processes");
@@ -739,10 +736,7 @@ mod tests {
     #[test]
     #[serial]
     pub fn test_aeron_archive() -> Result<(), Box<dyn error::Error>> {
-        let _ = env_logger::Builder::new()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Info)
-            .try_init();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
         EmbeddedArchiveMediaDriverProcess::kill_all_java_processes()
             .expect("failed to kill all java processes");
 

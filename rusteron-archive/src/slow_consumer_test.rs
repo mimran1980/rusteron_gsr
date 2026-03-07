@@ -120,10 +120,7 @@ mod tests {
         source_location: SourceLocation,
         replay_length: i64,
     ) -> Result<(), Box<dyn Error>> {
-        let _ = env_logger::Builder::new()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Info)
-            .try_init();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
 
         EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().ok();
 

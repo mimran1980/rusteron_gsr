@@ -97,10 +97,7 @@ mod tests {
     #[test]
     #[serial]
     fn async_publication_invalid_interface_poll_then_drop() -> Result<(), Box<dyn error::Error>> {
-        let _ = env_logger::Builder::new()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Info)
-            .try_init();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
 
         let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
         media_driver_ctx.set_dir_delete_on_shutdown(true)?;
@@ -203,10 +200,7 @@ mod tests {
     #[test]
     #[serial]
     fn async_pub_sub_invalid_endpoint_create_drop_stress() -> Result<(), Box<dyn error::Error>> {
-        let _ = env_logger::Builder::new()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Info)
-            .try_init();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
 
         let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
         media_driver_ctx.set_dir_delete_on_shutdown(true)?;
@@ -309,10 +303,7 @@ mod tests {
     #[serial]
     // // #[ignore] // TODO FIXME broken test
     fn async_subscription_invalid_interface_poll_then_drop() -> Result<(), Box<dyn error::Error>> {
-        let _ = env_logger::Builder::new()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Info)
-            .try_init();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
 
         let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
         media_driver_ctx.set_dir_delete_on_shutdown(true)?;
@@ -358,10 +349,7 @@ mod tests {
     #[test]
     #[serial]
     fn blocking_add_subscription_invalid_interface_timeout() -> Result<(), Box<dyn error::Error>> {
-        let _ = env_logger::Builder::new()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Info)
-            .try_init();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
 
         let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
         media_driver_ctx.set_dir_delete_on_shutdown(true)?;
@@ -400,10 +388,7 @@ mod tests {
     #[test]
     #[serial]
     fn async_publication_invalid_bind_poll_then_drop() -> Result<(), Box<dyn error::Error>> {
-        let _ = env_logger::Builder::new()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Info)
-            .try_init();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
 
         let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
         media_driver_ctx.set_dir_delete_on_shutdown(true)?;
@@ -442,10 +427,7 @@ mod tests {
     #[test]
     #[serial]
     pub fn simple_large_send() -> Result<(), Box<dyn error::Error>> {
-        let _ = env_logger::Builder::new()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Info)
-            .try_init();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
         let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
         media_driver_ctx.set_dir_delete_on_shutdown(true)?;
         media_driver_ctx.set_dir_delete_on_start(true)?;
@@ -673,10 +655,7 @@ mod tests {
     #[test]
     #[serial]
     pub fn try_claim() -> Result<(), Box<dyn error::Error>> {
-        let _ = env_logger::Builder::new()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Info)
-            .try_init();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
         let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
         media_driver_ctx.set_dir_delete_on_shutdown(true)?;
         media_driver_ctx.set_dir_delete_on_start(true)?;
@@ -833,10 +812,7 @@ mod tests {
     #[test]
     #[serial]
     pub fn counters() -> Result<(), Box<dyn error::Error>> {
-        let _ = env_logger::Builder::new()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Info)
-            .try_init();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
         let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
         media_driver_ctx.set_dir_delete_on_shutdown(true)?;
         media_driver_ctx.set_dir_delete_on_start(true)?;
@@ -987,10 +963,7 @@ mod tests {
     #[test]
     #[serial]
     pub fn backpressure_recovery_test() -> Result<(), Box<dyn error::Error>> {
-        let _ = env_logger::Builder::new()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Info)
-            .try_init();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
 
         let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
         media_driver_ctx.set_dir_delete_on_shutdown(true)?;
@@ -1074,10 +1047,7 @@ mod tests {
     #[test]
     #[serial]
     pub fn multi_subscription_test() -> Result<(), Box<dyn error::Error>> {
-        let _ = env_logger::Builder::new()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Info)
-            .try_init();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
 
         let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
         media_driver_ctx.set_dir_delete_on_shutdown(true)?;
@@ -1170,10 +1140,7 @@ mod tests {
     #[serial]
     pub fn should_be_able_to_drop_after_close_manually_being_closed(
     ) -> Result<(), Box<dyn error::Error>> {
-        let _ = env_logger::Builder::new()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Info)
-            .try_init();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
 
         let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
         media_driver_ctx.set_dir_delete_on_shutdown(true)?;
@@ -1223,10 +1190,7 @@ mod tests {
     #[test]
     #[serial]
     pub fn offer_on_closed_publication_error_test() -> Result<(), Box<dyn error::Error>> {
-        let _ = env_logger::Builder::new()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Info)
-            .try_init();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
 
         let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
         media_driver_ctx.set_dir_delete_on_shutdown(true)?;
@@ -1271,10 +1235,7 @@ mod tests {
     #[test]
     #[serial]
     pub fn empty_message_test() -> Result<(), Box<dyn error::Error>> {
-        let _ = env_logger::Builder::new()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Info)
-            .try_init();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
 
         let media_driver_ctx = rusteron_media_driver::AeronDriverContext::new()?;
         media_driver_ctx.set_dir_delete_on_shutdown(true)?;
@@ -1429,10 +1390,7 @@ mod tests {
     #[serial]
     #[ignore] // Long-running diagnostics test for manual MDC with rolling latency/gap reports.
     pub fn mdc_unreliable_gap_latency_histogram_report() -> Result<(), Box<dyn error::Error>> {
-        let _ = env_logger::Builder::new()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Info)
-            .try_init();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
 
         const STREAM_ID: i32 = 32931;
         const CONTROL_PORT: u16 = 32929;
@@ -1615,10 +1573,7 @@ mod tests {
     #[serial]
     #[ignore] // need to work to get tags working properly, its more of testing issue then tag issue
     pub fn tags() -> Result<(), Box<dyn error::Error>> {
-        let _ = env_logger::Builder::new()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Debug)
-            .try_init();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Debug);
 
         let (md_ctx, stop, md) = start_media_driver(1)?;
 
