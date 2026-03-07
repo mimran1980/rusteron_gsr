@@ -1,0 +1,136 @@
+# Valgrind suppressions for known external/runtime issues.
+#
+# Keep this file present even when empty so `just test-valgrind` can run.
+{
+   rust_test_thread_context_possible_leak
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:malloc
+   ...
+   fun:current_or_unnamed
+   fun:_ZN3std4sync4mpmc7context7Context3new*
+   ...
+   fun:_ZN4test16test_main_static*
+}
+
+{
+   serial_test_lock_map_possible_leak_archive
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:calloc
+   fun:_ZN3std3sys5alloc4unix81_$LT$impl$u20$core..alloc..global..GlobalAlloc$u20$for$u20$std..alloc..System$GT$12alloc_zeroed17hc569447a31655ef0E
+   fun:_ZN100_$LT$rusteron_archive..test_alloc..TrackingAllocator$u20$as$u20$core..alloc..global..GlobalAlloc$GT$12alloc_zeroed17h4425f3a586c41142E
+   fun:_RNvCsj4CZ6flxxfE_7___rustc19___rust_alloc_zeroed
+   fun:_ZN5alloc5alloc12alloc_zeroed17h27670231c478d932E
+   fun:_ZN3scc10hash_table12bucket_array32BucketArray$LT$K$C$V$C$L$C$_$GT$3new17hbb6c0a06a498d6ffE
+   fun:_ZN3scc10hash_table9HashTable17get_current_array17hc35367fe5daa88fdE
+   fun:_ZN3scc10hash_table9HashTable13reserve_entry17hb3f08c02c9f6c945E
+   fun:_ZN3scc8hash_map24HashMap$LT$K$C$V$C$H$GT$5entry17hf985f8b7eae91381E
+   fun:_ZN11serial_test9code_lock13check_new_key17hd0c855291c673b23E
+   fun:_ZN11serial_test16serial_code_lock29local_serial_core_with_return28_$u7b$$u7b$closure$u7d$$u7d$17h56bafad0b4001411E
+   fun:_ZN4core4iter8adapters3map8map_fold28_$u7b$$u7b$closure$u7d$$u7d$17ha7e4b4384cafb834E
+   fun:_ZN103_$LT$alloc..vec..into_iter..IntoIter$LT$T$C$A$GT$$u20$as$u20$core..iter..traits..iterator..Iterator$GT$4fold17hd59010db4f0cb72cE
+   fun:_ZN102_$LT$core..iter..adapters..map..Map$LT$I$C$F$GT$$u20$as$u20$core..iter..traits..iterator..Iterator$GT$4fold17hbcebc82711546defE
+   fun:_ZN4core4iter6traits8iterator8Iterator8for_each17he9448ed6b6a4e3b9E
+   fun:_ZN5alloc3vec16Vec$LT$T$C$A$GT$14extend_trusted17h8f6d69924fe12661E
+   fun:_ZN97_$LT$alloc..vec..Vec$LT$T$C$A$GT$$u20$as$u20$alloc..vec..spec_extend..SpecExtend$LT$T$C$I$GT$$GT$11spec_extend17h24dfb556443b64e5E
+   fun:_ZN111_$LT$alloc..vec..Vec$LT$T$GT$$u20$as$u20$alloc..vec..spec_from_iter_nested..SpecFromIterNested$LT$T$C$I$GT$$GT$9from_iter17h4a09671eeb2dfddaE
+   fun:_ZN111_$LT$alloc..vec..Vec$LT$T$GT$$u20$as$u20$alloc..vec..spec_from_iter_nested..SpecFromIterNested$LT$T$C$I$GT$$GT$39from_iter$u7b$$u7b$reify.shim$u7d$$u7d$17h5d79e06dd4479710E
+   fun:_ZN5alloc3vec16in_place_collect108_$LT$impl$u20$alloc..vec..spec_from_iter..SpecFromIter$LT$T$C$I$GT$$u20$for$u20$alloc..vec..Vec$LT$T$GT$$GT$9from_iter17h91e04788fca07892E
+   fun:_ZN95_$LT$alloc..vec..Vec$LT$T$GT$$u20$as$u20$core..iter..traits..collect..FromIterator$LT$T$GT$$GT$9from_iter17h4a13c459a5fa847fE
+   fun:_ZN4core4iter6traits8iterator8Iterator7collect17h2d09548c2bbb240dE
+   fun:_ZN11serial_test16serial_code_lock29local_serial_core_with_return17h21461fb5c5f95577E
+   fun:_ZN16rusteron_archive5tests18test_aeron_archive17h7f76219c48bd6d83E
+   fun:_ZN16rusteron_archive5tests18test_aeron_archive28_$u7b$$u7b$closure$u7d$$u7d$17h96f27ba5dcf9a075E
+   fun:_ZN4core3ops8function6FnOnce9call_once17hf0c61abe70b68edfE
+   fun:call_once<fn() -> core::result::Result<(), alloc::string::String>, ()>
+   fun:_ZN4test28__rust_begin_short_backtrace17ha52ab26e77157f03E
+   fun:{closure#0}
+   fun:call_once<core::result::Result<(), alloc::string::String>, test::run_test_in_process::{closure_env#0}>
+   fun:do_call<core::panic::unwind_safe::AssertUnwindSafe<test::run_test_in_process::{closure_env#0}>, core::result::Result<(), alloc::string::String>>
+   fun:catch_unwind<core::result::Result<(), alloc::string::String>, core::panic::unwind_safe::AssertUnwindSafe<test::run_test_in_process::{closure_env#0}>>
+   fun:catch_unwind<core::panic::unwind_safe::AssertUnwindSafe<test::run_test_in_process::{closure_env#0}>, core::result::Result<(), alloc::string::String>>
+   fun:run_test_in_process
+   fun:_ZN4test8run_test28_$u7b$$u7b$closure$u7d$$u7d$17h0364ba59bf23f652E
+   fun:{closure#1}
+   fun:_ZN3std3sys9backtrace28__rust_begin_short_backtrace17h177cb952fc54ad2cE
+   fun:{closure#0}<test::run_test::{closure_env#1}, ()>
+   fun:call_once<(), std::thread::{impl#0}::spawn_unchecked_::{closure#1}::{closure_env#0}<test::run_test::{closure_env#1}, ()>>
+   fun:do_call<core::panic::unwind_safe::AssertUnwindSafe<std::thread::{impl#0}::spawn_unchecked_::{closure#1}::{closure_env#0}<test::run_test::{closure_env#1}, ()>>, ()>
+   fun:catch_unwind<(), core::panic::unwind_safe::AssertUnwindSafe<std::thread::{impl#0}::spawn_unchecked_::{closure#1}::{closure_env#0}<test::run_test::{closure_env#1}, ()>>>
+   fun:catch_unwind<core::panic::unwind_safe::AssertUnwindSafe<std::thread::{impl#0}::spawn_unchecked_::{closure#1}::{closure_env#0}<test::run_test::{closure_env#1}, ()>>, ()>
+   fun:{closure#1}<test::run_test::{closure_env#1}, ()>
+   fun:_ZN4core3ops8function6FnOnce40call_once$u7b$$u7b$vtable.shim$u7d$$u7d$17hddcd7484a13fd793E
+}
+
+{
+   serial_test_lock_map_possible_leak_client
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:calloc
+   fun:_ZN3std3sys5alloc4unix81_$LT$impl$u20$core..alloc..global..GlobalAlloc$u20$for$u20$std..alloc..System$GT$12alloc_zeroed17h7c29577a3e08a123E
+   fun:_ZN99_$LT$rusteron_client..test_alloc..TrackingAllocator$u20$as$u20$core..alloc..global..GlobalAlloc$GT$12alloc_zeroed17ha827320d0875d48cE
+   fun:_RNvCsj4CZ6flxxfE_7___rustc19___rust_alloc_zeroed
+   fun:_ZN5alloc5alloc12alloc_zeroed17h27670231c478d932E
+   fun:_ZN3scc10hash_table12bucket_array32BucketArray$LT$K$C$V$C$L$C$_$GT$3new17hbb6c0a06a498d6ffE
+   fun:_ZN3scc10hash_table9HashTable17get_current_array17hc35367fe5daa88fdE
+   fun:_ZN3scc10hash_table9HashTable13reserve_entry17hb3f08c02c9f6c945E
+   fun:_ZN3scc8hash_map24HashMap$LT$K$C$V$C$H$GT$5entry17hf985f8b7eae91381E
+   fun:_ZN11serial_test9code_lock13check_new_key17hd0c855291c673b23E
+   fun:_ZN11serial_test16serial_code_lock29local_serial_core_with_return28_$u7b$$u7b$closure$u7d$$u7d$17hca87a595901961fcE
+   fun:_ZN4core4iter8adapters3map8map_fold28_$u7b$$u7b$closure$u7d$$u7d$17hc9e1c6a54fd81a5bE
+   fun:_ZN103_$LT$alloc..vec..into_iter..IntoIter$LT$T$C$A$GT$$u20$as$u20$core..iter..traits..iterator..Iterator$GT$4fold17h32c0bbd4b7d6e07eE
+   fun:_ZN102_$LT$core..iter..adapters..map..Map$LT$I$C$F$GT$$u20$as$u20$core..iter..traits..iterator..Iterator$GT$4fold17h30c89135123d3144E
+   fun:_ZN4core4iter6traits8iterator8Iterator8for_each17h7030ef0d7f8e2257E
+   fun:_ZN5alloc3vec16Vec$LT$T$C$A$GT$14extend_trusted17he312fcefbe8255d9E
+   fun:_ZN97_$LT$alloc..vec..Vec$LT$T$C$A$GT$$u20$as$u20$alloc..vec..spec_extend..SpecExtend$LT$T$C$I$GT$$GT$11spec_extend17hfd51450ee7041eecE
+   fun:_ZN111_$LT$alloc..vec..Vec$LT$T$GT$$u20$as$u20$alloc..vec..spec_from_iter_nested..SpecFromIterNested$LT$T$C$I$GT$$GT$9from_iter17he8fc0f8254283775E
+   fun:_ZN111_$LT$alloc..vec..Vec$LT$T$GT$$u20$as$u20$alloc..vec..spec_from_iter_nested..SpecFromIterNested$LT$T$C$I$GT$$GT$39from_iter$u7b$$u7b$reify.shim$u7d$$u7d$17hbcc7a0f87eb91a46E
+   fun:_ZN5alloc3vec16in_place_collect108_$LT$impl$u20$alloc..vec..spec_from_iter..SpecFromIter$LT$T$C$I$GT$$u20$for$u20$alloc..vec..Vec$LT$T$GT$$GT$9from_iter17h3d586c68e65f74a8E
+   fun:_ZN95_$LT$alloc..vec..Vec$LT$T$GT$$u20$as$u20$core..iter..traits..collect..FromIterator$LT$T$GT$$GT$9from_iter17h00059c6eb8debb66E
+   fun:_ZN4core4iter6traits8iterator8Iterator7collect17h574c4ec8e5f8b20fE
+   fun:_ZN11serial_test16serial_code_lock29local_serial_core_with_return17h2bec20eb29cc70f1E
+   fun:_ZN15rusteron_client5tests49async_pub_sub_invalid_endpoint_create_drop_stress17h0e5793abe6c4bc9aE
+   fun:_ZN15rusteron_client5tests49async_pub_sub_invalid_endpoint_create_drop_stress28_$u7b$$u7b$closure$u7d$$u7d$17h7799faa69135ac17E
+   fun:_ZN4core3ops8function6FnOnce9call_once17h79306401a0ad81afE
+   fun:call_once<fn() -> core::result::Result<(), alloc::string::String>, ()>
+   fun:_ZN4test28__rust_begin_short_backtrace17ha52ab26e77157f03E
+   fun:{closure#0}
+   fun:call_once<core::result::Result<(), alloc::string::String>, test::run_test_in_process::{closure_env#0}>
+   fun:do_call<core::panic::unwind_safe::AssertUnwindSafe<test::run_test_in_process::{closure_env#0}>, core::result::Result<(), alloc::string::String>>
+   fun:catch_unwind<core::result::Result<(), alloc::string::String>, core::panic::unwind_safe::AssertUnwindSafe<test::run_test_in_process::{closure_env#0}>>
+   fun:catch_unwind<core::panic::unwind_safe::AssertUnwindSafe<test::run_test_in_process::{closure_env#0}>, core::result::Result<(), alloc::string::String>>
+   fun:run_test_in_process
+   fun:_ZN4test8run_test28_$u7b$$u7b$closure$u7d$$u7d$17h0364ba59bf23f652E
+   fun:{closure#1}
+   fun:_ZN3std3sys9backtrace28__rust_begin_short_backtrace17h177cb952fc54ad2cE
+   fun:{closure#0}<test::run_test::{closure_env#1}, ()>
+   fun:call_once<(), std::thread::{impl#0}::spawn_unchecked_::{closure#1}::{closure_env#0}<test::run_test::{closure_env#1}, ()>>
+   fun:do_call<core::panic::unwind_safe::AssertUnwindSafe<std::thread::{impl#0}::spawn_unchecked_::{closure#1}::{closure_env#0}<test::run_test::{closure_env#1}, ()>>, ()>
+   fun:catch_unwind<(), core::panic::unwind_safe::AssertUnwindSafe<std::thread::{impl#0}::spawn_unchecked_::{closure#1}::{closure_env#0}<test::run_test::{closure_env#1}, ()>>>
+   fun:catch_unwind<core::panic::unwind_safe::AssertUnwindSafe<std::thread::{impl#0}::spawn_unchecked_::{closure#1}::{closure_env#0}<test::run_test::{closure_env#1}, ()>>, ()>
+   fun:{closure#1}<test::run_test::{closure_env#1}, ()>
+   fun:_ZN4core3ops8function6FnOnce40call_once$u7b$$u7b$vtable.shim$u7d$$u7d$17hddcd7484a13fd793E
+}
+
+{
+   aeron_driver_conductor_msync_uninitialised
+   Memcheck:Param
+   msync(start)
+   fun:__syscall_cancel_arch
+   fun:__internal_syscall_cancel
+   fun:__syscall_cancel
+   fun:msync
+   fun:aeron_msync
+   fun:aeron_driver_conductor_on_close
+   ...
+}
+
+{
+   aeron_idle_strategy_sleeping_after_context_close
+   Memcheck:Addr8
+   fun:aeron_idle_strategy_sleeping_idle
+   fun:agent_main
+   fun:start_thread
+   fun:clone
+}
