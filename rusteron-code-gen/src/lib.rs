@@ -19,18 +19,26 @@ pub use parser::*;
 use proc_macro2::TokenStream;
 use std::fs::OpenOptions;
 use std::io::Write;
+use std::path::Path;
 use std::process::{Command, Stdio};
 
 pub const CUSTOM_AERON_CODE: &str = include_str!("./aeron_custom.rs");
 pub const COMMON_CODE: &str = include_str!("./common.rs");
 
 pub fn append_to_file(file_path: &str, code: &str) -> std::io::Result<()> {
+    let path = Path::new(file_path);
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)?;
+        }
+    }
+
     // Open the file in append mode
     let mut file = OpenOptions::new()
         .create(true)
         .write(true)
         .append(true)
-        .open(file_path)?;
+        .open(path)?;
 
     // Write the generated code to the file
     writeln!(file, "\n{}", code)?;
