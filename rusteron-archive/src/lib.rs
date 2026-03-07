@@ -647,7 +647,7 @@ mod tests {
         }
         assert!(!replay_merge.has_failed());
         assert!(replay_merge.is_live_added());
-        assert!(reply_count > 0, "no replay-merge fragments received");
+        assert!(reply_count > 10_000, "no replay-merge fragments received");
         Ok(())
     }
 
