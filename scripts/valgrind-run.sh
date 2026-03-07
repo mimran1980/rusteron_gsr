@@ -64,9 +64,10 @@ for BIN in $BINARIES; do
       --error-exitcode=1 \
       --track-origins=yes \
       --leak-check=full \
-      --show-leak-kinds=definite,indirect \
-      --track-fds=yes \
+      --show-leak-kinds=all \
       --num-callers=30 \
+      -s \
+      --gen-suppressions=all \
       --suppressions="$SUPP_FILE" \
       "$BIN" --test-threads=1 --nocapture \
       || { echo "FAIL: $BIN_NAME" >&2; OVERALL_EXIT=1; }

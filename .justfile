@@ -119,11 +119,12 @@ test-valgrind: _build-valgrind-image
       -e TMP=/tmp/valgrind/tmp \
       -e TEMP=/tmp/valgrind/tmp \
       -e RUSTUP_HOME=/tmp/valgrind/rustup \
-      -e GRADLE_USER_HOME=/tmp/valgrind/gradle \
+      -e GRADLE_USER_HOME=/root/.gradle \
       -e CARGO_HOME=/tmp/valgrind/cargo-home \
       -e CARGO_TARGET_DIR=/tmp/valgrind/target \
       -e RUST_TEST_THREADS=1 \
       -e VALGRIND_SUPP=/work/valgrind.supp \
+      -v "$HOME/.gradle:/root/.gradle" \
       -v "{{justfile_directory()}}:/work" \
       --entrypoint /bin/bash \
       rusteron-valgrind \
@@ -138,11 +139,12 @@ valgrind-gen-suppressions: _build-valgrind-image
       -e TMP=/tmp/valgrind/tmp \
       -e TEMP=/tmp/valgrind/tmp \
       -e RUSTUP_HOME=/tmp/valgrind/rustup \
-      -e GRADLE_USER_HOME=/tmp/valgrind/gradle \
+      -e GRADLE_USER_HOME=/root/.gradle \
       -e CARGO_HOME=/tmp/valgrind/cargo-home \
       -e CARGO_TARGET_DIR=/tmp/valgrind/target \
       -e RUST_TEST_THREADS=1 \
       -e VALGRIND_GEN_SUPPRESSIONS=1 \
+      -v "$HOME/.gradle:/root/.gradle" \
       -v "{{justfile_directory()}}:/work" \
       --entrypoint /bin/bash \
       rusteron-valgrind \

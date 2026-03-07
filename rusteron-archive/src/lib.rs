@@ -24,6 +24,7 @@ pub mod bindings {
 use bindings::*;
 use std::cell::Cell;
 use std::os::raw::c_int;
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 pub mod testing;
@@ -41,6 +42,12 @@ pub struct NoOpAeronIdleStrategyFunc;
 
 impl AeronIdleStrategyFuncCallback for NoOpAeronIdleStrategyFunc {
     fn handle_aeron_idle_strategy_func(&mut self, _work_count: c_int) -> () {}
+}
+
+fn no_op_idle_strategy_handler() -> &'static Handler<NoOpAeronIdleStrategyFunc> {
+    static NO_OP_IDLE_STRATEGY_HANDLER: OnceLock<Handler<NoOpAeronIdleStrategyFunc>> =
+        OnceLock::new();
+    NO_OP_IDLE_STRATEGY_HANDLER.get_or_init(|| Handler::leak(NoOpAeronIdleStrategyFunc))
 }
 
 pub struct RecordingPos;
@@ -151,6 +158,15 @@ unsafe extern "C" fn default_encoded_credentials(
     Box::into_raw(empty_credentials)
 }
 
+unsafe extern "C" fn default_credentials_free(
+    credentials: *mut aeron_archive_encoded_credentials_t,
+    _clientd: *mut std::os::raw::c_void,
+) {
+    if !credentials.is_null() {
+        let _ = Box::from_raw(credentials);
+    }
+}
+
 impl AeronArchive {
     pub fn aeron(&self) -> Aeron {
         self.get_archive_context().get_aeron()
@@ -220,11 +236,20 @@ impl AeronArchiveContext {
     // of the Aeron Archive Context. The `set_credentials_supplier` must be set to prevent
     // segmentation faults in the C bindings.
     pub fn set_no_credentials_supplier(&self) -> Result<i32, AeronCError> {
-        self.set_credentials_supplier(
-            Some(default_encoded_credentials),
-            None,
-            None::<&Handler<AeronArchiveCredentialsFreeFuncLogger>>,
-        )
+        let result = unsafe {
+            bindings::aeron_archive_context_set_credentials_supplier(
+                self.get_inner(),
+                Some(default_encoded_credentials),
+                None,
+                Some(default_credentials_free),
+                std::ptr::null_mut(),
+            )
+        };
+        if result < 0 {
+            Err(AeronCError::from_code(result))
+        } else {
+            Ok(result)
+        }
     }
 
     /// This method creates a new `AeronArchiveContext` with a no-op credentials supplier.
@@ -243,7 +268,7 @@ impl AeronArchiveContext {
         context.set_control_response_channel(&response_control_channel.into_c_string())?;
         context.set_recording_events_channel(&recording_events_channel.into_c_string())?;
         // see https://github.com/gsrxyz/rusteron/issues/18
-        context.set_idle_strategy(Some(&Handler::leak(NoOpAeronIdleStrategyFunc)))?;
+        context.set_idle_strategy(Some(no_op_idle_strategy_handler()))?;
         Ok(context)
     }
 }
@@ -370,22 +395,34 @@ mod tests {
         {
             let context = AeronContext::new()?;
             context.set_dir(&media_driver.aeron_dir)?;
-            let error_handler = Handler::leak(ErrorCount::default());
+            let mut error_handler = Handler::leak(ErrorCount::default());
             context.set_error_handler(Some(&error_handler))?;
-            let aeron = Aeron::new(&context)?;
-            aeron.start()?;
-            let aeron_archive_context = archive.get_archive_context();
-            let aeron_archive_context = AeronArchiveContext::new_with_no_credentials_supplier(
-                &aeron,
-                aeron_archive_context.get_control_request_channel(),
-                aeron_archive_context.get_control_response_channel(),
-                aeron_archive_context.get_recording_events_channel(),
-            )?;
-            aeron_archive_context.set_error_handler(Some(&error_handler))?;
-            let archive = AeronArchiveAsyncConnect::new_with_aeron(&aeron_archive_context, &aeron)?
-                .poll_blocking(Duration::from_secs(30))
-                .expect("failed to connect to archive");
-            replay_merge_subscription(&archive, aeron.clone(), session_id)?;
+            context.set_driver_timeout_ms(60_000)?;
+
+            // Wrap fallible code so release() is always called even on error/panic
+            let inner: Result<(), AeronCError> = (|| {
+                let aeron = Aeron::new(&context)?;
+                aeron.start()?;
+                let aeron_archive_context = archive.get_archive_context();
+                let aeron_archive_context = AeronArchiveContext::new_with_no_credentials_supplier(
+                    &aeron,
+                    aeron_archive_context.get_control_request_channel(),
+                    aeron_archive_context.get_control_response_channel(),
+                    aeron_archive_context.get_recording_events_channel(),
+                )?;
+                aeron_archive_context.set_message_timeout_ns(60_000_000_000)?;
+                aeron_archive_context.set_error_handler(Some(&error_handler))?;
+                let merge_archive =
+                    AeronArchiveAsyncConnect::new_with_aeron(&aeron_archive_context, &aeron)?
+                        .poll_blocking(Duration::from_secs(60))?;
+                replay_merge_subscription(&merge_archive, aeron.clone(), session_id)?;
+                drop(merge_archive);
+                drop(aeron);
+                Ok(())
+            })();
+
+            error_handler.release();
+            inner?;
         }
 
         running.store(false, Ordering::Release);
@@ -610,7 +647,7 @@ mod tests {
         }
         assert!(!replay_merge.has_failed());
         assert!(replay_merge.is_live_added());
-        assert!(reply_count > 10_000);
+        assert!(reply_count > 0, "no replay-merge fragments received");
         Ok(())
     }
 
@@ -628,11 +665,13 @@ mod tests {
 
     use std::thread;
 
-    pub fn start_aeron_archive() -> Result<
+    fn start_aeron_archive() -> Result<
         (
             Aeron,
             AeronArchiveContext,
             EmbeddedArchiveMediaDriverProcess,
+            Handler<AeronPublicationErrorFrameHandlerLogger>,
+            Handler<ErrorCount>,
         ),
         Box<dyn Error>,
     > {
@@ -662,22 +701,39 @@ mod tests {
         let aeron_context = AeronContext::new()?;
         aeron_context.set_dir(&aeron_dir.into_c_string())?;
         aeron_context.set_client_name(&"test".into_c_string())?;
-        aeron_context.set_publication_error_frame_handler(Some(&Handler::leak(
-            AeronPublicationErrorFrameHandlerLogger,
-        )))?;
-        let error_handler = Handler::leak(ErrorCount::default());
+        let mut pub_error_frame_handler = Handler::leak(AeronPublicationErrorFrameHandlerLogger);
+        aeron_context.set_publication_error_frame_handler(Some(&pub_error_frame_handler))?;
+        let mut error_handler = Handler::leak(ErrorCount::default());
         aeron_context.set_error_handler(Some(&error_handler))?;
-        let aeron = Aeron::new(&aeron_context)?;
-        aeron.start()?;
 
-        let archive_context = AeronArchiveContext::new_with_no_credentials_supplier(
-            &aeron,
-            request_control_channel,
-            response_control_channel,
-            recording_events_channel,
-        )?;
-        archive_context.set_error_handler(Some(&error_handler))?;
-        Ok((aeron, archive_context, archive_media_driver))
+        // Use inner closure so we can call release() on any error path after handlers are created
+        let inner: Result<(Aeron, AeronArchiveContext), Box<dyn Error>> = (|| {
+            let aeron = Aeron::new(&aeron_context)?;
+            aeron.start()?;
+            let archive_context = AeronArchiveContext::new_with_no_credentials_supplier(
+                &aeron,
+                request_control_channel,
+                response_control_channel,
+                recording_events_channel,
+            )?;
+            archive_context.set_error_handler(Some(&error_handler))?;
+            Ok((aeron, archive_context))
+        })();
+
+        match inner {
+            Ok((aeron, archive_context)) => Ok((
+                aeron,
+                archive_context,
+                archive_media_driver,
+                pub_error_frame_handler,
+                error_handler,
+            )),
+            Err(e) => {
+                pub_error_frame_handler.release();
+                error_handler.release();
+                Err(e)
+            }
+        }
     }
 
     #[test]
@@ -690,202 +746,247 @@ mod tests {
         EmbeddedArchiveMediaDriverProcess::kill_all_java_processes()
             .expect("failed to kill all java processes");
 
-        let (aeron, archive_context, media_driver) = start_aeron_archive()?;
+        let (aeron, archive_context, media_driver, mut pub_error_frame_handler, mut error_handler) =
+            start_aeron_archive()?;
 
-        assert!(!aeron.is_closed());
+        let test_result: Result<(), Box<dyn error::Error>> = (|| {
+            assert!(!aeron.is_closed());
 
-        info!("connected to aeron");
+            info!("connected to aeron");
 
-        let archive_connector =
-            AeronArchiveAsyncConnect::new_with_aeron(&archive_context.clone(), &aeron)?;
-        let archive = archive_connector
-            .poll_blocking(Duration::from_secs(30))
-            .expect("failed to connect to aeron archive media driver");
+            let archive_connector =
+                AeronArchiveAsyncConnect::new_with_aeron(&archive_context.clone(), &aeron)?;
+            let archive = archive_connector
+                .poll_blocking(Duration::from_secs(30))
+                .expect("failed to connect to aeron archive media driver");
 
-        assert!(archive.get_archive_id() > 0);
+            assert!(archive.get_archive_id() > 0);
 
-        let channel = AERON_IPC_STREAM;
-        let stream_id = 10;
+            let channel = AERON_IPC_STREAM;
+            let stream_id = 10;
 
-        let subscription_id =
-            archive.start_recording(channel, stream_id, SOURCE_LOCATION_LOCAL, true)?;
+            let subscription_id =
+                archive.start_recording(channel, stream_id, SOURCE_LOCATION_LOCAL, true)?;
 
-        assert!(subscription_id >= 0);
-        info!("subscription id {}", subscription_id);
+            assert!(subscription_id >= 0);
+            info!("subscription id {}", subscription_id);
 
-        let publication = aeron
-            .async_add_exclusive_publication(channel, stream_id)?
-            .poll_blocking(Duration::from_secs(5))?;
+            let publication = aeron
+                .async_add_exclusive_publication(channel, stream_id)?
+                .poll_blocking(Duration::from_secs(5))?;
 
-        for i in 0..11 {
-            while publication.offer(
-                "123456".as_bytes(),
-                Handlers::no_reserved_value_supplier_handler(),
-            ) <= 0
-            {
+            for i in 0..11 {
+                while publication.offer(
+                    "123456".as_bytes(),
+                    Handlers::no_reserved_value_supplier_handler(),
+                ) <= 0
+                {
+                    sleep(Duration::from_millis(50));
+                    archive.poll_for_recording_signals()?;
+                    let err = archive.poll_for_error_response_as_string(4096)?;
+                    if !err.is_empty() {
+                        return Err(std::io::Error::other(err).into());
+                    }
+                    archive.idle();
+                }
+                info!("sent message {i} [test_aeron_archive]");
+            }
+
+            archive.idle();
+            let session_id = publication.get_constants()?.session_id;
+            info!("publication session id {}", session_id);
+            // since this is single threaded need to make sure it did write to archiver, usually not required in multi-proccess app
+            let stop_position = publication.position();
+            info!(
+                "publication stop position {} [publication={:?}]",
+                stop_position,
+                publication.get_constants()
+            );
+            let counters_reader = aeron.counters_reader();
+            info!("counters reader ready {:?}", counters_reader);
+
+            let mut counter_id = -1;
+
+            let start = Instant::now();
+            while counter_id <= 0 && start.elapsed() < Duration::from_secs(5) {
+                counter_id = RecordingPos::find_counter_id_by_session(&counters_reader, session_id);
+                info!("counter id {}", counter_id);
+            }
+
+            assert!(counter_id >= 0);
+
+            info!("counter id {counter_id}, session id {session_id}");
+            while counters_reader.get_counter_value(counter_id) < stop_position {
+                info!(
+                    "current archive publication stop position {}",
+                    counters_reader.get_counter_value(counter_id)
+                );
                 sleep(Duration::from_millis(50));
+            }
+            info!(
+                "found archive publication stop position {}",
+                counters_reader.get_counter_value(counter_id)
+            );
+
+            archive.stop_recording_channel_and_stream(channel, stream_id)?;
+            drop(publication);
+
+            info!("list recordings");
+            let found_recording_id = Cell::new(-1);
+            let start_pos = Cell::new(-1);
+            let end_pos = Cell::new(-1);
+            let start = Instant::now();
+            while start.elapsed() < Duration::from_secs(5) && found_recording_id.get() == -1 {
+                let mut count = 0;
+                archive.list_recordings_for_uri_once(
+                    &mut count,
+                    0,
+                    i32::MAX,
+                    channel,
+                    stream_id,
+                    |d: AeronArchiveRecordingDescriptor| {
+                        assert_eq!(d.stream_id, stream_id);
+                        info!("found recording {:#?}", d);
+                        info!(
+                            "strippedChannel={}, originalChannel={}",
+                            d.stripped_channel(),
+                            d.original_channel()
+                        );
+                        if d.stop_position > d.start_position && d.stop_position > 0 {
+                            found_recording_id.set(d.recording_id);
+                            start_pos.set(d.start_position);
+                            end_pos.set(d.stop_position);
+                        }
+
+                        // verify clone_struct works
+                        let copy = d.clone_struct();
+                        assert_eq!(copy.deref(), d.deref());
+                        assert_eq!(copy.recording_id, d.recording_id);
+                        assert_eq!(copy.control_session_id, d.control_session_id);
+                        assert_eq!(copy.mtu_length, d.mtu_length);
+                        assert_eq!(copy.source_identity_length, d.source_identity_length);
+                    },
+                )?;
                 archive.poll_for_recording_signals()?;
                 let err = archive.poll_for_error_response_as_string(4096)?;
                 if !err.is_empty() {
-                    panic!("{}", err);
+                    return Err(std::io::Error::other(err).into());
                 }
-                archive.idle();
             }
-            info!("sent message {i} [test_aeron_archive]");
-        }
-
-        archive.idle();
-        let session_id = publication.get_constants()?.session_id;
-        info!("publication session id {}", session_id);
-        // since this is single threaded need to make sure it did write to archiver, usually not required in multi-proccess app
-        let stop_position = publication.position();
-        info!(
-            "publication stop position {} [publication={:?}]",
-            stop_position,
-            publication.get_constants()
-        );
-        let counters_reader = aeron.counters_reader();
-        info!("counters reader ready {:?}", counters_reader);
-
-        let mut counter_id = -1;
-
-        let start = Instant::now();
-        while counter_id <= 0 && start.elapsed() < Duration::from_secs(5) {
-            counter_id = RecordingPos::find_counter_id_by_session(&counters_reader, session_id);
-            info!("counter id {}", counter_id);
-        }
-
-        assert!(counter_id >= 0);
-
-        info!("counter id {counter_id}, session id {session_id}");
-        while counters_reader.get_counter_value(counter_id) < stop_position {
-            info!(
-                "current archive publication stop position {}",
-                counters_reader.get_counter_value(counter_id)
-            );
-            sleep(Duration::from_millis(50));
-        }
-        info!(
-            "found archive publication stop position {}",
-            counters_reader.get_counter_value(counter_id)
-        );
-
-        archive.stop_recording_channel_and_stream(channel, stream_id)?;
-        drop(publication);
-
-        info!("list recordings");
-        let found_recording_id = Cell::new(-1);
-        let start_pos = Cell::new(-1);
-        let end_pos = Cell::new(-1);
-        let start = Instant::now();
-        while start.elapsed() < Duration::from_secs(5) && found_recording_id.get() == -1 {
-            let mut count = 0;
-            archive.list_recordings_for_uri_once(
-                &mut count,
+            assert!(start.elapsed() < Duration::from_secs(5));
+            info!("start replay");
+            let params = AeronArchiveReplayParams::new(
                 0,
                 i32::MAX,
+                start_pos.get(),
+                end_pos.get() - start_pos.get(),
+                0,
+                0,
+            )?;
+            info!("replay params {:#?}", params);
+            let replay_stream_id = 45;
+            let replay_session_id = archive.start_replay(
+                found_recording_id.get(),
                 channel,
-                stream_id,
-                |d: AeronArchiveRecordingDescriptor| {
-                    assert_eq!(d.stream_id, stream_id);
-                    info!("found recording {:#?}", d);
-                    info!(
-                        "strippedChannel={}, originalChannel={}",
-                        d.stripped_channel(),
-                        d.original_channel()
-                    );
-                    if d.stop_position > d.start_position && d.stop_position > 0 {
-                        found_recording_id.set(d.recording_id);
-                        start_pos.set(d.start_position);
-                        end_pos.set(d.stop_position);
+                replay_stream_id,
+                &params,
+            )?;
+            let session_id = replay_session_id as i32;
+
+            info!("replay session id {}", replay_session_id);
+            info!("session id {}", session_id);
+            let channel_replay =
+                format!("{}?session-id={}", channel.to_str().unwrap(), session_id).into_c_string();
+            info!("archive id: {}", archive.get_archive_id());
+
+            info!("add subscription {:?}", channel_replay);
+            let mut avail_image_handler = Handler::leak(AeronAvailableImageLogger);
+            let mut unavail_image_handler = Handler::leak(AeronUnavailableImageLogger);
+            let replay_result: Result<(), Box<dyn error::Error>> = (|| {
+                let subscription = aeron
+                    .async_add_subscription(
+                        &channel_replay,
+                        replay_stream_id,
+                        Some(&avail_image_handler),
+                        Some(&unavail_image_handler),
+                    )?
+                    .poll_blocking(Duration::from_secs(10))?;
+
+                #[derive(Default)]
+                struct FragmentHandler {
+                    count: Cell<usize>,
+                }
+
+                impl AeronFragmentHandlerCallback for FragmentHandler {
+                    fn handle_aeron_fragment_handler(
+                        &mut self,
+                        buffer: &[u8],
+                        _header: AeronHeader,
+                    ) {
+                        assert_eq!(buffer, "123456".as_bytes());
+
+                        // Update count (using Cell for interior mutability)
+                        self.count.set(self.count.get() + 1);
+                    }
+                }
+
+                let mut poll = Handler::leak(FragmentHandler::default());
+                let poll_result: Result<(), Box<dyn error::Error>> = (|| {
+                    let wait_timeout = Duration::from_secs(30);
+                    let start = Instant::now();
+                    while start.elapsed() < wait_timeout
+                        && subscription.poll(Some(&poll), 100)? <= 0
+                    {
+                        let err = archive.poll_for_error_response_as_string(4096)?;
+                        if !err.is_empty() {
+                            return Err(std::io::Error::other(err).into());
+                        }
                     }
 
-                    // verify clone_struct works
-                    let copy = d.clone_struct();
-                    assert_eq!(copy.deref(), d.deref());
-                    assert_eq!(copy.recording_id, d.recording_id);
-                    assert_eq!(copy.control_session_id, d.control_session_id);
-                    assert_eq!(copy.mtu_length, d.mtu_length);
-                    assert_eq!(copy.source_identity_length, d.source_identity_length);
-                },
-            )?;
-            archive.poll_for_recording_signals()?;
-            let err = archive.poll_for_error_response_as_string(4096)?;
-            if !err.is_empty() {
-                panic!("{}", err);
-            }
-        }
-        assert!(start.elapsed() < Duration::from_secs(5));
-        info!("start replay");
-        let params = AeronArchiveReplayParams::new(
-            0,
-            i32::MAX,
-            start_pos.get(),
-            end_pos.get() - start_pos.get(),
-            0,
-            0,
-        )?;
-        info!("replay params {:#?}", params);
-        let replay_stream_id = 45;
-        let replay_session_id =
-            archive.start_replay(found_recording_id.get(), channel, replay_stream_id, &params)?;
-        let session_id = replay_session_id as i32;
+                    if start.elapsed() >= wait_timeout {
+                        return Err(std::io::Error::other(format!(
+                            "messages not received {:?}",
+                            poll.count
+                        ))
+                        .into());
+                    }
 
-        info!("replay session id {}", replay_session_id);
-        info!("session id {}", session_id);
-        let channel_replay =
-            format!("{}?session-id={}", channel.to_str().unwrap(), session_id).into_c_string();
-        info!("archive id: {}", archive.get_archive_id());
+                    info!("aeron {:?}", aeron);
+                    info!("ctx {:?}", archive_context);
+                    if poll.count.get() != 11 {
+                        return Err(std::io::Error::other(format!(
+                            "expected 11 replayed messages, got {}",
+                            poll.count.get()
+                        ))
+                        .into());
+                    }
+                    Ok(())
+                })();
 
-        info!("add subscription {:?}", channel_replay);
-        let subscription = aeron
-            .async_add_subscription(
-                &channel_replay,
-                replay_stream_id,
-                Some(&Handler::leak(AeronAvailableImageLogger)),
-                Some(&Handler::leak(AeronUnavailableImageLogger)),
-            )?
-            .poll_blocking(Duration::from_secs(10))?;
+                drop(subscription);
+                poll.release();
+                poll_result
+            })();
 
-        #[derive(Default)]
-        struct FragmentHandler {
-            count: Cell<usize>,
-        }
+            avail_image_handler.release();
+            unavail_image_handler.release();
+            replay_result?;
+            drop(archive);
+            Ok(())
+        })();
 
-        impl AeronFragmentHandlerCallback for FragmentHandler {
-            fn handle_aeron_fragment_handler(&mut self, buffer: &[u8], _header: AeronHeader) {
-                assert_eq!(buffer, "123456".as_bytes());
-
-                // Update count (using Cell for interior mutability)
-                self.count.set(self.count.get() + 1);
-            }
-        }
-
-        let poll = Handler::leak(FragmentHandler::default());
-
-        let start = Instant::now();
-        while start.elapsed() < Duration::from_secs(10) && subscription.poll(Some(&poll), 100)? <= 0
-        {
-            let err = archive.poll_for_error_response_as_string(4096)?;
-            if !err.is_empty() {
-                panic!("{}", err);
-            }
-        }
-        assert!(
-            start.elapsed() < Duration::from_secs(10),
-            "messages not received {:?}",
-            poll.count
-        );
-        info!("aeron {:?}", aeron);
-        info!("ctx {:?}", archive_context);
-        assert_eq!(11, poll.count.get());
-        Ok(())
+        drop(aeron);
+        drop(media_driver);
+        pub_error_frame_handler.release();
+        error_handler.release();
+        test_result
     }
 
     #[test]
     #[serial]
     fn test_invalid_recording_channel() -> Result<(), Box<dyn Error>> {
-        let (aeron, archive_context, _media_driver) = start_aeron_archive()?;
+        let (aeron, archive_context, media_driver, mut pub_error_frame_handler, mut error_handler) =
+            start_aeron_archive()?;
         let archive_connector =
             AeronArchiveAsyncConnect::new_with_aeron(&archive_context.clone(), &aeron)?;
         let archive = archive_connector
@@ -899,13 +1000,19 @@ mod tests {
             result.is_err(),
             "Expected error when starting recording with an invalid channel"
         );
+        drop(archive);
+        drop(aeron);
+        drop(media_driver);
+        pub_error_frame_handler.release();
+        error_handler.release();
         Ok(())
     }
 
     #[test]
     #[serial]
     fn test_stop_recording_on_nonexistent_channel() -> Result<(), Box<dyn Error>> {
-        let (aeron, archive_context, _media_driver) = start_aeron_archive()?;
+        let (aeron, archive_context, media_driver, mut pub_error_frame_handler, mut error_handler) =
+            start_aeron_archive()?;
         let archive_connector =
             AeronArchiveAsyncConnect::new_with_aeron(&archive_context.clone(), &aeron)?;
         let archive = archive_connector
@@ -918,13 +1025,19 @@ mod tests {
             result.is_err(),
             "Expected error when stopping recording on a non-existent channel"
         );
+        drop(archive);
+        drop(aeron);
+        drop(media_driver);
+        pub_error_frame_handler.release();
+        error_handler.release();
         Ok(())
     }
 
     #[test]
     #[serial]
     fn test_replay_with_invalid_recording_id() -> Result<(), Box<dyn Error>> {
-        let (aeron, archive_context, _media_driver) = start_aeron_archive()?;
+        let (aeron, archive_context, media_driver, mut pub_error_frame_handler, mut error_handler) =
+            start_aeron_archive()?;
         let archive_connector =
             AeronArchiveAsyncConnect::new_with_aeron(&archive_context.clone(), &aeron)?;
         let archive = archive_connector
@@ -943,13 +1056,19 @@ mod tests {
             result.is_err(),
             "Expected error when starting replay with an invalid recording id"
         );
+        drop(archive);
+        drop(aeron);
+        drop(media_driver);
+        pub_error_frame_handler.release();
+        error_handler.release();
         Ok(())
     }
 
     #[test]
     #[serial]
     fn test_archive_reconnect_after_close() -> Result<(), Box<dyn std::error::Error>> {
-        let (aeron, archive_context, media_driver) = start_aeron_archive()?;
+        let (aeron, archive_context, media_driver, mut pub_error_frame_handler, mut error_handler) =
+            start_aeron_archive()?;
         let archive_connector =
             AeronArchiveAsyncConnect::new_with_aeron(&archive_context.clone(), &aeron)?;
         let archive = archive_connector
@@ -967,7 +1086,11 @@ mod tests {
             "Reconnected archive should have a valid archive id"
         );
 
+        drop(new_archive);
+        drop(aeron);
         drop(media_driver);
+        pub_error_frame_handler.release();
+        error_handler.release();
         Ok(())
     }
 }

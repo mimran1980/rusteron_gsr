@@ -113,7 +113,8 @@ mod tests {
 
         let ctx = AeronContext::new()?;
         ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
-        ctx.set_error_handler(Some(&Handler::leak(ErrorCount::default())))?;
+        let mut error_handler = Handler::leak(ErrorCount::default());
+        ctx.set_error_handler(Some(&error_handler))?;
         let aeron = Aeron::new(&ctx)?;
         aeron.start()?;
 
@@ -192,8 +193,10 @@ mod tests {
         }
 
         // Shutdown
+        drop(aeron);
         stop.store(true, Ordering::SeqCst);
         let _ = driver_handle.join().unwrap();
+        error_handler.release();
         Ok(())
     }
 
@@ -216,11 +219,16 @@ mod tests {
 
         let ctx = AeronContext::new()?;
         ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
-        ctx.set_error_handler(Some(&Handler::leak(ErrorCount::default())))?;
+        // Pending async adds leak in Aeron C until they reach a terminal poll state,
+        // so keep the driver timeout short and always poll to completion below.
+        ctx.set_driver_timeout_ms(1_000)?;
+        let mut error_handler = Handler::leak(ErrorCount::default());
+        ctx.set_error_handler(Some(&error_handler))?;
         let aeron = Aeron::new(&ctx)?;
         aeron.start()?;
 
-        // Stress: repeatedly create and drop pub/sub async pollers on an invalid endpoint.
+        // Stress: repeatedly create async pub/sub on an invalid endpoint and drive each
+        // poller to a terminal state before dropping it.
         for i in 0..60u16 {
             let port = 55000u16 + i;
             let channel = format!("aeron:udp?endpoint=203.0.113.1:{}", port);
@@ -234,22 +242,66 @@ mod tests {
             )?;
 
             let start = Instant::now();
-            while start.elapsed() < Duration::from_millis(50) {
-                let _ = pub_poller.poll();
-                let _ = sub_poller.poll();
+            let mut publication = None;
+            let mut publication_done = false;
+            let mut subscription = None;
+            let mut subscription_done = false;
+
+            while !(publication_done && subscription_done)
+                && start.elapsed() < Duration::from_secs(2)
+            {
+                if !publication_done {
+                    match pub_poller.poll() {
+                        Ok(Some(pub_)) => {
+                            publication = Some(pub_);
+                            publication_done = true;
+                        }
+                        Ok(None) => {}
+                        Err(err) => {
+                            info!("publication async add finished with error on iteration {i}: {err:?}");
+                            publication_done = true;
+                        }
+                    }
+                }
+
+                if !subscription_done {
+                    match sub_poller.poll() {
+                        Ok(Some(sub_)) => {
+                            subscription = Some(sub_);
+                            subscription_done = true;
+                        }
+                        Ok(None) => {}
+                        Err(err) => {
+                            info!("subscription async add finished with error on iteration {i}: {err:?}");
+                            subscription_done = true;
+                        }
+                    }
+                }
+
+                if !(publication_done && subscription_done) {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
             }
 
-            if i % 2 == 0 {
-                drop(sub_poller);
-                drop(pub_poller);
-            } else {
-                drop(pub_poller);
-                drop(sub_poller);
-            }
+            assert!(
+                publication_done,
+                "publication async add did not complete on iteration {i}"
+            );
+            assert!(
+                subscription_done,
+                "subscription async add did not complete on iteration {i}"
+            );
+
+            drop(subscription);
+            drop(publication);
+            drop(sub_poller);
+            drop(pub_poller);
         }
 
+        drop(aeron);
         stop.store(true, Ordering::SeqCst);
         let _ = driver_handle.join().unwrap();
+        error_handler.release();
         Ok(())
     }
 
@@ -273,7 +325,8 @@ mod tests {
 
         let ctx = AeronContext::new()?;
         ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
-        ctx.set_error_handler(Some(&Handler::leak(ErrorCount::default())))?;
+        let mut error_handler = Handler::leak(ErrorCount::default());
+        ctx.set_error_handler(Some(&error_handler))?;
         let aeron = Aeron::new(&ctx)?;
         aeron.start()?;
 
@@ -295,9 +348,10 @@ mod tests {
         }
 
         drop(poller);
-
+        drop(aeron);
         stop.store(true, Ordering::SeqCst);
         let _ = driver_handle.join().unwrap();
+        error_handler.release();
         Ok(())
     }
 
@@ -320,7 +374,8 @@ mod tests {
 
         let ctx = AeronContext::new()?;
         ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
-        ctx.set_error_handler(Some(&Handler::leak(ErrorCount::default())))?;
+        let mut error_handler = Handler::leak(ErrorCount::default());
+        ctx.set_error_handler(Some(&error_handler))?;
         let aeron = Aeron::new(&ctx)?;
         aeron.start()?;
 
@@ -335,9 +390,10 @@ mod tests {
         );
 
         assert!(result.is_err(), "expected error for invalid interface");
-
+        drop(aeron);
         stop.store(true, Ordering::SeqCst);
         let _ = driver_handle.join().unwrap();
+        error_handler.release();
         Ok(())
     }
 
@@ -360,7 +416,8 @@ mod tests {
 
         let ctx = AeronContext::new()?;
         ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
-        ctx.set_error_handler(Some(&Handler::leak(ErrorCount::default())))?;
+        let mut error_handler = Handler::leak(ErrorCount::default());
+        ctx.set_error_handler(Some(&error_handler))?;
         let aeron = Aeron::new(&ctx)?;
         aeron.start()?;
 
@@ -375,9 +432,10 @@ mod tests {
             std::thread::sleep(Duration::from_millis(10));
         }
         drop(poller);
-
+        drop(aeron);
         stop.store(true, Ordering::SeqCst);
         let _ = driver_handle.join().unwrap();
+        error_handler.release();
         Ok(())
     }
 
@@ -394,21 +452,39 @@ mod tests {
         media_driver_ctx.set_dir(
             &format!("{}{}", media_driver_ctx.get_dir(), Aeron::epoch_clock()).into_c_string(),
         )?;
+        // Under Valgrind execution is ~10x slower; increase liveness timeouts so the
+        // driver doesn't evict the client before the test finishes.
+        media_driver_ctx.set_client_liveness_timeout_ns(60_000_000_000)?; // 60 s
+        media_driver_ctx.set_image_liveness_timeout_ns(60_000_000_000)?; // 60 s
+        media_driver_ctx.set_publication_unblock_timeout_ns(65_000_000_000)?; // 65 s
+        media_driver_ctx.set_driver_timeout_ms(60_000)?; // 60 s
         let (stop, driver_handle) =
             rusteron_media_driver::AeronDriver::launch_embedded(media_driver_ctx.clone(), false);
 
         let ctx = AeronContext::new()?;
         ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
         assert_eq!(media_driver_ctx.get_dir(), ctx.get_dir());
-        let error_count = 1;
-        ctx.set_error_handler(Some(&Handler::leak(ErrorCount::default())))?;
-        ctx.set_on_new_publication(Some(&Handler::leak(AeronNewPublicationLogger)))?;
-        ctx.set_on_available_counter(Some(&Handler::leak(AeronAvailableCounterLogger)))?;
-        ctx.set_on_close_client(Some(&Handler::leak(AeronCloseClientLogger)))?;
-        ctx.set_on_new_subscription(Some(&Handler::leak(AeronNewSubscriptionLogger)))?;
-        ctx.set_on_unavailable_counter(Some(&Handler::leak(AeronUnavailableCounterLogger)))?;
-        ctx.set_on_available_counter(Some(&Handler::leak(AeronAvailableCounterLogger)))?;
-        ctx.set_on_new_exclusive_publication(Some(&Handler::leak(AeronNewPublicationLogger)))?;
+        // Keep client-side keepalive threshold aligned with the slow Valgrind environment.
+        ctx.set_driver_timeout_ms(60_000)?;
+        // Store all handlers so we can call release() after Aeron is stopped.
+        // Anonymous Handler::leak() temporaries would be dropped without release(),
+        // triggering the Drop impl warning and leaving heap allocations permanently orphaned.
+        let mut error_handler = Handler::leak(ErrorCount::default());
+        let mut new_pub_handler = Handler::leak(AeronNewPublicationLogger);
+        let mut avail_counter_handler1 = Handler::leak(AeronAvailableCounterLogger);
+        let mut close_client_handler = Handler::leak(AeronCloseClientLogger);
+        let mut new_sub_handler = Handler::leak(AeronNewSubscriptionLogger);
+        let mut unavail_counter_handler = Handler::leak(AeronUnavailableCounterLogger);
+        let mut avail_counter_handler2 = Handler::leak(AeronAvailableCounterLogger);
+        let mut excl_pub_handler = Handler::leak(AeronNewPublicationLogger);
+        ctx.set_error_handler(Some(&error_handler))?;
+        ctx.set_on_new_publication(Some(&new_pub_handler))?;
+        ctx.set_on_available_counter(Some(&avail_counter_handler1))?;
+        ctx.set_on_close_client(Some(&close_client_handler))?;
+        ctx.set_on_new_subscription(Some(&new_sub_handler))?;
+        ctx.set_on_unavailable_counter(Some(&unavail_counter_handler))?;
+        ctx.set_on_available_counter(Some(&avail_counter_handler2))?;
+        ctx.set_on_new_exclusive_publication(Some(&excl_pub_handler))?;
 
         info!("creating client [simple_large_send test]");
         let aeron = Aeron::new(&ctx)?;
@@ -449,13 +525,15 @@ mod tests {
         let string_len = media_driver_ctx.ipc_mtu_length * 100;
         info!("string length: {}", string_len);
 
+        let stop_publisher = Arc::new(AtomicBool::new(false));
+
         let publisher_handler = {
-            let stop = stop.clone();
+            let stop_publisher = stop_publisher.clone();
             std::thread::spawn(move || {
                 let binding = "1".repeat(string_len);
                 let large_msg = binding.as_bytes();
                 loop {
-                    if stop.load(Ordering::Acquire) || publisher.is_closed() {
+                    if stop_publisher.load(Ordering::Acquire) || publisher.is_closed() {
                         break;
                     }
                     let result =
@@ -502,17 +580,19 @@ mod tests {
         // Start the timer
         let start_time = Instant::now();
 
-        loop {
-            if start_time.elapsed() > Duration::from_secs(30) {
-                info!("Failed: exceeded 30-second timeout");
-                return Err(Box::new(std::io::Error::new(
+        // Use break-with-value so cleanup (handler release, driver stop) always runs.
+        // 120-second timeout: under Valgrind execution is ~10× slower, so 30 s is too tight.
+        let loop_result: Result<(), Box<dyn error::Error>> = loop {
+            if start_time.elapsed() > Duration::from_secs(120) {
+                info!("Failed: exceeded 120-second timeout");
+                break Err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::TimedOut,
                     "Timeout exceeded",
                 )));
             }
             let c = count.load(Ordering::SeqCst);
             if c > 100 {
-                break;
+                break Ok(());
             }
 
             fn process_msg(ctx: &mut Context, buffer: &[u8], header: AeronHeader) {
@@ -538,15 +618,29 @@ mod tests {
 
             subscription.poll(assembler.process(&mut context, process_msg), 128)?;
             assert_eq!(123, subscription.get_constants().unwrap().stream_id);
-        }
+        };
 
         subscription.close(Handlers::no_notification_handler())?;
 
         info!("stopping client");
-        stop.store(true, Ordering::SeqCst);
+        stop_publisher.store(true, Ordering::SeqCst);
 
         let _ = publisher_handler.join().unwrap();
+        drop(subscription);
+        drop(aeron);
+
+        stop.store(true, Ordering::SeqCst);
         let _ = driver_handle.join().unwrap();
+
+        // Release all context handlers now that Aeron and the driver are fully stopped.
+        error_handler.release();
+        new_pub_handler.release();
+        avail_counter_handler1.release();
+        close_client_handler.release();
+        new_sub_handler.release();
+        unavail_counter_handler.release();
+        avail_counter_handler2.release();
+        excl_pub_handler.release();
 
         let cnc = AeronCnc::new_on_heap(ctx.get_dir())?;
         cnc.counters_reader().foreach_counter_once(
@@ -572,6 +666,7 @@ mod tests {
             println!("loss reporter observationCount={observation_count}, totalBytesLost={total_bytes_lost}, first_observed={first_observation_timestamp}, last_observed={last_observation_timestamp}, session_id={session_id}, stream_id={stream_id}, channel={channel} source={source}");
         })?;
 
+        loop_result?;
         Ok(())
     }
 
@@ -588,13 +683,22 @@ mod tests {
         media_driver_ctx.set_dir(
             &format!("{}{}", media_driver_ctx.get_dir(), Aeron::epoch_clock()).into_c_string(),
         )?;
+        // Under Valgrind execution is ~10x slower; increase liveness timeouts so the
+        // driver doesn't evict the client before the test finishes.
+        media_driver_ctx.set_client_liveness_timeout_ns(60_000_000_000)?; // 60 s
+        media_driver_ctx.set_image_liveness_timeout_ns(60_000_000_000)?; // 60 s
+        media_driver_ctx.set_publication_unblock_timeout_ns(65_000_000_000)?; // 65 s
+        media_driver_ctx.set_driver_timeout_ms(60_000)?; // 60 s
         let (stop, driver_handle) =
             rusteron_media_driver::AeronDriver::launch_embedded(media_driver_ctx.clone(), false);
 
         let ctx = AeronContext::new()?;
         ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
         assert_eq!(media_driver_ctx.get_dir(), ctx.get_dir());
-        ctx.set_error_handler(Some(&Handler::leak(ErrorCount::default())))?;
+        // Keep client-side keepalive threshold aligned with slow Valgrind environment.
+        ctx.set_driver_timeout_ms(60_000)?;
+        let mut error_handler = Handler::leak(ErrorCount::default());
+        ctx.set_error_handler(Some(&error_handler))?;
 
         info!("creating client [try_claim test]");
         let aeron = Aeron::new(&ctx)?;
@@ -620,14 +724,16 @@ mod tests {
         let string_len = 156;
         info!("string length: {}", string_len);
 
+        let stop_publisher = Arc::new(AtomicBool::new(false));
+
         let publisher_handler = {
-            let stop = stop.clone();
+            let stop_publisher = stop_publisher.clone();
             std::thread::spawn(move || {
                 let binding = "1".repeat(string_len);
                 let msg = binding.as_bytes();
                 let buffer = AeronBufferClaim::default();
                 loop {
-                    if stop.load(Ordering::Acquire) || publisher.is_closed() {
+                    if stop_publisher.load(Ordering::Acquire) || publisher.is_closed() {
                         break;
                     }
 
@@ -683,34 +789,44 @@ mod tests {
             }
         }
 
-        let (closure, _inner) = Handler::leak_with_fragment_assembler(FragmentHandler {
-            count_copy,
-            stop2,
-            string_len,
-        })?;
-        let start_time = Instant::now();
-
-        loop {
-            if start_time.elapsed() > Duration::from_secs(30) {
-                info!("Failed: exceeded 30-second timeout");
-                return Err(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::TimedOut,
-                    "Timeout exceeded",
-                )));
+        let (mut closure, mut inner_handler) =
+            Handler::leak_with_fragment_assembler(FragmentHandler {
+                count_copy,
+                stop2,
+                string_len,
+            })?;
+        let loop_result: Result<(), Box<dyn error::Error>> = {
+            let start_time = Instant::now();
+            loop {
+                if start_time.elapsed() > Duration::from_secs(120) {
+                    info!("Failed: exceeded 120-second timeout");
+                    break Err(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        "Timeout exceeded",
+                    )));
+                }
+                let c = count.load(Ordering::SeqCst);
+                if c > 100 {
+                    break Ok(());
+                }
+                subscription.poll(Some(&closure), 128)?;
             }
-            let c = count.load(Ordering::SeqCst);
-            if c > 100 {
-                break;
-            }
-            subscription.poll(Some(&closure), 128)?;
-        }
+        };
 
         info!("stopping client");
 
-        stop.store(true, Ordering::SeqCst);
+        stop_publisher.store(true, Ordering::SeqCst);
 
         let _ = publisher_handler.join().unwrap();
+        drop(subscription);
+        drop(aeron);
+
+        stop.store(true, Ordering::SeqCst);
         let _ = driver_handle.join().unwrap();
+        closure.release();
+        inner_handler.release();
+        error_handler.release();
+        loop_result?;
         Ok(())
     }
 
@@ -733,8 +849,10 @@ mod tests {
         let ctx = AeronContext::new()?;
         ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
         assert_eq!(media_driver_ctx.get_dir(), ctx.get_dir());
-        ctx.set_error_handler(Some(&Handler::leak(ErrorCount::default())))?;
-        ctx.set_on_unavailable_counter(Some(&Handler::leak(AeronUnavailableCounterLogger)))?;
+        let mut error_handler = Handler::leak(ErrorCount::default());
+        ctx.set_error_handler(Some(&error_handler))?;
+        let mut unavailable_counter_handler = Handler::leak(AeronUnavailableCounterLogger);
+        ctx.set_on_unavailable_counter(Some(&unavailable_counter_handler))?;
 
         struct AvailableCounterHandler {
             found_counter: bool,
@@ -771,10 +889,10 @@ mod tests {
             }
         }
 
-        let handler = &Handler::leak(AvailableCounterHandler {
+        let mut available_counter_handler = Handler::leak(AvailableCounterHandler {
             found_counter: false,
         });
-        ctx.set_on_available_counter(Some(handler))?;
+        ctx.set_on_available_counter(Some(&available_counter_handler))?;
 
         info!("creating client");
         let aeron = Aeron::new(&ctx)?;
@@ -792,12 +910,14 @@ mod tests {
         let constants = counter.get_constants()?;
         let counter_id = constants.counter_id;
 
+        let stop_publisher = Arc::new(AtomicBool::new(false));
+
         let publisher_handler = {
-            let stop = stop.clone();
+            let stop_publisher = stop_publisher.clone();
             let counter = counter.clone();
             std::thread::spawn(move || {
                 for _ in 0..150 {
-                    if stop.load(Ordering::Acquire) || counter.is_closed() {
+                    if stop_publisher.load(Ordering::Acquire) || counter.is_closed() {
                         break;
                     }
                     counter.addr_atomic().fetch_add(1, Ordering::SeqCst);
@@ -823,9 +943,7 @@ mod tests {
         info!("stopping client");
 
         #[cfg(not(target_os = "windows"))] // not sure why windows version doesn't fire event
-        assert!(handler.found_counter);
-
-        stop.store(true, Ordering::SeqCst);
+        assert!(available_counter_handler.found_counter);
 
         let reader = aeron.counters_reader();
         assert_eq!(reader.get_counter_label(counter_id, 256)?, "label_buffer");
@@ -833,8 +951,17 @@ mod tests {
         let buffers = AeronCountersReaderBuffers::default();
         reader.get_buffers(&buffers)?;
 
+        stop_publisher.store(true, Ordering::SeqCst);
+
         let _ = publisher_handler.join().unwrap();
+        drop(counter);
+        drop(aeron);
+
+        stop.store(true, Ordering::SeqCst);
         let _ = driver_handle.join().unwrap();
+        available_counter_handler.release();
+        unavailable_counter_handler.release();
+        error_handler.release();
         Ok(())
     }
 
@@ -871,12 +998,17 @@ mod tests {
         media_driver_ctx.set_dir(
             &format!("{}{}", media_driver_ctx.get_dir(), Aeron::epoch_clock()).into_c_string(),
         )?;
+        media_driver_ctx.set_client_liveness_timeout_ns(60_000_000_000)?;
+        media_driver_ctx.set_image_liveness_timeout_ns(60_000_000_000)?;
+        media_driver_ctx.set_publication_unblock_timeout_ns(65_000_000_000)?;
+        media_driver_ctx.set_driver_timeout_ms(60_000)?;
         let (stop, driver_handle) =
             rusteron_media_driver::AeronDriver::launch_embedded(media_driver_ctx.clone(), false);
 
         let ctx = AeronContext::new()?;
         ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
-        ctx.set_error_handler(Some(&Handler::leak(TestErrorCount::default())))?;
+        let mut error_handler = Handler::leak(TestErrorCount::default());
+        ctx.set_error_handler(Some(&error_handler))?;
 
         let aeron = Aeron::new(&ctx)?;
         aeron.start()?;
@@ -893,11 +1025,13 @@ mod tests {
         let count = Arc::new(AtomicUsize::new(0));
         let start_time = Instant::now();
 
+        let stop_publisher = Arc::new(AtomicBool::new(false));
+
         // Spawn a publisher thread that repeatedly sends "test" messages.
         let publisher_thread = {
-            let stop = stop.clone();
+            let stop_publisher = stop_publisher.clone();
             std::thread::spawn(move || {
-                while !stop.load(Ordering::Acquire) {
+                while !stop_publisher.load(Ordering::Acquire) {
                     let msg = b"test";
                     let result =
                         publisher.offer(msg, Handlers::no_reserved_value_supplier_handler());
@@ -905,12 +1039,15 @@ mod tests {
                     if result == AeronErrorType::PublicationBackPressured.code() as i64 {
                         sleep(Duration::from_millis(50));
                     }
+                    if publisher.is_closed() {
+                        break;
+                    }
                 }
             })
         };
 
         // Poll using the inline closure via poll_once until we receive at least 50 messages.
-        while count.load(Ordering::SeqCst) < 50 && start_time.elapsed() < Duration::from_secs(10) {
+        while count.load(Ordering::SeqCst) < 50 && start_time.elapsed() < Duration::from_secs(60) {
             let _ = subscription.poll_once(
                 |_msg, _header| {
                     count.fetch_add(1, Ordering::SeqCst);
@@ -919,9 +1056,13 @@ mod tests {
             )?;
         }
 
-        stop.store(true, Ordering::SeqCst);
+        stop_publisher.store(true, Ordering::SeqCst);
         publisher_thread.join().unwrap();
+        drop(subscription);
+        drop(aeron);
+        stop.store(true, Ordering::SeqCst);
         let _ = driver_handle.join().unwrap();
+        error_handler.release();
 
         assert!(
             count.load(Ordering::SeqCst) >= 50,
@@ -944,12 +1085,17 @@ mod tests {
         media_driver_ctx.set_dir(
             &format!("{}{}", media_driver_ctx.get_dir(), Aeron::epoch_clock()).into_c_string(),
         )?;
+        media_driver_ctx.set_client_liveness_timeout_ns(60_000_000_000)?;
+        media_driver_ctx.set_image_liveness_timeout_ns(60_000_000_000)?;
+        media_driver_ctx.set_publication_unblock_timeout_ns(65_000_000_000)?;
+        media_driver_ctx.set_driver_timeout_ms(60_000)?;
         let (_stop, driver_handle) =
             rusteron_media_driver::AeronDriver::launch_embedded(media_driver_ctx.clone(), false);
 
         let ctx = AeronContext::new()?;
         ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
-        ctx.set_error_handler(Some(&Handler::leak(TestErrorCount::default())))?;
+        let mut error_handler = Handler::leak(TestErrorCount::default());
+        ctx.set_error_handler(Some(&error_handler))?;
 
         let aeron = Aeron::new(&ctx)?;
         aeron.start()?;
@@ -1010,8 +1156,13 @@ mod tests {
             "Subscription 2 did not receive the message"
         );
 
+        drop(subscription2);
+        drop(subscription1);
+        drop(publisher);
+        drop(aeron);
         _stop.store(true, Ordering::SeqCst);
         let _ = driver_handle.join().unwrap();
+        error_handler.release();
         Ok(())
     }
 
@@ -1035,7 +1186,8 @@ mod tests {
 
         let ctx = AeronContext::new()?;
         ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
-        ctx.set_error_handler(Some(&Handler::leak(AeronErrorHandlerLogger)))?;
+        let mut error_handler = Handler::leak(AeronErrorHandlerLogger);
+        ctx.set_error_handler(Some(&error_handler))?;
 
         let aeron = Aeron::new(&ctx)?;
         aeron.start()?;
@@ -1061,6 +1213,10 @@ mod tests {
             drop(publisher);
         }
 
+        drop(aeron);
+        _stop.store(true, Ordering::SeqCst);
+        let _ = driver_handle.join().unwrap();
+        error_handler.release();
         Ok(())
     }
 
@@ -1083,7 +1239,8 @@ mod tests {
 
         let ctx = AeronContext::new()?;
         ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
-        ctx.set_error_handler(Some(&Handler::leak(TestErrorCount::default())))?;
+        let mut error_handler = Handler::leak(TestErrorCount::default());
+        ctx.set_error_handler(Some(&error_handler))?;
 
         let aeron = Aeron::new(&ctx)?;
         aeron.start()?;
@@ -1102,8 +1259,11 @@ mod tests {
             "Offering on a closed publication should return a negative error code"
         );
 
+        drop(publisher);
+        drop(aeron);
         _stop.store(true, Ordering::SeqCst);
         let _ = driver_handle.join().unwrap();
+        error_handler.release();
         Ok(())
     }
 
@@ -1127,7 +1287,8 @@ mod tests {
 
         let ctx = AeronContext::new()?;
         ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
-        ctx.set_error_handler(Some(&Handler::leak(TestErrorCount::default())))?;
+        let mut error_handler = Handler::leak(TestErrorCount::default());
+        ctx.set_error_handler(Some(&error_handler))?;
 
         let aeron = Aeron::new(&ctx)?;
         aeron.start()?;
@@ -1163,8 +1324,12 @@ mod tests {
             empty_received.load(Ordering::SeqCst),
             "Empty message was not received"
         );
+        drop(subscription);
+        drop(publisher);
+        drop(aeron);
         _stop.store(true, Ordering::SeqCst);
         let _ = driver_handle.join().unwrap();
+        error_handler.release();
         Ok(())
     }
 
@@ -1540,7 +1705,6 @@ mod tests {
         info!("creating aeron client [dir={}]", dir);
         let ctx = AeronContext::new()?;
         ctx.set_dir(&dir.into_c_string())?;
-        ctx.set_error_handler(Some(&Handler::leak(TestErrorCount::default())))?;
         let aeron = Aeron::new(&ctx)?;
         aeron.start()?;
         Ok((ctx, aeron))

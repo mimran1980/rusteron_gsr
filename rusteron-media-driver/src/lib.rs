@@ -185,8 +185,8 @@ mod tests {
             }
         }
 
-        let error_handler = Some(Handler::leak(ErrorCount::default()));
-        ctx.set_error_handler(error_handler.as_ref())?;
+        let mut error_handler = Handler::leak(ErrorCount::default());
+        ctx.set_error_handler(Some(&error_handler))?;
 
         struct Test {}
         impl AeronAvailableCounterCallback for Test {
@@ -212,9 +212,9 @@ mod tests {
                 info!("on new publication {async_:?} {channel} {stream_id} {session_id} {correlation_id}")
             }
         }
-        let handler = Some(Handler::leak(Test {}));
-        ctx.set_on_available_counter(handler.as_ref())?;
-        ctx.set_on_new_publication(handler.as_ref())?;
+        let mut handler = Handler::leak(Test {});
+        ctx.set_on_available_counter(Some(&handler))?;
+        ctx.set_on_new_publication(Some(&handler))?;
 
         client.start()?;
         info!("aeron driver started");
@@ -237,11 +237,12 @@ mod tests {
         info!("publication stream_id: {:?}", publication.stream_id());
         info!("publication status: {:?}", publication.channel_status());
 
-        // client.main_do_work();
-        // let claim = AeronBufferClaim::default();
-        // assert!(publication.try_claim(100, &claim) > 0, "publication claim is empty");
-
+        drop(publication);
+        drop(counter);
+        drop(client);
         stop.store(true, Ordering::SeqCst);
+        error_handler.release();
+        handler.release();
 
         Ok(())
     }
@@ -267,12 +268,12 @@ mod tests {
             }
         }
 
-        ctx.set_agent_on_start_function(Some(&Handler::leak(AgentStartHandler {
-            ctx: ctx.clone(),
-        })))?;
+        let mut agent_handler = Handler::leak(AgentStartHandler { ctx: ctx.clone() });
+        ctx.set_agent_on_start_function(Some(&agent_handler))?;
 
         println!("{:#?}", ctx);
 
+        agent_handler.release();
         Ok(())
     }
 }

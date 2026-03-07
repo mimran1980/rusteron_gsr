@@ -417,10 +417,14 @@ fn extract_return_type(output: &syn::ReturnType) -> String {
 #[cfg(test)]
 mod tests {
     use crate::parser::parse_bindings;
+    use std::path::PathBuf;
 
     #[test]
     fn media_driver() {
-        let bindings = parse_bindings(&"../rusteron-code-gen/bindings/media-driver.rs".into());
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("bindings")
+            .join("media-driver.rs");
+        let bindings = parse_bindings(&path);
         assert_eq!(
             "AeronImageFragmentAssembler",
             bindings
@@ -432,7 +436,10 @@ mod tests {
     }
     #[test]
     fn client() {
-        let bindings = parse_bindings(&"../rusteron-code-gen/bindings/client.rs".into());
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("bindings")
+            .join("client.rs");
+        let bindings = parse_bindings(&path);
         assert_eq!(
             "AeronImageFragmentAssembler",
             bindings

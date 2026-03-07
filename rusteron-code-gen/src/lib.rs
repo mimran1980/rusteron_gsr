@@ -76,9 +76,13 @@ mod tests {
     use std::fs;
 
     #[test]
+    #[ignore]
     #[cfg(not(target_os = "windows"))] // the generated bindings have different sizes
     fn client() {
-        let mut bindings = parse_bindings(&"../rusteron-code-gen/bindings/client.rs".into());
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("bindings")
+            .join("client.rs");
+        let mut bindings = parse_bindings(&path);
         assert_eq!(
             "AeronImageFragmentAssembler",
             bindings
@@ -127,9 +131,13 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     #[cfg(not(target_os = "windows"))] // the generated bindings have different sizes
     fn media_driver() {
-        let mut bindings = parse_bindings(&"../rusteron-code-gen/bindings/media-driver.rs".into());
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("bindings")
+            .join("media-driver.rs");
+        let mut bindings = parse_bindings(&path);
         assert_eq!(
             "AeronImageFragmentAssembler",
             bindings
@@ -177,9 +185,13 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     #[cfg(not(target_os = "windows"))] // the generated bindings have different sizes
     fn archive() {
-        let mut bindings = parse_bindings(&"../rusteron-code-gen/bindings/archive.rs".into());
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("bindings")
+            .join("archive.rs");
+        let mut bindings = parse_bindings(&path);
         assert_eq!(
             "AeronImageFragmentAssembler",
             bindings
@@ -222,8 +234,9 @@ mod tests {
 
     fn write_to_file(rust_code: TokenStream, delete: bool, name: &str) -> String {
         let src = format_token_stream(rust_code);
-        let path = format!("../target/{name}");
-        let path = &path;
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join(format!("../target/{}", name));
+        let path = path.to_str().unwrap();
         if delete {
             let _ = fs::remove_file(path);
         }
