@@ -118,7 +118,6 @@ test-valgrind: _build-valgrind-image
       -e HOME=/tmp/valgrind \
       -e TMP=/tmp/valgrind/tmp \
       -e TEMP=/tmp/valgrind/tmp \
-      -e RUSTUP_HOME=/tmp/valgrind/rustup \
       -e GRADLE_USER_HOME=/root/.gradle \
       -e CARGO_HOME=/tmp/valgrind/cargo-home \
       -e CARGO_TARGET_DIR=/tmp/valgrind/target \
@@ -138,7 +137,6 @@ valgrind-gen-suppressions: _build-valgrind-image
       -e HOME=/tmp/valgrind \
       -e TMP=/tmp/valgrind/tmp \
       -e TEMP=/tmp/valgrind/tmp \
-      -e RUSTUP_HOME=/tmp/valgrind/rustup \
       -e GRADLE_USER_HOME=/root/.gradle \
       -e CARGO_HOME=/tmp/valgrind/cargo-home \
       -e CARGO_TARGET_DIR=/tmp/valgrind/target \
