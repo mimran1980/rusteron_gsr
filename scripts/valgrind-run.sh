@@ -65,6 +65,7 @@ for BIN in $BINARIES; do
       --track-origins=yes \
       --leak-check=full \
       --show-leak-kinds=all \
+      --errors-for-leak-kinds=definite,possible \
       --num-callers=30 \
       -s \
       --gen-suppressions=all \
