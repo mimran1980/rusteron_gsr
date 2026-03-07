@@ -33,14 +33,12 @@ pub fn append_to_file(file_path: &str, code: &str) -> std::io::Result<()> {
         }
     }
 
-    // Open the file in append mode
     let mut file = OpenOptions::new()
         .create(true)
         .write(true)
         .append(true)
         .open(path)?;
 
-    // Write the generated code to the file
     writeln!(file, "\n{}", code)?;
 
     Ok(())
