@@ -28,6 +28,32 @@
    fun:main
 }
 
+# Exact fallback for toolchains that emit this as an unsuppressed reachable block.
+{
+   rust_runtime_stack_overflow_thread_info_reachable_exact
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:_ZN3std3sys5alloc4unix81_$LT$impl$u20$core..alloc..global..GlobalAlloc$u20$for$u20$std..alloc..System$GT$5alloc*
+   fun:_ZN100_$LT$rusteron_archive..test_alloc..TrackingAllocator$u20$as$u20$core..alloc..global..GlobalAlloc$GT$5alloc*
+   fun:_RNvCsj4CZ6flxxfE_7___rustc12___rust_alloc
+   fun:alloc
+   fun:alloc_impl
+   fun:allocate
+   ...
+   fun:_ZN3std3sys3pal4unix14stack_overflow11thread_info16set_current_info*
+   fun:init
+   fun:init
+   fun:init
+   fun:{closure#0}
+   fun:do_call<std::rt::lang_start_internal::{closure_env#0}, isize>
+   fun:catch_unwind<isize, std::rt::lang_start_internal::{closure_env#0}>
+   fun:catch_unwind<std::rt::lang_start_internal::{closure_env#0}, isize>
+   fun:_ZN3std2rt19lang_start_internal*
+   fun:_ZN3std2rt10lang_start*
+   fun:main
+}
+
 # Fallback for `serial_test` + `scc` lock-map allocations where symbol hashes differ across toolchains.
 {
    serial_test_lock_map_generic_malloc
