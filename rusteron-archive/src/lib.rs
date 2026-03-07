@@ -24,7 +24,6 @@ pub mod bindings {
 use bindings::*;
 use std::cell::Cell;
 use std::os::raw::c_int;
-use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 pub mod testing;
@@ -38,16 +37,10 @@ pub const SOURCE_LOCATION_LOCAL: aeron_archive_source_location_en =
 pub const SOURCE_LOCATION_REMOTE: aeron_archive_source_location_en =
     SourceLocation::AERON_ARCHIVE_SOURCE_LOCATION_REMOTE;
 
-pub struct NoOpAeronIdleStrategyFunc;
-
-impl AeronIdleStrategyFuncCallback for NoOpAeronIdleStrategyFunc {
-    fn handle_aeron_idle_strategy_func(&mut self, _work_count: c_int) -> () {}
-}
-
-fn no_op_idle_strategy_handler() -> &'static Handler<NoOpAeronIdleStrategyFunc> {
-    static NO_OP_IDLE_STRATEGY_HANDLER: OnceLock<Handler<NoOpAeronIdleStrategyFunc>> =
-        OnceLock::new();
-    NO_OP_IDLE_STRATEGY_HANDLER.get_or_init(|| Handler::leak(NoOpAeronIdleStrategyFunc))
+unsafe extern "C" fn no_op_idle_strategy_func(
+    _state: *mut std::os::raw::c_void,
+    _work_count: c_int,
+) {
 }
 
 pub struct RecordingPos;
@@ -268,7 +261,17 @@ impl AeronArchiveContext {
         context.set_control_response_channel(&response_control_channel.into_c_string())?;
         context.set_recording_events_channel(&recording_events_channel.into_c_string())?;
         // see https://github.com/gsrxyz/rusteron/issues/18
-        context.set_idle_strategy(Some(no_op_idle_strategy_handler()))?;
+        // Use a plain function pointer with null clientd to avoid sharing mutable handler state.
+        let result = unsafe {
+            bindings::aeron_archive_context_set_idle_strategy(
+                context.get_inner(),
+                Some(no_op_idle_strategy_func),
+                std::ptr::null_mut(),
+            )
+        };
+        if result < 0 {
+            return Err(AeronCError::from_code(result));
+        }
         Ok(context)
     }
 }

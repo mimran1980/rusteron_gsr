@@ -15,6 +15,38 @@
    fun:_ZN4test16test_main_static*
 }
 
+# Fallback for Rust test runner spawned test-thread bookkeeping that can appear as
+# "possibly lost" with toolchain-dependent symbol paths.
+{
+   rust_test_thread_spawn_possible_leak
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:malloc
+   ...
+   fun:run_test_in_process
+   fun:_ZN4test8run_test*
+   ...
+   fun:call_once<(), dyn core::ops::function::FnOnce<(), Output=()>, alloc::alloc::Global>
+   fun:_ZN3std3sys3pal4unix6thread6Thread3new12thread_start*
+   fun:start_thread
+   fun:clone
+}
+
+{
+   rust_test_thread_spawn_possible_leak_calloc
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:calloc
+   ...
+   fun:run_test_in_process
+   fun:_ZN4test8run_test*
+   ...
+   fun:call_once<(), dyn core::ops::function::FnOnce<(), Output=()>, alloc::alloc::Global>
+   fun:_ZN3std3sys3pal4unix6thread6Thread3new12thread_start*
+   fun:start_thread
+   fun:clone
+}
+
 # Fallback for Rust runtime stack overflow thread metadata retained to process exit.
 {
    rust_runtime_stack_overflow_thread_info_reachable
