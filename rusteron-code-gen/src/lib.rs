@@ -254,6 +254,12 @@ mod test {
         Box::into_raw(Box::new(val))
     }
 
+    unsafe fn reclaim_resource(ptr: *mut i32) {
+        if !ptr.is_null() {
+            let _ = Box::from_raw(ptr);
+        }
+    }
+
     #[test]
     fn test_drop_calls_cleanup_non_borrowed_no_cleanup_struct() {
         let flag = Arc::new(AtomicBool::new(false));
@@ -264,7 +270,7 @@ mod test {
             flag_clone.store(true, Ordering::SeqCst);
             // Set the resource to null to simulate cleanup.
             unsafe {
-                drop(Box::from_raw(*res));
+                reclaim_resource(*res);
                 *res = std::ptr::null_mut();
             }
             0
@@ -327,7 +333,7 @@ mod test {
         let cleanup = Some(Box::new(move |res: *mut *mut i32| -> i32 {
             flag_clone.store(true, Ordering::SeqCst);
             unsafe {
-                drop(Box::from_raw(*res));
+                reclaim_resource(*res);
                 *res = std::ptr::null_mut();
             }
             0
@@ -365,7 +371,7 @@ mod test {
         let cleanup = Some(Box::new(move |res: *mut *mut i32| -> i32 {
             flag_clone.store(true, Ordering::SeqCst);
             unsafe {
-                drop(Box::from_raw(*res));
+                reclaim_resource(*res);
                 *res = std::ptr::null_mut();
             }
             0
@@ -389,7 +395,7 @@ mod test {
         }
         assert!(!flag.load(Ordering::SeqCst));
         unsafe {
-            drop(Box::from_raw(resource_ptr));
+            reclaim_resource(resource_ptr);
         }
     }
 
@@ -402,7 +408,7 @@ mod test {
         let cleanup = Some(Box::new(move |res: *mut *mut i32| -> i32 {
             flag_clone.store(true, Ordering::SeqCst);
             unsafe {
-                drop(Box::from_raw(*res));
+                reclaim_resource(*res);
                 *res = std::ptr::null_mut();
             }
             0
