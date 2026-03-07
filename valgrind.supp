@@ -79,6 +79,25 @@
    fun:run_test_in_process
 }
 
+# Archive replay-merge test can leave an Aeron async publication allocation as reachable
+# at process exit under Valgrind. Scope this suppression tightly to that test path.
+{
+   archive_reply_merge_async_add_publication_reachable
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:aeron_alloc
+   fun:aeron_client_conductor_async_add_publication
+   fun:aeron_async_add_publication
+   fun:_ZN16rusteron_archive24AeronAsyncAddPublication3new*
+   fun:_ZN16rusteron_archive25ManagedCResource$LT$T$GT$10initialise*
+   fun:_ZN16rusteron_archive25ManagedCResource$LT$T$GT$3new*
+   fun:_ZN16rusteron_archive24AeronAsyncAddPublication3new*
+   fun:_ZN16rusteron_archive5Aeron15add_publication*
+   fun:_ZN16rusteron_archive5tests21reply_merge_publisher*
+   fun:_ZN16rusteron_archive5tests24test_simple_replay_merge*
+}
+
 # `serial_test` + `scc` keep process-global lock state for the duration of the test binary.
 {
    serial_test_lock_map_possible_leak_archive
