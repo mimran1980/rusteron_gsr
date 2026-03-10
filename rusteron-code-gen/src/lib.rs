@@ -10,6 +10,7 @@
 mod common;
 mod generator;
 mod parser;
+pub mod test_logger;
 
 pub use common::*;
 pub use generator::*;
@@ -18,20 +19,26 @@ pub use parser::*;
 use proc_macro2::TokenStream;
 use std::fs::OpenOptions;
 use std::io::Write;
+use std::path::Path;
 use std::process::{Command, Stdio};
 
 pub const CUSTOM_AERON_CODE: &str = include_str!("./aeron_custom.rs");
 pub const COMMON_CODE: &str = include_str!("./common.rs");
 
 pub fn append_to_file(file_path: &str, code: &str) -> std::io::Result<()> {
-    // Open the file in append mode
+    let path = Path::new(file_path);
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)?;
+        }
+    }
+
     let mut file = OpenOptions::new()
         .create(true)
         .write(true)
         .append(true)
-        .open(file_path)?;
+        .open(path)?;
 
-    // Write the generated code to the file
     writeln!(file, "\n{}", code)?;
 
     Ok(())
@@ -75,10 +82,23 @@ mod tests {
     use proc_macro2::TokenStream;
     use std::fs;
 
+    // valgrind can give false positives, so we don't want to run on tests which are 100% rust
+    // and do not have any chance of any undefined behaviour i.e. parsing rs and generating code
+    fn running_under_valgrind() -> bool {
+        std::env::var_os("RUSTERON_VALGRIND").is_some()
+    }
+
     #[test]
     #[cfg(not(target_os = "windows"))] // the generated bindings have different sizes
     fn client() {
-        let mut bindings = parse_bindings(&"../rusteron-code-gen/bindings/client.rs".into());
+        if running_under_valgrind() {
+            return;
+        }
+
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("bindings")
+            .join("client.rs");
+        let mut bindings = parse_bindings(&path);
         assert_eq!(
             "AeronImageFragmentAssembler",
             bindings
@@ -129,7 +149,14 @@ mod tests {
     #[test]
     #[cfg(not(target_os = "windows"))] // the generated bindings have different sizes
     fn media_driver() {
-        let mut bindings = parse_bindings(&"../rusteron-code-gen/bindings/media-driver.rs".into());
+        if running_under_valgrind() {
+            return;
+        }
+
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("bindings")
+            .join("media-driver.rs");
+        let mut bindings = parse_bindings(&path);
         assert_eq!(
             "AeronImageFragmentAssembler",
             bindings
@@ -179,7 +206,14 @@ mod tests {
     #[test]
     #[cfg(not(target_os = "windows"))] // the generated bindings have different sizes
     fn archive() {
-        let mut bindings = parse_bindings(&"../rusteron-code-gen/bindings/archive.rs".into());
+        if running_under_valgrind() {
+            return;
+        }
+
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("bindings")
+            .join("archive.rs");
+        let mut bindings = parse_bindings(&path);
         assert_eq!(
             "AeronImageFragmentAssembler",
             bindings
@@ -222,8 +256,9 @@ mod tests {
 
     fn write_to_file(rust_code: TokenStream, delete: bool, name: &str) -> String {
         let src = format_token_stream(rust_code);
-        let path = format!("../target/{name}");
-        let path = &path;
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join(format!("../target/{}", name));
+        let path = path.to_str().unwrap();
         if delete {
             let _ = fs::remove_file(path);
         }
@@ -243,6 +278,12 @@ mod test {
         Box::into_raw(Box::new(val))
     }
 
+    unsafe fn reclaim_resource(ptr: *mut i32) {
+        if !ptr.is_null() {
+            let _ = Box::from_raw(ptr);
+        }
+    }
+
     #[test]
     fn test_drop_calls_cleanup_non_borrowed_no_cleanup_struct() {
         let flag = Arc::new(AtomicBool::new(false));
@@ -253,6 +294,7 @@ mod test {
             flag_clone.store(true, Ordering::SeqCst);
             // Set the resource to null to simulate cleanup.
             unsafe {
+                reclaim_resource(*res);
                 *res = std::ptr::null_mut();
             }
             0
@@ -315,6 +357,7 @@ mod test {
         let cleanup = Some(Box::new(move |res: *mut *mut i32| -> i32 {
             flag_clone.store(true, Ordering::SeqCst);
             unsafe {
+                reclaim_resource(*res);
                 *res = std::ptr::null_mut();
             }
             0
@@ -352,6 +395,7 @@ mod test {
         let cleanup = Some(Box::new(move |res: *mut *mut i32| -> i32 {
             flag_clone.store(true, Ordering::SeqCst);
             unsafe {
+                reclaim_resource(*res);
                 *res = std::ptr::null_mut();
             }
             0
@@ -374,6 +418,9 @@ mod test {
             assert!(_resource.is_ok());
         }
         assert!(!flag.load(Ordering::SeqCst));
+        unsafe {
+            reclaim_resource(resource_ptr);
+        }
     }
 
     #[test]
@@ -385,6 +432,7 @@ mod test {
         let cleanup = Some(Box::new(move |res: *mut *mut i32| -> i32 {
             flag_clone.store(true, Ordering::SeqCst);
             unsafe {
+                reclaim_resource(*res);
                 *res = std::ptr::null_mut();
             }
             0

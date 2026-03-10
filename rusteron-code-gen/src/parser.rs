@@ -1,4 +1,4 @@
-use crate::generator::{CBinding, CWrapper, Method};
+use crate::generator::{parse_custom_methods, CBinding, CWrapper, Method};
 use crate::{Arg, ArgProcessing, CHandler};
 use itertools::Itertools;
 use quote::ToTokens;
@@ -46,7 +46,7 @@ pub fn parse_bindings(out: &PathBuf) -> CBinding {
           }
         }
     */
-    let bindings = CBinding {
+    let mut bindings = CBinding {
         wrappers: wrappers
             .into_iter()
             .filter(|(_, wrapper)| {
@@ -81,6 +81,14 @@ pub fn parse_bindings(out: &PathBuf) -> CBinding {
         .map(|(a, b)| (a.clone(), b.clone()))
         .collect_vec();
     assert_eq!(Vec::<(String, CWrapper)>::new(), mismatched_types);
+
+    let custom = parse_custom_methods(crate::CUSTOM_AERON_CODE);
+    for wrapper in bindings.wrappers.values_mut() {
+        if let Some(methods) = custom.get(&wrapper.class_name) {
+            wrapper.skipped_methods = methods.clone();
+        }
+    }
+
     bindings
 }
 
@@ -409,10 +417,22 @@ fn extract_return_type(output: &syn::ReturnType) -> String {
 #[cfg(test)]
 mod tests {
     use crate::parser::parse_bindings;
+    use std::path::PathBuf;
+
+    fn running_under_valgrind() -> bool {
+        std::env::var_os("RUSTERON_VALGRIND").is_some()
+    }
 
     #[test]
     fn media_driver() {
-        let bindings = parse_bindings(&"../rusteron-code-gen/bindings/media-driver.rs".into());
+        if running_under_valgrind() {
+            return;
+        }
+
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("bindings")
+            .join("media-driver.rs");
+        let bindings = parse_bindings(&path);
         assert_eq!(
             "AeronImageFragmentAssembler",
             bindings
@@ -424,7 +444,14 @@ mod tests {
     }
     #[test]
     fn client() {
-        let bindings = parse_bindings(&"../rusteron-code-gen/bindings/client.rs".into());
+        if running_under_valgrind() {
+            return;
+        }
+
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("bindings")
+            .join("client.rs");
+        let bindings = parse_bindings(&path);
         assert_eq!(
             "AeronImageFragmentAssembler",
             bindings

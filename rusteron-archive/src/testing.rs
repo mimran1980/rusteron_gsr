@@ -1,8 +1,5 @@
 use crate::IntoCString;
-use crate::{
-    Aeron, AeronArchive, AeronArchiveAsyncConnect, AeronArchiveContext, AeronContext, Handler,
-    NoOpAeronIdleStrategyFunc,
-};
+use crate::{Aeron, AeronArchive, AeronArchiveAsyncConnect, AeronArchiveContext, AeronContext};
 use log::info;
 use log::{error, warn};
 use regex::Regex;
@@ -138,9 +135,6 @@ impl EmbeddedArchiveMediaDriverProcess {
                                 &self.recording_events_channel,
                             )
                         {
-                            archive_context
-                                .set_idle_strategy(Some(&Handler::leak(NoOpAeronIdleStrategyFunc)))
-                                .expect("unable to set idle strategy");
                             if let Ok(connect) =
                                 AeronArchiveAsyncConnect::new_with_aeron(&archive_context, &aeron)
                             {
@@ -240,13 +234,13 @@ impl EmbeddedArchiveMediaDriverProcess {
         .unwrap()
         .path();
         let mut jar_path = binding.to_str().unwrap();
-        let mut agent_jar = jar_path.replace("aeron-all", "aeron-agent");
+        let agent_jar = jar_path.replace("aeron-all", "aeron-agent");
 
         assert!(fs::exists(jar_path).unwrap_or_default());
+        let mut args = vec![];
+
         if fs::exists(&agent_jar).unwrap_or_default() {
-            agent_jar = format!("-javaagent:{}", agent_jar);
-        } else {
-            agent_jar = " ".to_string();
+            args.push(format!("-javaagent:{}", agent_jar));
         }
         let separator = if cfg!(target_os = "windows") {
             ";"
@@ -261,42 +255,35 @@ impl EmbeddedArchiveMediaDriverProcess {
         );
         jar_path = &combined_jars;
 
-        let args = [
-            agent_jar.as_str(),
-            "--add-opens",
-            "java.base/jdk.internal.misc=ALL-UNNAMED",
-            "-cp",
-            jar_path,
-            &format!("-Daeron.dir={}", aeron_dir),
-            &format!("-Daeron.archive.dir={}", archive_dir),
-            "-Daeron.spies.simulate.connection=true",
-            // "-Daeron.event.log=admin", // this will only work if an agent is built
-            "-Daeron.event.log=all", // this will only work if an agent is built
-            "-Daeron.event.log.disable=FRAME_IN,FRAME_OUT", // this will only work if an agent is built
-            "-Daeron.event.archive.log=all",
-            "-Daeron.event.cluster.log=all",
-            // "-Daeron.term.buffer.sparse.file=false",
-            // "-Daeron.pre.touch.mapped.memory=true",
-            // "-Daeron.threading.mode=DEDICATED",
-            // "-Daeron.sender.idle.strategy=noop",
-            // "-Daeron.receiver.idle.strategy=noop",
-            // "-Daeron.conductor.idle.strategy=spin",
-            "-Dagrona.disable.bounds.checks=true",
-            &format!(
-                "-Daeron.archive.control.channel={}",
-                control_request_channel
-            ),
-            &format!(
-                "-Daeron.archive.control.response.channel={}",
-                control_response_channel
-            ),
-            &format!(
-                "-Daeron.archive.recording.events.channel={}",
-                recording_events_channel
-            ),
-            "-Daeron.archive.replication.channel=aeron:udp?endpoint=localhost:0",
-            "io.aeron.archive.ArchivingMediaDriver",
-        ];
+        args.push("--add-opens".to_string());
+        args.push("java.base/jdk.internal.misc=ALL-UNNAMED".to_string());
+        args.push("-cp".to_string());
+        args.push(jar_path.to_string());
+        args.push(format!("-Daeron.dir={}", aeron_dir));
+        args.push(format!("-Daeron.archive.dir={}", archive_dir));
+        args.push("-Daeron.spies.simulate.connection=true".to_string());
+        args.push("-Daeron.event.log=all".to_string());
+        args.push("-Daeron.event.log.disable=FRAME_IN,FRAME_OUT".to_string());
+        args.push("-Daeron.event.archive.log=all".to_string());
+        args.push("-Daeron.event.cluster.log=all".to_string());
+        args.push("-Dagrona.disable.bounds.checks=true".to_string());
+        args.push(format!(
+            "-Daeron.archive.control.channel={}",
+            control_request_channel
+        ));
+        args.push(format!(
+            "-Daeron.archive.control.response.channel={}",
+            control_response_channel
+        ));
+        args.push(format!(
+            "-Daeron.archive.recording.events.channel={}",
+            recording_events_channel
+        ));
+        args.push("-Daeron.archive.replication.channel=aeron:udp?endpoint=localhost:0".to_string());
+        args.push("-Daeron.client.liveness.timeout=60000000000".to_string());
+        args.push("-Daeron.image.liveness.timeout=60000000000".to_string());
+        args.push("-Daeron.publication.unblock.timeout=65000000000".to_string());
+        args.push("io.aeron.archive.ArchivingMediaDriver".to_string());
 
         info!(
             "starting archive media driver [\n\tjava {}\n]",

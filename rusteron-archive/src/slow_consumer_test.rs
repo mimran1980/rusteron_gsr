@@ -47,6 +47,7 @@ mod tests {
             Aeron,
             AeronArchiveContext,
             EmbeddedArchiveMediaDriverProcess,
+            Handler<ErrorCount>,
         ),
         Box<dyn Error>,
     > {
@@ -77,21 +78,32 @@ mod tests {
         aeron_context.set_dir(&aeron_dir.into_c_string())?;
         aeron_context.set_client_name(&format!("test-{}", aeron_dir_suffix).into_c_string())?;
 
-        let error_handler = Handler::leak(ErrorCount::default());
+        let mut error_handler = Handler::leak(ErrorCount::default());
         aeron_context.set_error_handler(Some(&error_handler))?;
 
-        let aeron = Aeron::new(&aeron_context)?;
-        aeron.start()?;
+        // Use inner closure so we can call release() on any error path after handler is created
+        let inner: Result<(Aeron, AeronArchiveContext), Box<dyn Error>> = (|| {
+            let aeron = Aeron::new(&aeron_context)?;
+            aeron.start()?;
+            let archive_context = AeronArchiveContext::new_with_no_credentials_supplier(
+                &aeron,
+                &request_control_channel,
+                &response_control_channel,
+                &recording_events_channel,
+            )?;
+            archive_context.set_error_handler(Some(&error_handler))?;
+            Ok((aeron, archive_context))
+        })();
 
-        let archive_context = AeronArchiveContext::new_with_no_credentials_supplier(
-            &aeron,
-            &request_control_channel,
-            &response_control_channel,
-            &recording_events_channel,
-        )?;
-        archive_context.set_error_handler(Some(&error_handler))?;
-
-        Ok((aeron, archive_context, archive_media_driver))
+        match inner {
+            Ok((aeron, archive_context)) => {
+                Ok((aeron, archive_context, archive_media_driver, error_handler))
+            }
+            Err(e) => {
+                error_handler.release();
+                Err(e)
+            }
+        }
     }
 
     fn find_unused_udp_port(start_port: u16) -> Option<u16> {
@@ -108,15 +120,12 @@ mod tests {
         source_location: SourceLocation,
         replay_length: i64,
     ) -> Result<(), Box<dyn Error>> {
-        let _ = env_logger::Builder::new()
-            .is_test(true)
-            .filter_level(log::LevelFilter::Info)
-            .try_init();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
 
         EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().ok();
 
         // 1. Start Archive/Publisher Driver
-        let (aeron_archive, archive_context, _media_driver_archive) =
+        let (aeron_archive, archive_context, _media_driver_archive, mut archive_error_handler) =
             start_aeron_archive_with_config("archive", 8000)?;
 
         let archive_connector =
@@ -126,8 +135,12 @@ mod tests {
             .expect("failed to connect to archive");
 
         // 2. Start Subscriber Driver
-        let (aeron_subscriber, _subscriber_archive_context, _media_driver_subscriber) =
-            start_aeron_archive_with_config("subscriber", 9000)?;
+        let (
+            aeron_subscriber,
+            _subscriber_archive_context,
+            _media_driver_subscriber,
+            mut subscriber_error_handler,
+        ) = start_aeron_archive_with_config("subscriber", 9000)?;
 
         let recording_port = find_unused_udp_port(20121).unwrap();
         let control_port = find_unused_udp_port(recording_port + 1).unwrap();
@@ -218,12 +231,14 @@ mod tests {
 
         // 3. Create Subscription on Subscriber Driver with localhost:0
         let subscription_channel_template = "aeron:udp?endpoint=localhost:0";
+        let mut avail_image_handler = Handler::leak(AeronAvailableImageLogger);
+        let mut unavail_image_handler = Handler::leak(AeronUnavailableImageLogger);
         let subscription = aeron_subscriber
             .async_add_subscription(
                 &subscription_channel_template.into_c_string(),
                 replay_stream_id,
-                Some(&Handler::leak(AeronAvailableImageLogger)),
-                Some(&Handler::leak(AeronUnavailableImageLogger)),
+                Some(&avail_image_handler),
+                Some(&unavail_image_handler),
             )?
             .poll_blocking(Duration::from_secs(5))?;
 
@@ -276,7 +291,7 @@ mod tests {
             expected_seq: 0,
             gaps: 0,
         };
-        let handler_box = Handler::leak(handler); // Leak to pass to C callback safely
+        let mut handler_box = Handler::leak(handler); // Leak to pass to C callback safely
 
         info!("Starting slow consumer loop");
         while start_check.elapsed() < test_duration {
@@ -305,6 +320,14 @@ mod tests {
             "Test passed: No sequence gaps detected. Published: {}, Received: {}",
             published_count, handler_box.expected_seq
         );
+        drop(archive);
+        drop(aeron_archive);
+        drop(aeron_subscriber);
+        handler_box.release();
+        avail_image_handler.release();
+        unavail_image_handler.release();
+        archive_error_handler.release();
+        subscriber_error_handler.release();
         Ok(())
     }
 
