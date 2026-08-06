@@ -4,6 +4,9 @@ members = [
     "rusteron-media-driver",
     "rusteron-client",
     "rusteron-archive",
+    # Interop harness (plan §11.2). Off by default; the vdev test script builds
+    # it with `--features dpdk` on a privileged Linux host.
+    "tools/dpdk-harness",
 ]
 exclude = ["rusteron-docker-samples/rusteron-dummy-example"]
 resolver = "2"

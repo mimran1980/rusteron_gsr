@@ -163,20 +163,26 @@ static int rusteron_dpdk_init_port(rusteron_dpdk_transport_t *native, rusteron_d
         rusteron_dpdk_set_error(message);
         return -1;
     }
-    if (0 != strcmp(driver, "net_ena"))
+    /* The ENA-specific guarantees (net_ena PMD, IPv4/UDP checksum offload) are
+     * required for a PCI ENA but not for a virtual/TAP device: vdev PMDs report
+     * their own driver name and may software-checksum (plan §11.2). */
+    if (rusteron_dpdk_selector_is_pci(p->pci))
     {
-        snprintf(message, sizeof(message),
-                 "device %s reports driver %s, expected the net_ena PMD",
-                 p->pci, driver[0] != '\0' ? driver : "<unknown>");
-        rusteron_dpdk_set_error(message);
-        return -1;
-    }
-    if (!p->csum_offload_ok)
-    {
-        snprintf(message, sizeof(message),
-                 "device %s lacks the required IPv4/UDP checksum offloads", p->pci);
-        rusteron_dpdk_set_error(message);
-        return -1;
+        if (0 != strcmp(driver, "net_ena"))
+        {
+            snprintf(message, sizeof(message),
+                     "device %s reports driver %s, expected the net_ena PMD",
+                     p->pci, driver[0] != '\0' ? driver : "<unknown>");
+            rusteron_dpdk_set_error(message);
+            return -1;
+        }
+        if (!p->csum_offload_ok)
+        {
+            snprintf(message, sizeof(message),
+                     "device %s lacks the required IPv4/UDP checksum offloads", p->pci);
+            rusteron_dpdk_set_error(message);
+            return -1;
+        }
     }
 
     uint16_t l3_mtu = (uint16_t)(cfg->max_aeron_mtu + RUSTERON_DPDK_IP_UDP_OVERHEAD);

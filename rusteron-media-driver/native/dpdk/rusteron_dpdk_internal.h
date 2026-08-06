@@ -19,6 +19,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "rusteron_dpdk_transport.h"
 #include "rusteron_dpdk_port_ops.h"
@@ -43,6 +44,14 @@ extern "C" {
 #define RUSTERON_DPDK_EAL_REAL 0    /* --huge-dir <configured path> */
 #define RUSTERON_DPDK_EAL_NO_HUGE 1 /* --no-huge (tests without hugetlbfs) */
 #define RUSTERON_DPDK_EAL_SKIP 2    /* skip the EAL seam entirely (tests) */
+
+/* A canonical PCI BDF contains ':'; anything else is a virtual-device name
+ * (test/TAP path, plan §11.2). Shared by the EAL argv builder and the port
+ * bring-up checks so the two never disagree on the mode of a selector. */
+static inline int rusteron_dpdk_selector_is_pci(const char *sel)
+{
+    return NULL != sel && NULL != strchr(sel, ':');
+}
 
 /* Transport-level offload bits passed to the port ops; the real port
  * implementation maps them onto the RTE_ETH_RX/TX_OFFLOAD_* masks. */

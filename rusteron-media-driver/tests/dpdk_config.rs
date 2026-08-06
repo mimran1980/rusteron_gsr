@@ -5,8 +5,10 @@
 //! features; the full install/lifetime path is `#[cfg(feature = "dpdk")]`
 //! (Linux x86_64 in the Docker verification image).
 //!
-//! These tests mutate process-global env vars, so run them single-threaded:
-//! `cargo test -p rusteron-media-driver --test dpdk_config -- --test-threads=1`.
+//! These tests mutate process-global env vars, so every test is `#[serial]`
+//! (file-locked across the whole workspace, as with the other DPDK test files).
+
+use serial_test::serial;
 
 use rusteron_media_driver::dpdk::config::DpdkTransportConfig;
 use rusteron_media_driver::dpdk::env;
@@ -62,6 +64,7 @@ fn canonical() -> DpdkTransportConfig {
             gateway_ipv4: "10.0.1.254".parse().unwrap(),
         },
         file_prefix: "rusteron-ena".into(),
+        test_vdev: false,
         hugepage_dir: "/dev/hugepages".into(),
         rx_descriptors: 1024,
         tx_descriptors: 1024,
@@ -102,6 +105,7 @@ fn assert_invalid_config(config: &DpdkTransportConfig, needle: &str) {
 
 // --- Acceptance 1: typed and environment configurations resolve identically ---
 
+#[serial]
 #[test]
 fn typed_and_env_configs_resolve_identical() {
     clear_env();
@@ -111,6 +115,7 @@ fn typed_and_env_configs_resolve_identical() {
 
 // --- Validation rules (plan §6.5): each error names the offending field ------
 
+#[serial]
 #[test]
 fn validation_rejects_bad_sender_pci() {
     let mut c = canonical();
@@ -118,6 +123,48 @@ fn validation_rejects_bad_sender_pci() {
     assert_invalid_config(&c, "sender.pci_address");
 }
 
+// --- Test-only vdev selectors (plan §11.2): production stays PCI-only --------
+
+#[serial]
+#[test]
+fn validation_rejects_vdev_name_outside_test_mode() {
+    let mut c = canonical();
+    c.sender.pci_address = "net_tap0".into();
+    c.receiver.pci_address = "net_tap1".into();
+    assert_invalid_config(&c, "sender.pci_address");
+}
+
+#[serial]
+#[test]
+fn validation_accepts_vdev_names_in_test_mode() {
+    let mut c = canonical();
+    c.test_vdev = true;
+    c.sender.pci_address = "net_tap0".into();
+    c.receiver.pci_address = "net_tap1".into();
+    c.validate().unwrap();
+}
+
+#[serial]
+#[test]
+fn validation_rejects_bad_vdev_name_in_test_mode() {
+    let mut c = canonical();
+    c.test_vdev = true;
+    c.sender.pci_address = "0000:00:01.0".into(); // PCI is always valid
+    c.receiver.pci_address = "net_tap-with:colon".into(); // ':' would misdetect as PCI
+    assert_invalid_config(&c, "receiver.pci_address");
+}
+
+#[serial]
+#[test]
+fn validation_rejects_duplicate_vdev_in_test_mode() {
+    let mut c = canonical();
+    c.test_vdev = true;
+    c.sender.pci_address = "net_tap0".into();
+    c.receiver.pci_address = "net_tap0".into();
+    assert_invalid_config(&c, "must differ");
+}
+
+#[serial]
 #[test]
 fn validation_rejects_duplicate_pci() {
     let mut c = canonical();
@@ -125,6 +172,7 @@ fn validation_rejects_duplicate_pci() {
     assert_invalid_config(&c, "must differ");
 }
 
+#[serial]
 #[test]
 fn validation_rejects_multicast_local_ip() {
     let mut c = canonical();
@@ -132,6 +180,7 @@ fn validation_rejects_multicast_local_ip() {
     assert_invalid_config(&c, "sender.local_ipv4");
 }
 
+#[serial]
 #[test]
 fn validation_rejects_broadcast_gateway() {
     let mut c = canonical();
@@ -139,6 +188,7 @@ fn validation_rejects_broadcast_gateway() {
     assert_invalid_config(&c, "receiver.gateway_ipv4");
 }
 
+#[serial]
 #[test]
 fn validation_rejects_zero_prefix_len() {
     let mut c = canonical();
@@ -146,6 +196,7 @@ fn validation_rejects_zero_prefix_len() {
     assert_invalid_config(&c, "receiver.prefix_len");
 }
 
+#[serial]
 #[test]
 fn validation_rejects_prefix_len_above_32() {
     let mut c = canonical();
@@ -153,6 +204,7 @@ fn validation_rejects_prefix_len_above_32() {
     assert_invalid_config(&c, "sender.prefix_len");
 }
 
+#[serial]
 #[test]
 fn validation_rejects_gateway_outside_subnet() {
     let mut c = canonical();
@@ -160,6 +212,7 @@ fn validation_rejects_gateway_outside_subnet() {
     assert_invalid_config(&c, "sender.gateway_ipv4");
 }
 
+#[serial]
 #[test]
 fn validation_rejects_bad_file_prefix() {
     let mut c = canonical();
@@ -167,6 +220,7 @@ fn validation_rejects_bad_file_prefix() {
     assert_invalid_config(&c, "file_prefix");
 }
 
+#[serial]
 #[test]
 fn validation_rejects_empty_file_prefix() {
     let mut c = canonical();
@@ -174,6 +228,7 @@ fn validation_rejects_empty_file_prefix() {
     assert_invalid_config(&c, "file_prefix");
 }
 
+#[serial]
 #[test]
 fn validation_rejects_relative_hugepage_dir() {
     let mut c = canonical();
@@ -181,6 +236,7 @@ fn validation_rejects_relative_hugepage_dir() {
     assert_invalid_config(&c, "hugepage_dir");
 }
 
+#[serial]
 #[test]
 fn validation_rejects_rx_descriptors_out_of_range() {
     let mut c = canonical();
@@ -188,6 +244,7 @@ fn validation_rejects_rx_descriptors_out_of_range() {
     assert_invalid_config(&c, "rx_descriptors");
 }
 
+#[serial]
 #[test]
 fn validation_rejects_tx_descriptors_out_of_range() {
     let mut c = canonical();
@@ -195,6 +252,7 @@ fn validation_rejects_tx_descriptors_out_of_range() {
     assert_invalid_config(&c, "tx_descriptors");
 }
 
+#[serial]
 #[test]
 fn validation_rejects_zero_burst() {
     let mut c = canonical();
@@ -202,6 +260,7 @@ fn validation_rejects_zero_burst() {
     assert_invalid_config(&c, "burst_size");
 }
 
+#[serial]
 #[test]
 fn validation_rejects_burst_above_256() {
     let mut c = canonical();
@@ -209,6 +268,7 @@ fn validation_rejects_burst_above_256() {
     assert_invalid_config(&c, "burst_size");
 }
 
+#[serial]
 #[test]
 fn validation_rejects_undersized_mbuf_pool() {
     let mut c = canonical();
@@ -217,6 +277,7 @@ fn validation_rejects_undersized_mbuf_pool() {
     assert_invalid_config(&c, "mbufs_per_port");
 }
 
+#[serial]
 #[test]
 fn validation_rejects_unaligned_mtu() {
     let mut c = canonical();
@@ -224,6 +285,7 @@ fn validation_rejects_unaligned_mtu() {
     assert_invalid_config(&c, "max_aeron_mtu");
 }
 
+#[serial]
 #[test]
 fn validation_rejects_mtu_above_1472() {
     let mut c = canonical();
@@ -233,6 +295,7 @@ fn validation_rejects_mtu_above_1472() {
 
 // --- Selector behaviour (plan §6.1) ------------------------------------------
 
+#[serial]
 #[test]
 fn absent_selector_preserves_default() {
     clear_env();
@@ -241,6 +304,7 @@ fn absent_selector_preserves_default() {
     assert!(result.is_none(), "absent selector must preserve default behaviour");
 }
 
+#[serial]
 #[test]
 fn default_selector_preserves_default() {
     clear_env();
@@ -250,6 +314,7 @@ fn default_selector_preserves_default() {
     assert!(result.is_none(), "`default` selector must preserve default behaviour");
 }
 
+#[serial]
 #[test]
 fn unknown_selector_is_invalid_environment() {
     clear_env();
@@ -263,6 +328,7 @@ fn unknown_selector_is_invalid_environment() {
     assert!(err.to_string().contains("RUSTERON_MEDIA_DRIVER_TRANSPORT"));
 }
 
+#[serial]
 #[test]
 fn empty_selector_is_invalid_environment() {
     clear_env();
@@ -274,6 +340,7 @@ fn empty_selector_is_invalid_environment() {
 
 // --- Environment parsing failures (plan §6.2/§6.3) ---------------------------
 
+#[serial]
 #[test]
 fn config_from_env_reports_missing_variable() {
     clear_env();
@@ -284,6 +351,7 @@ fn config_from_env_reports_missing_variable() {
     assert!(err.to_string().contains("RUSTERON_DPDK_SENDER_PCI"));
 }
 
+#[serial]
 #[test]
 fn config_from_env_reports_cidr_without_prefix() {
     clear_env();
@@ -294,6 +362,7 @@ fn config_from_env_reports_cidr_without_prefix() {
     assert!(err.to_string().contains("SENDER_IPV4_CIDR"));
 }
 
+#[serial]
 #[test]
 fn config_from_env_reports_bad_prefix_number() {
     clear_env();
@@ -304,6 +373,7 @@ fn config_from_env_reports_bad_prefix_number() {
     assert!(err.to_string().contains("prefix"));
 }
 
+#[serial]
 #[test]
 fn config_from_env_reports_bad_gateway() {
     clear_env();
@@ -314,6 +384,7 @@ fn config_from_env_reports_bad_gateway() {
     assert!(err.to_string().contains("RECEIVER_GATEWAY"));
 }
 
+#[serial]
 #[test]
 fn config_from_env_reports_bad_number_default() {
     clear_env();
@@ -324,6 +395,7 @@ fn config_from_env_reports_bad_number_default() {
     assert!(err.to_string().contains("RUSTERON_DPDK_BURST_SIZE"));
 }
 
+#[serial]
 #[test]
 fn env_defaults_match_plan() {
     clear_env();
@@ -352,6 +424,7 @@ fn env_defaults_match_plan() {
 // --- Feature disabled (runs everywhere without `dpdk`) ------------------------
 
 #[cfg(not(feature = "dpdk"))]
+#[serial]
 #[test]
 fn dpdk_ena_without_feature_is_feature_disabled() {
     clear_env();
@@ -363,6 +436,7 @@ fn dpdk_ena_without_feature_is_feature_disabled() {
 }
 
 #[cfg(not(feature = "dpdk"))]
+#[serial]
 #[test]
 fn install_without_feature_is_feature_disabled() {
     clear_env();
@@ -391,6 +465,7 @@ fn configured_context() -> AeronDriverContext {
 }
 
 #[cfg(feature = "dpdk")]
+#[serial]
 #[test]
 fn install_succeeds_on_configured_context() {
     let env = TestEnv::new();
@@ -401,6 +476,7 @@ fn install_succeeds_on_configured_context() {
 }
 
 #[cfg(feature = "dpdk")]
+#[serial]
 #[test]
 fn install_rejects_misconfigured_context() {
     let _env = TestEnv::new();
@@ -412,6 +488,7 @@ fn install_rejects_misconfigured_context() {
 }
 
 #[cfg(feature = "dpdk")]
+#[serial]
 #[test]
 fn dropping_caller_guard_keeps_context_owned_transport_alive() {
     let env = TestEnv::new();

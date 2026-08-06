@@ -64,6 +64,7 @@ pub fn config_from_env() -> Result<DpdkTransportConfig, DpdkError> {
             )?,
         },
         file_prefix: required("RUSTERON_DPDK_FILE_PREFIX")?,
+        test_vdev: false, // production selectors are PCI-only (plan §11.2)
         hugepage_dir: PathBuf::from(
             env::var("RUSTERON_DPDK_HUGE_DIR").unwrap_or_else(|_| "/dev/hugepages".into()),
         ),

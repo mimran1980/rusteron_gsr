@@ -24,6 +24,13 @@ pub struct DpdkTransportConfig {
     pub receiver: DpdkPortConfig,
     /// DPDK EAL file prefix, unique per process (`[A-Za-z0-9_-]{1,64}`).
     pub file_prefix: String,
+    /// Accept DPDK virtual-device names (e.g. `net_tap0`) instead of PCI BDFs.
+    ///
+    /// Test-only (plan §11.2): the environment parser never sets this, so
+    /// production configurations stay PCI-only. When set, the two selectors
+    /// are each validated as a canonical PCI BDF *or* a vdev name, and the
+    /// native EAL emits `--vdev=<name>` instead of `-a <bdf>`.
+    pub test_vdev: bool,
     /// Hugepage mount. Must be absolute; hugetlbfs backing is verified natively
     /// at EAL initialization (plan §6.5, Ticket 3).
     pub hugepage_dir: PathBuf,
@@ -41,8 +48,8 @@ impl DpdkTransportConfig {
     /// Returns [`DpdkError::InvalidConfiguration`] with the failing field (and
     /// port role where applicable) named in the message.
     pub fn validate(&self) -> Result<(), DpdkError> {
-        validate_port("sender", &self.sender)?;
-        validate_port("receiver", &self.receiver)?;
+        validate_port("sender", &self.sender, self.test_vdev)?;
+        validate_port("receiver", &self.receiver, self.test_vdev)?;
 
         if self.sender.pci_address == self.receiver.pci_address {
             return Err(DpdkError::InvalidConfiguration(format!(
@@ -107,11 +114,12 @@ impl DpdkTransportConfig {
     }
 }
 
-fn validate_port(role: &str, port: &DpdkPortConfig) -> Result<(), DpdkError> {
-    if !valid_pci(&port.pci_address) {
+fn validate_port(role: &str, port: &DpdkPortConfig, test_vdev: bool) -> Result<(), DpdkError> {
+    if !valid_pci(&port.pci_address) && !(test_vdev && valid_vdev(&port.pci_address)) {
         return Err(DpdkError::InvalidConfiguration(format!(
-            "{role}.pci_address {:?} is not canonical dddd:bb:ss.f",
-            port.pci_address
+            "{role}.pci_address {:?} is not canonical dddd:bb:ss.f{}",
+            port.pci_address,
+            if test_vdev { " nor a DPDK vdev name" } else { "" }
         )));
     }
     if !is_unicast(port.local_ipv4) {
@@ -170,6 +178,18 @@ fn valid_pci(s: &str) -> bool {
         && hex(8) && hex(9)
         && b[10] == b'.'
         && hex(11)
+}
+
+/// DPDK virtual-device name (e.g. `net_tap0`, `net_pcap0`), test-only.
+///
+/// Must fit the 16-byte native selector buffer and must not contain `:` so the
+/// native EAL can distinguish a vdev name from a PCI BDF by shape.
+fn valid_vdev(s: &str) -> bool {
+    let n = s.len();
+    n >= 1
+        && n <= 15
+        && s.bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
 }
 
 fn valid_file_prefix(s: &str) -> bool {

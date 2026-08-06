@@ -25,4 +25,6 @@ docker run --rm --platform linux/amd64 \
   -v "$REPO:/src:ro" \
   -w /src \
   "$IMAGE" \
-  bash -c "set -o pipefail; cargo test -p rusteron-media-driver --features dpdk $FILTER 2>&1 | tail -40"
+  # dpdk_config mutates process-global env vars, so its tests must run
+  # single-threaded; a single-binary run is unaffected.
+  bash -c "set -o pipefail; cargo test -p rusteron-media-driver --features dpdk $FILTER -- --test-threads=1 2>&1 | tail -40"

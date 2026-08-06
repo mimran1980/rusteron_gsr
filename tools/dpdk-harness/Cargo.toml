@@ -1,0 +1,17 @@
+[package]
+name = "dpdk-harness"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+log = "0.4"
+rusteron-code-gen = { path = "../../rusteron-code-gen" }
+rusteron-client = { path = "../../rusteron-client" }
+rusteron-media-driver = { path = "../../rusteron-media-driver" }
+
+[features]
+# Off by default so the workspace and macOS CI build without the native DPDK
+# toolchain. The vdev test script enables it with `--features dpdk`.
+default = []
+dpdk = ["rusteron-media-driver/dpdk"]
