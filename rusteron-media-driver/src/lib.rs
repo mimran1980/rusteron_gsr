@@ -22,6 +22,8 @@
 #[cfg(all(feature = "dpdk", not(all(target_os = "linux", target_arch = "x86_64"))))]
 compile_error!("the `dpdk` feature requires Linux x86_64 (Amazon Linux 2023 / EKS Nitro)");
 
+pub mod dpdk;
+
 #[allow(improper_ctypes_definitions)]
 #[allow(unpredictable_function_pointer_comparisons)]
 pub mod bindings {
@@ -115,6 +117,18 @@ impl AeronDriverContext {
     /// Typed variant of [`Self::set_shared_idle_strategy`].
     pub fn set_shared_idle_strategy_kind(&self, kind: AeronIdleStrategyKind) -> Result<i32, AeronCError> {
         self.set_shared_idle_strategy(kind.name_c())
+    }
+
+    /// Store a `'static` dependency in this context's resource graph so it
+    /// outlives the context. The DPDK transport uses this to keep its native
+    /// state alive until the context (and the driver borrowing it) is dropped.
+    pub fn add_dependency<D: std::any::Any>(&self, dep: D) {
+        self.inner.add_dependency(dep)
+    }
+
+    /// Retrieve a previously stored dependency of type `V`.
+    pub fn get_dependency<V: Clone + 'static>(&self) -> Option<V> {
+        self.inner.get_dependency()
     }
 }
 
