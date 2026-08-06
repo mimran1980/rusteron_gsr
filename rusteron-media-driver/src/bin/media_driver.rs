@@ -1,4 +1,5 @@
 use log::info;
+use rusteron_media_driver::dpdk::configure_media_transport_from_env;
 use rusteron_media_driver::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -15,6 +16,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create Aeron context
     let aeron_context = AeronDriverContext::new()?;
+
+    // Select the transport from `RUSTERON_MEDIA_DRIVER_TRANSPORT` after the
+    // context exists and before the driver is created (plan §8). A selected
+    // DPDK failure propagates as a nonzero exit; it never falls back to the
+    // default socket driver.
+    let _dpdk = configure_media_transport_from_env(&aeron_context)?;
+    let backend = if _dpdk.is_some() { "dpdk-ena" } else { "socket" };
+    println!("transport backend: {backend}");
+
     info!("aeron dir: {:?}", aeron_context.get_dir());
     aeron_context.print_configuration();
 

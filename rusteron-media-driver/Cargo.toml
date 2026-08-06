@@ -74,6 +74,10 @@ dpdk = ["build-from-source"]  # Enables the DPDK ENA kernel-bypass transport (Li
 name = "media_driver"
 path = "src/bin/media_driver.rs"
 
+[[example]]
+name = "embedded_dpdk"
+required-features = ["dpdk"]
+
 [package.metadata.docs.rs]
 features = ["static", "precompile"]
 default-target = "aarch64-apple-darwin"
