@@ -8,7 +8,7 @@
  * thread-local last_error buffer and return a failure so a driver that binds
  * them early fails loudly instead of silently dropping traffic.
  */
-#include "rusteron_dpdk_transport.h"
+#include "rusteron_dpdk_internal.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,18 +19,21 @@
 #define RUSTERON_DPDK_BINDINGS_NAME "rusteron-dpdk-ena"
 #define RUSTERON_DPDK_BINDINGS_TYPE "media"
 
-struct rusteron_dpdk_transport_stct
-{
-    rusteron_dpdk_config_t config;
-    /* DPDK runtime state (EAL, ports, mempools) is added in Ticket 3. */
-};
+/* The transport layout lives in rusteron_dpdk_internal.h (Ticket 3). */
 
 static _Thread_local char rusteron_dpdk_error_buffer[1024];
+static _Thread_local int rusteron_dpdk_error_code = RUSTERON_DPDK_ERR_OK;
 
-static void rusteron_dpdk_set_error(const char *message)
+void rusteron_dpdk_set_error_code(const char *message, int code)
 {
     strncpy(rusteron_dpdk_error_buffer, message, sizeof(rusteron_dpdk_error_buffer) - 1);
     rusteron_dpdk_error_buffer[sizeof(rusteron_dpdk_error_buffer) - 1] = '\0';
+    rusteron_dpdk_error_code = code;
+}
+
+void rusteron_dpdk_set_error(const char *message)
+{
+    rusteron_dpdk_set_error_code(message, RUSTERON_DPDK_ERR_NATIVE);
 }
 
 /*
@@ -145,6 +148,12 @@ int rusteron_dpdk_transport_create(
 
     native->config = *config;
 
+    if (rusteron_dpdk_runtime_init(native) < 0)
+    {
+        free(native);
+        return -1;
+    }
+
     *transport = native;
     return 0;
 }
@@ -179,6 +188,7 @@ int rusteron_dpdk_transport_close(rusteron_dpdk_transport_t *transport)
         return 0;
     }
 
+    rusteron_dpdk_runtime_cleanup(transport);
     free(transport);
     return 0;
 }
@@ -379,4 +389,9 @@ const char *rusteron_dpdk_last_error(void)
     }
 
     return rusteron_dpdk_error_buffer;
+}
+
+int rusteron_dpdk_last_error_code(void)
+{
+    return rusteron_dpdk_error_code;
 }

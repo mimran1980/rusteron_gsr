@@ -14,13 +14,13 @@ use rusteron_media_driver::dpdk::error::DpdkError;
 use rusteron_media_driver::dpdk::{configure_media_transport_from_env, DpdkPortConfig, DpdkTransport};
 use rusteron_media_driver::AeronDriverContext;
 
-// Integration-test binaries don't inherit build-script `rustc-link-lib`
-// directives (see the Ticket 1 notes in `dpdk_abi.rs`), so declare the native
-// libraries this test links. `aeron_driver` is always needed for the context
-// calls; `rusteron_dpdk` only with the feature.
-#[link(name = "aeron_driver")]
-#[cfg_attr(feature = "dpdk", link(name = "rusteron_dpdk", kind = "static"))]
-extern "C" {}
+// Native libraries and the DPDK-free fakes are declared in `common/mod.rs`
+// (cargo forwards build-script link-libs to the lib, not to same-package
+// integration tests). Feature-gated install tests drive the transport under
+// the skip-EAL test mode.
+mod common;
+#[cfg(feature = "dpdk")]
+use common::TestEnv;
 
 const ENV_VARS: &[&str] = &[
     "RUSTERON_MEDIA_DRIVER_TRANSPORT",
@@ -393,6 +393,8 @@ fn configured_context() -> AeronDriverContext {
 #[cfg(feature = "dpdk")]
 #[test]
 fn install_succeeds_on_configured_context() {
+    let env = TestEnv::new();
+    env.eal_skip();
     let ctx = configured_context();
     let guard = DpdkTransport::install(&ctx, canonical()).unwrap();
     drop(guard); // guard drop alone must not stop DPDK (context holds a clone)
@@ -401,6 +403,7 @@ fn install_succeeds_on_configured_context() {
 #[cfg(feature = "dpdk")]
 #[test]
 fn install_rejects_misconfigured_context() {
+    let _env = TestEnv::new();
     // Default context: sender/receiver cpu affinity = -1 (§6.4 requirement fails).
     let ctx = AeronDriverContext::new().unwrap();
     let err = DpdkTransport::install(&ctx, canonical()).unwrap_err();
@@ -411,6 +414,8 @@ fn install_rejects_misconfigured_context() {
 #[cfg(feature = "dpdk")]
 #[test]
 fn dropping_caller_guard_keeps_context_owned_transport_alive() {
+    let env = TestEnv::new();
+    env.eal_skip();
     let ctx = configured_context();
     let guard = DpdkTransport::install(&ctx, canonical()).unwrap();
     drop(guard);

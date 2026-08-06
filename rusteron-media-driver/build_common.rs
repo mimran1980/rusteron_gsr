@@ -511,11 +511,26 @@ fn build_from_source(config: &RusteronBuildConfig, docs_rs: &Path) {
     build_dpdk_native(&aeron_path);
 }
 
-/// Compile `native/dpdk/*.c` as a static archive and emit its link directives.
-/// Linux x86_64 only; requires `libdpdk >= 23.11` (probed via pkg-config).
-/// `lib.rs` carries the matching `compile_error!` for unsupported targets; the
-/// panic here turns a missing/old libdpdk into a build-time error with an
-/// install hint instead of an opaque link failure.
+/// Compile `native/dpdk/*.c` into five static archives and emit link
+/// directives. Linux x86_64 only; requires `libdpdk >= 23.11` (probed via
+/// pkg-config). `lib.rs` carries the matching `compile_error!` for unsupported
+/// targets; the panic here turns a missing/old libdpdk into a build-time error
+/// with an install hint instead of an opaque link failure.
+///
+/// The archive split keeps the test binaries DPDK-free (plan §7.2):
+///
+/// | archive            | contents                                   | linked into |
+/// |--------------------|--------------------------------------------|-------------|
+/// | `rusteron_dpdk`    | transport.c + runtime.c (no rte_* refs)    | prod + tests|
+/// | `rusteron_dpdk_eal`| real EAL seam (rte_eal_*)                  | prod        |
+/// | `rusteron_dpdk_port`| real port ops (rte_eth_*)                 | prod        |
+/// | `rusteron_dpdk_fake`| fake port ops (same symbol as port)        | tests       |
+/// | `rusteron_dpdk_fake_eal`| fake EAL seam (same symbols as eal)    | tests       |
+///
+/// The fakes build with `cargo_metadata(false)` so their link-libs are never
+/// emitted; test binaries reference them with explicit `#[link]` attributes
+/// resolved via the core archive's link-search (cargo forwards link-search to
+/// every target, but only forwards link-libs to the lib/bins/dependents).
 #[cfg(feature = "dpdk")]
 fn build_dpdk_native(aeron_path: &Path) {
     if !(cfg!(target_os = "linux") && cfg!(target_arch = "x86_64")) {
@@ -534,39 +549,55 @@ fn build_dpdk_native(aeron_path: &Path) {
 
     let cargo_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let native_dir = cargo_dir.join("native/dpdk");
+    let test_dir = native_dir.join("test");
 
-    let mut build = cc::Build::new();
-    build.std("c11");
-    build.include(&native_dir);
-    build.include(aeron_path.join("aeron-driver/src/main/c"));
-    build.include(aeron_path.join("aeron-client/src/main/c"));
-    for inc in &dpdk.include_paths {
-        build.include(inc);
-    }
-    for (key, value) in &dpdk.defines {
-        match value {
-            Some(v) => {
-                build.define(key, Some(v.as_str()));
-            }
-            None => {
-                build.define(key, None);
+    let mut base = || {
+        let mut b = cc::Build::new();
+        b.std("c11");
+        b.include(&native_dir);
+        b.include(aeron_path.join("aeron-driver/src/main/c"));
+        b.include(aeron_path.join("aeron-client/src/main/c"));
+        b
+    };
+    let mut with_dpdk = || {
+        let mut b = base();
+        for inc in &dpdk.include_paths {
+            b.include(inc);
+        }
+        for (key, value) in &dpdk.defines {
+            match value {
+                Some(v) => {
+                    b.define(key, Some(v.as_str()));
+                }
+                None => {
+                    b.define(key, None);
+                }
             }
         }
-    }
-    let sources: Vec<_> = std::fs::read_dir(&native_dir)
-        .expect("native/dpdk dir")
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .filter(|p| p.extension().map(|s| s == "c").unwrap_or(false))
-        .collect();
-    build.files(sources);
-    build.compile("rusteron_dpdk");
+        b
+    };
 
-    // Static archive first, then its shared DPDK deps. The test registers
-    // `aeron_driver` + `rusteron_dpdk` via `#[link]` (cargo forwards
-    // build-script link-libs to the lib/bins/dependents, not to same-package
-    // integration tests), so only the search paths need to reach every target.
-    println!("cargo:rustc-link-lib=static=rusteron_dpdk");
+    // Core: ABI + runtime orchestration. DPDK-free; its link-search reaches
+    // every target (including same-package integration tests).
+    base().file(native_dir.join("rusteron_dpdk_transport.c"))
+        .file(native_dir.join("rusteron_dpdk_runtime.c"))
+        .compile("rusteron_dpdk");
+
+    // Real seams: production only. cc emits their link-libs for the lib/bins.
+    with_dpdk().file(native_dir.join("rusteron_dpdk_eal.c")).compile("rusteron_dpdk_eal");
+    with_dpdk().file(native_dir.join("rusteron_dpdk_port.c")).compile("rusteron_dpdk_port");
+
+    // Fakes: DPDK-free; never emitted into production links. Test binaries
+    // `#[link]` them explicitly.
+    base().cargo_metadata(false)
+        .file(test_dir.join("rusteron_dpdk_fake_port.c"))
+        .compile("rusteron_dpdk_fake");
+    base().cargo_metadata(false)
+        .file(test_dir.join("rusteron_dpdk_fake_eal.c"))
+        .compile("rusteron_dpdk_fake_eal");
+
+    // The core archive's link-search is already emitted by cc; add the DPDK
+    // search paths and libs so the real seams resolve their rte_* references.
     for path in &dpdk.link_paths {
         println!("cargo:rustc-link-search=native={}", path.display());
     }

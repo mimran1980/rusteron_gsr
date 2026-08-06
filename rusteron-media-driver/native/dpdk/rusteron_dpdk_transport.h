@@ -93,6 +93,12 @@ aeron_udp_channel_transport_bindings_t *rusteron_dpdk_transport_bindings(void);
 /* Last recorded native error message (thread-local, valid until next call). */
 const char *rusteron_dpdk_last_error(void);
 
+/* Machine-readable error code for the last native failure (plan §7.2). */
+#define RUSTERON_DPDK_ERR_OK 0
+#define RUSTERON_DPDK_ERR_NATIVE 1
+#define RUSTERON_DPDK_ERR_ALREADY_INITIALIZED 2
+int rusteron_dpdk_last_error_code(void);
+
 #ifdef __cplusplus
 }
 #endif
