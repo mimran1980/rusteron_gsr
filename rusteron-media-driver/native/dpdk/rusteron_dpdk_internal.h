@@ -23,6 +23,14 @@
 #include "rusteron_dpdk_transport.h"
 #include "rusteron_dpdk_port_ops.h"
 #include "rusteron_dpdk_arp.h"
+#include "rusteron_dpdk_endpoint_map.h"
+
+/* Aeron types for the poller callbacks and the shared receive loop (poller.c):
+ * the affinity enum, the transport struct, the recv/recvmmsg function typedefs
+ * and the (forward-declared) poller struct. transport.c already pulls these
+ * transitively via media/aeron_udp_channel_transport.h; declaring them here
+ * keeps poller.c self-contained. */
+#include "media/aeron_udp_channel_transport_bindings.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -78,6 +86,26 @@ typedef struct rusteron_dpdk_client_stct
     struct sockaddr_storage connected_address; /* owned copy for NULL-address sends */
 } rusteron_dpdk_client_t;
 
+/* Receive counters (plan §7.6): one bucket per reject class, incremented in the
+ * poll hot path. Surfaced as Aeron counters in Ticket 7. */
+typedef struct rusteron_dpdk_rx_stats_stct
+{
+    uint64_t accepted;
+    uint64_t arp;
+    uint64_t ipv6;
+    uint64_t multicast;
+    uint64_t ethertype;
+    uint64_t vlan;
+    uint64_t ip_options;
+    uint64_t fragment;
+    uint64_t truncated;
+    uint64_t protocol;
+    uint64_t checksum;
+    uint64_t multi_segment;
+    uint64_t foreign_dst;
+    uint64_t unknown_port;
+} rusteron_dpdk_rx_stats_t;
+
 struct rusteron_dpdk_transport_stct
 {
     rusteron_dpdk_config_t config;
@@ -86,6 +114,7 @@ struct rusteron_dpdk_transport_stct
     rusteron_dpdk_port_t sender;
     rusteron_dpdk_port_t receiver;
     rusteron_dpdk_arp_table_t arp;       /* shared next-hop cache (plan §7.5) */
+    rusteron_dpdk_rx_stats_t rx_stats;   /* receive counters (plan §7.6) */
 };
 
 /* EAL seam — implemented by rusteron_dpdk_eal.c (real rte_eal) in production
@@ -146,6 +175,44 @@ int rusteron_dpdk_transport_test_arp_rx(
 /* Thread-local error buffer (defined in rusteron_dpdk_transport.c). */
 void rusteron_dpdk_set_error(const char *message);
 void rusteron_dpdk_set_error_code(const char *message, int code);
+
+/* Aeron poller callbacks (rusteron_dpdk_poller.c, plan §7.6/§7.7). */
+int rusteron_dpdk_poller_init(
+    aeron_udp_transport_poller_t *poller,
+    aeron_driver_context_t *context,
+    aeron_udp_channel_transport_affinity_t affinity);
+int rusteron_dpdk_poller_close(aeron_udp_transport_poller_t *poller);
+int rusteron_dpdk_poller_add(
+    aeron_udp_transport_poller_t *poller, aeron_udp_channel_transport_t *transport);
+int rusteron_dpdk_poller_remove(
+    aeron_udp_transport_poller_t *poller, aeron_udp_channel_transport_t *transport);
+int rusteron_dpdk_poller_poll(
+    aeron_udp_transport_poller_t *poller,
+    struct mmsghdr *msgvec,
+    size_t vlen,
+    int64_t *bytes_rcved,
+    aeron_udp_transport_recv_func_t recv_func,
+    aeron_udp_channel_transport_recvmmsg_func_t recvmmsg_func,
+    void *clientd);
+
+/* Shared receive loop (rusteron_dpdk_poller.c): poll `client`'s port and
+ * dispatch each valid frame to recv_func. When `endpoints` is non-NULL the
+ * target transport is chosen by the map; otherwise only frames addressed to
+ * `only_transport`'s own local endpoint are dispatched. Returns the number of
+ * datagrams dispatched; accumulates payload bytes in *bytes_rcved. */
+int rusteron_dpdk_poller_receive(
+    rusteron_dpdk_client_t *client,
+    aeron_udp_channel_transport_t *only_transport,
+    const rusteron_dpdk_endpoint_map_t *endpoints,
+    struct mmsghdr *msgvec,
+    size_t vlen,
+    int64_t *bytes_rcved,
+    aeron_udp_transport_recv_func_t recv_func,
+    void *clientd);
+
+/* Test inspection of the receive counters (runtime.c). */
+void rusteron_dpdk_transport_test_rx_stats(
+    const rusteron_dpdk_transport_t *native, rusteron_dpdk_rx_stats_t *out);
 
 #ifdef __cplusplus
 }

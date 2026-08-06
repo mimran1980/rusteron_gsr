@@ -124,8 +124,8 @@ pub fn rusteron_build_main(config: &RusteronBuildConfig) {
         return;
     }
 
-    println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=build_common.rs");
+    println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=bindings.h");
 
     // If precompiled artifacts exist (or can be downloaded), use them instead of cmake+java.
@@ -521,7 +521,7 @@ fn build_from_source(config: &RusteronBuildConfig, docs_rs: &Path) {
 ///
 /// | archive            | contents                                   | linked into |
 /// |--------------------|--------------------------------------------|-------------|
-/// | `rusteron_dpdk`    | transport.c + runtime.c + packet.c + arp.c   | prod + tests|
+/// | `rusteron_dpdk`    | transport + runtime + packet + arp + endpoint map + poller | prod + tests |
 /// | `rusteron_dpdk_eal`| real EAL seam (rte_eal_*)                  | prod        |
 /// | `rusteron_dpdk_port`| real port ops (rte_eth_*)                 | prod        |
 /// | `rusteron_dpdk_fake`| fake port ops (same symbol as port)        | tests       |
@@ -551,7 +551,7 @@ fn build_dpdk_native(aeron_path: &Path) {
     let native_dir = cargo_dir.join("native/dpdk");
     let test_dir = native_dir.join("test");
 
-    let mut base = || {
+    let base = || {
         let mut b = cc::Build::new();
         b.std("c11");
         // _POSIX_C_SOURCE is declared in rusteron_dpdk_internal.h, which every
@@ -563,7 +563,7 @@ fn build_dpdk_native(aeron_path: &Path) {
         b.include(aeron_path.join("aeron-client/src/main/c"));
         b
     };
-    let mut with_dpdk = || {
+    let with_dpdk = || {
         let mut b = base();
         // DPDK's x86_64 baseline: rte_memcpy.h references SSSE3 intrinsics
         // (palignr) unconditionally, so the seam must be compiled with the same
@@ -585,13 +585,15 @@ fn build_dpdk_native(aeron_path: &Path) {
         b
     };
 
-    // Core: ABI + runtime orchestration + frame/ARP encoders. DPDK-free; its
-    // link-search reaches every target (including same-package integration
-    // tests).
+    // Core: ABI + runtime orchestration + frame/ARP encoders + receive path.
+    // DPDK-free; its link-search reaches every target (including same-package
+    // integration tests).
     base().file(native_dir.join("rusteron_dpdk_transport.c"))
         .file(native_dir.join("rusteron_dpdk_runtime.c"))
         .file(native_dir.join("rusteron_dpdk_packet.c"))
         .file(native_dir.join("rusteron_dpdk_arp.c"))
+        .file(native_dir.join("rusteron_dpdk_endpoint_map.c"))
+        .file(native_dir.join("rusteron_dpdk_poller.c"))
         // AERON_SET_ERR (transport.c) routes through aeron_err_set, which lives
         // in the client util and is NOT exported by the shared libaeron_driver.so
         // (that target builds DRIVER_ONLY_SOURCE). Compile the error + thread +

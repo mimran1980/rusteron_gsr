@@ -55,6 +55,17 @@ int rusteron_dpdk_fake_capture_at(int index, rusteron_dpdk_fake_capture_t *out);
 int rusteron_dpdk_fake_allocated(void);
 int rusteron_dpdk_fake_released(void);
 
+/* RX injector (plan §7.6): queue a raw frame for the next rx_burst on the
+ * given port. `rx_ol_flags`/`nb_segs` seed the delivered view so tests can
+ * exercise NIC-reported checksum verdicts and multi-segment rejection.
+ * Returns 0 on success, -1 when the queue is full or the port is out of range. */
+int rusteron_dpdk_fake_rx_inject(
+    uint16_t port_id, const uint8_t *frame, size_t len,
+    uint32_t rx_ol_flags, uint32_t nb_segs);
+
+/* Number of frames still queued for the port's rx_burst (test assertion). */
+int rusteron_dpdk_fake_rx_queued(uint16_t port_id);
+
 /* Fake EAL seam reset (rusteron_dpdk_fake_eal.c). */
 void rusteron_dpdk_fake_eal_reset(void);
 

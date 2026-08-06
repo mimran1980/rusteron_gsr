@@ -31,6 +31,9 @@ extern "C" {
 
 #define RUSTERON_DPDK_ETH_TYPE_IPV4 0x0800
 #define RUSTERON_DPDK_ETH_TYPE_ARP 0x0806
+#define RUSTERON_DPDK_ETH_TYPE_IPV6 0x86DD
+#define RUSTERON_DPDK_ETH_TYPE_VLAN 0x8100
+#define RUSTERON_DPDK_ETH_TYPE_QINQ 0x88A8
 #define RUSTERON_DPDK_IP_PROTO_UDP 17
 #define RUSTERON_DPDK_ARP_HTYPE_ETHERNET 1
 #define RUSTERON_DPDK_ARP_PTYPE_IPV4 0x0800
@@ -44,6 +47,14 @@ extern "C" {
 #define RUSTERON_DPDK_MBUF_F_TX_IPV4 (1u << 0)
 #define RUSTERON_DPDK_MBUF_F_TX_IP_CKSUM (1u << 1)
 #define RUSTERON_DPDK_MBUF_F_TX_UDP_CKSUM (1u << 2)
+
+/* RX offload verdicts copied from the NIC onto the view by the port ops. When
+ * neither GOOD nor BAD is set for a protocol, the NIC left the verdict unknown
+ * and the transport software-verifies that checksum (plan §7.6). */
+#define RUSTERON_DPDK_MBUF_F_RX_IPV4_CKSUM_GOOD (1u << 0)
+#define RUSTERON_DPDK_MBUF_F_RX_UDP_CKSUM_GOOD (1u << 1)
+#define RUSTERON_DPDK_MBUF_F_RX_IPV4_CKSUM_BAD (1u << 2)
+#define RUSTERON_DPDK_MBUF_F_RX_UDP_CKSUM_BAD (1u << 3)
 
 /*
  * Opaque-to-the-encoder mbuf view. The port ops fill `opaque`/`data`/`capacity`
@@ -61,6 +72,8 @@ typedef struct rusteron_dpdk_mbuf_stct
     uint16_t l3_len;
     uint16_t l4_len;
     uint16_t udp_pseudo_csum; /* UDP pseudo-header checksum for TX offload */
+    uint32_t nb_segs;         /* received frame segment count (1 expected) */
+    uint32_t rx_ol_flags;     /* RX offload verdicts (RUSTERON_DPDK_MBUF_F_RX_*) */
 } rusteron_dpdk_mbuf_t;
 
 /* IPv4 helpers (addresses are network order). */
@@ -95,6 +108,43 @@ int rusteron_dpdk_packet_build_arp_reply(
     const uint8_t dst_mac[RUSTERON_DPDK_ETH_ADDR_LEN],
     const uint8_t src_mac[RUSTERON_DPDK_ETH_ADDR_LEN],
     uint32_t sender_ip, uint32_t target_ip);
+
+/* --- Receive classification (plan §7.6) --- */
+
+typedef enum rusteron_dpdk_rx_result_en
+{
+    RUSTERON_DPDK_RX_RESULT_OK = 0,   /* IPv4/UDP, *out filled */
+    RUSTERON_DPDK_RX_RESULT_ARP,      /* feed the frame to the ARP table */
+    RUSTERON_DPDK_RX_RESULT_IPV6,
+    RUSTERON_DPDK_RX_RESULT_MULTICAST, /* Ethernet or IP multicast/broadcast */
+    RUSTERON_DPDK_RX_RESULT_ETHERTYPE, /* unsupported EtherType */
+    RUSTERON_DPDK_RX_RESULT_VLAN,      /* VLAN/QinQ encapsulation */
+    RUSTERON_DPDK_RX_RESULT_IP_OPTIONS,
+    RUSTERON_DPDK_RX_RESULT_FRAGMENT,  /* MF set or non-zero fragment offset */
+    RUSTERON_DPDK_RX_RESULT_TRUNCATED, /* short or length-inconsistent frame */
+    RUSTERON_DPDK_RX_RESULT_PROTOCOL,  /* non-UDP IP protocol */
+    RUSTERON_DPDK_RX_RESULT_CHECKSUM,  /* NIC-reported or software-invalid */
+    RUSTERON_DPDK_RX_RESULT_MULTI_SEGMENT
+} rusteron_dpdk_rx_result_t;
+
+/* A valid single-segment IPv4/UDP datagram, parsed for dispatch. All addresses
+ * are network order; ports are host order. `payload` points into the mbuf. */
+typedef struct rusteron_dpdk_parsed_frame_stct
+{
+    uint32_t src_ip;
+    uint32_t dst_ip;
+    uint16_t src_port;
+    uint16_t dst_port;
+    const uint8_t *payload;
+    size_t payload_len;
+} rusteron_dpdk_parsed_frame_t;
+
+/*
+ * Classify a received mbuf. RUSTERON_DPDK_RX_RESULT_OK fills *out; every other
+ * result is a reject class (plan §7.6). No allocation, no locking, no logging.
+ */
+rusteron_dpdk_rx_result_t rusteron_dpdk_packet_classify_rx(
+    const rusteron_dpdk_mbuf_t *m, rusteron_dpdk_parsed_frame_t *out);
 
 #ifdef __cplusplus
 }

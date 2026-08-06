@@ -207,10 +207,7 @@ pub fn dump(transport: *const c_void) -> Dump {
 }
 
 extern "C" {
-    fn rusteron_dpdk_transport_create(
-        config: *const rusteron_dpdk_config_t,
-        transport: *mut *mut c_void,
-    ) -> c_int;
+    fn rusteron_dpdk_transport_create(config: *const rusteron_dpdk_config_t, transport: *mut *mut c_void) -> c_int;
     fn rusteron_dpdk_transport_close(transport: *mut c_void) -> c_int;
     fn rusteron_dpdk_last_error() -> *const c_char;
     fn rusteron_dpdk_last_error_code() -> c_int;

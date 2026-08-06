@@ -22,6 +22,8 @@
 #define RUSTERON_DPDK_FAKE_POOL_AVAIL_DEFAULT 64
 #define RUSTERON_DPDK_FAKE_TX_BURST_CAP_DEFAULT 64
 #define RUSTERON_DPDK_FAKE_CAPTURE_MAX 1024
+#define RUSTERON_DPDK_FAKE_PORTS 4
+#define RUSTERON_DPDK_FAKE_RX_DEPTH 256
 
 typedef struct rusteron_dpdk_fake_buffer_stct
 {
@@ -47,6 +49,21 @@ static int rusteron_dpdk_fake_allocated_count = 0;
 static int rusteron_dpdk_fake_released_count = 0;
 static int rusteron_dpdk_fake_capture_len = 0;
 static rusteron_dpdk_fake_capture_t rusteron_dpdk_fake_capture[RUSTERON_DPDK_FAKE_CAPTURE_MAX];
+
+/* RX path (plan §7.6): a per-port ring of injected frames that rx_burst drains
+ * into freshly allocated mbuf views, so receive traffic flows through the same
+ * pool and leak accounting as transmit. */
+typedef struct rusteron_dpdk_fake_rx_entry_stct
+{
+    uint8_t data[RUSTERON_DPDK_FAKE_BUFFER_CAPACITY];
+    uint32_t len;
+    uint32_t rx_ol_flags;
+    uint32_t nb_segs;
+} rusteron_dpdk_fake_rx_entry_t;
+
+static int rusteron_dpdk_fake_rx_head[RUSTERON_DPDK_FAKE_PORTS];
+static int rusteron_dpdk_fake_rx_tail[RUSTERON_DPDK_FAKE_PORTS];
+static rusteron_dpdk_fake_rx_entry_t rusteron_dpdk_fake_rx_q[RUSTERON_DPDK_FAKE_PORTS][RUSTERON_DPDK_FAKE_RX_DEPTH];
 
 static void rusteron_dpdk_fake_logf(const char *fmt, ...)
 {
@@ -89,6 +106,9 @@ void rusteron_dpdk_fake_reset(void)
     rusteron_dpdk_fake_allocated_count = 0;
     rusteron_dpdk_fake_released_count = 0;
     rusteron_dpdk_fake_capture_len = 0;
+    memset(rusteron_dpdk_fake_rx_head, 0, sizeof(rusteron_dpdk_fake_rx_head));
+    memset(rusteron_dpdk_fake_rx_tail, 0, sizeof(rusteron_dpdk_fake_rx_tail));
+    memset(rusteron_dpdk_fake_rx_q, 0, sizeof(rusteron_dpdk_fake_rx_q));
 }
 
 void rusteron_dpdk_fake_set_tx_burst_cap(uint16_t n)
@@ -352,6 +372,71 @@ static uint16_t rusteron_dpdk_fake_tx_burst(
     return accepted;
 }
 
+int rusteron_dpdk_fake_rx_inject(
+    uint16_t port_id, const uint8_t *frame, size_t len,
+    uint32_t rx_ol_flags, uint32_t nb_segs)
+{
+    if (port_id >= RUSTERON_DPDK_FAKE_PORTS || NULL == frame ||
+        len > RUSTERON_DPDK_FAKE_BUFFER_CAPACITY)
+    {
+        return -1;
+    }
+    int tail = rusteron_dpdk_fake_rx_tail[port_id];
+    if ((tail + 1) % RUSTERON_DPDK_FAKE_RX_DEPTH == rusteron_dpdk_fake_rx_head[port_id])
+    {
+        return -1; /* queue full */
+    }
+    rusteron_dpdk_fake_rx_entry_t *entry = &rusteron_dpdk_fake_rx_q[port_id][tail];
+    memcpy(entry->data, frame, len);
+    entry->len = (uint32_t)len;
+    entry->rx_ol_flags = rx_ol_flags;
+    entry->nb_segs = nb_segs;
+    rusteron_dpdk_fake_rx_tail[port_id] = (tail + 1) % RUSTERON_DPDK_FAKE_RX_DEPTH;
+    return 0;
+}
+
+int rusteron_dpdk_fake_rx_queued(uint16_t port_id)
+{
+    if (port_id >= RUSTERON_DPDK_FAKE_PORTS)
+    {
+        return 0;
+    }
+    int head = rusteron_dpdk_fake_rx_head[port_id];
+    int tail = rusteron_dpdk_fake_rx_tail[port_id];
+    return (tail - head + RUSTERON_DPDK_FAKE_RX_DEPTH) % RUSTERON_DPDK_FAKE_RX_DEPTH;
+}
+
+static uint16_t rusteron_dpdk_fake_rx_burst(
+    uint16_t port_id, uint16_t rx_queue_id,
+    rusteron_dpdk_mbuf_t **pkts, uint16_t nb)
+{
+    (void)rx_queue_id;
+    if (port_id >= RUSTERON_DPDK_FAKE_PORTS)
+    {
+        return 0;
+    }
+
+    uint16_t received = 0;
+    while (received < nb &&
+           rusteron_dpdk_fake_rx_head[port_id] != rusteron_dpdk_fake_rx_tail[port_id])
+    {
+        rusteron_dpdk_fake_rx_entry_t *entry = &rusteron_dpdk_fake_rx_q[port_id][rusteron_dpdk_fake_rx_head[port_id]];
+        rusteron_dpdk_mbuf_t *m = pkts[received];
+        if (rusteron_dpdk_fake_mbuf_alloc(NULL, m) < 0)
+        {
+            break; /* pool exhausted: deliver what we have */
+        }
+        memcpy(m->data, entry->data, entry->len);
+        m->frame_len = entry->len;
+        m->nb_segs = entry->nb_segs;
+        m->rx_ol_flags = entry->rx_ol_flags;
+        rusteron_dpdk_fake_rx_head[port_id] =
+            (rusteron_dpdk_fake_rx_head[port_id] + 1) % RUSTERON_DPDK_FAKE_RX_DEPTH;
+        received++;
+    }
+    return received;
+}
+
 rusteron_dpdk_port_ops_t *rusteron_dpdk_port_ops_real(void)
 {
     static rusteron_dpdk_port_ops_t ops = {
@@ -370,6 +455,7 @@ rusteron_dpdk_port_ops_t *rusteron_dpdk_port_ops_real(void)
         .mbuf_alloc = rusteron_dpdk_fake_mbuf_alloc,
         .mbuf_release = rusteron_dpdk_fake_mbuf_release,
         .tx_burst = rusteron_dpdk_fake_tx_burst,
+        .rx_burst = rusteron_dpdk_fake_rx_burst,
     };
     return &ops;
 }

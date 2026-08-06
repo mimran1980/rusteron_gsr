@@ -357,6 +357,9 @@ static int rusteron_dpdk_transport_close_transport(aeron_udp_channel_transport_t
     return 0;
 }
 
+/* Aeron drives a single registered transport through recvmmsg; the shared
+ * receive loop dispatches only frames addressed to this transport's own
+ * endpoint (plan §7.6). */
 static int rusteron_dpdk_transport_recvmmsg(
     aeron_udp_channel_transport_t *transport,
     struct mmsghdr *msgvec,
@@ -365,13 +368,13 @@ static int rusteron_dpdk_transport_recvmmsg(
     aeron_udp_transport_recv_func_t recv_func,
     void *clientd)
 {
-    (void)transport;
-    (void)msgvec;
-    (void)vlen;
-    (void)bytes_rcved;
-    (void)recv_func;
-    (void)clientd;
-    return rusteron_dpdk_not_implemented("recvmmsg");
+    rusteron_dpdk_client_t *client = transport != NULL ? transport->bindings_clientd : NULL;
+    if (NULL == client)
+    {
+        return 0;
+    }
+    return rusteron_dpdk_poller_receive(
+        client, transport, NULL, msgvec, vlen, bytes_rcved, recv_func, clientd);
 }
 
 static int rusteron_dpdk_transport_send(
@@ -544,37 +547,30 @@ static int rusteron_dpdk_transport_bind_addr_and_port(
     return 0;
 }
 
+/* The poller callbacks live in rusteron_dpdk_poller.c (plan §7.6/§7.7). */
 static int rusteron_dpdk_transport_poller_init(
     aeron_udp_transport_poller_t *poller,
     aeron_driver_context_t *context,
     aeron_udp_channel_transport_affinity_t affinity)
 {
-    (void)poller;
-    (void)context;
-    (void)affinity;
-    return rusteron_dpdk_not_implemented("poller_init");
+    return rusteron_dpdk_poller_init(poller, context, affinity);
 }
 
 static int rusteron_dpdk_transport_poller_close(aeron_udp_transport_poller_t *poller)
 {
-    (void)poller;
-    return 0;
+    return rusteron_dpdk_poller_close(poller);
 }
 
 static int rusteron_dpdk_transport_poller_add(
     aeron_udp_transport_poller_t *poller, aeron_udp_channel_transport_t *transport)
 {
-    (void)poller;
-    (void)transport;
-    return rusteron_dpdk_not_implemented("poller_add");
+    return rusteron_dpdk_poller_add(poller, transport);
 }
 
 static int rusteron_dpdk_transport_poller_remove(
     aeron_udp_transport_poller_t *poller, aeron_udp_channel_transport_t *transport)
 {
-    (void)poller;
-    (void)transport;
-    return 0;
+    return rusteron_dpdk_poller_remove(poller, transport);
 }
 
 static int rusteron_dpdk_transport_poller_poll(
@@ -586,14 +582,8 @@ static int rusteron_dpdk_transport_poller_poll(
     aeron_udp_channel_transport_recvmmsg_func_t recvmmsg_func,
     void *clientd)
 {
-    (void)poller;
-    (void)msgvec;
-    (void)vlen;
-    (void)bytes_rcved;
-    (void)recv_func;
-    (void)recvmmsg_func;
-    (void)clientd;
-    return rusteron_dpdk_not_implemented("poller_poll");
+    return rusteron_dpdk_poller_poll(
+        poller, msgvec, vlen, bytes_rcved, recv_func, recvmmsg_func, clientd);
 }
 
 /* --- binding table --------------------------------------------------------- */

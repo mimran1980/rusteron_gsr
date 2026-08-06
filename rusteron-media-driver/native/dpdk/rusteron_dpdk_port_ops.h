@@ -86,6 +86,16 @@ typedef struct rusteron_dpdk_port_ops_stct
     uint16_t (*tx_burst)(
         uint16_t port_id, uint16_t tx_queue_id,
         rusteron_dpdk_mbuf_t **pkts, uint16_t nb);
+
+    /*
+     * Receive a burst. The impl fills every returned view (opaque/data/
+     * capacity/frame_len/nb_segs/rx_ol_flags); the caller owns the views and
+     * must release them via mbuf_release once processed. Returns the number of
+     * frames received (0..=nb, a contiguous prefix from index 0).
+     */
+    uint16_t (*rx_burst)(
+        uint16_t port_id, uint16_t rx_queue_id,
+        rusteron_dpdk_mbuf_t **pkts, uint16_t nb);
 } rusteron_dpdk_port_ops_t;
 
 /*

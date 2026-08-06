@@ -265,6 +265,57 @@ static uint16_t rusteron_dpdk_port_tx_burst(
     return sent;
 }
 
+/* Map the DPDK RX offload verdicts onto the view flags (plan §7.6). */
+static uint32_t rusteron_dpdk_port_rx_ol_flags(const struct rte_mbuf *mbuf)
+{
+    uint32_t flags = 0;
+    uint64_t ol = mbuf->ol_flags;
+    if (0 != (ol & RTE_MBUF_F_RX_IP_CKSUM_GOOD))
+    {
+        flags |= RUSTERON_DPDK_MBUF_F_RX_IPV4_CKSUM_GOOD;
+    }
+    if (0 != (ol & RTE_MBUF_F_RX_IP_CKSUM_BAD))
+    {
+        flags |= RUSTERON_DPDK_MBUF_F_RX_IPV4_CKSUM_BAD;
+    }
+    if (0 != (ol & RTE_MBUF_F_RX_L4_CKSUM_GOOD))
+    {
+        flags |= RUSTERON_DPDK_MBUF_F_RX_UDP_CKSUM_GOOD;
+    }
+    if (0 != (ol & RTE_MBUF_F_RX_L4_CKSUM_BAD))
+    {
+        flags |= RUSTERON_DPDK_MBUF_F_RX_UDP_CKSUM_BAD;
+    }
+    return flags;
+}
+
+static uint16_t rusteron_dpdk_port_rx_burst(
+    uint16_t port_id, uint16_t rx_queue_id,
+    rusteron_dpdk_mbuf_t **pkts, uint16_t nb)
+{
+    struct rte_mbuf *mbufs[256];
+    uint16_t i;
+    uint16_t received = rte_eth_rx_burst(port_id, rx_queue_id, mbufs, nb);
+
+    for (i = 0; i < received; i++)
+    {
+        struct rte_mbuf *mbuf = mbufs[i];
+        rusteron_dpdk_mbuf_t *m = pkts[i];
+        m->opaque = mbuf;
+        m->data = rte_pktmbuf_mtod(mbuf, uint8_t *);
+        m->capacity = (uint32_t)rte_pktmbuf_tailroom(mbuf);
+        m->frame_len = rte_pktmbuf_pkt_len(mbuf);
+        m->ol_flags = 0; /* TX offload flags are not meaningful on RX */
+        m->l2_len = 0;
+        m->l3_len = 0;
+        m->l4_len = 0;
+        m->udp_pseudo_csum = 0;
+        m->nb_segs = (uint32_t)mbuf->nb_segs;
+        m->rx_ol_flags = rusteron_dpdk_port_rx_ol_flags(mbuf);
+    }
+    return received;
+}
+
 rusteron_dpdk_port_ops_t *rusteron_dpdk_port_ops_real(void)
 {
     static rusteron_dpdk_port_ops_t ops = {
@@ -283,6 +334,7 @@ rusteron_dpdk_port_ops_t *rusteron_dpdk_port_ops_real(void)
         .mbuf_alloc = rusteron_dpdk_port_mbuf_alloc,
         .mbuf_release = rusteron_dpdk_port_mbuf_release,
         .tx_burst = rusteron_dpdk_port_tx_burst,
+        .rx_burst = rusteron_dpdk_port_rx_burst,
     };
     return &ops;
 }

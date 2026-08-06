@@ -437,3 +437,13 @@ int rusteron_dpdk_transport_test_arp_rx(
         (RUSTERON_DPDK_ROLE_RECEIVER == role) ? &native->receiver : &native->sender;
     return rusteron_dpdk_arp_handle_frame(&native->arp, native, port, frame, frame_len);
 }
+
+void rusteron_dpdk_transport_test_rx_stats(
+    const rusteron_dpdk_transport_t *native, rusteron_dpdk_rx_stats_t *out)
+{
+    if (NULL == native || NULL == out)
+    {
+        return;
+    }
+    *out = native->rx_stats;
+}

@@ -233,3 +233,193 @@ int rusteron_dpdk_packet_build_arp_reply(
 
     return 0;
 }
+
+/* --- Receive classification (plan §7.6) --- */
+
+/* One's-complement sum of 16-bit big-endian words (odd tail padded with zero). */
+static uint32_t rusteron_dpdk_rx_sum(const uint8_t *p, size_t len)
+{
+    uint32_t sum = 0;
+    while (len >= 2)
+    {
+        sum += (uint16_t)((p[0] << 8) | p[1]);
+        p += 2;
+        len -= 2;
+    }
+    if (len)
+    {
+        sum += (uint16_t)(p[0] << 8);
+    }
+    return sum;
+}
+
+static uint16_t rusteron_dpdk_rx_fold(uint32_t sum)
+{
+    while (sum >> 16)
+    {
+        sum = (sum & 0xFFFF) + (sum >> 16);
+    }
+    return (uint16_t)sum;
+}
+
+/* IPv4 header checksum validity: the folded one's-complement sum over the
+ * whole 20-byte header (checksum field included) is 0xFFFF for a valid one. */
+static int rusteron_dpdk_rx_ipv4_csum_ok(const uint8_t *ip)
+{
+    return rusteron_dpdk_rx_fold(rusteron_dpdk_rx_sum(ip, RUSTERON_DPDK_IPV4_HDR_LEN)) == 0xFFFFu;
+}
+
+/* UDP checksum validity including the pseudo-header. A zero checksum field
+ * means the sender omitted it (legal in IPv4) and is accepted. */
+static int rusteron_dpdk_rx_udp_csum_ok(const rusteron_dpdk_parsed_frame_t *f)
+{
+    const uint8_t *udp = f->payload - RUSTERON_DPDK_UDP_HDR_LEN;
+    uint16_t udp_len = (uint16_t)((udp[4] << 8) | udp[5]);
+    uint16_t csum = (uint16_t)((udp[6] << 8) | udp[7]);
+    if (0 == csum)
+    {
+        return 1;
+    }
+
+    const uint8_t *s = (const uint8_t *)&f->src_ip;
+    const uint8_t *d = (const uint8_t *)&f->dst_ip;
+    uint32_t sum = 0;
+    sum += (uint16_t)((s[0] << 8) | s[1]);
+    sum += (uint16_t)((s[2] << 8) | s[3]);
+    sum += (uint16_t)((d[0] << 8) | d[1]);
+    sum += (uint16_t)((d[2] << 8) | d[3]);
+    sum += RUSTERON_DPDK_IP_PROTO_UDP;
+    sum += udp_len;
+    sum += (uint16_t)((udp[0] << 8) | udp[1]); /* src port */
+    sum += (uint16_t)((udp[2] << 8) | udp[3]); /* dst port */
+    sum += udp_len;
+    sum += rusteron_dpdk_rx_sum(f->payload, f->payload_len);
+
+    return (uint16_t)~rusteron_dpdk_rx_fold(sum) == csum;
+}
+
+rusteron_dpdk_rx_result_t rusteron_dpdk_packet_classify_rx(
+    const rusteron_dpdk_mbuf_t *m, rusteron_dpdk_parsed_frame_t *out)
+{
+    const uint8_t *frame = m->data;
+    const size_t frame_len = m->frame_len;
+
+    if (1 != m->nb_segs)
+    {
+        return RUSTERON_DPDK_RX_RESULT_MULTI_SEGMENT;
+    }
+    if (0 != (m->rx_ol_flags &
+              (RUSTERON_DPDK_MBUF_F_RX_IPV4_CKSUM_BAD | RUSTERON_DPDK_MBUF_F_RX_UDP_CKSUM_BAD)))
+    {
+        return RUSTERON_DPDK_RX_RESULT_CHECKSUM;
+    }
+    if (frame_len < RUSTERON_DPDK_ETH_HDR_LEN)
+    {
+        return RUSTERON_DPDK_RX_RESULT_TRUNCATED;
+    }
+
+    /* The EtherType is decided before the multicast-MAC check: ARP requests are
+     * addressed to the broadcast MAC, and the ARP handler must see them (plan
+     * §7.6). The multicast check below therefore applies only to IPv4 frames. */
+    const uint16_t ethertype = (uint16_t)((frame[12] << 8) | frame[13]);
+    if (RUSTERON_DPDK_ETH_TYPE_ARP == ethertype)
+    {
+        return RUSTERON_DPDK_RX_RESULT_ARP;
+    }
+    if (RUSTERON_DPDK_ETH_TYPE_IPV6 == ethertype)
+    {
+        return RUSTERON_DPDK_RX_RESULT_IPV6;
+    }
+    if (RUSTERON_DPDK_ETH_TYPE_VLAN == ethertype || RUSTERON_DPDK_ETH_TYPE_QINQ == ethertype)
+    {
+        return RUSTERON_DPDK_RX_RESULT_VLAN;
+    }
+    if (RUSTERON_DPDK_ETH_TYPE_IPV4 != ethertype)
+    {
+        return RUSTERON_DPDK_RX_RESULT_ETHERTYPE;
+    }
+    if (0 != (frame[0] & 0x01))
+    {
+        return RUSTERON_DPDK_RX_RESULT_MULTICAST; /* broadcast/multicast dst MAC */
+    }
+
+    if (frame_len < RUSTERON_DPDK_ETH_HDR_LEN + RUSTERON_DPDK_IPV4_HDR_LEN)
+    {
+        return RUSTERON_DPDK_RX_RESULT_TRUNCATED;
+    }
+
+    const uint8_t *ip = frame + RUSTERON_DPDK_ETH_HDR_LEN;
+    if (0x40 != (ip[0] & 0xF0))
+    {
+        return RUSTERON_DPDK_RX_RESULT_ETHERTYPE; /* not IPv4 despite EtherType */
+    }
+    if (5 != (ip[0] & 0x0F))
+    {
+        return RUSTERON_DPDK_RX_RESULT_IP_OPTIONS;
+    }
+
+    const uint16_t total_len = (uint16_t)((ip[2] << 8) | ip[3]);
+    if (total_len < RUSTERON_DPDK_IPV4_HDR_LEN ||
+        RUSTERON_DPDK_ETH_HDR_LEN + total_len > frame_len)
+    {
+        return RUSTERON_DPDK_RX_RESULT_TRUNCATED;
+    }
+
+    const uint16_t flags_frag = (uint16_t)((ip[6] << 8) | ip[7]);
+    if (0 != (flags_frag & 0x2000) || 0 != (flags_frag & 0x1FFF))
+    {
+        return RUSTERON_DPDK_RX_RESULT_FRAGMENT; /* MF set or non-zero offset */
+    }
+
+    if (RUSTERON_DPDK_IP_PROTO_UDP != ip[9])
+    {
+        return RUSTERON_DPDK_RX_RESULT_PROTOCOL;
+    }
+    if (rusteron_dpdk_ipv4_is_multicast(*(const uint32_t *)(ip + 16)))
+    {
+        return RUSTERON_DPDK_RX_RESULT_MULTICAST;
+    }
+
+    if (frame_len < RUSTERON_DPDK_ETH_HDR_LEN + RUSTERON_DPDK_IPV4_HDR_LEN + RUSTERON_DPDK_UDP_HDR_LEN)
+    {
+        return RUSTERON_DPDK_RX_RESULT_TRUNCATED;
+    }
+
+    const uint8_t *udp = ip + RUSTERON_DPDK_IPV4_HDR_LEN;
+    const uint16_t udp_len = (uint16_t)((udp[4] << 8) | udp[5]);
+    if (udp_len < RUSTERON_DPDK_UDP_HDR_LEN ||
+        udp_len > total_len - RUSTERON_DPDK_IPV4_HDR_LEN ||
+        RUSTERON_DPDK_ETH_HDR_LEN + RUSTERON_DPDK_IPV4_HDR_LEN + udp_len > frame_len)
+    {
+        return RUSTERON_DPDK_RX_RESULT_TRUNCATED;
+    }
+
+    /* Trust a NIC GOOD verdict; BAD was already rejected above; otherwise
+     * software-verify (plan §7.6). */
+    if (0 == (m->rx_ol_flags & RUSTERON_DPDK_MBUF_F_RX_IPV4_CKSUM_GOOD) &&
+        !rusteron_dpdk_rx_ipv4_csum_ok(ip))
+    {
+        return RUSTERON_DPDK_RX_RESULT_CHECKSUM;
+    }
+    if (0 == (m->rx_ol_flags & RUSTERON_DPDK_MBUF_F_RX_UDP_CKSUM_GOOD))
+    {
+        rusteron_dpdk_parsed_frame_t tmp;
+        tmp.src_ip = *(const uint32_t *)(ip + 12);
+        tmp.dst_ip = *(const uint32_t *)(ip + 16);
+        tmp.payload = udp + RUSTERON_DPDK_UDP_HDR_LEN;
+        tmp.payload_len = udp_len - RUSTERON_DPDK_UDP_HDR_LEN;
+        if (!rusteron_dpdk_rx_udp_csum_ok(&tmp))
+        {
+            return RUSTERON_DPDK_RX_RESULT_CHECKSUM;
+        }
+    }
+
+    out->src_ip = *(const uint32_t *)(ip + 12);
+    out->dst_ip = *(const uint32_t *)(ip + 16);
+    out->src_port = (uint16_t)((udp[0] << 8) | udp[1]);
+    out->dst_port = (uint16_t)((udp[2] << 8) | udp[3]);
+    out->payload = udp + RUSTERON_DPDK_UDP_HDR_LEN;
+    out->payload_len = udp_len - RUSTERON_DPDK_UDP_HDR_LEN;
+
+    return RUSTERON_DPDK_RX_RESULT_OK;
+}
