@@ -17,7 +17,8 @@ use std::ptr;
     feature = "dpdk",
     link(name = "rusteron_dpdk", kind = "static"),
     link(name = "rusteron_dpdk_fake", kind = "static"),
-    link(name = "rusteron_dpdk_fake_eal", kind = "static")
+    link(name = "rusteron_dpdk_fake_eal", kind = "static"),
+    link(name = "m")
 )]
 extern "C" {}
 

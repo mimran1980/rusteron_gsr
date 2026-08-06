@@ -23,6 +23,7 @@
 
 #include "rusteron_dpdk_transport.h"
 #include "rusteron_dpdk_port_ops.h"
+#include "rusteron_dpdk_counters.h"
 #include "rusteron_dpdk_arp.h"
 #include "rusteron_dpdk_endpoint_map.h"
 
@@ -81,6 +82,8 @@ typedef struct rusteron_dpdk_port_stct
     uint8_t mac[RUSTERON_DPDK_ETH_ADDR_LEN]; /* dev_info MAC, byte order */
     uint32_t local_ip;            /* parsed local IPv4, network order */
     uint32_t gateway_ip;          /* parsed gateway IPv4, network order */
+    char driver[64];              /* dev_info PMD name (labels, port-info) */
+    rusteron_dpdk_counters_t counters; /* Aeron counters (plan §9) */
 } rusteron_dpdk_port_t;
 
 /* Per-channel state attached to an Aeron transport via bindings_clientd

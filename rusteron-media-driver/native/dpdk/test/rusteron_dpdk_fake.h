@@ -36,6 +36,12 @@ void rusteron_dpdk_fake_log_at(int index, char *buf, size_t buflen);
 void rusteron_dpdk_fake_set_tx_burst_cap(uint16_t n);
 void rusteron_dpdk_fake_set_pool_avail(int n);
 
+/* Extended statistics (plan §9): install the fake PMD's xstat table. `names`
+ * points to `count` NUL-terminated strings, each copied at the fixed
+ * RUSTERON_DPDK_XSTAT_NAME_LEN stride; `values` are copied verbatim. Call again
+ * to change the values between 1 Hz samples (the sample must re-read them). */
+void rusteron_dpdk_fake_set_xstats(const char *const *names, const uint64_t *values, uint32_t count);
+
 /* A frame accepted by the fake tx_burst (the mbuf is owned by the "NIC"). */
 typedef struct rusteron_dpdk_fake_capture_stct
 {

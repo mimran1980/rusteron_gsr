@@ -40,39 +40,52 @@ typedef struct rusteron_dpdk_poller_state_stct
     rusteron_dpdk_endpoint_map_t endpoints;
 } rusteron_dpdk_poller_state_t;
 
-static void rusteron_dpdk_rx_count(rusteron_dpdk_rx_stats_t *stats, rusteron_dpdk_rx_result_t result)
+/* Reject-class bookkeeping: the rx_stats bucket (existing §7.6 accounting) plus
+ * the matching Aeron counter (plan §9). */
+static void rusteron_dpdk_rx_count(
+    rusteron_dpdk_rx_stats_t *stats, rusteron_dpdk_counters_t *counters, rusteron_dpdk_rx_result_t result)
 {
     switch (result)
     {
         case RUSTERON_DPDK_RX_RESULT_IPV6:
             stats->ipv6++;
+            rusteron_dpdk_counters_add(counters, RD_COUNTER_DISCARD, 1);
             break;
         case RUSTERON_DPDK_RX_RESULT_MULTICAST:
             stats->multicast++;
+            rusteron_dpdk_counters_add(counters, RD_COUNTER_DISCARD, 1);
             break;
         case RUSTERON_DPDK_RX_RESULT_ETHERTYPE:
             stats->ethertype++;
+            rusteron_dpdk_counters_add(counters, RD_COUNTER_UNSUPPORTED_ETHERTYPE, 1);
             break;
         case RUSTERON_DPDK_RX_RESULT_VLAN:
             stats->vlan++;
+            rusteron_dpdk_counters_add(counters, RD_COUNTER_DISCARD, 1);
             break;
         case RUSTERON_DPDK_RX_RESULT_IP_OPTIONS:
             stats->ip_options++;
+            rusteron_dpdk_counters_add(counters, RD_COUNTER_DISCARD, 1);
             break;
         case RUSTERON_DPDK_RX_RESULT_FRAGMENT:
             stats->fragment++;
+            rusteron_dpdk_counters_add(counters, RD_COUNTER_FRAGMENTED, 1);
             break;
         case RUSTERON_DPDK_RX_RESULT_TRUNCATED:
             stats->truncated++;
+            rusteron_dpdk_counters_add(counters, RD_COUNTER_DISCARD, 1);
             break;
         case RUSTERON_DPDK_RX_RESULT_PROTOCOL:
             stats->protocol++;
+            rusteron_dpdk_counters_add(counters, RD_COUNTER_UNSUPPORTED_PROTOCOL, 1);
             break;
         case RUSTERON_DPDK_RX_RESULT_CHECKSUM:
             stats->checksum++;
+            rusteron_dpdk_counters_add(counters, RD_COUNTER_CHECKSUM, 1);
             break;
         case RUSTERON_DPDK_RX_RESULT_MULTI_SEGMENT:
             stats->multi_segment++;
+            rusteron_dpdk_counters_add(counters, RD_COUNTER_DISCARD, 1);
             break;
         default:
             break;
@@ -108,13 +121,17 @@ static int rusteron_dpdk_dispatch_frame(
 
     if (NULL == target)
     {
+        rusteron_dpdk_counters_t *counters = &client->port->counters;
         if (frame->dst_ip != client->port->local_ip)
         {
             client->runtime->rx_stats.foreign_dst++;
+            rusteron_dpdk_counters_add(counters, RD_COUNTER_DISCARD, 1);
         }
         else
         {
             client->runtime->rx_stats.unknown_port++;
+            rusteron_dpdk_counters_add(counters, RD_COUNTER_DISCARD, 1);
+            rusteron_dpdk_counters_add(counters, RD_COUNTER_QUEUE_DROP, 1);
         }
         return 0;
     }
@@ -150,6 +167,8 @@ static int rusteron_dpdk_dispatch_frame(
 
     *bytes_rcved += (int64_t)frame->payload_len;
     client->runtime->rx_stats.accepted++;
+    rusteron_dpdk_counters_add(&client->port->counters, RD_COUNTER_RX_PKTS, 1);
+    rusteron_dpdk_counters_add(&client->port->counters, RD_COUNTER_RX_BYTES, (int64_t)frame->payload_len);
     return 1;
 }
 
@@ -201,6 +220,8 @@ int rusteron_dpdk_poller_receive(
         rusteron_dpdk_parsed_frame_t frame;
         rusteron_dpdk_rx_result_t result = rusteron_dpdk_packet_classify_rx(m, &frame);
 
+        rusteron_dpdk_counters_add(&port->counters, RD_COUNTER_POLLER, 1);
+
         if (RUSTERON_DPDK_RX_RESULT_OK == result)
         {
             work_count += rusteron_dpdk_dispatch_frame(
@@ -214,7 +235,7 @@ int rusteron_dpdk_poller_receive(
         }
         else
         {
-            rusteron_dpdk_rx_count(&native->rx_stats, result);
+            rusteron_dpdk_rx_count(&native->rx_stats, &port->counters, result);
         }
 
         /* The callback has returned (and the ARP handler has run); the mbuf is
@@ -222,6 +243,7 @@ int rusteron_dpdk_poller_receive(
         ops->mbuf_release(m);
     }
 
+    rusteron_dpdk_counters_sample(&port->counters, port, ops);
     return work_count;
 }
 

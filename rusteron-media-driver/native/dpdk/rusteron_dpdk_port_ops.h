@@ -25,6 +25,11 @@
 extern "C" {
 #endif
 
+/* Fixed record length for PMD extended-stat names (rte_eth_xstat_name is that
+ * size in DPDK); the fake packs the same stride so the two stay interchangeable
+ * (plan §9). */
+#define RUSTERON_DPDK_XSTAT_NAME_LEN 64
+
 typedef struct rusteron_dpdk_port_ops_stct
 {
     /* Resolve a PCI BDF to a DPDK port id. -1 if the device is not probed. */
@@ -96,6 +101,18 @@ typedef struct rusteron_dpdk_port_ops_stct
     uint16_t (*rx_burst)(
         uint16_t port_id, uint16_t rx_queue_id,
         rusteron_dpdk_mbuf_t **pkts, uint16_t nb);
+
+    /* Extended statistics (plan §9). xstats_count returns the number of PMD
+     * extended stats; xstats_names packs that many NUL-terminated names into
+     * `names`, each at a fixed RUSTERON_DPDK_XSTAT_NAME_LEN stride (the PMD
+     * names come from rte_eth_xstat_name, which is that size); xstats_get
+     * fills `values[0..count)` with the current value of the first `count`
+     * xstats in id order. The _names/_get functions return 0 on success.
+     * mempool_avail returns the number of free objects in a pool. */
+    uint32_t (*xstats_count)(uint16_t port_id);
+    int (*xstats_names)(uint16_t port_id, char *names, uint32_t count);
+    int (*xstats_get)(uint16_t port_id, uint64_t *values, uint32_t count);
+    uint32_t (*mempool_avail)(void *mempool);
 } rusteron_dpdk_port_ops_t;
 
 /*

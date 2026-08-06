@@ -24,6 +24,7 @@
 #define RUSTERON_DPDK_FAKE_CAPTURE_MAX 1024
 #define RUSTERON_DPDK_FAKE_PORTS 4
 #define RUSTERON_DPDK_FAKE_RX_DEPTH 256
+#define RUSTERON_DPDK_FAKE_XSTAT_MAX 256
 
 typedef struct rusteron_dpdk_fake_buffer_stct
 {
@@ -64,6 +65,13 @@ typedef struct rusteron_dpdk_fake_rx_entry_stct
 static int rusteron_dpdk_fake_rx_head[RUSTERON_DPDK_FAKE_PORTS];
 static int rusteron_dpdk_fake_rx_tail[RUSTERON_DPDK_FAKE_PORTS];
 static rusteron_dpdk_fake_rx_entry_t rusteron_dpdk_fake_rx_q[RUSTERON_DPDK_FAKE_PORTS][RUSTERON_DPDK_FAKE_RX_DEPTH];
+
+/* Extended statistics (plan §9): a fake PMD xstat table installed via
+ * rusteron_dpdk_fake_set_xstats, so the counters test can assert the type-92
+ * mirrors (including an ENA-style *missed* entry) without libdpdk. */
+static uint32_t rusteron_dpdk_fake_xstat_count = 0;
+static char rusteron_dpdk_fake_xstat_names[RUSTERON_DPDK_FAKE_XSTAT_MAX][RUSTERON_DPDK_XSTAT_NAME_LEN];
+static uint64_t rusteron_dpdk_fake_xstat_values[RUSTERON_DPDK_FAKE_XSTAT_MAX];
 
 static void rusteron_dpdk_fake_logf(const char *fmt, ...)
 {
@@ -109,6 +117,7 @@ void rusteron_dpdk_fake_reset(void)
     memset(rusteron_dpdk_fake_rx_head, 0, sizeof(rusteron_dpdk_fake_rx_head));
     memset(rusteron_dpdk_fake_rx_tail, 0, sizeof(rusteron_dpdk_fake_rx_tail));
     memset(rusteron_dpdk_fake_rx_q, 0, sizeof(rusteron_dpdk_fake_rx_q));
+    rusteron_dpdk_fake_xstat_count = 0;
 }
 
 void rusteron_dpdk_fake_set_tx_burst_cap(uint16_t n)
@@ -119,6 +128,24 @@ void rusteron_dpdk_fake_set_tx_burst_cap(uint16_t n)
 void rusteron_dpdk_fake_set_pool_avail(int n)
 {
     rusteron_dpdk_fake_pool_avail = n;
+}
+
+void rusteron_dpdk_fake_set_xstats(const char *const *names, const uint64_t *values, uint32_t count)
+{
+    if (count > RUSTERON_DPDK_FAKE_XSTAT_MAX)
+    {
+        count = RUSTERON_DPDK_FAKE_XSTAT_MAX;
+    }
+    rusteron_dpdk_fake_xstat_count = count;
+    for (uint32_t i = 0; i < count; i++)
+    {
+        memset(rusteron_dpdk_fake_xstat_names[i], 0, RUSTERON_DPDK_XSTAT_NAME_LEN);
+        if (NULL != names && NULL != names[i])
+        {
+            snprintf(rusteron_dpdk_fake_xstat_names[i], RUSTERON_DPDK_XSTAT_NAME_LEN, "%s", names[i]);
+        }
+        rusteron_dpdk_fake_xstat_values[i] = (NULL != values) ? values[i] : 0;
+    }
 }
 
 int rusteron_dpdk_fake_capture_count(void)
@@ -437,6 +464,52 @@ static uint16_t rusteron_dpdk_fake_rx_burst(
     return received;
 }
 
+/* Extended statistics (plan §9): mirror the installed fake xstat table. */
+static uint32_t rusteron_dpdk_fake_xstats_count(uint16_t port_id)
+{
+    (void)port_id;
+    return rusteron_dpdk_fake_xstat_count;
+}
+
+static int rusteron_dpdk_fake_xstats_names(uint16_t port_id, char *names, uint32_t count)
+{
+    (void)port_id;
+    if (count > rusteron_dpdk_fake_xstat_count)
+    {
+        return -1;
+    }
+    for (uint32_t i = 0; i < count; i++)
+    {
+        memcpy(
+            names + (i * RUSTERON_DPDK_XSTAT_NAME_LEN),
+            rusteron_dpdk_fake_xstat_names[i], RUSTERON_DPDK_XSTAT_NAME_LEN);
+    }
+    return 0;
+}
+
+static int rusteron_dpdk_fake_xstats_get(uint16_t port_id, uint64_t *values, uint32_t count)
+{
+    (void)port_id;
+    if (count > rusteron_dpdk_fake_xstat_count)
+    {
+        return -1;
+    }
+    for (uint32_t i = 0; i < count; i++)
+    {
+        values[i] = rusteron_dpdk_fake_xstat_values[i];
+    }
+    return 0;
+}
+
+/* Free mbufs = configured pool capacity minus live allocations. */
+static uint32_t rusteron_dpdk_fake_mempool_avail(void *mempool)
+{
+    (void)mempool;
+    int live = rusteron_dpdk_fake_allocated_count - rusteron_dpdk_fake_released_count;
+    int avail = rusteron_dpdk_fake_pool_avail - live;
+    return avail > 0 ? (uint32_t)avail : 0;
+}
+
 rusteron_dpdk_port_ops_t *rusteron_dpdk_port_ops_real(void)
 {
     static rusteron_dpdk_port_ops_t ops = {
@@ -456,6 +529,10 @@ rusteron_dpdk_port_ops_t *rusteron_dpdk_port_ops_real(void)
         .mbuf_release = rusteron_dpdk_fake_mbuf_release,
         .tx_burst = rusteron_dpdk_fake_tx_burst,
         .rx_burst = rusteron_dpdk_fake_rx_burst,
+        .xstats_count = rusteron_dpdk_fake_xstats_count,
+        .xstats_names = rusteron_dpdk_fake_xstats_names,
+        .xstats_get = rusteron_dpdk_fake_xstats_get,
+        .mempool_avail = rusteron_dpdk_fake_mempool_avail,
     };
     return &ops;
 }

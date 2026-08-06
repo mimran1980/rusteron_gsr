@@ -22,6 +22,7 @@
 #include <rte_mempool.h>
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define RUSTERON_DPDK_MBUF_DESC_COUNT 2048
@@ -316,6 +317,70 @@ static uint16_t rusteron_dpdk_port_rx_burst(
     return received;
 }
 
+/* Extended statistics (plan §9). DPDK exposes the count via a NULL-array call,
+ * and the values/names in id order (ENA reports sequential ids). */
+
+static uint32_t rusteron_dpdk_port_xstats_count(uint16_t port_id)
+{
+    int n = rte_eth_xstats_get_names(port_id, NULL, 0);
+    return n > 0 ? (uint32_t)n : 0;
+}
+
+static int rusteron_dpdk_port_xstats_names(uint16_t port_id, char *names, uint32_t count)
+{
+    if (count == 0)
+    {
+        return 0;
+    }
+    struct rte_eth_xstat_name *buf = calloc(count, sizeof(*buf));
+    if (NULL == buf)
+    {
+        return -1;
+    }
+    int got = rte_eth_xstats_get_names(port_id, buf, count);
+    if (got != (int)count)
+    {
+        free(buf);
+        return -1;
+    }
+    for (uint32_t i = 0; i < count; i++)
+    {
+        memcpy(names + (i * RUSTERON_DPDK_XSTAT_NAME_LEN), buf[i].name, RUSTERON_DPDK_XSTAT_NAME_LEN);
+    }
+    free(buf);
+    return 0;
+}
+
+static int rusteron_dpdk_port_xstats_get(uint16_t port_id, uint64_t *values, uint32_t count)
+{
+    if (count == 0)
+    {
+        return 0;
+    }
+    struct rte_eth_xstat *buf = calloc(count, sizeof(*buf));
+    if (NULL == buf)
+    {
+        return -1;
+    }
+    int got = rte_eth_xstats_get(port_id, buf, count);
+    if (got != (int)count)
+    {
+        free(buf);
+        return -1;
+    }
+    for (uint32_t i = 0; i < count; i++)
+    {
+        values[i] = buf[i].value;
+    }
+    free(buf);
+    return 0;
+}
+
+static uint32_t rusteron_dpdk_port_mempool_avail(void *mempool)
+{
+    return rte_mempool_avail_count(mempool);
+}
+
 rusteron_dpdk_port_ops_t *rusteron_dpdk_port_ops_real(void)
 {
     static rusteron_dpdk_port_ops_t ops = {
@@ -335,6 +400,10 @@ rusteron_dpdk_port_ops_t *rusteron_dpdk_port_ops_real(void)
         .mbuf_release = rusteron_dpdk_port_mbuf_release,
         .tx_burst = rusteron_dpdk_port_tx_burst,
         .rx_burst = rusteron_dpdk_port_rx_burst,
+        .xstats_count = rusteron_dpdk_port_xstats_count,
+        .xstats_names = rusteron_dpdk_port_xstats_names,
+        .xstats_get = rusteron_dpdk_port_xstats_get,
+        .mempool_avail = rusteron_dpdk_port_mempool_avail,
     };
     return &ops;
 }

@@ -18,6 +18,10 @@
 
 #include "util/aeron_error.h"
 #include "media/aeron_udp_channel_transport.h"
+/* Full driver-context layout: the counters manager is reached via
+ * context->counters_manager at transport init (plan §9). bindings.h only
+ * forward-declares the type. */
+#include "aeron_driver_context.h"
 
 #define RUSTERON_DPDK_BINDINGS_NAME "rusteron-dpdk-ena"
 #define RUSTERON_DPDK_BINDINGS_TYPE "media"
@@ -241,7 +245,6 @@ static int rusteron_dpdk_transport_init(
     aeron_udp_channel_transport_affinity_t affinity)
 {
     (void)multicast_if_addr;
-    (void)context;
 
     if (NULL == bind_addr)
     {
@@ -290,6 +293,15 @@ static int rusteron_dpdk_transport_init(
         rusteron_dpdk_set_error("DPDK transport init: role ENA is not up");
         return -1;
     }
+
+    /* Surface the port's counters into the driver's counters manager (plan §9).
+     * Best effort: a NULL context (unit tests) or a NULL counters manager skips
+     * registration and the counters bumps become no-ops. */
+    rusteron_dpdk_counters_register(
+        &port->counters,
+        NULL != context ? context->counters_manager : NULL,
+        port, native->ops);
+    rusteron_dpdk_counters_add(&port->counters, RD_COUNTER_TRANSPORT, 1);
 
     rusteron_dpdk_client_t *client = calloc(1, sizeof(rusteron_dpdk_client_t));
     if (NULL == client)
@@ -349,6 +361,10 @@ static int rusteron_dpdk_transport_close_transport(aeron_udp_channel_transport_t
         return 0;
     }
     rusteron_dpdk_client_t *client = transport->bindings_clientd;
+    if (NULL != client && NULL != client->port)
+    {
+        rusteron_dpdk_counters_add(&client->port->counters, RD_COUNTER_TRANSPORT, -1);
+    }
     transport->bindings_clientd = NULL;
     transport->connected_address = NULL;
     transport->fd = -1;
@@ -408,16 +424,19 @@ static int rusteron_dpdk_transport_send(
     rusteron_dpdk_transport_t *native = client->runtime;
     rusteron_dpdk_port_t *port = client->port;
     const rusteron_dpdk_port_ops_t *ops = native->ops;
+    rusteron_dpdk_counters_t *counters = &port->counters;
 
     struct sockaddr_storage *dst = address != NULL ? address : transport->connected_address;
     if (NULL == dst)
     {
+        rusteron_dpdk_counters_add(counters, RD_COUNTER_ERROR, 1);
         AERON_SET_ERR(EINVAL, "%s", "DPDK transport send: no destination address");
         rusteron_dpdk_set_error("DPDK transport send: no destination address");
         return -1;
     }
     if (AF_INET != dst->ss_family)
     {
+        rusteron_dpdk_counters_add(counters, RD_COUNTER_ERROR, 1);
         AERON_SET_ERR(EINVAL, "%s", "DPDK transport send: only IPv4 unicast destinations are supported");
         rusteron_dpdk_set_error("DPDK transport send: only IPv4 unicast destinations are supported");
         return -1;
@@ -428,6 +447,7 @@ static int rusteron_dpdk_transport_send(
 
     if (rusteron_dpdk_ipv4_is_multicast(dst_ip))
     {
+        rusteron_dpdk_counters_add(counters, RD_COUNTER_ERROR, 1);
         AERON_SET_ERR(EINVAL, "%s", "DPDK transport send: multicast destinations are not supported");
         rusteron_dpdk_set_error("DPDK transport send: multicast destinations are not supported");
         return -1;
@@ -441,6 +461,7 @@ static int rusteron_dpdk_transport_send(
     uint8_t dst_mac[RUSTERON_DPDK_ETH_ADDR_LEN];
     if (!rusteron_dpdk_arp_resolve(&native->arp, native, port, next_hop, dst_mac))
     {
+        rusteron_dpdk_counters_add(counters, RD_COUNTER_ARP_MISS, 1);
         return 0; /* ARP request in flight; Aeron retries the zero result */
     }
 
@@ -463,6 +484,7 @@ static int rusteron_dpdk_transport_send(
         rusteron_dpdk_mbuf_t *m = &views[batch_len];
         if (ops->mbuf_alloc(port->mempool, m) < 0)
         {
+            rusteron_dpdk_counters_add(counters, RD_COUNTER_NOBUFS, 1);
             break; /* mbuf exhaustion: flush the already-built prefix below */
         }
         if (rusteron_dpdk_packet_build_udp(
@@ -483,6 +505,7 @@ static int rusteron_dpdk_transport_send(
             batch_len = 0;
             if (bs < native->config.burst_size)
             {
+                rusteron_dpdk_counters_add(counters, RD_COUNTER_TX_EAGAIN, 1);
                 break; /* NIC backpressure: stop, report the accepted prefix */
             }
         }
@@ -490,6 +513,10 @@ static int rusteron_dpdk_transport_send(
     if (batch_len > 0)
     {
         uint16_t bs = ops->tx_burst(port->port_id, port->tx_queue_id, batch, (uint16_t)batch_len);
+        if (bs < (uint16_t)batch_len)
+        {
+            rusteron_dpdk_counters_add(counters, RD_COUNTER_TX_EAGAIN, 1);
+        }
         sent += bs;
         batch_len = 0;
     }
@@ -499,9 +526,12 @@ static int rusteron_dpdk_transport_send(
     {
         *bytes_sent += iov[i].iov_len;
     }
+    rusteron_dpdk_counters_add(counters, RD_COUNTER_TX_PKTS, (int64_t)sent);
+    rusteron_dpdk_counters_add(counters, RD_COUNTER_TX_BYTES, *bytes_sent);
 
     if (oversized)
     {
+        rusteron_dpdk_counters_add(counters, RD_COUNTER_ERROR, 1);
         /* The prefix was sent and accounted; the oversized datagram itself is a
          * permanent validation error surfaced through the Aeron mechanism. */
         AERON_SET_ERR(EINVAL, "%s", "DPDK transport send: datagram exceeds the channel MTU");
@@ -509,6 +539,7 @@ static int rusteron_dpdk_transport_send(
         return -1;
     }
 
+    rusteron_dpdk_counters_sample(counters, port, ops);
     return (int)sent;
 }
 

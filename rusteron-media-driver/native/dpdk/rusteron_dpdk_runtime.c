@@ -163,6 +163,8 @@ static int rusteron_dpdk_init_port(rusteron_dpdk_transport_t *native, rusteron_d
         rusteron_dpdk_set_error(message);
         return -1;
     }
+    /* Keep the PMD name for the port-info counter label (plan §9). */
+    memcpy(p->driver, driver, sizeof(p->driver));
     /* The ENA-specific guarantees (net_ena PMD, IPv4/UDP checksum offload) are
      * required for a PCI ENA but not for a virtual/TAP device: vdev PMDs report
      * their own driver name and may software-checksum (plan §11.2). */
@@ -323,6 +325,11 @@ static void rusteron_dpdk_port_teardown(rusteron_dpdk_transport_t *native, ruste
  * torn down first, then the sender. */
 void rusteron_dpdk_runtime_cleanup(rusteron_dpdk_transport_t *native)
 {
+    /* Release the Aeron counters back to the driver's counters manager first;
+     * the manager outlives the transport and remains valid. */
+    rusteron_dpdk_counters_free(&native->receiver.counters);
+    rusteron_dpdk_counters_free(&native->sender.counters);
+
     rusteron_dpdk_port_teardown(native, &native->receiver);
     rusteron_dpdk_port_teardown(native, &native->sender);
     native->eal_up = 0;

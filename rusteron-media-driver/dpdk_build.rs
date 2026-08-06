@@ -101,6 +101,14 @@ pub fn build_dpdk_native(aeron_path: &Path) {
         // exists in the client (aeronc.c); provide the default-handler
         // behaviour locally (see the file for rationale).
         .file(native_dir.join("aeron_fprintf_shim.c"))
+        // Aeron counters (plan §9): the counter-manager alloc/free/label helper
+        // and its cached clock live in the client, not the driver-only dylib.
+        // Compiled into the core archive so the counters test binary (which
+        // links only the archive) resolves aeron_counters_manager_* and
+        // aeron_clock_*; the manager uses fmin -> tests link libm.
+        .file(native_dir.join("rusteron_dpdk_counters.c"))
+        .file(aeron_path.join("aeron-client/src/main/c/concurrent/aeron_counters_manager.c"))
+        .file(aeron_path.join("aeron-client/src/main/c/util/aeron_clock.c"))
         .compile("rusteron_dpdk");
 
     // Real seams: production only. cc emits their link-libs for the lib/bins.
