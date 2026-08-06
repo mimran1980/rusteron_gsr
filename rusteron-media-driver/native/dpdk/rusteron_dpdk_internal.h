@@ -9,11 +9,20 @@
 #ifndef RUSTERON_DPDK_INTERNAL_H
 #define RUSTERON_DPDK_INTERNAL_H
 
+/* clock_gettime/CLOCK_MONOTONIC (runtime.c), inet_pton (transport.c) and
+ * htonl/htons (packet.c) are POSIX-199309/200112 symbols glibc hides under
+ * strict -std=c11 without a feature macro. Every native DPDK source includes
+ * this header first, so declaring it here (before any system include) covers
+ * them uniformly. The vendored Aeron util files compiled alongside declare
+ * their own macro and must not receive a -D from the build script. */
+#define _POSIX_C_SOURCE 200809L
+
 #include <stddef.h>
 #include <stdint.h>
 
 #include "rusteron_dpdk_transport.h"
 #include "rusteron_dpdk_port_ops.h"
+#include "rusteron_dpdk_arp.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -52,7 +61,22 @@ typedef struct rusteron_dpdk_port_stct
     int link_up;                  /* link_wait_ready succeeded */
     int csum_offload_ok;          /* dev_info: IPv4/UDP checksum offloads */
     int ena_llq_available;        /* dev_info: ENA LLQ/write-combining */
+    uint8_t mac[RUSTERON_DPDK_ETH_ADDR_LEN]; /* dev_info MAC, byte order */
+    uint32_t local_ip;            /* parsed local IPv4, network order */
+    uint32_t gateway_ip;          /* parsed gateway IPv4, network order */
 } rusteron_dpdk_port_t;
+
+/* Per-channel state attached to an Aeron transport via bindings_clientd
+ * (transport.c). One instance per initialized Aeron transport/endpoint. */
+typedef struct rusteron_dpdk_client_stct
+{
+    rusteron_dpdk_transport_t *runtime; /* owning native runtime (singleton) */
+    rusteron_dpdk_port_t *port;         /* sender or receiver ENA by affinity */
+    int affinity;                       /* AERON_UDP_CHANNEL_TRANSPORT_AFFINITY_* */
+    uint16_t local_udp_port;            /* local bind port, host order */
+    size_t mtu;                         /* per-channel Aeron MTU cap (bytes) */
+    struct sockaddr_storage connected_address; /* owned copy for NULL-address sends */
+} rusteron_dpdk_client_t;
 
 struct rusteron_dpdk_transport_stct
 {
@@ -61,6 +85,7 @@ struct rusteron_dpdk_transport_stct
     int eal_up;                          /* this transport owns EAL up */
     rusteron_dpdk_port_t sender;
     rusteron_dpdk_port_t receiver;
+    rusteron_dpdk_arp_table_t arp;       /* shared next-hop cache (plan §7.5) */
 };
 
 /* EAL seam — implemented by rusteron_dpdk_eal.c (real rte_eal) in production
@@ -89,11 +114,34 @@ void rusteron_dpdk_test_reset(void);
 void rusteron_dpdk_test_set_eal_mode(int mode);
 void rusteron_dpdk_set_port_ops(const rusteron_dpdk_port_ops_t *ops);
 
+/* Test reset for the transport.c singleton (cleared by rusteron_dpdk_test_reset). */
+void rusteron_dpdk_transport_test_reset(void);
+
+/* Monotonic milliseconds clock (runtime.c). Tests pin it with the setter so
+ * ARP rate limiting and expiry are deterministic; reset clears the pin. */
+uint64_t rusteron_dpdk_clock_ms(void);
+void rusteron_dpdk_test_set_clock_ms(uint64_t ms);
+
+/* The process-lifetime native runtime singleton (transport.c), or NULL when no
+ * transport has been created. EAL can be initialized once, so there is at most
+ * one. */
+rusteron_dpdk_transport_t *rusteron_dpdk_active_runtime(void);
+
 /* Test inspection of the two role ports (distinct ports / mempools). */
 void rusteron_dpdk_transport_test_dump(
     const rusteron_dpdk_transport_t *native,
     uint16_t *sender_port, uintptr_t *sender_pool,
     uint16_t *receiver_port, uintptr_t *receiver_pool);
+
+/* Test-only ARP helpers (runtime.c) so the tx tests can drive the next-hop
+ * cache directly: seed a reachable entry, or feed an incoming ARP frame through
+ * the handler as if it arrived on the given role (0 = sender, 1 = receiver). */
+int rusteron_dpdk_transport_test_arp_seed(
+    rusteron_dpdk_transport_t *native,
+    const char *ip_str, const uint8_t mac[6]);
+int rusteron_dpdk_transport_test_arp_rx(
+    rusteron_dpdk_transport_t *native,
+    int role, const uint8_t *frame, size_t frame_len);
 
 /* Thread-local error buffer (defined in rusteron_dpdk_transport.c). */
 void rusteron_dpdk_set_error(const char *message);

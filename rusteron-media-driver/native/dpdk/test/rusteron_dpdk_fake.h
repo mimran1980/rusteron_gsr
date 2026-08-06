@@ -31,6 +31,30 @@ void rusteron_dpdk_fake_set_csum_ok(int ok);
 int rusteron_dpdk_fake_log_count(void);
 void rusteron_dpdk_fake_log_at(int index, char *buf, size_t buflen);
 
+/* Data-path knobs (plan §7.4): cap the frames accepted per tx_burst, and cap
+ * the number of mbufs that may be live at once (pool exhaustion). */
+void rusteron_dpdk_fake_set_tx_burst_cap(uint16_t n);
+void rusteron_dpdk_fake_set_pool_avail(int n);
+
+/* A frame accepted by the fake tx_burst (the mbuf is owned by the "NIC"). */
+typedef struct rusteron_dpdk_fake_capture_stct
+{
+    uint8_t data[2048];
+    uint32_t len;
+    uint32_t ol_flags;
+    uint16_t l2_len, l3_len, l4_len;
+    uint16_t udp_pseudo_csum;
+    uint16_t port_id;
+} rusteron_dpdk_fake_capture_t;
+
+int rusteron_dpdk_fake_capture_count(void);
+int rusteron_dpdk_fake_capture_at(int index, rusteron_dpdk_fake_capture_t *out);
+
+/* Live-mbuf accounting for leak assertions: after any send, every allocated
+ * mbuf has been released (sent or unsent), so allocated() == released(). */
+int rusteron_dpdk_fake_allocated(void);
+int rusteron_dpdk_fake_released(void);
+
 /* Fake EAL seam reset (rusteron_dpdk_fake_eal.c). */
 void rusteron_dpdk_fake_eal_reset(void);
 

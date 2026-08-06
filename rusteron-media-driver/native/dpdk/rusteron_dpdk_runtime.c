@@ -11,11 +11,18 @@
  * through the rusteron_dpdk_eal_* seam and ports through the port-ops table, so
  * it can be linked and deterministically tested without libdpdk.
  */
+
+/* clock_gettime/CLOCK_MONOTONIC need POSIX 199309; the strict -std=c11 build
+ * hides them unless this is declared before any libc header is included. */
+#define _POSIX_C_SOURCE 200809L
+
 #include "rusteron_dpdk_internal.h"
 
+#include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #define RUSTERON_DPDK_IP_UDP_OVERHEAD 28 /* IPv4 + UDP headers above the payload */
 #define RUSTERON_DPDK_LINK_TIMEOUT_MS 5000
@@ -25,10 +32,29 @@
 static int rusteron_dpdk_test_eal_mode = RUSTERON_DPDK_EAL_REAL;
 static int rusteron_dpdk_eal_ever_initialized = 0;
 static const rusteron_dpdk_port_ops_t *rusteron_dpdk_port_ops_override = NULL;
+static uint64_t rusteron_dpdk_test_clock_ms_value = 0;
+static int rusteron_dpdk_test_clock_ms_pinned = 0;
 
 void rusteron_dpdk_test_set_eal_mode(int mode)
 {
     rusteron_dpdk_test_eal_mode = mode;
+}
+
+void rusteron_dpdk_test_set_clock_ms(uint64_t ms)
+{
+    rusteron_dpdk_test_clock_ms_value = ms;
+    rusteron_dpdk_test_clock_ms_pinned = 1;
+}
+
+uint64_t rusteron_dpdk_clock_ms(void)
+{
+    if (rusteron_dpdk_test_clock_ms_pinned)
+    {
+        return rusteron_dpdk_test_clock_ms_value;
+    }
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000u + (uint64_t)ts.tv_nsec / 1000000u;
 }
 
 void rusteron_dpdk_test_reset(void)
@@ -36,6 +62,9 @@ void rusteron_dpdk_test_reset(void)
     rusteron_dpdk_test_eal_mode = RUSTERON_DPDK_EAL_REAL;
     rusteron_dpdk_eal_ever_initialized = 0;
     rusteron_dpdk_port_ops_override = NULL;
+    rusteron_dpdk_test_clock_ms_value = 0;
+    rusteron_dpdk_test_clock_ms_pinned = 0;
+    rusteron_dpdk_transport_test_reset();
     /* Clear the thread-local error state so last_error()/last_error_code()
      * start from "no error" in the next test (tests run single-threaded). */
     rusteron_dpdk_set_error_code("", RUSTERON_DPDK_ERR_OK);
@@ -53,6 +82,18 @@ static const rusteron_dpdk_port_ops_t *rusteron_dpdk_active_ops(void)
         return rusteron_dpdk_port_ops_override;
     }
     return rusteron_dpdk_port_ops_real();
+}
+
+/* Parse a dotted-quad into a network-order uint32_t; 0 on success. */
+static int rusteron_dpdk_parse_ipv4(const char *text, uint32_t *out)
+{
+    struct in_addr addr;
+    if (NULL == text || 1 != inet_pton(AF_INET, text, &addr))
+    {
+        return -1;
+    }
+    *out = addr.s_addr;
+    return 0;
 }
 
 /* Bring EAL up once per process (or skip it under the test hook). The EAL
@@ -107,11 +148,18 @@ static int rusteron_dpdk_init_port(rusteron_dpdk_transport_t *native, rusteron_d
     }
 
     char driver[64] = "";
-    if (ops->dev_info(p->port_id, p->pci, driver, sizeof(driver),
+    if (ops->dev_info(p->port_id, p->pci, p->mac, driver, sizeof(driver),
                       &p->csum_offload_ok, &p->ena_llq_available) < 0)
     {
         snprintf(message, sizeof(message),
                  "cannot read capabilities of device %s (port %u)", p->pci, p->port_id);
+        rusteron_dpdk_set_error(message);
+        return -1;
+    }
+    if (0 == memcmp(p->mac, "\x00\x00\x00\x00\x00\x00", 6))
+    {
+        snprintf(message, sizeof(message),
+                 "device %s (port %u) reports an all-zero MAC", p->pci, p->port_id);
         rusteron_dpdk_set_error(message);
         return -1;
     }
@@ -213,6 +261,19 @@ int rusteron_dpdk_runtime_init(rusteron_dpdk_transport_t *native)
     memcpy(native->receiver.local_ipv4, native->config.receiver_ipv4, sizeof(native->receiver.local_ipv4));
     native->receiver.prefix_len = native->config.receiver_prefix_len;
     memcpy(native->receiver.gateway_ipv4, native->config.receiver_gateway, sizeof(native->receiver.gateway_ipv4));
+
+    if (rusteron_dpdk_parse_ipv4(native->config.sender_ipv4, &native->sender.local_ip) < 0 ||
+        rusteron_dpdk_parse_ipv4(native->config.sender_gateway, &native->sender.gateway_ip) < 0)
+    {
+        rusteron_dpdk_set_error("sender IPv4 address or gateway is not a valid dotted quad");
+        return -1;
+    }
+    if (rusteron_dpdk_parse_ipv4(native->config.receiver_ipv4, &native->receiver.local_ip) < 0 ||
+        rusteron_dpdk_parse_ipv4(native->config.receiver_gateway, &native->receiver.gateway_ip) < 0)
+    {
+        rusteron_dpdk_set_error("receiver IPv4 address or gateway is not a valid dotted quad");
+        return -1;
+    }
 
     if (rusteron_dpdk_runtime_eal_up(native) < 0)
     {
@@ -316,4 +377,63 @@ void rusteron_dpdk_transport_test_dump(
     {
         *receiver_pool = (uintptr_t)native->receiver.mempool;
     }
+}
+
+/* Test-only ARP hooks (see internal.h). */
+int rusteron_dpdk_transport_test_arp_seed(
+    rusteron_dpdk_transport_t *native, const char *ip_str, const uint8_t mac[6])
+{
+    if (NULL == native || NULL == ip_str || NULL == mac)
+    {
+        rusteron_dpdk_set_error("arp_seed requires non-NULL transport, ip and mac");
+        return -1;
+    }
+
+    uint32_t ip;
+    if (rusteron_dpdk_parse_ipv4(ip_str, &ip) < 0)
+    {
+        rusteron_dpdk_set_error("arp_seed ip must be a valid dotted quad");
+        return -1;
+    }
+
+    const uint32_t mask = RUSTERON_DPDK_ARP_TABLE_SIZE - 1;
+    uint32_t h = ip;
+    h = (h ^ (h >> 16)) * 0x85ebca6bu;
+    h = (h ^ (h >> 13)) * 0xc2b2ae35u;
+    size_t slot = (size_t)((h ^ (h >> 16)) & mask);
+
+    rusteron_dpdk_arp_entry_t *e = NULL;
+    for (size_t i = 0; i < RUSTERON_DPDK_ARP_TABLE_SIZE; i++)
+    {
+        rusteron_dpdk_arp_entry_t *candidate = &native->arp.entries[(slot + i) & mask];
+        if (RUSTERON_DPDK_ARP_EMPTY == candidate->state || candidate->ip == ip)
+        {
+            e = candidate;
+            break;
+        }
+    }
+    if (NULL == e)
+    {
+        rusteron_dpdk_set_error("arp_seed: ARP table is full");
+        return -1;
+    }
+
+    e->ip = ip;
+    memcpy(e->mac, mac, RUSTERON_DPDK_ETH_ADDR_LEN);
+    e->state = RUSTERON_DPDK_ARP_REACHABLE;
+    e->last_seen_ms = rusteron_dpdk_clock_ms();
+    return 0;
+}
+
+int rusteron_dpdk_transport_test_arp_rx(
+    rusteron_dpdk_transport_t *native, int role, const uint8_t *frame, size_t frame_len)
+{
+    if (NULL == native)
+    {
+        rusteron_dpdk_set_error("arp_rx requires a non-NULL transport");
+        return -1;
+    }
+    rusteron_dpdk_port_t *port =
+        (RUSTERON_DPDK_ROLE_RECEIVER == role) ? &native->receiver : &native->sender;
+    return rusteron_dpdk_arp_handle_frame(&native->arp, native, port, frame, frame_len);
 }

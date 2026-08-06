@@ -17,6 +17,18 @@
 #define RUSTERON_DPDK_FAKE_LOG_MAX 64
 #define RUSTERON_DPDK_FAKE_LOG_ENTRY_LEN 128
 
+#define RUSTERON_DPDK_FAKE_BUFFER_COUNT 256
+#define RUSTERON_DPDK_FAKE_BUFFER_CAPACITY 2048
+#define RUSTERON_DPDK_FAKE_POOL_AVAIL_DEFAULT 64
+#define RUSTERON_DPDK_FAKE_TX_BURST_CAP_DEFAULT 64
+#define RUSTERON_DPDK_FAKE_CAPTURE_MAX 1024
+
+typedef struct rusteron_dpdk_fake_buffer_stct
+{
+    uint8_t storage[RUSTERON_DPDK_FAKE_BUFFER_CAPACITY];
+    int used;
+} rusteron_dpdk_fake_buffer_t;
+
 static int rusteron_dpdk_fake_failure_step = 0;
 static int rusteron_dpdk_fake_call_count = 0;
 static char rusteron_dpdk_fake_driver[64] = "net_ena";
@@ -25,6 +37,16 @@ static uint16_t rusteron_dpdk_fake_next_port = 0;
 static uintptr_t rusteron_dpdk_fake_next_pool = 0x1000;
 static int rusteron_dpdk_fake_log_len = 0;
 static char rusteron_dpdk_fake_log[RUSTERON_DPDK_FAKE_LOG_MAX][RUSTERON_DPDK_FAKE_LOG_ENTRY_LEN];
+
+/* Data path (plan §7.4): a pool of fixed-capacity buffers, a tx-burst accept
+ * cap, live-mbuf accounting, and a frame capture for golden-vector asserts. */
+static rusteron_dpdk_fake_buffer_t rusteron_dpdk_fake_buffers[RUSTERON_DPDK_FAKE_BUFFER_COUNT];
+static int rusteron_dpdk_fake_pool_avail = RUSTERON_DPDK_FAKE_POOL_AVAIL_DEFAULT;
+static uint16_t rusteron_dpdk_fake_tx_burst_cap = RUSTERON_DPDK_FAKE_TX_BURST_CAP_DEFAULT;
+static int rusteron_dpdk_fake_allocated_count = 0;
+static int rusteron_dpdk_fake_released_count = 0;
+static int rusteron_dpdk_fake_capture_len = 0;
+static rusteron_dpdk_fake_capture_t rusteron_dpdk_fake_capture[RUSTERON_DPDK_FAKE_CAPTURE_MAX];
 
 static void rusteron_dpdk_fake_logf(const char *fmt, ...)
 {
@@ -60,6 +82,48 @@ void rusteron_dpdk_fake_reset(void)
     rusteron_dpdk_fake_next_port = 0;
     rusteron_dpdk_fake_next_pool = 0x1000;
     rusteron_dpdk_fake_log_len = 0;
+
+    memset(rusteron_dpdk_fake_buffers, 0, sizeof(rusteron_dpdk_fake_buffers));
+    rusteron_dpdk_fake_pool_avail = RUSTERON_DPDK_FAKE_POOL_AVAIL_DEFAULT;
+    rusteron_dpdk_fake_tx_burst_cap = RUSTERON_DPDK_FAKE_TX_BURST_CAP_DEFAULT;
+    rusteron_dpdk_fake_allocated_count = 0;
+    rusteron_dpdk_fake_released_count = 0;
+    rusteron_dpdk_fake_capture_len = 0;
+}
+
+void rusteron_dpdk_fake_set_tx_burst_cap(uint16_t n)
+{
+    rusteron_dpdk_fake_tx_burst_cap = n;
+}
+
+void rusteron_dpdk_fake_set_pool_avail(int n)
+{
+    rusteron_dpdk_fake_pool_avail = n;
+}
+
+int rusteron_dpdk_fake_capture_count(void)
+{
+    return rusteron_dpdk_fake_capture_len;
+}
+
+int rusteron_dpdk_fake_capture_at(int index, rusteron_dpdk_fake_capture_t *out)
+{
+    if (NULL == out || index < 0 || index >= rusteron_dpdk_fake_capture_len)
+    {
+        return -1;
+    }
+    *out = rusteron_dpdk_fake_capture[index];
+    return 0;
+}
+
+int rusteron_dpdk_fake_allocated(void)
+{
+    return rusteron_dpdk_fake_allocated_count;
+}
+
+int rusteron_dpdk_fake_released(void)
+{
+    return rusteron_dpdk_fake_released_count;
 }
 
 void rusteron_dpdk_fake_set_failure(int step)
@@ -107,6 +171,7 @@ static int rusteron_dpdk_fake_probe_port(const char *pci_bdf, uint16_t *port_id)
 
 static int rusteron_dpdk_fake_dev_info(
     uint16_t port_id, const char *pci_bdf,
+    uint8_t mac[RUSTERON_DPDK_ETH_ADDR_LEN],
     char *driver_name, size_t driver_name_len,
     int *csum_offload_ok, int *ena_llq_available)
 {
@@ -115,6 +180,11 @@ static int rusteron_dpdk_fake_dev_info(
     {
         return -1;
     }
+    /* Deterministic, distinct locally-administered MACs: 02:00:00:00:00:01 for
+     * the sender (port 0) and :02 for the receiver (port 1). */
+    memset(mac, 0, RUSTERON_DPDK_ETH_ADDR_LEN);
+    mac[0] = 0x02;
+    mac[5] = (uint8_t)(port_id + 1);
     snprintf(driver_name, driver_name_len, "%s", rusteron_dpdk_fake_driver);
     *csum_offload_ok = rusteron_dpdk_fake_csum_ok;
     *ena_llq_available = 0;
@@ -194,6 +264,94 @@ static void rusteron_dpdk_fake_mempool_free(void *mempool)
     rusteron_dpdk_fake_logf("free %p", mempool);
 }
 
+/* Data path (plan §7.4). */
+
+static void rusteron_dpdk_fake_release_buffer(rusteron_dpdk_mbuf_t *m)
+{
+    if (NULL != m && NULL != m->opaque)
+    {
+        /* opaque is a 1-based buffer index (see mbuf_alloc): 0 would alias NULL
+         * and this guard would silently skip the release/count. */
+        rusteron_dpdk_fake_buffers[(uintptr_t)m->opaque - 1].used = 0;
+        m->opaque = NULL;
+        rusteron_dpdk_fake_released_count++;
+    }
+}
+
+static int rusteron_dpdk_fake_mbuf_alloc(void *mempool, rusteron_dpdk_mbuf_t *m)
+{
+    (void)mempool; /* one shared pool backing every role mempool in the fake */
+    int live = rusteron_dpdk_fake_allocated_count - rusteron_dpdk_fake_released_count;
+    if (live >= rusteron_dpdk_fake_pool_avail)
+    {
+        return -1; /* pool exhaustion */
+    }
+
+    for (int i = 0; i < RUSTERON_DPDK_FAKE_BUFFER_COUNT; i++)
+    {
+        if (!rusteron_dpdk_fake_buffers[i].used)
+        {
+            rusteron_dpdk_fake_buffers[i].used = 1;
+            /* 1-based handle: index 0 would cast to NULL and defeat the fake's
+             * own NULL-opaque release guard (and leak-accounting asserts). */
+            m->opaque = (void *)(uintptr_t)(i + 1);
+            m->data = rusteron_dpdk_fake_buffers[i].storage;
+            m->capacity = RUSTERON_DPDK_FAKE_BUFFER_CAPACITY;
+            m->frame_len = 0;
+            m->ol_flags = 0;
+            m->l2_len = 0;
+            m->l3_len = 0;
+            m->l4_len = 0;
+            m->udp_pseudo_csum = 0;
+            rusteron_dpdk_fake_allocated_count++;
+            return 0;
+        }
+    }
+    return -1;
+}
+
+static void rusteron_dpdk_fake_mbuf_release(rusteron_dpdk_mbuf_t *m)
+{
+    rusteron_dpdk_fake_release_buffer(m);
+}
+
+static uint16_t rusteron_dpdk_fake_tx_burst(
+    uint16_t port_id, uint16_t tx_queue_id,
+    rusteron_dpdk_mbuf_t **pkts, uint16_t nb)
+{
+    (void)tx_queue_id;
+    uint16_t cap = rusteron_dpdk_fake_tx_burst_cap;
+    uint16_t accepted = nb < cap ? nb : cap;
+
+    /* Accepted prefix: the "NIC" owns these — record them and recycle the
+     * buffers. Rejected tail: released, matching rte_eth_tx_burst semantics. */
+    for (uint16_t i = 0; i < accepted; i++)
+    {
+        rusteron_dpdk_mbuf_t *m = pkts[i];
+        if (rusteron_dpdk_fake_capture_len < RUSTERON_DPDK_FAKE_CAPTURE_MAX)
+        {
+            rusteron_dpdk_fake_capture_t *c = &rusteron_dpdk_fake_capture[rusteron_dpdk_fake_capture_len++];
+            uint32_t len = m->frame_len;
+            memset(c, 0, sizeof(*c));
+            memcpy(c->data, m->data, len);
+            c->len = len;
+            c->ol_flags = m->ol_flags;
+            c->l2_len = m->l2_len;
+            c->l3_len = m->l3_len;
+            c->l4_len = m->l4_len;
+            c->udp_pseudo_csum = m->udp_pseudo_csum;
+            c->port_id = port_id;
+        }
+        rusteron_dpdk_fake_release_buffer(m);
+    }
+    for (uint16_t i = accepted; i < nb; i++)
+    {
+        rusteron_dpdk_fake_release_buffer(pkts[i]);
+    }
+
+    return accepted;
+}
+
 rusteron_dpdk_port_ops_t *rusteron_dpdk_port_ops_real(void)
 {
     static rusteron_dpdk_port_ops_t ops = {
@@ -209,6 +367,9 @@ rusteron_dpdk_port_ops_t *rusteron_dpdk_port_ops_real(void)
         .dev_stop = rusteron_dpdk_fake_dev_stop,
         .dev_close = rusteron_dpdk_fake_dev_close,
         .mempool_free = rusteron_dpdk_fake_mempool_free,
+        .mbuf_alloc = rusteron_dpdk_fake_mbuf_alloc,
+        .mbuf_release = rusteron_dpdk_fake_mbuf_release,
+        .tx_burst = rusteron_dpdk_fake_tx_burst,
     };
     return &ops;
 }

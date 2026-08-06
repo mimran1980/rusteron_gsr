@@ -521,7 +521,7 @@ fn build_from_source(config: &RusteronBuildConfig, docs_rs: &Path) {
 ///
 /// | archive            | contents                                   | linked into |
 /// |--------------------|--------------------------------------------|-------------|
-/// | `rusteron_dpdk`    | transport.c + runtime.c (no rte_* refs)    | prod + tests|
+/// | `rusteron_dpdk`    | transport.c + runtime.c + packet.c + arp.c   | prod + tests|
 /// | `rusteron_dpdk_eal`| real EAL seam (rte_eal_*)                  | prod        |
 /// | `rusteron_dpdk_port`| real port ops (rte_eth_*)                 | prod        |
 /// | `rusteron_dpdk_fake`| fake port ops (same symbol as port)        | tests       |
@@ -554,6 +554,10 @@ fn build_dpdk_native(aeron_path: &Path) {
     let mut base = || {
         let mut b = cc::Build::new();
         b.std("c11");
+        // _POSIX_C_SOURCE is declared in rusteron_dpdk_internal.h, which every
+        // native DPDK source includes first. It must NOT be a global -D: the
+        // vendored Aeron util files (aeron_error.c etc.) declare their own
+        // value and a command-line define would redefine it (benign warning).
         b.include(&native_dir);
         b.include(aeron_path.join("aeron-driver/src/main/c"));
         b.include(aeron_path.join("aeron-client/src/main/c"));
@@ -561,6 +565,10 @@ fn build_dpdk_native(aeron_path: &Path) {
     };
     let mut with_dpdk = || {
         let mut b = base();
+        // DPDK's x86_64 baseline: rte_memcpy.h references SSSE3 intrinsics
+        // (palignr) unconditionally, so the seam must be compiled with the same
+        // ISA floor DPDK itself is built with.
+        b.flag("-mssse3");
         for inc in &dpdk.include_paths {
             b.include(inc);
         }
@@ -577,10 +585,25 @@ fn build_dpdk_native(aeron_path: &Path) {
         b
     };
 
-    // Core: ABI + runtime orchestration. DPDK-free; its link-search reaches
-    // every target (including same-package integration tests).
+    // Core: ABI + runtime orchestration + frame/ARP encoders. DPDK-free; its
+    // link-search reaches every target (including same-package integration
+    // tests).
     base().file(native_dir.join("rusteron_dpdk_transport.c"))
         .file(native_dir.join("rusteron_dpdk_runtime.c"))
+        .file(native_dir.join("rusteron_dpdk_packet.c"))
+        .file(native_dir.join("rusteron_dpdk_arp.c"))
+        // AERON_SET_ERR (transport.c) routes through aeron_err_set, which lives
+        // in the client util and is NOT exported by the shared libaeron_driver.so
+        // (that target builds DRIVER_ONLY_SOURCE). Compile the error + thread +
+        // alloc helpers into the core archive so the symbol is always provided,
+        // for both test binaries and production links.
+        .file(aeron_path.join("aeron-client/src/main/c/util/aeron_error.c"))
+        .file(aeron_path.join("aeron-client/src/main/c/concurrent/aeron_thread.c"))
+        .file(aeron_path.join("aeron-client/src/main/c/aeron_alloc.c"))
+        // aeron_error.c's AERON_FPRINTF references aeron_fprintf, which only
+        // exists in the client (aeronc.c); provide the default-handler
+        // behaviour locally (see the file for rationale).
+        .file(native_dir.join("aeron_fprintf_shim.c"))
         .compile("rusteron_dpdk");
 
     // Real seams: production only. cc emits their link-libs for the lib/bins.
