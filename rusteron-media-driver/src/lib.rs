@@ -15,6 +15,13 @@
 //! - **`log-c-bindings`**: When enabled will log every C binding call with arguments and return values. Useful for debugging FFI interactions
 //! - **`precompile`**: When enabled will use precompiled C code instead of requiring cmake and java to be installed
 
+// The DPDK ENA kernel-bypass transport (`dpdk` feature) targets Amazon Linux
+// 2023 / EKS Nitro instances: Linux x86_64 only. The build script also rejects
+// unsupported targets, but this gives a direct rustc diagnostic at feature-gate
+// time instead of a build-script panic.
+#[cfg(all(feature = "dpdk", not(all(target_os = "linux", target_arch = "x86_64"))))]
+compile_error!("the `dpdk` feature requires Linux x86_64 (Amazon Linux 2023 / EKS Nitro)");
+
 #[allow(improper_ctypes_definitions)]
 #[allow(unpredictable_function_pointer_comparisons)]
 pub mod bindings {

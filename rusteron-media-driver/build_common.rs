@@ -125,6 +125,7 @@ pub fn rusteron_build_main(config: &RusteronBuildConfig) {
     }
 
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=build_common.rs");
     println!("cargo:rerun-if-changed=bindings.h");
 
     // If precompiled artifacts exist (or can be downloaded), use them instead of cmake+java.
@@ -502,6 +503,77 @@ fn build_from_source(config: &RusteronBuildConfig, docs_rs: &Path) {
         let cmake_lib_dir = cmake_output;
         publish_artifacts(&cmake_lib_dir).expect("Failed to publish artifacts");
     }
+
+    // DPDK ENA transport shim: compile the Rusteron-owned native sources and
+    // emit its link directives after the Aeron C build (so the shim's includes
+    // and link-libs resolve against it). `dpdk` implies `build-from-source`.
+    #[cfg(feature = "dpdk")]
+    build_dpdk_native(&aeron_path);
+}
+
+/// Compile `native/dpdk/*.c` as a static archive and emit its link directives.
+/// Linux x86_64 only; requires `libdpdk >= 23.11` (probed via pkg-config).
+/// `lib.rs` carries the matching `compile_error!` for unsupported targets; the
+/// panic here turns a missing/old libdpdk into a build-time error with an
+/// install hint instead of an opaque link failure.
+#[cfg(feature = "dpdk")]
+fn build_dpdk_native(aeron_path: &Path) {
+    if !(cfg!(target_os = "linux") && cfg!(target_arch = "x86_64")) {
+        panic!("the `dpdk` feature requires Linux x86_64 (Amazon Linux 2023 / EKS Nitro)");
+    }
+
+    let dpdk = pkg_config::Config::new()
+        .atleast_version("23.11")
+        .probe("libdpdk")
+        .unwrap_or_else(|e| {
+            panic!(
+                "the `dpdk` feature requires libdpdk >= 23.11 (pkg-config probe failed: {e}). \
+                 Install it with e.g. `dnf install dpdk-devel` on Amazon Linux 2023."
+            )
+        });
+
+    let cargo_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let native_dir = cargo_dir.join("native/dpdk");
+
+    let mut build = cc::Build::new();
+    build.std("c11");
+    build.include(&native_dir);
+    build.include(aeron_path.join("aeron-driver/src/main/c"));
+    build.include(aeron_path.join("aeron-client/src/main/c"));
+    for inc in &dpdk.include_paths {
+        build.include(inc);
+    }
+    for (key, value) in &dpdk.defines {
+        match value {
+            Some(v) => {
+                build.define(key, Some(v.as_str()));
+            }
+            None => {
+                build.define(key, None);
+            }
+        }
+    }
+    let sources: Vec<_> = std::fs::read_dir(&native_dir)
+        .expect("native/dpdk dir")
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.extension().map(|s| s == "c").unwrap_or(false))
+        .collect();
+    build.files(sources);
+    build.compile("rusteron_dpdk");
+
+    // Static archive first, then its shared DPDK deps. The test registers
+    // `aeron_driver` + `rusteron_dpdk` via `#[link]` (cargo forwards
+    // build-script link-libs to the lib/bins/dependents, not to same-package
+    // integration tests), so only the search paths need to reach every target.
+    println!("cargo:rustc-link-lib=static=rusteron_dpdk");
+    for path in &dpdk.link_paths {
+        println!("cargo:rustc-link-search=native={}", path.display());
+    }
+    for lib in &dpdk.libs {
+        println!("cargo:rustc-link-lib={}", lib);
+    }
+    println!("cargo:rerun-if-changed={}", native_dir.display());
 }
 
 #[cfg(not(feature = "build-from-source"))]

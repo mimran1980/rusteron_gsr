@@ -12,6 +12,7 @@ resolver = "2"
 
 [workspace.dependencies]
 bindgen         = "0.72"
+cc              = "1.2"
 cmake           = "0.1"
 criterion       = "0.8"
 ctrlc           = "3.5"
