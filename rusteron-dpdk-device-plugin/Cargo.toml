@@ -1,0 +1,31 @@
+# Kubelet device plugin for the rusteron DPDK ENA transport (plan §10.3).
+# Advertises `rusteron.io/dpdk-ena-pair` (one device per healthy VFIO pair in
+# /var/lib/rusteron-dpdk/ena-pairs.json) and injects the pair's PCI/CIDR/
+# gateway env plus VFIO device nodes at Allocate time.
+[package]
+name = "rusteron-dpdk-device-plugin"
+version = "0.1.0"
+edition = "2021"
+description = "Kubelet device plugin advertising VFIO ENA pairs for the rusteron DPDK media driver"
+publish = false
+license = "Apache-2.0"
+
+[dependencies]
+env_logger = { workspace = true }
+hyper-util = { workspace = true }
+log        = { workspace = true }
+prost      = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+tokio      = { workspace = true }
+tokio-stream = { workspace = true }
+tonic      = { workspace = true }
+tonic-prost = { workspace = true }
+tower      = { workspace = true }
+
+# The vendored kubelet v1beta1 proto (proto/deviceplugin/v1beta1/api.proto) is
+# compiled by protox (pure-Rust, no protoc binary in Docker/CI) and handed to
+# tonic-prost-build as a FileDescriptorSet (tonic-build 0.14 dropped protox).
+[build-dependencies]
+protox           = { workspace = true }
+tonic-prost-build = { workspace = true }
