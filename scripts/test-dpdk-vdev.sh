@@ -19,6 +19,9 @@
 #   sudo scripts/test-dpdk-vdev.sh [--scenario NAME] [--msgs N]
 
 set -euo pipefail
+# Surface silent `set -e` exits: a bare non-zero command aborts the script and
+# otherwise only the EXIT-trap cleanup would print.
+trap 'echo "[vdev] FAILED: ${BASH_COMMAND} (exit $?)" >&2' ERR
 cd "$(dirname "$0")/.."
 
 BRIDGE=rusteron-vdev0
@@ -95,7 +98,9 @@ build_harness() {
 # ---------------------------------------------------------------------------
 
 snapshot_taps() {
-    ip -o link show 2>/dev/null | awk -F': ' '{print $2}' | grep -E '^(dtap|tap)[0-9]+$' | sort -u
+    # `grep` exits 1 when no tap exists yet; under `set -e`/`pipefail` that
+    # aborts the script on the very first (pre-launch) snapshot. Force 0.
+    ip -o link show 2>/dev/null | awk -F': ' '{print $2}' | grep -E '^(dtap|tap)[0-9]+$' | sort -u || true
 }
 
 # new_taps <snapshot-file>: interfaces in snapshot-file's "before" list that
@@ -108,7 +113,9 @@ discover_taps() {
             return 1   # process died before creating its taps
         fi
         after=$(snapshot_taps)
-        TAPS=$(comm -13 <(sort "$before") <(echo "$after"))
+        # `before` is a string of tap names, not a file path — sort it via
+        # here-string, or `sort` treats it as a filename and errors.
+        TAPS=$(comm -13 <(sort <<<"$before") <(echo "$after"))
         local n; n=$(echo "$TAPS" | grep -c . || true)
         if (( n >= want )); then
             echo "$TAPS" | head -n "$want"
@@ -430,7 +437,18 @@ cleanup() {
     done
     log "cleaned up bridge and taps"
 }
-trap cleanup EXIT
+
+# Dump the redirected harness output on failure: the harness's own stderr goes
+# to $WORK_DIR/*.log, which CI otherwise never surfaces.
+dump_harness_logs() {
+    for f in "$WORK_DIR"/*.log; do
+        [[ -e "$f" ]] || continue
+        log "--- $f ---"
+        tail -n 40 "$f" >&2
+    done
+}
+
+trap 'rc=$?; [[ $rc -ne 0 ]] && dump_harness_logs; cleanup' EXIT
 
 mkdir -p "$REPORT_DIR" "$WORK_DIR"
 
