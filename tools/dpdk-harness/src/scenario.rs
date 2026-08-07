@@ -470,6 +470,14 @@ fn multi_endpoint(cfg: &ScenarioCfg, aeron: &Aeron) -> ScenarioResult {
             for dest in &cfg.destinations {
                 add_and_wait(&pub_, dest, cfg.timeout)?;
             }
+            // is_connected() is a single aggregate flag that turns true as soon
+            // as ANY destination connects, so add_and_wait returns before the
+            // remaining destinations have completed their own connection
+            // handshake. Offering immediately then silently drops the leading
+            // frames to a not-yet-connected destination (the MDC tracker treats
+            // a no-route send as success, never retries). Settle briefly so
+            // every destination is connected before the first offer.
+            sleep(Duration::from_millis(250));
             // An MDC publication casts every offer to ALL registered
             // destinations (aeron_udp_destination_tracker_send fans the iovec
             // out to each), so offering `msgs` total hands every endpoint the
