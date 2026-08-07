@@ -93,9 +93,7 @@ impl DpdkTransportConfig {
 
         // The mbuf pool must cover both descriptor rings plus four bursts of
         // headroom (plan §6.5).
-        let required = u64::from(self.rx_descriptors)
-            + u64::from(self.tx_descriptors)
-            + 4 * u64::from(self.burst_size);
+        let required = u64::from(self.rx_descriptors) + u64::from(self.tx_descriptors) + 4 * u64::from(self.burst_size);
         if u64::from(self.mbufs_per_port) < required {
             return Err(DpdkError::InvalidConfiguration(format!(
                 "mbufs_per_port {} is below the required {required} (rx + tx descriptors + 4 bursts)",
@@ -171,11 +169,16 @@ fn valid_pci(s: &str) -> bool {
         return false;
     }
     let hex = |i: usize| b[i].is_ascii_hexdigit();
-    hex(0) && hex(1) && hex(2) && hex(3)
+    hex(0)
+        && hex(1)
+        && hex(2)
+        && hex(3)
         && b[4] == b':'
-        && hex(5) && hex(6)
+        && hex(5)
+        && hex(6)
         && b[7] == b':'
-        && hex(8) && hex(9)
+        && hex(8)
+        && hex(9)
         && b[10] == b'.'
         && hex(11)
 }
@@ -186,16 +189,10 @@ fn valid_pci(s: &str) -> bool {
 /// native EAL can distinguish a vdev name from a PCI BDF by shape.
 fn valid_vdev(s: &str) -> bool {
     let n = s.len();
-    n >= 1
-        && n <= 15
-        && s.bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+    n >= 1 && n <= 15 && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
 }
 
 fn valid_file_prefix(s: &str) -> bool {
     let n = s.len();
-    n >= 1
-        && n <= 64
-        && s.bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+    n >= 1 && n <= 64 && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
 }

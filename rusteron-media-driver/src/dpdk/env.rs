@@ -65,9 +65,7 @@ pub fn config_from_env() -> Result<DpdkTransportConfig, DpdkError> {
         },
         file_prefix: required("RUSTERON_DPDK_FILE_PREFIX")?,
         test_vdev: false, // production selectors are PCI-only (plan §11.2)
-        hugepage_dir: PathBuf::from(
-            env::var("RUSTERON_DPDK_HUGE_DIR").unwrap_or_else(|_| "/dev/hugepages".into()),
-        ),
+        hugepage_dir: PathBuf::from(env::var("RUSTERON_DPDK_HUGE_DIR").unwrap_or_else(|_| "/dev/hugepages".into())),
         rx_descriptors: num_or("RUSTERON_DPDK_RX_DESCRIPTORS", 1024)?,
         tx_descriptors: num_or("RUSTERON_DPDK_TX_DESCRIPTORS", 1024)?,
         mbufs_per_port: num_or("RUSTERON_DPDK_MBUFS_PER_PORT", 65536)?,
@@ -82,23 +80,22 @@ fn required(name: &str) -> Result<String, DpdkError> {
 }
 
 fn ipv4(name: &str, value: &str) -> Result<Ipv4Addr, DpdkError> {
-    value.parse().map_err(|_| {
-        DpdkError::InvalidEnvironment(format!("{name}={value:?} is not a valid IPv4 address"))
-    })
+    value
+        .parse()
+        .map_err(|_| DpdkError::InvalidEnvironment(format!("{name}={value:?} is not a valid IPv4 address")))
 }
 
 /// Parse `address/prefix` into the address and prefix length.
 fn parse_cidr(role: &str, value: &str) -> Result<(Ipv4Addr, u8), DpdkError> {
     let var = format!("RUSTERON_DPDK_{}_IPV4_CIDR", role.to_uppercase());
     let (ip, prefix) = value.split_once('/').ok_or_else(|| {
-        DpdkError::InvalidEnvironment(format!(
-            "{var}={value:?} must be address/prefix (e.g. 10.0.0.1/24)"
-        ))
+        DpdkError::InvalidEnvironment(format!("{var}={value:?} must be address/prefix (e.g. 10.0.0.1/24)"))
     })?;
     let addr = ipv4(&var, ip)?;
-    let prefix_len: u8 = prefix.trim().parse().map_err(|_| {
-        DpdkError::InvalidEnvironment(format!("{var} prefix {prefix:?} is not a number"))
-    })?;
+    let prefix_len: u8 = prefix
+        .trim()
+        .parse()
+        .map_err(|_| DpdkError::InvalidEnvironment(format!("{var} prefix {prefix:?} is not a number")))?;
     if !(1..=32).contains(&prefix_len) {
         return Err(DpdkError::InvalidEnvironment(format!(
             "{var} prefix {prefix_len} must be in 1..=32"
@@ -114,8 +111,9 @@ where
 {
     match env::var(name) {
         Err(_) => Ok(default),
-        Ok(v) => v.trim().parse().map_err(|_| {
-            DpdkError::InvalidEnvironment(format!("{name}={v:?} is not a valid number"))
-        }),
+        Ok(v) => v
+            .trim()
+            .parse()
+            .map_err(|_| DpdkError::InvalidEnvironment(format!("{name}={v:?} is not a valid number"))),
     }
 }

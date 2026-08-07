@@ -18,7 +18,7 @@
 //! ```
 
 use rusteron_media_driver::dpdk::{DpdkPortConfig, DpdkTransport, DpdkTransportConfig};
-use rusteron_media_driver::{AeronDriverContext, AeronDriver, AeronIdleStrategyKind};
+use rusteron_media_driver::{AeronDriver, AeronDriverContext, AeronIdleStrategyKind};
 use std::time::Duration;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

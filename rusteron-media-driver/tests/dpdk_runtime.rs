@@ -19,11 +19,7 @@ use std::os::raw::{c_char, c_int, c_void};
 // rusteron_dpdk_internal.h); the test build links the core archive which
 // defines it, so declare it directly here.
 extern "C" {
-    fn rusteron_dpdk_runtime_probe_device(
-        transport: *mut c_void,
-        pci_bdf: *const c_char,
-        port_id: *mut u16,
-    ) -> c_int;
+    fn rusteron_dpdk_runtime_probe_device(transport: *mut c_void, pci_bdf: *const c_char, port_id: *mut u16) -> c_int;
 }
 
 /// Index of the first log entry containing `needle`, or -1.
@@ -47,7 +43,10 @@ fn dual_ports_initialize_with_distinct_resources() {
     let transport = create(&config).unwrap_or_else(|e| panic!("create failed: {e}"));
 
     let d = dump(transport);
-    assert_ne!(d.sender_port, d.receiver_port, "sender and receiver must use distinct DPDK ports");
+    assert_ne!(
+        d.sender_port, d.receiver_port,
+        "sender and receiver must use distinct DPDK ports"
+    );
     assert_ne!(d.sender_pool, d.receiver_pool, "each port needs its own mempool");
     assert_ne!(d.sender_pool, 0, "sender pool must be allocated");
     assert_ne!(d.receiver_pool, 0, "receiver pool must be allocated");
@@ -78,7 +77,10 @@ fn teardown_is_reverse_init_order() {
     let receiver_free = log_index_containing(&env, "free 0x1020");
     let sender_free = log_index_containing(&env, "free 0x1010");
     assert!(receiver_free >= 0 && sender_free >= 0, "both pools must be freed");
-    assert!(receiver_free < sender_free, "receiver pool must be freed before sender pool");
+    assert!(
+        receiver_free < sender_free,
+        "receiver pool must be freed before sender pool"
+    );
 
     // Per-port order: stop, then close, then free.
     let close_idx = log_index_containing(&env, "close 1");

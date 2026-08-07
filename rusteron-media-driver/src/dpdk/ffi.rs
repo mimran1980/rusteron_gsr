@@ -38,10 +38,7 @@ impl DpdkTransport {
     ///
     /// Without the `dpdk` feature this returns [`DpdkError::FeatureDisabled`]
     /// before inspecting the config or context.
-    pub fn install(
-        context: &AeronDriverContext,
-        config: DpdkTransportConfig,
-    ) -> Result<Self, DpdkError> {
+    pub fn install(context: &AeronDriverContext, config: DpdkTransportConfig) -> Result<Self, DpdkError> {
         #[cfg(feature = "dpdk")]
         {
             // 3. Validate the Rust configuration and existing Aeron context.
@@ -139,10 +136,7 @@ struct rusteron_dpdk_config_t {
 #[cfg(feature = "dpdk")]
 #[link(name = "rusteron_dpdk", kind = "static")]
 extern "C" {
-    fn rusteron_dpdk_transport_create(
-        config: *const rusteron_dpdk_config_t,
-        transport: *mut *mut c_void,
-    ) -> c_int;
+    fn rusteron_dpdk_transport_create(config: *const rusteron_dpdk_config_t, transport: *mut *mut c_void) -> c_int;
     fn rusteron_dpdk_transport_install(
         transport: *mut c_void,
         context: *mut crate::bindings::aeron_driver_context_t,
@@ -173,16 +167,37 @@ fn native_config(config: &DpdkTransportConfig) -> Result<rusteron_dpdk_config_t,
         max_aeron_mtu: config.max_aeron_mtu,
     };
     fill(&mut c.file_prefix, &config.file_prefix, "file_prefix")?;
-    let huge_dir = config.hugepage_dir.to_str().ok_or_else(|| {
-        DpdkError::InvalidConfiguration("hugepage_dir is not valid UTF-8".to_string())
-    })?;
+    let huge_dir = config
+        .hugepage_dir
+        .to_str()
+        .ok_or_else(|| DpdkError::InvalidConfiguration("hugepage_dir is not valid UTF-8".to_string()))?;
     fill(&mut c.hugepage_dir, huge_dir, "hugepage_dir")?;
     fill(&mut c.sender_pci, &config.sender.pci_address, "sender.pci_address")?;
-    fill(&mut c.sender_ipv4, &config.sender.local_ipv4.to_string(), "sender.local_ipv4")?;
-    fill(&mut c.sender_gateway, &config.sender.gateway_ipv4.to_string(), "sender.gateway_ipv4")?;
-    fill(&mut c.receiver_pci, &config.receiver.pci_address, "receiver.pci_address")?;
-    fill(&mut c.receiver_ipv4, &config.receiver.local_ipv4.to_string(), "receiver.local_ipv4")?;
-    fill(&mut c.receiver_gateway, &config.receiver.gateway_ipv4.to_string(), "receiver.gateway_ipv4")?;
+    fill(
+        &mut c.sender_ipv4,
+        &config.sender.local_ipv4.to_string(),
+        "sender.local_ipv4",
+    )?;
+    fill(
+        &mut c.sender_gateway,
+        &config.sender.gateway_ipv4.to_string(),
+        "sender.gateway_ipv4",
+    )?;
+    fill(
+        &mut c.receiver_pci,
+        &config.receiver.pci_address,
+        "receiver.pci_address",
+    )?;
+    fill(
+        &mut c.receiver_ipv4,
+        &config.receiver.local_ipv4.to_string(),
+        "receiver.local_ipv4",
+    )?;
+    fill(
+        &mut c.receiver_gateway,
+        &config.receiver.gateway_ipv4.to_string(),
+        "receiver.gateway_ipv4",
+    )?;
     Ok(c)
 }
 
@@ -239,9 +254,7 @@ fn validate_context(context: &AeronDriverContext, config: &DpdkTransportConfig) 
         )));
     }
 
-    if context.get_sender_idle_strategy() != "spin"
-        || context.get_receiver_idle_strategy() != "spin"
-    {
+    if context.get_sender_idle_strategy() != "spin" || context.get_receiver_idle_strategy() != "spin" {
         return Err(DpdkError::InvalidConfiguration(
             "aeron context sender and receiver idle strategies must be `spin`".to_string(),
         ));
@@ -279,10 +292,7 @@ fn validate_context(context: &AeronDriverContext, config: &DpdkTransportConfig) 
 }
 
 #[cfg(feature = "dpdk")]
-fn wildcard_port_range(
-    context: &AeronDriverContext,
-    role: &str,
-) -> Result<(u16, u16), DpdkError> {
+fn wildcard_port_range(context: &AeronDriverContext, role: &str) -> Result<(u16, u16), DpdkError> {
     let (mut low, mut high) = (0u16, 0u16);
     let result = if role == "sender" {
         context.get_sender_wildcard_port_range(&mut low, &mut high)
@@ -290,7 +300,9 @@ fn wildcard_port_range(
         context.get_receiver_wildcard_port_range(&mut low, &mut high)
     };
     result.map_err(|e| {
-        DpdkError::Aeron(format!("aeron_driver_context_get_{role}_wildcard_port_range failed: {e}"))
+        DpdkError::Aeron(format!(
+            "aeron_driver_context_get_{role}_wildcard_port_range failed: {e}"
+        ))
     })?;
     Ok((low, high))
 }

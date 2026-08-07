@@ -321,10 +321,7 @@ fn unknown_selector_is_invalid_environment() {
     std::env::set_var("RUSTERON_MEDIA_DRIVER_TRANSPORT", "vanilla");
     let ctx = AeronDriverContext::new().unwrap();
     let err = configure_media_transport_from_env(&ctx).unwrap_err();
-    assert!(
-        matches!(err, DpdkError::InvalidEnvironment(_)),
-        "got {err:?}"
-    );
+    assert!(matches!(err, DpdkError::InvalidEnvironment(_)), "got {err:?}");
     assert!(err.to_string().contains("RUSTERON_MEDIA_DRIVER_TRANSPORT"));
 }
 

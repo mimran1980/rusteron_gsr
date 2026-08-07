@@ -24,10 +24,7 @@ use std::ptr;
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 extern "C" {
-    fn rusteron_dpdk_transport_install(
-        transport: *mut c_void,
-        context: *mut aeron_driver_context_t,
-    ) -> c_int;
+    fn rusteron_dpdk_transport_install(transport: *mut c_void, context: *mut aeron_driver_context_t) -> c_int;
     fn rusteron_dpdk_transport_bindings() -> *mut aeron_udp_channel_transport_bindings_stct;
 }
 

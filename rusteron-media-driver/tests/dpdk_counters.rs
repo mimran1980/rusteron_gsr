@@ -211,7 +211,11 @@ impl CountersManager {
         let vb = id as usize * VALUE_LENGTH;
         let value = i64::from_le_bytes(vals[vb..vb + 8].try_into().unwrap());
         let type_id = i32::from_le_bytes(meta[mb + TYPE_ID_OFFSET..mb + TYPE_ID_OFFSET + 4].try_into().unwrap());
-        let len = i32::from_le_bytes(meta[mb + LABEL_LENGTH_OFFSET..mb + LABEL_LENGTH_OFFSET + 4].try_into().unwrap());
+        let len = i32::from_le_bytes(
+            meta[mb + LABEL_LENGTH_OFFSET..mb + LABEL_LENGTH_OFFSET + 4]
+                .try_into()
+                .unwrap(),
+        );
         let label = if len > 0 {
             String::from_utf8_lossy(&meta[mb + LABEL_OFFSET..mb + LABEL_OFFSET + len as usize]).into_owned()
         } else {
@@ -638,31 +642,44 @@ fn counters_registered_with_type_ids_and_labels() {
     h.init_rx(RECEIVER_IP, 60000, 1472);
 
     // Sender port-info: type 75, value 1, driver + MAC in the label.
-    let (v, t, label) = h.counters.find(TYPE_PORT_INFO, "role=sender").expect("sender port-info");
+    let (v, t, label) = h
+        .counters
+        .find(TYPE_PORT_INFO, "role=sender")
+        .expect("sender port-info");
     assert_eq!(t, TYPE_PORT_INFO);
     assert_eq!(v, 1);
     assert!(label.contains("rusteron-dpdk role=sender bdf=0000:00:01.0 port=0 q=0 dir=- port-info"));
-    assert!(label.contains(" driver=net_ena mac=02:00:00:00:00:01"), "label: {label}");
+    assert!(
+        label.contains(" driver=net_ena mac=02:00:00:00:00:01"),
+        "label: {label}"
+    );
 
     // Receiver port-info: distinct BDF/port/MAC.
-    let (v, t, label) = h.counters.find(TYPE_PORT_INFO, "role=receiver").expect("receiver port-info");
+    let (v, t, label) = h
+        .counters
+        .find(TYPE_PORT_INFO, "role=receiver")
+        .expect("receiver port-info");
     assert_eq!(v, 1);
     assert!(label.contains("role=receiver bdf=0000:00:02.0 port=1"));
     assert!(label.contains("mac=02:00:00:00:00:02"), "label: {label}");
 
     // Each port carries the full counter set for both directions, so the
     // needle must pin role AND direction to disambiguate the match.
-    let (_, _, label) = h.counters
+    let (_, _, label) = h
+        .counters
         .find(TYPE_PKTS, "role=sender bdf=0000:00:01.0 port=0 q=0 dir=tx pkts")
         .expect("sender tx pkts");
-    let (_, _, label) = h.counters
+    let (_, _, label) = h
+        .counters
         .find(TYPE_BYTES, "role=sender bdf=0000:00:01.0 port=0 q=0 dir=tx bytes")
         .expect("sender tx bytes");
 
-    let (_, _, label) = h.counters
+    let (_, _, label) = h
+        .counters
         .find(TYPE_PKTS, "role=receiver bdf=0000:00:02.0 port=1 q=0 dir=rx pkts")
         .expect("receiver rx pkts");
-    let (_, _, label) = h.counters
+    let (_, _, label) = h
+        .counters
         .find(TYPE_BYTES, "role=receiver bdf=0000:00:02.0 port=1 q=0 dir=rx bytes")
         .expect("receiver rx bytes");
 
@@ -722,7 +739,11 @@ fn oversized_datagram_bumps_error_not_tx_bytes() {
     assert!(last_error().contains("oversized"), "got: {}", last_error());
     assert_eq!(h.counter(TYPE_PKTS, "dir=tx"), 1, "only the prefix datagram");
     assert_eq!(h.counter(TYPE_BYTES, "dir=tx"), 20, "only prefix bytes");
-    assert_eq!(h.counter(TYPE_ERROR, "role=sender"), 1, "oversized bumps the error counter");
+    assert_eq!(
+        h.counter(TYPE_ERROR, "role=sender"),
+        1,
+        "oversized bumps the error counter"
+    );
     assert_no_leak();
 }
 
@@ -878,7 +899,11 @@ fn rx_pkts_bytes_and_reject_classes_counted() {
     assert_eq!(inject_and_poll(&mut h, &mut p, &unknown), 0);
     let discard = h.counter(TYPE_RX_RECEIVER_DISCARD, "role=receiver");
     assert_eq!(discard, 4, "ipv6+vlan+foreign+unknown all discarded");
-    assert_eq!(h.counter(TYPE_QUEUE_DROP, "role=receiver"), 1, "only the unknown-port misses the map");
+    assert_eq!(
+        h.counter(TYPE_QUEUE_DROP, "role=receiver"),
+        1,
+        "only the unknown-port misses the map"
+    );
 
     // Accepted is unaffected by the rejects.
     assert_eq!(h.counter(TYPE_PKTS, "dir=rx"), 1);
@@ -910,14 +935,20 @@ fn ena_xstats_mirrored_and_sampled_at_1hz() {
     // would wipe an earlier install_xstats. Install the PMD xstat table and pin
     // the clock before registration so the 1 Hz gate is deterministic.
     let mut h = Harness::new();
-    install_xstats(&["rx_missed", "ena_srd_llq_rx_packets", "ena_express_rx_drops"], &[11, 2200, 3]);
+    install_xstats(
+        &["rx_missed", "ena_srd_llq_rx_packets", "ena_express_rx_drops"],
+        &[11, 2200, 3],
+    );
     unsafe { rusteron_dpdk_test_set_clock_ms(1_000) };
     h.init_rx(RECEIVER_IP, 60000, 1472);
     let mut p = h.poller();
     p.add(&mut *h.rx);
 
     // The three PMD xstats are mirrored as type-92 counters with their names.
-    let (v, t, label) = h.counters.find(TYPE_EXTENDED_STATS, "rx_missed").expect("rx_missed mirror");
+    let (v, t, label) = h
+        .counters
+        .find(TYPE_EXTENDED_STATS, "rx_missed")
+        .expect("rx_missed mirror");
     assert_eq!(t, TYPE_EXTENDED_STATS);
     assert_eq!(v, 11);
     assert!(label.starts_with("rx_missed"), "label is the PMD name: {label}");
@@ -926,10 +957,17 @@ fn ena_xstats_mirrored_and_sampled_at_1hz() {
 
     // The *missed* mirror (type 84) is populated by the sample, not by
     // registration — it reads 0 until the first 1 Hz refresh.
-    assert_eq!(h.counter(TYPE_MISSED_PACKETS, "role=receiver"), 0, "mirror waits for the sample");
+    assert_eq!(
+        h.counter(TYPE_MISSED_PACKETS, "role=receiver"),
+        0,
+        "mirror waits for the sample"
+    );
 
     // Change the PMD values; within the 1 Hz window nothing is re-read.
-    install_xstats(&["rx_missed", "ena_srd_llq_rx_packets", "ena_express_rx_drops"], &[99, 4400, 7]);
+    install_xstats(
+        &["rx_missed", "ena_srd_llq_rx_packets", "ena_express_rx_drops"],
+        &[99, 4400, 7],
+    );
     let mut bytes = 0i64;
     let clientd = &mut h.rx_dgrams as *mut Vec<RxDatagram> as *mut c_void;
     assert_eq!(p.poll(16, clientd, &mut bytes), 0, "no traffic; sample gate governs");
@@ -942,7 +980,11 @@ fn ena_xstats_mirrored_and_sampled_at_1hz() {
     assert_eq!(h.counter(TYPE_EXTENDED_STATS, "rx_missed"), 99, "1 Hz sample re-reads");
     assert_eq!(h.counter(TYPE_EXTENDED_STATS, "ena_srd_llq_rx_packets"), 4400);
     assert_eq!(h.counter(TYPE_EXTENDED_STATS, "ena_express_rx_drops"), 7);
-    assert_eq!(h.counter(TYPE_MISSED_PACKETS, "role=receiver"), 99, "type-84 mirror follows");
+    assert_eq!(
+        h.counter(TYPE_MISSED_PACKETS, "role=receiver"),
+        99,
+        "type-84 mirror follows"
+    );
 
     // Mempool availability refreshes on the sample too.
     assert_eq!(h.counter(TYPE_MEMPOOL_AVAILABLE, "role=receiver"), 64);

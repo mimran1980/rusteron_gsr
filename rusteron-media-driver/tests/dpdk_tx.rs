@@ -42,17 +42,8 @@ struct FakeCapture {
 
 extern "C" {
     fn rusteron_dpdk_transport_bindings() -> *mut aeron_udp_channel_transport_bindings_stct;
-    fn rusteron_dpdk_transport_test_arp_seed(
-        transport: *mut c_void,
-        ip: *const c_char,
-        mac: *const u8,
-    ) -> c_int;
-    fn rusteron_dpdk_transport_test_arp_rx(
-        transport: *mut c_void,
-        role: c_int,
-        frame: *const u8,
-        len: usize,
-    ) -> c_int;
+    fn rusteron_dpdk_transport_test_arp_seed(transport: *mut c_void, ip: *const c_char, mac: *const u8) -> c_int;
+    fn rusteron_dpdk_transport_test_arp_rx(transport: *mut c_void, role: c_int, frame: *const u8, len: usize) -> c_int;
     fn rusteron_dpdk_test_set_clock_ms(ms: u64);
     fn rusteron_dpdk_fake_set_tx_burst_cap(n: u16);
     fn rusteron_dpdk_fake_set_pool_avail(n: c_int);
@@ -436,15 +427,7 @@ fn udp_frame_golden_vector() {
     let caps = captures();
     assert_eq!(caps.len(), 1);
     let c = &caps[0];
-    let expected = build_udp_frame(
-        TARGET_MAC,
-        SENDER_MAC,
-        SENDER_IP,
-        [10, 0, 0, 5],
-        40000,
-        40123,
-        payload,
-    );
+    let expected = build_udp_frame(TARGET_MAC, SENDER_MAC, SENDER_IP, [10, 0, 0, 5], 40000, 40123, payload);
     assert_eq!(cap_bytes(c), expected.as_slice());
 
     // Checksum-offload metadata (plan §7.4).

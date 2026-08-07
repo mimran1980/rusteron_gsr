@@ -25,9 +25,7 @@ use crate::AeronDriverContext;
 ///
 /// Returns `Ok(None)` when the selector is absent or `default` — the existing
 /// socket-based behaviour is unchanged.
-pub fn configure_media_transport_from_env(
-    context: &AeronDriverContext,
-) -> Result<Option<DpdkTransport>, DpdkError> {
+pub fn configure_media_transport_from_env(context: &AeronDriverContext) -> Result<Option<DpdkTransport>, DpdkError> {
     match env::selector()? {
         Selector::Default => Ok(None),
         Selector::DpdkEna => install_from_env(context),
