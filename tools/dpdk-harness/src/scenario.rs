@@ -468,13 +468,14 @@ fn multi_endpoint(cfg: &ScenarioCfg, aeron: &Aeron) -> ScenarioResult {
             for dest in &cfg.destinations {
                 add_and_wait(&pub_, dest, cfg.timeout)?;
             }
-            // A multi-destination pub distributes offers across its registered
-            // endpoints, so each endpoint gets `msgs` and the secondary (which
-            // subscribes to every endpoint) expects `msgs * endpoints`. Pace
-            // the offers like symmetric_unicast: the vdev bridge/tap path
-            // drops frames when a sender bursts, and only the retransmitted
-            // data frames survive.
-            let total = cfg.msgs * cfg.destinations.len() as u64;
+            // An MDC publication casts every offer to ALL registered
+            // destinations (aeron_udp_destination_tracker_send fans the iovec
+            // out to each), so offering `msgs` total hands every endpoint the
+            // full `msgs` range and the secondary (which subscribes to every
+            // endpoint) expects `msgs * endpoints`. Pace the offers like
+            // symmetric_unicast: the vdev bridge/tap path drops frames when a
+            // sender bursts, and only the retransmitted data frames survive.
+            let total = cfg.msgs;
             let started = Instant::now();
             let mut sent = 0u64;
             while sent < total && started.elapsed() < cfg.timeout {
@@ -504,10 +505,10 @@ fn multi_endpoint(cfg: &ScenarioCfg, aeron: &Aeron) -> ScenarioResult {
                 subs.push(open_subscription(aeron, ep, cfg.stream, cfg.timeout)?);
             }
             let expect = cfg.msgs * cfg.sub_endpoints.len() as u64;
-            // Each destination is a distinct seq space (the multi-destination pub
-            // hands each endpoint a disjoint range), so track them separately: a
-            // shared `last_seq` sees backwards jumps every round-robin pass and
-            // `recv.gaps += seq.wrapping_sub(last) - 1` overflows u64 in debug.
+            // MDC-cast hands every endpoint the same full range, but each sub's
+            // stream is its own monotonic copy, so track them separately: a
+            // shared `last_seq` would conflate three streams that each advance
+            // by ~1 per poll round and mis-count gaps.
             let mut recvs: Vec<Recv> = (0..subs.len()).map(|_| Recv::default()).collect();
             let started = Instant::now();
             loop {
