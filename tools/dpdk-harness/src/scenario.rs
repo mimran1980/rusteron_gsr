@@ -195,14 +195,16 @@ fn add_and_wait(pub_: &AeronExclusivePublication, dest: &Endpoint, timeout: Dura
     Ok(())
 }
 
-/// Offer one message, retrying transient errors until it is accepted.
-fn offer_retry(pub_: &AeronExclusivePublication, msg: &[u8], timeout: Duration) -> Result<(), Box<dyn Error>> {
+/// Offer one message, retrying transient errors until it is accepted. Returns
+/// the number of retry passes taken, so callers can surface backpressure.
+fn offer_retry(pub_: &AeronExclusivePublication, msg: &[u8], timeout: Duration) -> Result<u64, Box<dyn Error>> {
     let started = Instant::now();
+    let mut retries = 0u64;
     loop {
         match pub_.offer(msg) {
-            Ok(pos) if pos >= 0 => return Ok(()),
+            Ok(pos) if pos >= 0 => return Ok(retries),
             Ok(_) => { /* negative position — unreachable via the typed wrapper */ }
-            Err(e) if e.is_retryable() && started.elapsed() < timeout => {}
+            Err(e) if e.is_retryable() && started.elapsed() < timeout => retries += 1,
             Err(e) => return Err(format!("offer failed: {e}").into()),
         }
         if started.elapsed() >= timeout {
@@ -480,7 +482,8 @@ fn multi_endpoint(cfg: &ScenarioCfg, aeron: &Aeron) -> ScenarioResult {
             let mut sent = 0u64;
             while sent < total && started.elapsed() < cfg.timeout {
                 let msg = build_msg(cfg, sent);
-                offer_retry(&pub_, &msg, cfg.timeout)?;
+                let retries = offer_retry(&pub_, &msg, cfg.timeout)?;
+                res.backpressure_ops += retries;
                 sent += 1;
                 sleep(Duration::from_millis(1));
             }
@@ -526,9 +529,11 @@ fn multi_endpoint(cfg: &ScenarioCfg, aeron: &Aeron) -> ScenarioResult {
             res.bad_payload = recvs.iter().map(|r| r.bad_payload).sum();
             let dups: u64 = recvs.iter().map(|r| r.dups).sum();
             if res.received != expect {
-                let per_sub: Vec<(u64, u64)> = recvs.iter().map(|r| (r.received, r.dups)).collect();
+                // gaps=0 with a short count ⇒ prefix loss (frames offered before
+                // the destination connected); gaps>0 ⇒ interleaved/ongoing loss.
+                let per_sub: Vec<(u64, u64, u64)> = recvs.iter().map(|r| (r.received, r.dups, r.gaps)).collect();
                 return Err(format!(
-                    "received {} of {expect} messages across {} endpoints (per-sub received/dups: {per_sub:?})",
+                    "received {} of {expect} messages across {} endpoints (per-sub received/dups/gaps: {per_sub:?})",
                     res.received,
                     subs.len()
                 )

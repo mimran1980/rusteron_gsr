@@ -246,7 +246,9 @@ assert_report() {
     local ok; ok=$(report_field "$report" ok)
     local sent; sent=$(report_field "$report" sent)
     local received; received=$(report_field "$report" received)
-    log "assert $label: ok=$ok sent=$sent received=$received"
+    local duration; duration=$(report_field "$report" duration_ms)
+    local backpressure; backpressure=$(report_field "$report" backpressure_ops)
+    log "assert $label: ok=$ok sent=$sent received=$received duration_ms=$duration backpressure_ops=$backpressure"
     [[ "$ok" == true ]] || die "$label: report not ok"
     [[ "$received" == "$expect_received" ]] || die "$label: received $received != $expect_received"
     echo "$sent"

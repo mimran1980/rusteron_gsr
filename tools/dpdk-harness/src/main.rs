@@ -91,8 +91,9 @@ fn main() {
                 std::process::exit(1);
             }
             println!(
-                "[harness-done] role={} scenario={} transport={} ok={} sent={} received={}",
-                report.role, report.scenario, report.transport, report.ok, report.sent, report.received
+                "[harness-done] role={} scenario={} transport={} ok={} sent={} received={} duration_ms={} backpressure_ops={}",
+                report.role, report.scenario, report.transport, report.ok, report.sent, report.received,
+                report.duration_ms, report.backpressure_ops
             );
             std::process::exit(if report.ok { 0 } else { 1 });
         }
