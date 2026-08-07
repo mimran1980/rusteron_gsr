@@ -19,6 +19,8 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "rusteron_dpdk_transport.h"
@@ -45,6 +47,30 @@ extern "C" {
 #define RUSTERON_DPDK_EAL_REAL 0    /* --huge-dir <configured path> */
 #define RUSTERON_DPDK_EAL_NO_HUGE 1 /* --no-huge (tests without hugetlbfs) */
 #define RUSTERON_DPDK_EAL_SKIP 2    /* skip the EAL seam entirely (tests) */
+
+/* Test-only tracing for the vdev harness: prints to stderr (captured into the
+ * harness log) when RUSTERON_DPDK_DEBUG is set. Zero cost otherwise. */
+#define RD_DEBUG(...)                                                                 \
+    do                                                                                \
+    {                                                                                 \
+        static int rd_debug_on = -1;                                                  \
+        if (rd_debug_on < 0)                                                          \
+        {                                                                             \
+            rd_debug_on = (NULL != getenv("RUSTERON_DPDK_DEBUG"));                    \
+        }                                                                             \
+        if (rd_debug_on)                                                              \
+        {                                                                             \
+            fprintf(stderr, "[dpdk] " __VA_ARGS__);                                   \
+        }                                                                             \
+    } while (0)
+
+/* Debug tracing: format a network-order IPv4 address (bytes are already in
+ * wire order, so byte[0] is the first octet). */
+static inline void rusteron_dpdk_ipv4_fmt(uint32_t ip, char out[16])
+{
+    const uint8_t *b = (const uint8_t *)&ip;
+    (void)snprintf(out, 16, "%u.%u.%u.%u", b[0], b[1], b[2], b[3]);
+}
 
 /* A canonical PCI BDF contains ':'; anything else is a virtual-device name
  * (test/TAP path, plan §11.2). Shared by the EAL argv builder and the port

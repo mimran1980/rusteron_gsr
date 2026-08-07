@@ -165,6 +165,7 @@ dpdk_env() {
     fi
     echo "RUSTERON_MEDIA_DRIVER_TRANSPORT=dpdk-ena"
     echo "RUSTERON_DPDK_FILE_PREFIX=$suffix"
+    echo "RUSTERON_DPDK_DEBUG=1"
     echo "RUSTERON_DPDK_TEST_VDEV=1"
     echo "RUSTERON_DPDK_SENDER_PCI=net_tap0"
     echo "RUSTERON_DPDK_SENDER_IPV4_CIDR=$s_ip/24"
@@ -461,7 +462,7 @@ dump_harness_logs() {
     for f in "$WORK_DIR"/*.log; do
         [[ -e "$f" ]] || continue
         log "--- $f ---"
-        tail -n 40 "$f" >&2
+        tail -n 120 "$f" >&2
     done
 }
 

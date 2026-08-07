@@ -462,6 +462,9 @@ static int rusteron_dpdk_transport_send(
     if (!rusteron_dpdk_arp_resolve(&native->arp, native, port, next_hop, dst_mac))
     {
         rusteron_dpdk_counters_add(counters, RD_COUNTER_ARP_MISS, 1);
+        char arp_str[16];
+        rusteron_dpdk_ipv4_fmt(next_hop, arp_str);
+        RD_DEBUG("tx: arp-in-flight to %s on %s\n", arp_str, port->pci);
         return 0; /* ARP request in flight; Aeron retries the zero result */
     }
 
@@ -528,6 +531,9 @@ static int rusteron_dpdk_transport_send(
     }
     rusteron_dpdk_counters_add(counters, RD_COUNTER_TX_PKTS, (int64_t)sent);
     rusteron_dpdk_counters_add(counters, RD_COUNTER_TX_BYTES, *bytes_sent);
+    char dst_str[16];
+    rusteron_dpdk_ipv4_fmt(dst_ip, dst_str);
+    RD_DEBUG("tx: sent %zu datagrams to %s:%u on %s\n", sent, dst_str, dst_port, port->pci);
 
     if (oversized)
     {

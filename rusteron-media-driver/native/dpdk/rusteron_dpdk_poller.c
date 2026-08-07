@@ -220,6 +220,9 @@ int rusteron_dpdk_poller_receive(
         rusteron_dpdk_parsed_frame_t frame;
         rusteron_dpdk_rx_result_t result = rusteron_dpdk_packet_classify_rx(m, &frame);
 
+        RD_DEBUG("rx: frame len=%u result=%d ether=0x%02x%02x on %s\n",
+                 m->frame_len, (int)result, m->data[12], m->data[13], port->pci);
+
         rusteron_dpdk_counters_add(&port->counters, RD_COUNTER_POLLER, 1);
 
         if (RUSTERON_DPDK_RX_RESULT_OK == result)
