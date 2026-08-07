@@ -124,7 +124,10 @@ impl ScenarioResult {
 pub fn run(cfg: &ScenarioCfg, aeron: &Aeron) -> ScenarioResult {
     let started = Instant::now();
     let mut res = match cfg.name.as_str() {
-        "bidirectional_unicast" | "restart" => symmetric_unicast(cfg, aeron),
+        // Cross-transport scenarios run the same symmetric unicast flow — only
+        // the media driver transport differs (script's `scenario_bidi` wires
+        // DESTINATIONS/SUB_ENDPOINTS per transport).
+        "bidirectional_unicast" | "restart" | "dpdk_to_udp" | "udp_to_dpdk" => symmetric_unicast(cfg, aeron),
         "reconnect" => reconnect(cfg, aeron),
         "multi_endpoint" | "loss_recovery" => multi_endpoint(cfg, aeron),
         "perf" => perf(cfg, aeron),
