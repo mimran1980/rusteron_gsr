@@ -218,6 +218,9 @@ struct Recv {
     bad_payload: u64,
     /// Unrecovered sequence gaps (NAK/retransmit recovers most loss).
     gaps: u64,
+    /// Repeated sequence deliveries (retransmit raced the original). Counted
+    /// separately so the exact-count assertions see only unique messages.
+    dups: u64,
     last_seq: Option<u64>,
     histogram: Histogram<u64>,
     samples: Option<BufWriter<File>>,
@@ -236,6 +239,7 @@ impl Recv {
             bytes: 0,
             bad_payload: 0,
             gaps: 0,
+            dups: 0,
             last_seq: None,
             histogram: Histogram::new_with_bounds(1, 10_000_000_000, 3)?,
             samples,
@@ -268,6 +272,13 @@ fn poll_once(sub: &AeronSubscription, expect_byte: u8, recv: &mut Recv) -> Resul
             }
             let seq = u64::from_le_bytes(data[0..8].try_into().unwrap());
             if let Some(last) = recv.last_seq {
+                // Each sub in multi_endpoint owns a disjoint, monotonic range
+                // (round-robin distribution), so a repeat is a retransmit that
+                // raced the original — count it, don't deliver it again.
+                if seq <= last {
+                    recv.dups += 1;
+                    return;
+                }
                 if seq != last + 1 {
                     recv.gaps += seq.wrapping_sub(last).saturating_sub(1);
                 }
@@ -512,9 +523,11 @@ fn multi_endpoint(cfg: &ScenarioCfg, aeron: &Aeron) -> ScenarioResult {
             res.received = recvs.iter().map(|r| r.received).sum();
             res.bytes = recvs.iter().map(|r| r.bytes).sum();
             res.bad_payload = recvs.iter().map(|r| r.bad_payload).sum();
+            let dups: u64 = recvs.iter().map(|r| r.dups).sum();
             if res.received != expect {
+                let per_sub: Vec<(u64, u64)> = recvs.iter().map(|r| (r.received, r.dups)).collect();
                 return Err(format!(
-                    "received {} of {expect} messages across {} endpoints",
+                    "received {} of {expect} messages across {} endpoints (per-sub received/dups: {per_sub:?})",
                     res.received,
                     subs.len()
                 )
@@ -524,9 +537,14 @@ fn multi_endpoint(cfg: &ScenarioCfg, aeron: &Aeron) -> ScenarioResult {
                 return Err(format!("{} payload byte mismatches", res.bad_payload).into());
             }
             res.push(format!(
-                "received {} messages across {} endpoints",
+                "received {} messages across {} endpoints{}",
                 res.received,
-                subs.len()
+                subs.len(),
+                if dups != 0 {
+                    format!(" ({dups} duplicate retransmits deduped)")
+                } else {
+                    String::new()
+                }
             ));
             Ok(())
         })()
