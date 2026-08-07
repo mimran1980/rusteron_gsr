@@ -13,6 +13,17 @@ pub struct Report {
     pub received: u64,
     pub bytes: u64,
     pub duration_ms: u64,
+    /// Receiver-side one-way latency histogram (plan §12); zero in count-mode runs.
+    pub latency_p50_ns: u64,
+    pub latency_p99_ns: u64,
+    pub latency_max_ns: u64,
+    /// Throughput derived from the perf run's wall clock.
+    pub offered_per_sec: f64,
+    pub delivered_per_sec: f64,
+    /// Offer calls that returned retryable/backpressured (sender-side).
+    pub backpressure_ops: u64,
+    /// Unrecovered sequence gaps observed by the receiver.
+    pub gaps: u64,
     pub detail: Vec<String>,
     pub error: Option<String>,
 }
@@ -31,6 +42,13 @@ impl Report {
         s.push_str(&format!("  \"received\": {},\n", self.received));
         s.push_str(&format!("  \"bytes\": {},\n", self.bytes));
         s.push_str(&format!("  \"duration_ms\": {},\n", self.duration_ms));
+        s.push_str(&format!("  \"latency_p50_ns\": {},\n", self.latency_p50_ns));
+        s.push_str(&format!("  \"latency_p99_ns\": {},\n", self.latency_p99_ns));
+        s.push_str(&format!("  \"latency_max_ns\": {},\n", self.latency_max_ns));
+        s.push_str(&format!("  \"offered_per_sec\": {},\n", self.offered_per_sec));
+        s.push_str(&format!("  \"delivered_per_sec\": {},\n", self.delivered_per_sec));
+        s.push_str(&format!("  \"backpressure_ops\": {},\n", self.backpressure_ops));
+        s.push_str(&format!("  \"gaps\": {},\n", self.gaps));
         s.push_str("  \"detail\": [\n");
         for (i, d) in self.detail.iter().enumerate() {
             s.push_str(&format!("    {}", json_str(d)));

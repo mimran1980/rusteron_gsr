@@ -24,18 +24,23 @@ struct Args {
     role: String,
     scenario: String,
     report: String,
+    /// Connect to a separately-started standalone media driver instead of
+    /// launching an embedded one (plan §11.3 standalone row).
+    standalone: bool,
 }
 
 fn parse_args() -> Result<Args, String> {
     let mut role = None;
     let mut scenario = None;
     let mut report = None;
+    let mut standalone = false;
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         match arg.as_str() {
             "--role" => role = Some(it.next().ok_or("--role needs a value")?),
             "--scenario" => scenario = Some(it.next().ok_or("--scenario needs a value")?),
             "--report" => report = Some(it.next().ok_or("--report needs a value")?),
+            "--standalone" => standalone = true,
             other => return Err(format!("unknown argument {other:?}")),
         }
     }
@@ -43,6 +48,7 @@ fn parse_args() -> Result<Args, String> {
         role: role.ok_or("missing --role (primary|secondary)")?,
         scenario: scenario.ok_or("missing --scenario")?,
         report: report.ok_or("missing --report")?,
+        standalone,
     })
 }
 
@@ -71,7 +77,7 @@ fn main() {
     let args = match parse_args() {
         Ok(a) => a,
         Err(e) => {
-            eprintln!("usage: dpdk-harness --role primary|secondary --scenario NAME --report PATH");
+            eprintln!("usage: dpdk-harness --role primary|secondary --scenario NAME --report PATH [--standalone]");
             eprintln!("error: {e}");
             std::process::exit(2);
         }
@@ -121,6 +127,23 @@ fn run(args: &Args) -> Result<Report, Box<dyn Error>> {
         fill_byte: fill_byte(&args.role),
         expect_byte: fill_byte(if args.role == "primary" { "secondary" } else { "primary" }),
         mtu: env_u64("RUSTERON_HARNESS_MTU", 1408) as usize,
+        duration: {
+            let d = env_u64("RUSTERON_HARNESS_DURATION_SECS", 0);
+            if d > 0 {
+                Some(Duration::from_secs(d))
+            } else {
+                None
+            }
+        },
+        load_rps: env_u64("RUSTERON_HARNESS_LOAD_RPS", 0),
+        latency_samples: {
+            let p = env_str("RUSTERON_HARNESS_LATENCY_SAMPLES", "");
+            if p.is_empty() {
+                None
+            } else {
+                Some(p)
+            }
+        },
     };
 
     let mut report = Report {
@@ -129,42 +152,63 @@ fn run(args: &Args) -> Result<Report, Box<dyn Error>> {
         ..Report::default()
     };
 
-    // --- media driver context (§6.4 required state) ---
-    let driver_ctx = AeronDriverContext::new()?;
-    driver_ctx.set_dir_delete_on_shutdown(true)?;
-    driver_ctx.set_dir_delete_on_start(true)?;
-    driver_ctx.set_dir(
-        &format!(
-            "{}{}-{}",
-            driver_ctx.get_dir(),
-            Aeron::epoch_clock(),
-            std::process::id()
-        )
-        .into_c_string(),
-    )?;
-    driver_ctx.set_sender_cpu_affinity(env_u64("RUSTERON_HARNESS_SENDER_CPU", 1) as i32)?;
-    driver_ctx.set_receiver_cpu_affinity(env_u64("RUSTERON_HARNESS_RECEIVER_CPU", 2) as i32)?;
-    driver_ctx.set_sender_idle_strategy_kind(AeronIdleStrategyKind::BusySpin)?;
-    driver_ctx.set_receiver_idle_strategy_kind(AeronIdleStrategyKind::BusySpin)?;
-    driver_ctx.set_sender_wildcard_port_range(20000, 20999)?;
-    driver_ctx.set_receiver_wildcard_port_range(21000, 21999)?;
-    driver_ctx.set_mtu_length(cfg.mtu)?;
+    // --- driver setup: standalone (plan §11.3) or embedded ---
+    // The embedded driver's RAII guard must outlive the whole scenario, so the
+    // tuple keeps it alive until `run()` returns.
+    let (_driver, client_ctx) = if args.standalone {
+        // A separate `rusteron-media-driver` process owns the DPDK transport
+        // and the Aeron dir (pinned via RUSTERON_MEDIA_DRIVER_DIR); this
+        // process is only a client.
+        let dir = env_str("RUSTERON_HARNESS_DRIVER_DIR", "");
+        if dir.is_empty() {
+            return Err("--standalone requires RUSTERON_HARNESS_DRIVER_DIR".into());
+        }
+        report.transport = if env_str("RUSTERON_MEDIA_DRIVER_TRANSPORT", "default") == "dpdk-ena" {
+            "standalone-dpdk".to_string()
+        } else {
+            "standalone-udp".to_string()
+        };
+        let ctx = AeronContext::new()?;
+        ctx.set_dir(&dir.into_c_string())?;
+        (None, ctx)
+    } else {
+        // --- media driver context (§6.4 required state) ---
+        let driver_ctx = AeronDriverContext::new()?;
+        driver_ctx.set_dir_delete_on_shutdown(true)?;
+        driver_ctx.set_dir_delete_on_start(true)?;
+        driver_ctx.set_dir(
+            &format!(
+                "{}{}-{}",
+                driver_ctx.get_dir(),
+                Aeron::epoch_clock(),
+                std::process::id()
+            )
+            .into_c_string(),
+        )?;
+        driver_ctx.set_sender_cpu_affinity(env_u64("RUSTERON_HARNESS_SENDER_CPU", 1) as i32)?;
+        driver_ctx.set_receiver_cpu_affinity(env_u64("RUSTERON_HARNESS_RECEIVER_CPU", 2) as i32)?;
+        driver_ctx.set_sender_idle_strategy_kind(AeronIdleStrategyKind::BusySpin)?;
+        driver_ctx.set_receiver_idle_strategy_kind(AeronIdleStrategyKind::BusySpin)?;
+        driver_ctx.set_sender_wildcard_port_range(20000, 20999)?;
+        driver_ctx.set_receiver_wildcard_port_range(21000, 21999)?;
+        driver_ctx.set_mtu_length(cfg.mtu)?;
 
-    // --- transport selection: DPDK (vdev/ENA) or default kernel UDP ---
-    report.transport = match configure_media_transport_from_env(&driver_ctx) {
-        Ok(Some(_guard)) => "dpdk".to_string(),
-        Ok(None) => "udp".to_string(),
-        Err(e) => return Err(format!("transport configuration failed: {e}").into()),
+        // --- transport selection: DPDK (vdev/ENA) or default kernel UDP ---
+        report.transport = match configure_media_transport_from_env(&driver_ctx) {
+            Ok(Some(_guard)) => "dpdk".to_string(),
+            Ok(None) => "udp".to_string(),
+            Err(e) => return Err(format!("transport configuration failed: {e}").into()),
+        };
+        info!("[transport] selected {}", report.transport);
+
+        let driver = AeronDriver::launch_embedded_guard(driver_ctx.clone(), false);
+        let dir = driver_ctx.get_dir().to_string();
+        let ctx = AeronContext::new()?;
+        ctx.set_dir(&dir.into_c_string())?;
+        (Some(driver), ctx)
     };
-    info!("[transport] selected {}", report.transport);
 
-    // The RAII guard stops the driver on drop; it lives for the whole scenario.
-    let _driver = AeronDriver::launch_embedded_guard(driver_ctx.clone(), false);
-
-    // --- client to the embedded driver ---
-    let dir = driver_ctx.get_dir().to_string();
-    let client_ctx = AeronContext::new()?;
-    client_ctx.set_dir(&dir.into_c_string())?;
+    // --- client to the (embedded or standalone) driver ---
     let aeron = Aeron::new(&client_ctx)?;
     aeron.start()?;
 
@@ -175,6 +219,13 @@ fn run(args: &Args) -> Result<Report, Box<dyn Error>> {
     report.received = res.received;
     report.bytes = res.bytes;
     report.duration_ms = res.duration_ms;
+    report.latency_p50_ns = res.latency_p50_ns;
+    report.latency_p99_ns = res.latency_p99_ns;
+    report.latency_max_ns = res.latency_max_ns;
+    report.offered_per_sec = res.offered_per_sec;
+    report.delivered_per_sec = res.delivered_per_sec;
+    report.backpressure_ops = res.backpressure_ops;
+    report.gaps = res.gaps;
     report.detail = res.detail;
     report.error = res.error;
 

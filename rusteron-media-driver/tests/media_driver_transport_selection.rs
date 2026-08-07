@@ -127,7 +127,12 @@ fn send_sigint(child: &Child) {
 fn absent_selector_starts_socket_backend() {
     let dir = aeron_dir("absent");
     let envs = [("AERON_DIR", dir.as_str())];
-    let mut child = spawn_and_wait_for_line(&envs, "transport backend: socket");
+    // Wait for the LAST startup stdout line ("media driver started") before
+    // SIGINT. Waiting on "transport backend: socket" races the child's startup:
+    // spawn_and_wait_for_line drops the channel receiver on return, which closes
+    // the stdout pipe while the child is still writing "media driver started",
+    // and the child's println! then dies with EPIPE (exit 101).
+    let mut child = spawn_and_wait_for_line(&envs, "media driver started");
     send_sigint(&child);
     let status = wait_exit(&mut child);
     assert_eq!(status.code(), Some(0), "graceful SIGINT shutdown must exit 0");
@@ -141,7 +146,12 @@ fn default_selector_starts_socket_backend() {
         ("AERON_DIR", dir.as_str()),
         ("RUSTERON_MEDIA_DRIVER_TRANSPORT", "default"),
     ];
-    let mut child = spawn_and_wait_for_line(&envs, "transport backend: socket");
+    // Wait for the LAST startup stdout line ("media driver started") before
+    // SIGINT. Waiting on "transport backend: socket" races the child's startup:
+    // spawn_and_wait_for_line drops the channel receiver on return, which closes
+    // the stdout pipe while the child is still writing "media driver started",
+    // and the child's println! then dies with EPIPE (exit 101).
+    let mut child = spawn_and_wait_for_line(&envs, "media driver started");
     send_sigint(&child);
     let status = wait_exit(&mut child);
     assert_eq!(status.code(), Some(0), "graceful SIGINT shutdown must exit 0");
@@ -240,7 +250,11 @@ fn selected_dpdk_without_feature_exits_nonzero() {
         ("RUSTERON_MEDIA_DRIVER_TRANSPORT", "dpdk-ena"),
     ];
     let (status, _out, stderr) = spawn_and_capture(&envs);
-    assert_ne!(status.code(), Some(0), "dpdk-ena without the feature must not launch a driver");
+    assert_ne!(
+        status.code(),
+        Some(0),
+        "dpdk-ena without the feature must not launch a driver"
+    );
     // Rust's `main` Err path prints the Debug form (`Error: {err:?}`).
     assert!(
         stderr.contains("FeatureDisabled"),

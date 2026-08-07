@@ -10,13 +10,14 @@
 //! (primary transmits, secondary receives); the `role` branch decides.
 
 use std::error::Error;
+use std::fs::File;
+use std::io::{BufWriter, Write};
 use std::thread::sleep;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use hdrhistogram::Histogram;
 use log::{info, warn};
-use rusteron_client::{
-    Aeron, AeronExclusivePublication, AeronSubscription, Handlers, IntoCString,
-};
+use rusteron_client::{Aeron, AeronExclusivePublication, AeronSubscription, Handlers, IntoCString};
 
 /// A single `host:port` endpoint (IPv4 — this plan targets Nitro, no brackets).
 #[derive(Clone, Debug)]
@@ -65,6 +66,12 @@ pub struct ScenarioCfg {
     /// Media driver MTU; the driver fragments above this and the DPDK transport
     /// bounds every emitted datagram by it (§8).
     pub mtu: usize,
+    /// `perf`-scenario wall-clock bound (`None` = the vdev scenarios' msg-count mode).
+    pub duration: Option<Duration>,
+    /// `perf`-scenario offered rate (`0` = saturation, no pacing).
+    pub load_rps: u64,
+    /// Where the receiver appends raw one-way latency samples (`None` = skip).
+    pub latency_samples: Option<String>,
 }
 
 impl ScenarioCfg {
@@ -85,6 +92,17 @@ pub struct ScenarioResult {
     pub bytes: u64,
     pub bad_payload: u64,
     pub duration_ms: u64,
+    /// Receiver-side one-way latency histogram (plan §12); zero in count-mode runs.
+    pub latency_p50_ns: u64,
+    pub latency_p99_ns: u64,
+    pub latency_max_ns: u64,
+    /// Throughput derived from the perf run's wall clock.
+    pub offered_per_sec: f64,
+    pub delivered_per_sec: f64,
+    /// Offer calls that returned retryable/backpressured (sender-side).
+    pub backpressure_ops: u64,
+    /// Unrecovered sequence gaps observed by the receiver.
+    pub gaps: u64,
     pub detail: Vec<String>,
     pub error: Option<String>,
 }
@@ -109,8 +127,16 @@ pub fn run(cfg: &ScenarioCfg, aeron: &Aeron) -> ScenarioResult {
         "bidirectional_unicast" | "restart" => symmetric_unicast(cfg, aeron),
         "reconnect" => reconnect(cfg, aeron),
         "multi_endpoint" | "loss_recovery" => multi_endpoint(cfg, aeron),
+        "perf" => perf(cfg, aeron),
         other => return ScenarioResult::fail(format!("unknown scenario {other:?}")),
     };
+    // The sender's throughput is its own offers; the receiver's is its deliveries.
+    if res.sent > 0 && res.duration_ms > 0 {
+        res.offered_per_sec = res.sent as f64 / (res.duration_ms as f64 / 1000.0);
+    }
+    if res.received > 0 && res.duration_ms > 0 {
+        res.delivered_per_sec = res.received as f64 / (res.duration_ms as f64 / 1000.0);
+    }
     res.duration_ms = started.elapsed().as_millis() as u64;
     res
 }
@@ -138,17 +164,19 @@ fn open_subscription(
     timeout: Duration,
 ) -> Result<AeronSubscription, Box<dyn Error>> {
     let uri = ep.udp_uri();
-    let sub = aeron.add_subscription(&uri.clone().into_c_string(), stream, Handlers::NONE, Handlers::NONE, timeout)?;
+    let sub = aeron.add_subscription(
+        &uri.clone().into_c_string(),
+        stream,
+        Handlers::NONE,
+        Handlers::NONE,
+        timeout,
+    )?;
     info!("[sub] channel={uri}");
     Ok(sub)
 }
 
 /// Add an MDC destination and wait until the publication is connected to it.
-fn add_and_wait(
-    pub_: &AeronExclusivePublication,
-    dest: &Endpoint,
-    timeout: Duration,
-) -> Result<(), Box<dyn Error>> {
+fn add_and_wait(pub_: &AeronExclusivePublication, dest: &Endpoint, timeout: Duration) -> Result<(), Box<dyn Error>> {
     let uri = dest.udp_uri();
     pub_.add_destination(&uri.clone().into_c_string(), timeout)?;
     let started = Instant::now();
@@ -163,11 +191,7 @@ fn add_and_wait(
 }
 
 /// Offer one message, retrying transient errors until it is accepted.
-fn offer_retry(
-    pub_: &AeronExclusivePublication,
-    msg: &[u8],
-    timeout: Duration,
-) -> Result<(), Box<dyn Error>> {
+fn offer_retry(pub_: &AeronExclusivePublication, msg: &[u8], timeout: Duration) -> Result<(), Box<dyn Error>> {
     let started = Instant::now();
     loop {
         match pub_.offer(msg) {
@@ -183,23 +207,81 @@ fn offer_retry(
     }
 }
 
-#[derive(Default)]
 struct Recv {
     received: u64,
     bytes: u64,
     bad_payload: u64,
+    /// Unrecovered sequence gaps (NAK/retransmit recovers most loss).
+    gaps: u64,
+    last_seq: Option<u64>,
+    histogram: Histogram<u64>,
+    samples: Option<BufWriter<File>>,
 }
 
-/// Drain `sub` once, counting messages and validating the payload pattern.
+impl Recv {
+    fn new(latency_samples: Option<&str>) -> Result<Recv, Box<dyn Error>> {
+        let samples = match latency_samples {
+            Some(path) => Some(BufWriter::new(File::create(path)?)),
+            None => None,
+        };
+        // 1 ns .. 10 s, 3 significant digits — a 60s @ saturation run of 1 MiB
+        // messages must not overflow the histogram.
+        Ok(Recv {
+            received: 0,
+            bytes: 0,
+            bad_payload: 0,
+            gaps: 0,
+            last_seq: None,
+            histogram: Histogram::new_with_bounds(1, 10_000_000_000, 3)?,
+            samples,
+        })
+    }
+
+    fn flush_samples(&mut self) -> Result<(), Box<dyn Error>> {
+        if let Some(w) = self.samples.as_mut() {
+            w.flush()?;
+        }
+        Ok(())
+    }
+}
+
+impl Default for Recv {
+    fn default() -> Self {
+        Self::new(None).unwrap()
+    }
+}
+
+/// Drain `sub` once, validating the payload pattern, tracking sequence gaps,
+/// and recording one-way latency. The sender stamps wall-clock nanoseconds at
+/// [8..16] (both nodes NTP-synchronise on EKS; a stable clock skew cancels out
+/// of mode-vs-mode comparisons — see the benchmark report).
 fn poll_once(sub: &AeronSubscription, expect_byte: u8, recv: &mut Recv) -> Result<(), Box<dyn Error>> {
     sub.poll_fn(
         |data, _header| {
-            if data.len() < 9 {
+            if data.len() < 17 {
                 return;
             }
+            let seq = u64::from_le_bytes(data[0..8].try_into().unwrap());
+            if let Some(last) = recv.last_seq {
+                if seq != last + 1 {
+                    recv.gaps += seq.wrapping_sub(last).saturating_sub(1);
+                }
+            }
+            recv.last_seq = Some(seq);
+
+            let ts = u64::from_le_bytes(data[8..16].try_into().unwrap());
+            let now = now_wall_ns();
+            if now >= ts {
+                let lat = now - ts;
+                recv.histogram.record(lat).ok();
+                if let Some(w) = recv.samples.as_mut() {
+                    let _ = writeln!(w, "{lat}");
+                }
+            }
+
             recv.received += 1;
             recv.bytes += data.len() as u64;
-            if data[8..].iter().any(|&b| b != expect_byte) {
+            if data[16..].iter().any(|&b| b != expect_byte) {
                 recv.bad_payload += 1;
             }
         },
@@ -208,10 +290,18 @@ fn poll_once(sub: &AeronSubscription, expect_byte: u8, recv: &mut Recv) -> Resul
     Ok(())
 }
 
+fn now_wall_ns() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0)
+}
+
 fn build_msg(cfg: &ScenarioCfg, seq: u64) -> Vec<u8> {
-    let mut m = vec![0u8; 8 + cfg.payload];
-    m[8..].fill(cfg.fill_byte);
+    let mut m = vec![0u8; 16 + cfg.payload];
+    m[16..].fill(cfg.fill_byte);
     m[0..8].copy_from_slice(&seq.to_le_bytes());
+    m[8..16].copy_from_slice(&now_wall_ns().to_le_bytes());
     m
 }
 
@@ -265,7 +355,10 @@ fn symmetric_unicast(cfg: &ScenarioCfg, aeron: &Aeron) -> ScenarioResult {
         if recv.bad_payload != 0 {
             return Err(format!("{} payload byte mismatches", recv.bad_payload).into());
         }
-        res.push(format!("bidirectional round-trip ok ({sent} messages, {} bytes)", res.bytes));
+        res.push(format!(
+            "bidirectional round-trip ok ({sent} messages, {} bytes)",
+            res.bytes
+        ));
         Ok(())
     })();
 
@@ -298,7 +391,10 @@ fn reconnect(cfg: &ScenarioCfg, aeron: &Aeron) -> ScenarioResult {
             add_and_wait(&pub2, &cfg.destinations[1], cfg.timeout)?;
             send_batch(&pub2, cfg, split..cfg.msgs)?;
             res.sent = cfg.msgs;
-            res.push(format!("reconnected: batch1 {split} msgs, batch2 {} msgs", cfg.msgs - split));
+            res.push(format!(
+                "reconnected: batch1 {split} msgs, batch2 {} msgs",
+                cfg.msgs - split
+            ));
             Ok(())
         })()
     } else {
@@ -316,12 +412,19 @@ fn reconnect(cfg: &ScenarioCfg, aeron: &Aeron) -> ScenarioResult {
             res.bytes = recv.bytes;
             res.bad_payload = recv.bad_payload;
             if recv.received != cfg.msgs {
-                return Err(format!("received {} of {} messages across both transports", recv.received, cfg.msgs).into());
+                return Err(format!(
+                    "received {} of {} messages across both transports",
+                    recv.received, cfg.msgs
+                )
+                .into());
             }
             if recv.bad_payload != 0 {
                 return Err(format!("{} payload byte mismatches", recv.bad_payload).into());
             }
-            res.push(format!("reconnected: received {} messages on both transports", recv.received));
+            res.push(format!(
+                "reconnected: received {} messages on both transports",
+                recv.received
+            ));
             Ok(())
         })()
     };
@@ -377,12 +480,134 @@ fn multi_endpoint(cfg: &ScenarioCfg, aeron: &Aeron) -> ScenarioResult {
             res.bytes = recv.bytes;
             res.bad_payload = recv.bad_payload;
             if recv.received != expect {
-                return Err(format!("received {} of {expect} messages across {} endpoints", recv.received, subs.len()).into());
+                return Err(format!(
+                    "received {} of {expect} messages across {} endpoints",
+                    recv.received,
+                    subs.len()
+                )
+                .into());
             }
             if recv.bad_payload != 0 {
                 return Err(format!("{} payload byte mismatches", recv.bad_payload).into());
             }
-            res.push(format!("received {} messages across {} endpoints", recv.received, subs.len()));
+            res.push(format!(
+                "received {} messages across {} endpoints",
+                recv.received,
+                subs.len()
+            ));
+            Ok(())
+        })()
+    };
+
+    match result {
+        Ok(()) => res.ok = true,
+        Err(e) => {
+            warn!("scenario failed: {e}");
+            res.error = Some(e.to_string());
+        }
+    }
+    res
+}
+
+/// §12 benchmark run: asymmetric (primary offers, secondary receives) for a
+/// fixed wall-clock duration. `load_rps > 0` paces offers to that rate (the
+/// common/stress offered loads the acceptance script computes); `0` saturates.
+/// The receiver records one-way latency into its histogram and gap counters,
+/// and dumps raw samples to `latency_samples` when configured.
+fn perf(cfg: &ScenarioCfg, aeron: &Aeron) -> ScenarioResult {
+    let mut res = ScenarioResult::default();
+    let duration = cfg.duration.unwrap_or_else(|| Duration::from_secs(60));
+    let result = if cfg.role == "primary" {
+        (|| -> Result<(), Box<dyn Error>> {
+            let pub_ = open_publication(aeron, &cfg.pub_ctrl, cfg.stream, cfg.timeout)?;
+            add_and_wait(&pub_, cfg.dest(), cfg.timeout)?;
+            let started = Instant::now();
+            let interval_ns = if cfg.load_rps > 0 {
+                // load_rps > 0 here, so this never hits the div-by-zero branch;
+                // checked_div silences the lint and 0 (=saturate) is the safe fallback.
+                1_000_000_000u64.checked_div(cfg.load_rps).unwrap_or(0)
+            } else {
+                0
+            };
+            let mut sent: u64 = 0;
+            let mut backpressure: u64 = 0;
+            let mut next_slot = 0u64;
+            while started.elapsed() < duration {
+                if interval_ns > 0 {
+                    // Coarse pacing: hold each offer to its slot (ponytail: fine
+                    // for hitting a target offered rate; the HDR latency is the
+                    // measurement that matters).
+                    let elapsed_ns = started.elapsed().as_nanos() as u64;
+                    if elapsed_ns < next_slot {
+                        sleep(Duration::from_nanos(next_slot - elapsed_ns));
+                        continue;
+                    }
+                    next_slot += interval_ns;
+                }
+                let msg = build_msg(cfg, sent);
+                match pub_.offer(&msg) {
+                    Ok(pos) if pos >= 0 => sent += 1,
+                    Ok(_) => { /* negative position — unreachable via the typed wrapper */ }
+                    Err(e) if e.is_retryable() => {
+                        backpressure += 1;
+                        sleep(Duration::from_micros(50));
+                    }
+                    Err(e) => return Err(format!("offer failed: {e}").into()),
+                }
+            }
+            res.sent = sent;
+            res.backpressure_ops = backpressure;
+            res.push(format!(
+                "offered {sent} messages in {}s ({} msg/s, {backpressure} backpressure ops)",
+                duration.as_secs(),
+                sent as f64 / duration.as_secs_f64()
+            ));
+            Ok(())
+        })()
+    } else {
+        (|| -> Result<(), Box<dyn Error>> {
+            let sub = open_subscription(aeron, cfg.sub(), cfg.stream, cfg.timeout)?;
+            let mut recv = Recv::new(cfg.latency_samples.as_deref())?;
+            let started = Instant::now();
+            // Drain for duration + a short tail so in-flight batches land.
+            let drain = duration + Duration::from_secs(5);
+            let mut silence = 0u32;
+            while started.elapsed() < drain {
+                let before = recv.received;
+                poll_once(&sub, cfg.expect_byte, &mut recv)?;
+                if recv.received == before {
+                    silence += 1;
+                    if silence > 200 {
+                        break; // 200ms without a message — the run is over
+                    }
+                } else {
+                    silence = 0;
+                }
+                sleep(Duration::from_millis(1));
+            }
+            recv.flush_samples()?;
+            res.received = recv.received;
+            res.bytes = recv.bytes;
+            res.bad_payload = recv.bad_payload;
+            res.gaps = recv.gaps;
+            res.latency_p50_ns = recv.histogram.value_at_quantile(0.5);
+            res.latency_p99_ns = recv.histogram.value_at_quantile(0.99);
+            res.latency_max_ns = recv.histogram.max();
+            if recv.bad_payload != 0 {
+                return Err(format!("{} payload byte mismatches", recv.bad_payload).into());
+            }
+            if recv.received == 0 {
+                return Err("no messages received".into());
+            }
+            res.push(format!(
+                "received {} messages ({} msg/s, {} gaps, p50={}ns p99={}ns max={}ns)",
+                recv.received,
+                recv.received as f64 / duration.as_secs_f64(),
+                res.gaps,
+                res.latency_p50_ns,
+                res.latency_p99_ns,
+                res.latency_max_ns
+            ));
             Ok(())
         })()
     };

@@ -213,6 +213,54 @@ jobs:
           retention-days: 1
           path: rusteron-media-driver/artifacts
 
+  # Linux DPDK unit + virtual-device tests (plan §11.2/§11.3): exercises the
+  # DPDK media-driver path over tap devices on a bridge. Requires libdpdk
+  # >= 23.11 (ubuntu-24.04) and root for the bridge/tap/hugetlbfs setup. Runs
+  # independently of the jobs above and below; a vdev failure here gates the
+  # DPDK feature on Linux CI the same way the build matrix gates the rest.
+  dpdk-test:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    name: DPDK (unit + vdev)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.95.0
+          components: rustfmt
+
+      - name: Install dependencies on Ubuntu
+        run: sudo apt-get update && sudo apt-get install -y curl pkg-config libssl-dev libbsd-dev uuid-dev ca-certificates make cmake gcc g++ clang zlib1g-dev libdpdk-dev
+
+      # The vendored Aeron requires CMake >= 3.30; ubuntu-24.04 apt ships 3.28.
+      - name: Install newer CMake
+        run: |
+          sudo python3 -m pip install --break-system-packages --no-cache-dir cmake
+          cmake --version
+
+      # aeron archive cmake for some reason starts java
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '23'
+
+      - name: Clean artifacts
+        run: rm -rf rusteron-media-driver/artifacts
+
+      - name: DPDK media-driver unit tests
+        run: cargo test -p rusteron-media-driver --features dpdk
+
+      - name: DPDK virtual-device interoperability (root)
+        run: sudo scripts/test-dpdk-vdev.sh
+
   build:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
     name: Build

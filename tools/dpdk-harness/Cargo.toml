@@ -5,6 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
+hdrhistogram = { workspace = true }
 log = "0.4"
 rusteron-code-gen = { path = "../../rusteron-code-gen" }
 rusteron-client = { path = "../../rusteron-client" }
