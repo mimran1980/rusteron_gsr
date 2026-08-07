@@ -127,9 +127,11 @@ pub fn run(cfg: &ScenarioCfg, aeron: &Aeron) -> ScenarioResult {
         // Cross-transport scenarios run the same symmetric unicast flow — only
         // the media driver transport differs (script's `scenario_bidi` wires
         // DESTINATIONS/SUB_ENDPOINTS per transport).
-        "bidirectional_unicast" | "restart" | "dpdk_to_udp" | "udp_to_dpdk" => symmetric_unicast(cfg, aeron),
+        "bidirectional_unicast" | "restart" | "dpdk_to_udp" | "udp_to_dpdk" | "loss_recovery" => {
+            symmetric_unicast(cfg, aeron)
+        }
         "reconnect" => reconnect(cfg, aeron),
-        "multi_endpoint" | "loss_recovery" => multi_endpoint(cfg, aeron),
+        "multi_endpoint" => multi_endpoint(cfg, aeron),
         "perf" => perf(cfg, aeron),
         other => return ScenarioResult::fail(format!("unknown scenario {other:?}")),
     };
@@ -455,11 +457,31 @@ fn multi_endpoint(cfg: &ScenarioCfg, aeron: &Aeron) -> ScenarioResult {
             for dest in &cfg.destinations {
                 add_and_wait(&pub_, dest, cfg.timeout)?;
             }
-            send_batch(&pub_, cfg, 0..cfg.msgs)?;
-            res.sent = cfg.msgs;
+            // A multi-destination pub distributes offers across its registered
+            // endpoints, so each endpoint gets `msgs` and the secondary (which
+            // subscribes to every endpoint) expects `msgs * endpoints`. Pace
+            // the offers like symmetric_unicast: the vdev bridge/tap path
+            // drops frames when a sender bursts, and only the retransmitted
+            // data frames survive.
+            let total = cfg.msgs * cfg.destinations.len() as u64;
+            let started = Instant::now();
+            let mut sent = 0u64;
+            while sent < total && started.elapsed() < cfg.timeout {
+                let msg = build_msg(cfg, sent);
+                offer_retry(&pub_, &msg, cfg.timeout)?;
+                sent += 1;
+                sleep(Duration::from_millis(1));
+            }
+            res.sent = sent;
+            if sent != total {
+                return Err(format!(
+                    "sent {sent} of {total} messages across {} destinations",
+                    cfg.destinations.len()
+                )
+                .into());
+            }
             res.push(format!(
-                "published {msgs} messages to {n} destinations",
-                msgs = cfg.msgs,
+                "published {total} messages to {n} destinations",
                 n = cfg.destinations.len()
             ));
             Ok(())
