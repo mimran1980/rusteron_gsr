@@ -12,7 +12,10 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
 
-#[link(name = "aeron_driver")]
+// The aeron archive is dynamic by default and `aeron_driver_static` under the
+// `static` feature (see build.rs), so the `#[link]` must follow the feature.
+#[cfg_attr(not(feature = "static"), link(name = "aeron_driver"))]
+#[cfg_attr(feature = "static", link(name = "aeron_driver_static", kind = "static"))]
 #[cfg_attr(
     feature = "dpdk",
     link(name = "rusteron_dpdk", kind = "static"),

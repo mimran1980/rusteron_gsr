@@ -4,13 +4,15 @@
 //! The transport links the DPDK-free fakes (see `common/mod.rs`), so the full
 //! init sequence, the failure matrix, reverse-order teardown, the allow-list,
 //! and the already-initialized guard are exercised deterministically on any
-//! host. Run single-threaded: the EAL is process-lifetime.
+//! host. Every test is `#[serial]` (as with the other DPDK test files): the EAL
+//! is process-lifetime, so the init/failure sequences must never overlap.
 //!
 //! Linux x86_64 only, and requires libdpdk >= 23.11 (the `dpdk` feature).
 #![cfg(all(feature = "dpdk", target_os = "linux", target_arch = "x86_64"))]
 
 mod common;
 use common::{close, create, dump, last_error, last_error_code, rusteron_dpdk_config_t, TestEnv};
+use serial_test::serial;
 
 use std::ffi::CString;
 use std::os::raw::{c_char, c_int, c_void};
@@ -34,6 +36,7 @@ fn log_index_containing(env: &TestEnv, needle: &str) -> c_int {
 
 /// Both ENA ports are probed, configured, and started, and hold distinct DPDK
 /// port ids and mempools (plan §7.2: "separate mempool per port").
+#[serial]
 #[test]
 fn dual_ports_initialize_with_distinct_resources() {
     let env = TestEnv::new();
@@ -60,6 +63,7 @@ fn dual_ports_initialize_with_distinct_resources() {
 
 /// Teardown runs in reverse initialization order: the receiver (initialized
 /// second) is stopped, closed, and freed before the sender (plan §7.2).
+#[serial]
 #[test]
 fn teardown_is_reverse_init_order() {
     let env = TestEnv::new();
@@ -89,6 +93,7 @@ fn teardown_is_reverse_init_order() {
 
 /// Every step of the nine-step sender/receiver sequence (steps 1..=18) fails
 /// loudly with a native error and cleans up what was initialized so far.
+#[serial]
 #[test]
 fn init_failure_matrix_reports_native_error() {
     let env = TestEnv::new();
@@ -105,6 +110,7 @@ fn init_failure_matrix_reports_native_error() {
 }
 
 /// Only the net_ena PMD is accepted (plan §7.2: "verify net_ena PMD").
+#[serial]
 #[test]
 fn rejects_non_ena_driver() {
     let env = TestEnv::new();
@@ -118,6 +124,7 @@ fn rejects_non_ena_driver() {
 }
 
 /// The IPv4/UDP checksum offloads are required (plan §7.2).
+#[serial]
 #[test]
 fn rejects_missing_checksum_offloads() {
     let env = TestEnv::new();
@@ -131,6 +138,7 @@ fn rejects_missing_checksum_offloads() {
 }
 
 /// The device allow-list accepts exactly the two configured ENA devices.
+#[serial]
 #[test]
 fn probe_device_rejects_unconfigured_bdf() {
     let env = TestEnv::new();
@@ -155,6 +163,7 @@ fn probe_device_rejects_unconfigured_bdf() {
 
 /// EAL is a process singleton: a second transport creation reports the
 /// dedicated ALREADY_INITIALIZED error code (plan §7.2).
+#[serial]
 #[test]
 fn second_transport_is_already_initialized() {
     let env = TestEnv::new();
@@ -175,6 +184,7 @@ fn second_transport_is_already_initialized() {
 
 /// The real seam path (production `--huge-dir`, tests `--no-huge`) is covered
 /// by the fake EAL archive in the `no-huge` mode.
+#[serial]
 #[test]
 fn eal_seam_path_initializes_singleton() {
     let env = TestEnv::new();
