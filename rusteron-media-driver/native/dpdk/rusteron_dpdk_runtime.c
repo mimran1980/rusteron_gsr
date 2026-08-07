@@ -204,8 +204,13 @@ static int rusteron_dpdk_init_port(rusteron_dpdk_transport_t *native, rusteron_d
     p->mempool = ops->mempool_create(pool_name, cfg->mbufs_per_port, cfg->mempool_cache);
     if (NULL == p->mempool)
     {
-        snprintf(message, sizeof(message), "mempool creation failed for %s", p->pci);
-        rusteron_dpdk_set_error(message);
+        /* The port op records the underlying rte error (rte_strerror); only
+         * fall back to a generic message if the op did not set one. */
+        if (RUSTERON_DPDK_ERR_OK == rusteron_dpdk_last_error_code())
+        {
+            snprintf(message, sizeof(message), "mempool creation failed for %s", p->pci);
+            rusteron_dpdk_set_error(message);
+        }
         return -1;
     }
 

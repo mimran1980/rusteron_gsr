@@ -14,6 +14,7 @@
 #include "rusteron_dpdk_port_ops.h"
 
 #include <rte_eal.h>
+#include <rte_errno.h>
 #include <rte_ethdev.h>
 #include <rte_ether.h>
 #include <rte_mbuf.h>
@@ -116,8 +117,18 @@ static void *rusteron_dpdk_port_mempool_create(const char *name, uint32_t n, uin
     {
         cache_size = RUSTERON_DPDK_MBUF_CACHE_SIZE;
     }
-    return rte_pktmbuf_pool_create(
+    void *pool = rte_pktmbuf_pool_create(
         name, n, cache_size, 0, RTE_MBUF_DEFAULT_BUF_SIZE, SOCKET_ID_ANY);
+    if (NULL == pool)
+    {
+        /* Surface the underlying rte error (e.g. ENOMEM on hugepage
+         * exhaustion) — runtime.c only records a generic fallback if no
+         * error was already set here. */
+        char detail[512];
+        snprintf(detail, sizeof(detail), "mempool %s: %s", name, rte_strerror(rte_errno));
+        rusteron_dpdk_set_error_code(detail, rte_errno);
+    }
+    return pool;
 }
 
 static int rusteron_dpdk_port_rx_queue_setup(
