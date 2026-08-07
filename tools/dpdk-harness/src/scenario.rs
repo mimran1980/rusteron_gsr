@@ -493,31 +493,39 @@ fn multi_endpoint(cfg: &ScenarioCfg, aeron: &Aeron) -> ScenarioResult {
                 subs.push(open_subscription(aeron, ep, cfg.stream, cfg.timeout)?);
             }
             let expect = cfg.msgs * cfg.sub_endpoints.len() as u64;
-            let mut recv = Recv::default();
+            // Each destination is a distinct seq space (the multi-destination pub
+            // hands each endpoint a disjoint range), so track them separately: a
+            // shared `last_seq` sees backwards jumps every round-robin pass and
+            // `recv.gaps += seq.wrapping_sub(last) - 1` overflows u64 in debug.
+            let mut recvs: Vec<Recv> = (0..subs.len()).map(|_| Recv::default()).collect();
             let started = Instant::now();
-            while recv.received < expect && started.elapsed() < cfg.timeout {
-                for sub in &subs {
-                    poll_once(sub, cfg.expect_byte, &mut recv)?;
+            loop {
+                let done: u64 = recvs.iter().map(|r| r.received).sum();
+                if done >= expect || started.elapsed() >= cfg.timeout {
+                    break;
+                }
+                for (sub, recv) in subs.iter().zip(recvs.iter_mut()) {
+                    poll_once(sub, cfg.expect_byte, recv)?;
                 }
                 sleep(Duration::from_millis(1));
             }
-            res.received = recv.received;
-            res.bytes = recv.bytes;
-            res.bad_payload = recv.bad_payload;
-            if recv.received != expect {
+            res.received = recvs.iter().map(|r| r.received).sum();
+            res.bytes = recvs.iter().map(|r| r.bytes).sum();
+            res.bad_payload = recvs.iter().map(|r| r.bad_payload).sum();
+            if res.received != expect {
                 return Err(format!(
                     "received {} of {expect} messages across {} endpoints",
-                    recv.received,
+                    res.received,
                     subs.len()
                 )
                 .into());
             }
-            if recv.bad_payload != 0 {
-                return Err(format!("{} payload byte mismatches", recv.bad_payload).into());
+            if res.bad_payload != 0 {
+                return Err(format!("{} payload byte mismatches", res.bad_payload).into());
             }
             res.push(format!(
                 "received {} messages across {} endpoints",
-                recv.received,
+                res.received,
                 subs.len()
             ));
             Ok(())
