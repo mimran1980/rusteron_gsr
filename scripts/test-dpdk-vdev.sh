@@ -137,15 +137,26 @@ bridge_up() {
     log "bridge $BRIDGE up at $BRIDGE_IP/24"
 }
 
-# attach_tap <iface> [ip]: add to the bridge and (optionally) assign an IP.
+# attach_tap <iface> [ip]: add to the bridge so unicast to the DPDK port MAC
+# crosses it. The DPDK tap PMD copies its (random) port MAC onto the kernel
+# iface (rte_eth_tap.c SIOCSIFHWADDR at tap_create), and a Linux bridge records
+# each member port's MAC as a LOCAL FDB entry and absorbs unicast to it —
+# delivers it to the host stack instead of forwarding it back to the tap. So
+# the DPDK ARP replies and UDP frames (unicast to that MAC) never arrive. Re-point
+# the kernel iface at a distinct MAC (derived from the role IP) and enable
+# promiscuous: the bridge then forwards/floods unicast to the DPDK MAC and the
+# tap accepts it, making the vdev fabric deliver unicast like a real ENA switch.
+# No IP is assigned — the DPDK processes own their IPs in userspace, and a host
+# address here would let the kernel ARP-respond for them and race the DPDK replies.
 attach_tap() {
     local iface=$1 ip=$2
     ip link set "$iface" up
-    ip link set "$iface" master "$BRIDGE"
     if [[ -n "$ip" ]]; then
-        ip addr add "$ip/24" dev "$iface"
+        ip link set "$iface" address "$(printf '02:00:00:00:00:%02x' "${ip##*.}")"
     fi
-    log "tap $iface -> bridge${ip:+ @ $ip}"
+    ip link set "$iface" promisc on
+    ip link set "$iface" master "$BRIDGE"
+    log "tap $iface -> bridge${ip:+ @ $ip} promisc, distinct MAC"
 }
 
 # ---------------------------------------------------------------------------
@@ -254,49 +265,72 @@ scenario_bidi() {
 
     harness_common_env >> "$penv"; harness_common_env >> "$senv"
 
-    # Primary: sender tap 10.9.0.1, receiver tap 10.9.0.3; sends to secondary
-    # receiver 10.9.0.4:40102, receives on 10.9.0.3:40102.
-    echo "RUSTERON_HARNESS_PUB_CTRL=10.9.0.1:40101" >> "$penv"
-    echo "RUSTERON_HARNESS_SUB_ENDPOINTS=10.9.0.3:40102" >> "$penv"
-    # Secondary: sender 10.9.0.2, receiver 10.9.0.4; sends to primary 10.9.0.3.
-    echo "RUSTERON_HARNESS_PUB_CTRL=10.9.0.2:40101" >> "$senv"
-    echo "RUSTERON_HARNESS_SUB_ENDPOINTS=10.9.0.4:40102" >> "$senv"
-
+    # DPDK roles own their IPs in userspace (10.9.0.1/.3 primary, 10.9.0.2/.4
+    # secondary); a UDP role terminates L3 on the bridge itself ($BRIDGE_IP), so
+    # each role's DESTINATIONS must target the peer's actual receiver:
+    #   dpdk->dpdk : 10.9.0.4:40102 / 10.9.0.3:40102
+    #   dpdk->udp  : primary -> $BRIDGE_IP:40102, secondary -> 10.9.0.3:40102
+    #   udp->dpdk  : primary -> 10.9.0.4:40102, secondary -> $BRIDGE_IP:40103
     if [[ "$ptx" == dpdk ]]; then
         dpdk_env primary >> "$penv"
-        echo "RUSTERON_HARNESS_DESTINATIONS=10.9.0.4:40102" >> "$penv"
+        echo "RUSTERON_HARNESS_PUB_CTRL=10.9.0.1:40101" >> "$penv"
+        echo "RUSTERON_HARNESS_SUB_ENDPOINTS=10.9.0.3:40102" >> "$penv"
+        if [[ "$stx" == dpdk ]]; then
+            echo "RUSTERON_HARNESS_DESTINATIONS=10.9.0.4:40102" >> "$penv"
+        else
+            echo "RUSTERON_HARNESS_DESTINATIONS=$BRIDGE_IP:40102" >> "$penv"
+        fi
     else
         echo "RUSTERON_HARNESS_PUB_CTRL=$BRIDGE_IP:40101" >> "$penv"
         echo "RUSTERON_HARNESS_SUB_ENDPOINTS=$BRIDGE_IP:40103" >> "$penv"
-        echo "RUSTERON_HARNESS_DESTINATIONS=10.9.0.3:40102" >> "$penv"
+        if [[ "$stx" == dpdk ]]; then
+            echo "RUSTERON_HARNESS_DESTINATIONS=10.9.0.4:40102" >> "$penv"
+        else
+            echo "RUSTERON_HARNESS_DESTINATIONS=$BRIDGE_IP:40102" >> "$penv"
+        fi
     fi
     if [[ "$stx" == dpdk ]]; then
         dpdk_env secondary >> "$senv"
-        echo "RUSTERON_HARNESS_DESTINATIONS=10.9.0.3:40102" >> "$senv"
+        echo "RUSTERON_HARNESS_PUB_CTRL=10.9.0.2:40101" >> "$senv"
+        echo "RUSTERON_HARNESS_SUB_ENDPOINTS=10.9.0.4:40102" >> "$senv"
+        if [[ "$ptx" == dpdk ]]; then
+            echo "RUSTERON_HARNESS_DESTINATIONS=10.9.0.3:40102" >> "$senv"
+        else
+            echo "RUSTERON_HARNESS_DESTINATIONS=$BRIDGE_IP:40103" >> "$senv"
+        fi
     else
-        echo "RUSTERON_HARNESS_DESTINATIONS=10.9.0.3:40102" >> "$senv"
+        echo "RUSTERON_HARNESS_PUB_CTRL=$BRIDGE_IP:40101" >> "$senv"
+        echo "RUSTERON_HARNESS_SUB_ENDPOINTS=$BRIDGE_IP:40102" >> "$senv"
+        if [[ "$ptx" == dpdk ]]; then
+            echo "RUSTERON_HARNESS_DESTINATIONS=10.9.0.3:40102" >> "$senv"
+        else
+            echo "RUSTERON_HARNESS_DESTINATIONS=$BRIDGE_IP:40103" >> "$senv"
+        fi
     fi
 
-    # Launch primary, discover its taps (sender first, receiver second).
-    local before_p; before_p=$(snapshot_taps)
+    # Launch primary; discover and bridge its taps (sender first, receiver
+    # second). A UDP role creates no DPDK taps — it binds the bridge itself.
+    local before_p=""
+    [[ "$ptx" == dpdk ]] && before_p=$(snapshot_taps)
     local p_spec; p_spec=$(run_one primary "$scenario" 1 "$penv")
     local p_report=${p_spec%% *} p_pid=${p_spec##* }
-    local p_taps; p_taps=$(discover_taps "$before_p" "$p_pid" 2) || die "primary ($ptx) tap discovery failed"
-    p_taps=( $p_taps )
+    local p_taps=""
     if [[ "$ptx" == dpdk ]]; then
+        p_taps=$(discover_taps "$before_p" "$p_pid" 2) || die "primary ($ptx) tap discovery failed"
+        p_taps=( $p_taps )
         attach_tap "${p_taps[0]}" 10.9.0.1
         attach_tap "${p_taps[1]}" 10.9.0.3
-    else
-        : # UDP side uses the bridge interface itself
     fi
 
-    # Launch secondary, discover its taps.
-    local before_s; before_s=$(snapshot_taps)
+    # Launch secondary; discover and bridge its taps.
+    local before_s=""
+    [[ "$stx" == dpdk ]] && before_s=$(snapshot_taps)
     local s_spec; s_spec=$(run_one secondary "$scenario" 1 "$senv")
     local s_report=${s_spec%% *} s_pid=${s_spec##* }
-    local s_taps; s_taps=$(discover_taps "$before_s" "$s_pid" 2) || die "secondary ($stx) tap discovery failed"
-    s_taps=( $s_taps )
+    local s_taps=""
     if [[ "$stx" == dpdk ]]; then
+        s_taps=$(discover_taps "$before_s" "$s_pid" 2) || die "secondary ($stx) tap discovery failed"
+        s_taps=( $s_taps )
         attach_tap "${s_taps[0]}" 10.9.0.2
         attach_tap "${s_taps[1]}" 10.9.0.4
     fi
