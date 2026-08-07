@@ -259,7 +259,9 @@ jobs:
         run: cargo test -p rusteron-media-driver --features dpdk
 
       - name: DPDK virtual-device interoperability (root)
-        run: sudo scripts/test-dpdk-vdev.sh
+        # `sudo env "PATH=$PATH"` keeps the runner's cargo on root's PATH — the
+        # vdev script runs `cargo build -p dpdk-harness` and dies otherwise.
+        run: sudo env "PATH=$PATH" scripts/test-dpdk-vdev.sh
 
   build:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
