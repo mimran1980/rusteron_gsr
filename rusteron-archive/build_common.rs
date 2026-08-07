@@ -582,7 +582,9 @@ fn download_precompiled_binaries(artifacts_dir: &Path) -> Result<(), Box<dyn std
 
     if target_os == "linux" {
         target_os = "ubuntu".to_string();
-        image = "22.04";
+        // DPDK requires libdpdk >= 23.11, which only Ubuntu 24.04 ships
+        // (22.04 has 21.11). Non-dpdk crates keep the 22.04 assets.
+        image = if cfg!(feature = "dpdk") { "24.04" } else { "22.04" };
     }
 
     let asset = format!("https://github.com/gsrxyz/rusteron/releases/download/v{version}/artifacts-{target_os}-{image}-{feature}.tar.gz");

@@ -31,11 +31,9 @@ pub fn main() {
     });
 
     // The DPDK ENA transport (plan §7.2). Compiling it is the trigger for the
-    // required libdpdk >= 23.11 presence check, so gate the whole call.
+    // required libdpdk >= 23.11 presence check, so gate the whole call. The
+    // `aeron` submodule is canonicalized inside (only in the from-source path),
+    // so the precompile path never needs it.
     #[cfg(feature = "dpdk")]
-    {
-        let aeron_path = std::fs::canonicalize(std::path::Path::new("./aeron"))
-            .expect("aeron submodule missing — run `git submodule update --init`");
-        build_dpdk_native(&aeron_path);
-    }
+    build_dpdk_native();
 }

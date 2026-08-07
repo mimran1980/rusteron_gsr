@@ -112,7 +112,9 @@ jobs:
           CI_RUN: ${{ steps.find_ci.outputs.ci_run_id }}
         run: |
           # define your list here:
-          artifacts=(artifacts-macos-latest-static artifacts-ubuntu-22.04-static)
+          # artifacts-ubuntu-24.04-static carries the DPDK prebuilt archives
+          # (built by the ci.yml build-dpdk job, which needs libdpdk >= 23.11).
+          artifacts=(artifacts-macos-latest-static artifacts-ubuntu-22.04-static artifacts-ubuntu-24.04-static)
 
           for art in "${artifacts[@]}"; do
             echo "⏬ Downloading $art into artifacts/$art"

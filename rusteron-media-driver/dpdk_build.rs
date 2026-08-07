@@ -27,10 +27,24 @@
 /// resolved via the core archive's link-search (cargo forwards link-search to
 /// every target, but only forwards link-libs to the lib/bins/dependents).
 #[cfg(feature = "dpdk")]
-pub fn build_dpdk_native(aeron_path: &Path) {
+pub fn build_dpdk_native() {
     if !(cfg!(target_os = "linux") && cfg!(target_arch = "x86_64")) {
         panic!("the `dpdk` feature requires Linux x86_64 (Amazon Linux 2023 / EKS Nitro)");
     }
+
+    // Prebuilt DPDK archives (the `precompile`/`static` path): link the
+    // published `librusteron_dpdk*.a` from the artifacts dir instead of
+    // compiling the native transport (and the Aeron C below) from source. The
+    // archives still reference `librte_*` shared symbols, so libdpdk must be
+    // present on the consumer (pkg-config probe) — exactly like the `static`
+    // feature needs system `uuid`/`bsd`.
+    let prebuilt_active = cfg!(all(
+        any(feature = "precompile", feature = "precompile-rustls"),
+        feature = "static"
+    )) && std::env::var_os("RUSTERON_BUILD_FROM_SOURCE").is_none()
+        && ["librusteron_dpdk.a", "librusteron_dpdk_eal.a", "librusteron_dpdk_port.a"]
+            .iter()
+            .all(|a| get_artifact_path().join(a).exists());
 
     let dpdk = pkg_config::Config::new()
         .atleast_version("23.11")
@@ -41,6 +55,25 @@ pub fn build_dpdk_native(aeron_path: &Path) {
                  Install it with e.g. `dnf install dpdk-devel` on Amazon Linux 2023."
             )
         });
+
+    if prebuilt_active {
+        let artifacts_dir = get_artifact_path();
+        println!("cargo:rustc-link-search=native={}", artifacts_dir.display());
+        for lib in ["rusteron_dpdk", "rusteron_dpdk_eal", "rusteron_dpdk_port"] {
+            println!("cargo:rustc-link-lib=static={lib}");
+        }
+        // librte_* shared libs (the prebuilt archives' unresolved symbols).
+        for path in &dpdk.link_paths {
+            println!("cargo:rustc-link-search=native={}", path.display());
+        }
+        for lib in &dpdk.libs {
+            println!("cargo:rustc-link-lib={lib}");
+        }
+        return;
+    }
+
+    let aeron_path = std::fs::canonicalize(std::path::Path::new("./aeron"))
+        .expect("aeron submodule missing — run `git submodule update --init`");
 
     let cargo_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let native_dir = cargo_dir.join("native/dpdk");
@@ -132,5 +165,25 @@ pub fn build_dpdk_native(aeron_path: &Path) {
     for lib in &dpdk.libs {
         println!("cargo:rustc-link-lib={}", lib);
     }
+
+    // Publish: cc writes the archives to OUT_DIR, but `publish_artifacts` (in
+    // build_common.rs) only walks the cmake build dir — it never sees them.
+    // Copy the production archives into the artifacts dir so the precompile
+    // consumer (`static` + `dpdk`) can link them from `download_precompiled_binaries`.
+    #[cfg(feature = "static")]
+    if std::env::var("PUBLISH_ARTIFACTS").is_ok() {
+        let publish_dir = get_artifact_path();
+        let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+        for archive in [
+            "librusteron_dpdk.a",
+            "librusteron_dpdk_eal.a",
+            "librusteron_dpdk_port.a",
+        ] {
+            std::fs::copy(out_dir.join(archive), publish_dir.join(archive))
+                .expect("failed to publish DPDK archive");
+        }
+        println!("DPDK artifacts published to: {}", publish_dir.display());
+    }
+
     println!("cargo:rerun-if-changed={}", native_dir.display());
 }

@@ -145,6 +145,23 @@ For an embedded deployment that selects the transport through the typed Rust
 API instead of the environment, see
 [`examples/embedded_dpdk.rs`](examples/embedded_dpdk.rs).
 
+### Precompiled DPDK binaries
+
+On Linux x86_64 you can avoid building the Aeron C and DPDK sources at all and
+link the prebuilt archives released with the crate:
+
+```toml
+[dependencies]
+rusteron-media-driver = { version = "0.2", features = ["static", "precompile", "dpdk"] }
+```
+
+This downloads `artifacts-ubuntu-24.04-static` (the DPDK archives require
+libdpdk >= 23.11, which only Ubuntu 24.04 ships) and links
+`librusteron_dpdk*.a` plus the prebuilt Aeron driver statically. libdpdk must
+still be installed on the consumer (`dpdk-devel` on Amazon Linux 2023,
+`libdpdk-dev` on Ubuntu) because the archives reference the `librte_*` shared
+libraries.
+
 ---
 
 ## Contributing & License

@@ -159,6 +159,60 @@ jobs:
           echo "ASan could not initialise (shadow-memory collision) — infrastructure limitation on this runner, not a rusteron bug. Leak detection is covered by valgrind (Memory Check job) and the ManagedCResource Drop warning."
           exit 0
 
+  # DPDK prebuilt archives (plan §12): the `dpdk` feature is media-driver-only
+  # and needs libdpdk >= 23.11, which only Ubuntu 24.04 ships (22.04 has 21.11).
+  # A dedicated job builds just that crate with `static,dpdk` + PUBLISH_ARTIFACTS
+  # so the artifacts land in the same release tarball consumed by
+  # `download_precompiled_binaries` under `--features precompile,static,dpdk`.
+  build-dpdk:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    name: Build (DPDK prebuilt)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.95.0
+          components: clippy, rustfmt
+
+      - name: Install dependencies on Ubuntu
+        run: sudo apt-get update && sudo apt-get install -y curl pkg-config libssl-dev libbsd-dev uuid-dev ca-certificates make cmake gcc g++ clang zlib1g-dev libbsd-dev libdpdk-dev
+
+      # The vendored Aeron requires CMake >= 3.30; ubuntu-24.04 apt ships 3.28.
+      - name: Install newer CMake
+        run: |
+          sudo python3 -m pip install --break-system-packages --no-cache-dir cmake
+          cmake --version
+
+      - name: Clean artifacts
+        run: rm -rf rusteron-media-driver/artifacts
+
+      - name: Build and publish DPDK archives
+        env:
+          PUBLISH_ARTIFACTS: true
+        run: cargo build -p rusteron-media-driver --release --features static,dpdk
+
+      # Self-check that the published archives are consumable via the precompile
+      # path (artifacts dir is already populated, so no download happens — the
+      # build script must link the published DPDK archives instead of compiling).
+      - name: Verify prebuilt consumption
+        run: cargo build -p rusteron-media-driver --features precompile,static,dpdk --release --example embedded_dpdk
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-ubuntu-24.04-static
+          retention-days: 1
+          path: rusteron-media-driver/artifacts
+
   build:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
     name: Build
