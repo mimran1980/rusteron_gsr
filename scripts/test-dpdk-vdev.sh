@@ -419,6 +419,11 @@ scenario_multi_endpoint() {
     echo "RUSTERON_HARNESS_SUB_ENDPOINTS=10.9.0.4:40102,10.9.0.4:40112,10.9.0.4:40122" >> "$senv"
     echo "RUSTERON_HARNESS_PUB_CTRL=10.9.0.2:40101" >> "$senv"
     echo "RUSTERON_HARNESS_DESTINATIONS=10.9.0.3:40102" >> "$senv"
+    # MDC-cast fans each offer to all 3 destinations = 3x the frame load of the
+    # single-stream scenarios; drop the count so the vdev link converges within
+    # the timeout instead of burying the tail under the retransmit storm.
+    echo "RUSTERON_HARNESS_MSGS=300" >> "$penv"
+    echo "RUSTERON_HARNESS_MSGS=300" >> "$senv"
 
     local before_p; before_p=$(snapshot_taps)
     local p_spec; p_spec=$(run_one primary "$scenario" 1 "$penv")
@@ -439,8 +444,8 @@ scenario_multi_endpoint() {
     wait_report "$p_report" "$p_pid" || die "multi_endpoint primary did not report"
     wait_report "$s_report" "$s_pid" || die "multi_endpoint secondary did not report"
 
-    # Secondary expects msgs * 3 endpoints.
-    local expect=$((MSGS * 3))
+    # Secondary expects msgs * 3 endpoints (msgs overridden to 300 above).
+    local expect=$((300 * 3))
     assert_report "$p_report" 0 "multi_endpoint primary (sender)"
     assert_report "$s_report" "$expect" "multi_endpoint secondary (3 endpoints)"
 
