@@ -198,8 +198,12 @@ static int rusteron_dpdk_init_port(rusteron_dpdk_transport_t *native, rusteron_d
     }
     p->configured = 1;
 
+    /* Keep the mempool name short: when a pool is split across memzones DPDK
+     * names them MP_<pool>_<n>, and RTE_MEMZONE_NAMESIZE is 32 — the old
+     * "rusteron_dpdk_receiver_pool" (27) produced a 32-char memzone name and
+     * failed with ENAMETOOLONG on the split path (rte_mempool_populate_default). */
     char pool_name[64];
-    snprintf(pool_name, sizeof(pool_name), "rusteron_dpdk_%s_pool",
+    snprintf(pool_name, sizeof(pool_name), "rusteron_%s_pool",
              p->role == RUSTERON_DPDK_ROLE_SENDER ? "sender" : "receiver");
     p->mempool = ops->mempool_create(pool_name, cfg->mbufs_per_port, cfg->mempool_cache);
     if (NULL == p->mempool)
