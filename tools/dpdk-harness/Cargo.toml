@@ -16,7 +16,3 @@ rusteron-media-driver = { path = "../../rusteron-media-driver" }
 # toolchain. The vdev test script enables it with `--features dpdk`.
 default = []
 dpdk = ["rusteron-media-driver/dpdk"]
-# Static aeron: the harness runs as a bare binary (the vdev script launches
-# `target/debug/dpdk-harness` directly), and a dynamic aeron link would need
-# the build-script OUT_DIR on the loader path to find libaeron*.so.
-static = ["rusteron-client/static"]

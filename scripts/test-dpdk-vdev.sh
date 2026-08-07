@@ -87,8 +87,8 @@ build_harness() {
         log "using prebuilt harness $HARNESS_BIN"
         return
     fi
-    log "building dpdk-harness (--features dpdk,static)"
-    "$CARGO" build -p dpdk-harness --features dpdk,static
+    log "building dpdk-harness (--features dpdk)"
+    "$CARGO" build -p dpdk-harness --features dpdk
     HARNESS_BIN="target/debug/dpdk-harness"
     [[ -x "$HARNESS_BIN" ]] || die "harness build did not produce $HARNESS_BIN"
 }
@@ -454,6 +454,12 @@ mkdir -p "$REPORT_DIR" "$WORK_DIR"
 
 setup_hugepages
 build_harness
+
+# The harness links libaeron*.so dynamically from the build-script OUT_DIR
+# (a non-standard loader path), so a bare `target/debug/dpdk-harness` cannot
+# find them at runtime. Export the dirs so the launched harness resolves them.
+export LD_LIBRARY_PATH="$(find target -name 'libaeron*.so' -printf '%h\n' 2>/dev/null | sort -u | tr '\n' ':' | sed 's/:$//' || true)"
+
 bridge_up
 
 run_one_scenario() {
