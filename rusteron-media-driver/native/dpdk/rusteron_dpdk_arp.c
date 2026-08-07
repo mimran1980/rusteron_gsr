@@ -69,9 +69,6 @@ static void rusteron_dpdk_arp_send_request(
         return;
     }
     rusteron_dpdk_arp_send_frame(runtime, port, &m);
-    char ip_str[16];
-    rusteron_dpdk_ipv4_fmt(next_hop_ip, ip_str);
-    RD_DEBUG("arp: sent who-has %s on %s\n", ip_str, port->pci);
 }
 
 static void rusteron_dpdk_arp_send_reply(
@@ -90,10 +87,6 @@ static void rusteron_dpdk_arp_send_reply(
         return;
     }
     rusteron_dpdk_arp_send_frame(runtime, port, &m);
-    char local_str[16], req_str[16];
-    rusteron_dpdk_ipv4_fmt(port->local_ip, local_str);
-    rusteron_dpdk_ipv4_fmt(requester_ip, req_str);
-    RD_DEBUG("arp: answered who-has %s to %s on %s\n", local_str, req_str, port->pci);
 }
 
 int rusteron_dpdk_arp_resolve(
@@ -177,15 +170,11 @@ int rusteron_dpdk_arp_handle_frame(
     if (RUSTERON_DPDK_ARP_OPER_REQUEST == oper)
     {
         /* Respond only to requests for this role's configured local IPv4. */
-        char tpa_str[16];
-        rusteron_dpdk_ipv4_fmt(tpa, tpa_str);
         if (tpa == rx_port->local_ip)
         {
             rusteron_dpdk_arp_send_reply(runtime, rx_port, sha, spa);
-            RD_DEBUG("arp: rx who-has %s (answered) on %s\n", tpa_str, rx_port->pci);
             return 1;
         }
-        RD_DEBUG("arp: rx who-has %s (not ours) on %s\n", tpa_str, rx_port->pci);
         return 0;
     }
 
@@ -194,8 +183,6 @@ int rusteron_dpdk_arp_handle_frame(
         /* Learn only when the reply is addressed to this role's local MAC and
          * matches an outstanding (INCOMPLETE) request. A reachable entry is
          * never overwritten, so gratuitous/unrelated ARP cannot poison it. */
-        char spa_str[16];
-        rusteron_dpdk_ipv4_fmt(spa, spa_str);
         if (0 == memcmp(frame, rx_port->mac, RUSTERON_DPDK_ETH_ADDR_LEN))
         {
             rusteron_dpdk_arp_entry_t *e = rusteron_dpdk_arp_slot_for(table, spa);
@@ -204,14 +191,8 @@ int rusteron_dpdk_arp_handle_frame(
                 memcpy(e->mac, sha, RUSTERON_DPDK_ETH_ADDR_LEN);
                 e->state = RUSTERON_DPDK_ARP_REACHABLE;
                 e->last_seen_ms = rusteron_dpdk_clock_ms();
-                RD_DEBUG("arp: learned %s on %s\n", spa_str, rx_port->pci);
                 return 1;
             }
-            RD_DEBUG("arp: rx reply %s (not-incomplete) on %s\n", spa_str, rx_port->pci);
-        }
-        else
-        {
-            RD_DEBUG("arp: rx reply %s (dst-mac mismatch) on %s\n", spa_str, rx_port->pci);
         }
         return 0;
     }
