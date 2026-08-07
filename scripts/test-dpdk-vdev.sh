@@ -87,8 +87,8 @@ build_harness() {
         log "using prebuilt harness $HARNESS_BIN"
         return
     fi
-    log "building dpdk-harness (--features dpdk)"
-    "$CARGO" build -p dpdk-harness --features dpdk
+    log "building dpdk-harness (--features dpdk,static)"
+    "$CARGO" build -p dpdk-harness --features dpdk,static
     HARNESS_BIN="target/debug/dpdk-harness"
     [[ -x "$HARNESS_BIN" ]] || die "harness build did not produce $HARNESS_BIN"
 }
