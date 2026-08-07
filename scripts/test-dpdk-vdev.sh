@@ -153,13 +153,25 @@ attach_tap() {
 # ---------------------------------------------------------------------------
 
 dpdk_env() {
-    local role=$1 suffix
+    local role=$1 suffix s_ip r_ip
     suffix=rusteron-vdev-p
     [[ "$role" == secondary ]] && suffix=rusteron-vdev-s
+    # Sender/receiver tap IPs per role (see the attach_tap calls in
+    # scenario_bidi): primary 10.9.0.1/.3, secondary 10.9.0.2/.4.
+    if [[ "$role" == secondary ]]; then
+        s_ip=10.9.0.2; r_ip=10.9.0.4
+    else
+        s_ip=10.9.0.1; r_ip=10.9.0.3
+    fi
     echo "RUSTERON_MEDIA_DRIVER_TRANSPORT=dpdk-ena"
     echo "RUSTERON_DPDK_FILE_PREFIX=$suffix"
+    echo "RUSTERON_DPDK_TEST_VDEV=1"
     echo "RUSTERON_DPDK_SENDER_PCI=net_tap0"
+    echo "RUSTERON_DPDK_SENDER_IPV4_CIDR=$s_ip/24"
+    echo "RUSTERON_DPDK_SENDER_GATEWAY=$GW"
     echo "RUSTERON_DPDK_RECEIVER_PCI=net_tap1"
+    echo "RUSTERON_DPDK_RECEIVER_IPV4_CIDR=$r_ip/24"
+    echo "RUSTERON_DPDK_RECEIVER_GATEWAY=$GW"
     echo "RUSTERON_DPDK_HUGE_DIR=$HUGEDIR"
     echo "RUSTERON_DPDK_RX_DESCRIPTORS=1024"
     echo "RUSTERON_DPDK_TX_DESCRIPTORS=1024"
