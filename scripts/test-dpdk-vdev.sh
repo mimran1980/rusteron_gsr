@@ -360,6 +360,16 @@ scenario_bidi() {
     kill "$s_pid" 2>/dev/null || true
     wait "$p_pid" 2>/dev/null || true
     wait "$s_pid" 2>/dev/null || true
+
+    # A DPDK tap netdev can outlive the process that created it for a beat.
+    # Any that linger would be snapshotted as the next run's "before" set and
+    # shadow the new process's identically-named taps (discover_taps diffs by
+    # name) — the restart scenario hit exactly this. Drop what's left so the
+    # next scenario starts with a clean tap namespace.
+    local linger; linger=$(snapshot_taps)
+    for t in $linger; do
+        ip link del "$t" 2>/dev/null || true
+    done
     log "scenario $scenario PASSED"
 }
 
@@ -405,6 +415,16 @@ scenario_reconnect() {
     kill "$s_pid" 2>/dev/null || true
     wait "$p_pid" 2>/dev/null || true
     wait "$s_pid" 2>/dev/null || true
+
+    # A DPDK tap netdev can outlive the process that created it for a beat.
+    # Any that linger would be snapshotted as the next run's "before" set and
+    # shadow the new process's identically-named taps (discover_taps diffs by
+    # name) — the restart scenario hit exactly this. Drop what's left so the
+    # next scenario starts with a clean tap namespace.
+    local linger; linger=$(snapshot_taps)
+    for t in $linger; do
+        ip link del "$t" 2>/dev/null || true
+    done
     log "scenario $scenario PASSED"
 }
 
@@ -455,6 +475,16 @@ scenario_multi_endpoint() {
     kill "$s_pid" 2>/dev/null || true
     wait "$p_pid" 2>/dev/null || true
     wait "$s_pid" 2>/dev/null || true
+
+    # A DPDK tap netdev can outlive the process that created it for a beat.
+    # Any that linger would be snapshotted as the next run's "before" set and
+    # shadow the new process's identically-named taps (discover_taps diffs by
+    # name) — the restart scenario hit exactly this. Drop what's left so the
+    # next scenario starts with a clean tap namespace.
+    local linger; linger=$(snapshot_taps)
+    for t in $linger; do
+        ip link del "$t" 2>/dev/null || true
+    done
     log "scenario $scenario PASSED"
 }
 
