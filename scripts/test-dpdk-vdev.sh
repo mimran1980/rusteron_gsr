@@ -175,7 +175,11 @@ dpdk_env() {
     echo "RUSTERON_DPDK_HUGE_DIR=$HUGEDIR"
     echo "RUSTERON_DPDK_RX_DESCRIPTORS=1024"
     echo "RUSTERON_DPDK_TX_DESCRIPTORS=1024"
-    echo "RUSTERON_DPDK_MBUFS_PER_PORT=65536"
+    # 8192, not the 65536 default: on a PA-mode runner (physical NIC forces
+    # IOVA PA) each rte_pktmbuf_pool needs a physically-contiguous hugepage
+    # run, and two 128 MB pools don't fit 512 MB. 8192 covers the 1000-msg
+    # scenarios with huge headroom (matches the test-fixture value).
+    echo "RUSTERON_DPDK_MBUFS_PER_PORT=8192"
     echo "RUSTERON_DPDK_MEMPOOL_CACHE=256"
     echo "RUSTERON_DPDK_BURST_SIZE=32"
     echo "RUSTERON_DPDK_MAX_AERON_MTU=1408"
