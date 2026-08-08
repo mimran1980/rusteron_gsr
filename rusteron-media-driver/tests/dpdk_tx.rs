@@ -608,7 +608,7 @@ fn oversized_channel_mtu_rejected_at_init() {
     let native = create(&config).unwrap_or_else(|e| panic!("create failed: {e}"));
     let bindings = unsafe { rusteron_dpdk_transport_bindings() };
     assert!(!bindings.is_null());
-    let transport = Box::new(unsafe { std::mem::zeroed::<aeron_udp_channel_transport_stct>() });
+    let mut transport = Box::new(unsafe { std::mem::zeroed::<aeron_udp_channel_transport_stct>() });
     let mut bind = SockAddrIn::new(SENDER_IP, 40000);
     let mut params: aeron_udp_channel_transport_params_stct = unsafe { std::mem::zeroed() };
     params.mtu_length = 64; // exceeds the 32-byte ceiling
