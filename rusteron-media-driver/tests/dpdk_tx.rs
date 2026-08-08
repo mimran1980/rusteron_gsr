@@ -11,7 +11,7 @@
 #![cfg(all(feature = "dpdk", target_os = "linux", target_arch = "x86_64"))]
 
 mod common;
-use common::{close, create, last_error, rusteron_dpdk_config_t, TestEnv};
+use common::*;
 
 use serial_test::serial;
 
@@ -27,30 +27,9 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 // Native test hooks (fakes + runtime).
 // ---------------------------------------------------------------------------
 
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct FakeCapture {
-    data: [u8; 2048],
-    len: u32,
-    ol_flags: u32,
-    l2_len: u16,
-    l3_len: u16,
-    l4_len: u16,
-    udp_pseudo_csum: u16,
-    port_id: u16,
-}
-
 extern "C" {
     fn rusteron_dpdk_transport_bindings() -> *mut aeron_udp_channel_transport_bindings_stct;
-    fn rusteron_dpdk_transport_test_arp_seed(transport: *mut c_void, ip: *const c_char, mac: *const u8) -> c_int;
     fn rusteron_dpdk_transport_test_arp_rx(transport: *mut c_void, role: c_int, frame: *const u8, len: usize) -> c_int;
-    fn rusteron_dpdk_test_set_clock_ms(ms: u64);
-    fn rusteron_dpdk_fake_set_tx_burst_cap(n: u16);
-    fn rusteron_dpdk_fake_set_pool_avail(n: c_int);
-    fn rusteron_dpdk_fake_capture_count() -> c_int;
-    fn rusteron_dpdk_fake_capture_at(index: c_int, out: *mut FakeCapture) -> c_int;
-    fn rusteron_dpdk_fake_allocated() -> c_int;
-    fn rusteron_dpdk_fake_released() -> c_int;
 }
 
 // ---------------------------------------------------------------------------
@@ -251,15 +230,6 @@ fn captures() -> Vec<FakeCapture> {
 
 fn cap_bytes(c: &FakeCapture) -> &[u8] {
     &c.data[..c.len as usize]
-}
-
-fn assert_no_leak() {
-    let allocated = unsafe { rusteron_dpdk_fake_allocated() };
-    let released = unsafe { rusteron_dpdk_fake_released() };
-    assert_eq!(
-        allocated, released,
-        "mbuf leak: allocated={allocated} released={released}"
-    );
 }
 
 fn eth_dst(c: &FakeCapture) -> [u8; 6] {
@@ -621,6 +591,42 @@ fn oversized_after_valid_prefix_flushes_prefix_then_errors() {
     let caps = captures();
     assert_eq!(caps.len(), 1, "the valid prefix was transmitted");
     assert_eq!(udp_payload(&caps[0]), small.as_slice());
+    assert_no_leak();
+}
+
+#[test]
+#[serial]
+fn oversized_channel_mtu_rejected_at_init() {
+    // A channel MTU over max_aeron_mtu is rejected at init (plan §6.5), not
+    // clamped: it fails loudly instead of silently degrading to a different
+    // MTU. The reject fires before any port/affinity work (§11.1), so the
+    // failed init leaves nothing to roll back.
+    let env = TestEnv::new();
+    env.eal_skip();
+    let mut config = rusteron_dpdk_config_t::valid();
+    config.max_aeron_mtu = 32; // small 32-aligned ceiling
+    let native = create(&config).unwrap_or_else(|e| panic!("create failed: {e}"));
+    let bindings = unsafe { rusteron_dpdk_transport_bindings() };
+    assert!(!bindings.is_null());
+    let transport = Box::new(unsafe { std::mem::zeroed::<aeron_udp_channel_transport_stct>() });
+    let mut bind = SockAddrIn::new(SENDER_IP, 40000);
+    let mut params: aeron_udp_channel_transport_params_stct = unsafe { std::mem::zeroed() };
+    params.mtu_length = 64; // exceeds the 32-byte ceiling
+    let rc = unsafe {
+        let b = &*bindings;
+        b.init_func.unwrap()(
+            &*transport,
+            bind.storage_mut(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+            &mut params,
+            ptr::null_mut(),
+            aeron_udp_channel_transport_affinity_t::AERON_UDP_CHANNEL_TRANSPORT_AFFINITY_SENDER,
+        )
+    };
+    assert_eq!(rc, -1, "init must reject an over-limit channel MTU");
+    assert!(last_error().contains("exceeds max_aeron_mtu"), "got: {}", last_error());
+    close(native);
     assert_no_leak();
 }
 

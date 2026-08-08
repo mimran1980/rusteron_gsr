@@ -204,6 +204,9 @@ fn allocation_for(pair: &Pair) -> ContainerAllocateResponse {
     }
 }
 
+// ponytail: role builds RUSTERON_DPDK_{SENDER|RECEIVER}_{PCI|IPV4_CIDR|GATEWAY}
+// and must match the env.rs required() names; pinned by the
+// allocation_injects_pair_env_and_vfio_nodes test.
 fn put_role(envs: &mut HashMap<String, String>, role: &str, port: &Port) {
     let p = format!("RUSTERON_DPDK_{role}");
     envs.insert(format!("{p}_PCI"), port.pci.clone());

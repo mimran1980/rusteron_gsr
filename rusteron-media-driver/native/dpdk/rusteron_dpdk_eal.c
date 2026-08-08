@@ -16,6 +16,7 @@
 #include "rusteron_dpdk_internal.h"
 
 #include <rte_eal.h>
+#include <rte_lcore.h>
 #include <rte_version.h>
 
 #include <stdio.h>
@@ -100,5 +101,34 @@ int rusteron_dpdk_eal_init(const rusteron_dpdk_eal_params_t *params, char *errbu
     }
 
     rusteron_dpdk_eal_initialized = 1;
+    return 0;
+}
+
+int rusteron_dpdk_eal_thread_register(void)
+{
+    /* Only lcore-less threads need registration. A registered non-EAL thread
+     * (and the EAL main lcore) already has a valid lcore id, and
+     * rte_thread_register has no double-registration guard — it would silently
+     * consume another RTE_MAX_LCORE slot — so gate on rte_lcore_id(). */
+    if (LCORE_ID_ANY != rte_lcore_id())
+    {
+        return 0;
+    }
+    if (rte_thread_register() < 0)
+    {
+        return -1;
+    }
+    return 0;
+}
+
+int rusteron_dpdk_eal_thread_unregister(void)
+{
+    /* Never release an EAL lcore (e.g. the main lcore); only a NON_EAL lcore
+     * acquired by rte_thread_register. Safe no-op on every other thread. */
+    unsigned int lcore_id = rte_lcore_id();
+    if (LCORE_ID_ANY != lcore_id && rte_lcore_has_role(lcore_id, ROLE_NON_EAL))
+    {
+        rte_thread_unregister();
+    }
     return 0;
 }

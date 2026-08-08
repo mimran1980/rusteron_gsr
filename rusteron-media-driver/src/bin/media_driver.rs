@@ -28,8 +28,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // context exists and before the driver is created (plan §8). A selected
     // DPDK failure propagates as a nonzero exit; it never falls back to the
     // default socket driver.
-    let _dpdk = configure_media_transport_from_env(&aeron_context)?;
-    let backend = if _dpdk.is_some() { "dpdk-ena" } else { "socket" };
+    let dpdk = configure_media_transport_from_env(&aeron_context)?;
+    let backend = if dpdk.is_some() { "dpdk-ena" } else { "socket" };
     println!("transport backend: {backend}");
     println!("aeron dir: {}", aeron_context.get_dir());
     aeron_context.print_configuration();

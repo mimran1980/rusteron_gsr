@@ -22,6 +22,10 @@ use std::os::raw::{c_char, c_int, c_void};
 // defines it, so declare it directly here.
 extern "C" {
     fn rusteron_dpdk_runtime_probe_device(transport: *mut c_void, pci_bdf: *const c_char, port_id: *mut u16) -> c_int;
+    // EAL thread registration seam (plan §7.2). Test builds link the fake EAL's
+    // no-op stubs; the real rte_lcore_id-gated impl runs in production builds.
+    fn rusteron_dpdk_eal_thread_register() -> c_int;
+    fn rusteron_dpdk_eal_thread_unregister() -> c_int;
 }
 
 /// Index of the first log entry containing `needle`, or -1.
@@ -192,5 +196,28 @@ fn eal_seam_path_initializes_singleton() {
 
     let config = rusteron_dpdk_config_t::valid();
     let transport = create(&config).unwrap_or_else(|e| panic!("create failed: {e}"));
+    assert_eq!(close(transport), 0);
+}
+
+/// The EAL thread-registration seam (plan §7.2) is wired and safe to call on
+/// the test thread: register is an idempotent no-op for non-EAL threads under
+/// the fake EAL, and unregister is a guarded no-op on every other thread.
+#[serial]
+#[test]
+fn thread_registration_seam_is_safe_noop() {
+    let env = TestEnv::new();
+    env.eal_skip();
+
+    let config = rusteron_dpdk_config_t::valid();
+    let transport = create(&config).unwrap();
+
+    assert_eq!(unsafe { rusteron_dpdk_eal_thread_register() }, 0);
+    assert_eq!(
+        unsafe { rusteron_dpdk_eal_thread_register() },
+        0,
+        "register must be idempotent"
+    );
+    assert_eq!(unsafe { rusteron_dpdk_eal_thread_unregister() }, 0);
+
     assert_eq!(close(transport), 0);
 }

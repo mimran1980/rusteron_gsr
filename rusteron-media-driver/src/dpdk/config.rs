@@ -58,7 +58,7 @@ impl DpdkTransportConfig {
             )));
         }
 
-        if !valid_file_prefix(&self.file_prefix) {
+        if !valid_ident(&self.file_prefix, 64) {
             return Err(DpdkError::InvalidConfiguration(format!(
                 "file_prefix {:?} must match [A-Za-z0-9_-]{{1,64}}",
                 self.file_prefix
@@ -113,7 +113,7 @@ impl DpdkTransportConfig {
 }
 
 fn validate_port(role: &str, port: &DpdkPortConfig, test_vdev: bool) -> Result<(), DpdkError> {
-    if !valid_pci(&port.pci_address) && !(test_vdev && valid_vdev(&port.pci_address)) {
+    if !valid_pci(&port.pci_address) && !(test_vdev && valid_ident(&port.pci_address, 15)) {
         return Err(DpdkError::InvalidConfiguration(format!(
             "{role}.pci_address {:?} is not canonical dddd:bb:ss.f{}",
             port.pci_address,
@@ -163,6 +163,10 @@ fn is_unicast(addr: Ipv4Addr) -> bool {
 }
 
 /// Canonical PCI BDF syntax `dddd:bb:ss.f` (4-2-2 hex, dot, 1 hex).
+///
+/// Shape must match `is_bdf` in rusteron-dpdk-device-plugin/src/inventory.rs —
+/// the plugin refuses any inventory whose BDF this check would reject. (No
+/// shared crate dependency; this comment is the sync contract.)
 fn valid_pci(s: &str) -> bool {
     let b = s.as_bytes();
     if b.len() != 12 {
@@ -183,16 +187,10 @@ fn valid_pci(s: &str) -> bool {
         && hex(11)
 }
 
-/// DPDK virtual-device name (e.g. `net_tap0`, `net_pcap0`), test-only.
-///
-/// Must fit the 16-byte native selector buffer and must not contain `:` so the
-/// native EAL can distinguish a vdev name from a PCI BDF by shape.
-fn valid_vdev(s: &str) -> bool {
+/// `[A-Za-z0-9_-]` name of `1..=max_len` bytes. Shared by DPDK vdev names
+/// (max 15, the 16-byte native selector buffer; no `:` so the EAL can tell a
+/// vdev from a PCI BDF by shape) and EAL file prefixes (max 64).
+fn valid_ident(s: &str, max_len: usize) -> bool {
     let n = s.len();
-    n >= 1 && n <= 15 && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
-}
-
-fn valid_file_prefix(s: &str) -> bool {
-    let n = s.len();
-    n >= 1 && n <= 64 && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+    n >= 1 && n <= max_len && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
 }

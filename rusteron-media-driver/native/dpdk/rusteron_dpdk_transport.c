@@ -273,6 +273,17 @@ static int rusteron_dpdk_transport_init(
         return -1;
     }
 
+    /* Channel-specific MTU overrides larger than max_aeron_mtu are rejected at
+     * init (plan §6.5) rather than clamped, so an over-large channel fails
+     * loudly instead of silently degrading to a different MTU. Placed before
+     * any port/affinity work so no partial state needs rollback (§11.1). */
+    if (params->mtu_length > native->config.max_aeron_mtu)
+    {
+        AERON_SET_ERR(EINVAL, "%s", "DPDK transport init: channel MTU exceeds max_aeron_mtu");
+        rusteron_dpdk_set_error("DPDK transport init: channel MTU exceeds max_aeron_mtu");
+        return -1;
+    }
+
     rusteron_dpdk_port_t *port;
     switch (affinity)
     {
@@ -313,14 +324,9 @@ static int rusteron_dpdk_transport_init(
     client->port = port;
     client->affinity = (int)affinity;
     client->local_udp_port = (uint16_t)ntohs(((struct sockaddr_in *)bind_addr)->sin_port);
+    /* Oversized channel MTUs were rejected earlier in this function, so the
+     * client MTU is always <= max_aeron_mtu and needs no clamp. */
     client->mtu = params->mtu_length;
-    if (client->mtu > native->config.max_aeron_mtu)
-    {
-        /* The device L3 MTU caps every frame; clamp to it so an over-large
-         * channel MTU degrades to "oversized datagram rejected" instead of
-         * handing the NIC a frame bigger than the configured device MTU. */
-        client->mtu = native->config.max_aeron_mtu;
-    }
 
     transport->bindings_clientd = client;
     /* The connect address is caller-owned; keep a copy so NULL-address sends
@@ -419,6 +425,15 @@ static int rusteron_dpdk_transport_send(
     if (0 == iov_length)
     {
         return 0;
+    }
+
+    /* The Aeron sender is a non-EAL thread; register it with DPDK before its
+     * first tx (plan §7.2). The seam is a cheap lcore-id check after the first
+     * call and is a no-op on already-registered/EAL threads. */
+    if (rusteron_dpdk_eal_thread_register() < 0)
+    {
+        rusteron_dpdk_set_error("DPDK transport send: failed to register thread with DPDK");
+        return -1;
     }
 
     rusteron_dpdk_transport_t *native = client->runtime;

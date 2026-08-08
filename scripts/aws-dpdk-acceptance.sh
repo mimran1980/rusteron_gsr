@@ -145,6 +145,88 @@ RUSTERON_HARNESS_RECEIVER_CPU=2
 EOF
 }
 
+# write_udp_sec_env <node> <outfile> <peer_receiver_ip>
+#   Kernel-UDP env over the node's own secondary ENAs (plan §12.1 baseline):
+#   no DPDK vars; the MDC endpoints are the sender/receiver secondary IPs, so
+#   the baseline measures the same ENIs the DPDK modes use, not the primary.
+write_udp_sec_env() {
+    local node=$1 out=$2 peer=$3 inv ip_s ip_r
+    inv=$(inventory_json "$node")
+    echo "$inv" | jq -e '.pairs | length > 0' >/dev/null || die "$node has no DPDK pairs"
+    ip_s=$(echo "$inv" | jq -r '.pairs[0].sender.ipv4')
+    ip_r=$(echo "$inv" | jq -r '.pairs[0].receiver.ipv4')
+    cat > "$out" <<EOF
+RUSTERON_HARNESS_PUB_CTRL=$ip_s:40101
+RUSTERON_HARNESS_SUB_ENDPOINTS=$ip_r:40102
+RUSTERON_HARNESS_DESTINATIONS=$peer:40102
+RUSTERON_HARNESS_SENDER_CPU=1
+RUSTERON_HARNESS_RECEIVER_CPU=2
+EOF
+}
+
+# ena_bind_kernel <node> <peer_rx_ip>
+#   Temporarily return both secondary ENAs to the kernel `ena` driver with
+#   their inventory IPs up (plan §12.1 baseline). Mirrors the bootstrap's
+#   bind_vfio in reverse: vfio-pci unbind, clear driver_override, probe.
+#   A /32 route to <peer_rx_ip> is added via the sender's gateway only when
+#   the peer is outside the sender's subnet (same-subnet peers are on-link;
+#   forcing the gateway would add a hop and skew the baseline).
+ena_bind_kernel() {
+    local node=$1 peer=$2 inv role bdf ip pfx gw iface i
+    inv=$(inventory_json "$node")
+    for role in sender receiver; do
+        bdf=$(echo "$inv" | jq -r ".pairs[0].$role.pci")
+        ip=$(echo "$inv" | jq -r ".pairs[0].$role.ipv4")
+        pfx=$(echo "$inv" | jq -r ".pairs[0].$role.prefix_len")
+        gw=$(echo "$inv" | jq -r ".pairs[0].$role.gateway")
+        nssh "$node" "echo $bdf > /sys/bus/pci/drivers/vfio-pci/unbind 2>/dev/null || true"
+        nssh "$node" "echo > /sys/bus/pci/devices/$bdf/driver_override"
+        nssh "$node" "echo $bdf > /sys/bus/pci/drivers_probe"
+        iface=""
+        for i in 1 2 3 4 5; do
+            iface=$(nssh "$node" "ls /sys/bus/pci/devices/$bdf/net/ 2>/dev/null | head -1" | tr -d '\r')
+            [[ -n "$iface" ]] && break
+            sleep 1
+        done
+        [[ -n "$iface" ]] || die "ena_bind_kernel: $node $bdf ($role) got no net iface after probe"
+        nssh "$node" "ip addr add $ip/$pfx dev $iface 2>/dev/null || true; ip link set $iface up"
+        if [[ "$role" == sender ]]; then
+            # Route the peer receiver over the sender ENA unless already on-link
+            # (forcing the gateway on a same-subnet peer would add a hop).
+            if ! in_subnet "$peer" "$ip" "$pfx"; then
+                nssh "$node" "ip route add $peer/32 via $gw dev $iface 2>/dev/null || true"
+            fi
+        fi
+    done
+    log "returned secondary ENAs to the kernel ena driver on $node"
+}
+
+# ena_bind_vfio <node>
+#   Restore both secondary ENAs to vfio-pci (bootstrap bind_vfio semantics);
+#   dies if either does not end up bound to vfio-pci.
+ena_bind_vfio() {
+    local node=$1 inv role bdf driver
+    inv=$(inventory_json "$node")
+    for role in sender receiver; do
+        bdf=$(echo "$inv" | jq -r ".pairs[0].$role.pci")
+        nssh "$node" "echo $bdf > /sys/bus/pci/drivers/ena/unbind 2>/dev/null || true"
+        nssh "$node" "echo vfio-pci > /sys/bus/pci/devices/$bdf/driver_override"
+        nssh "$node" "echo $bdf > /sys/bus/pci/drivers_probe"
+        driver=$(nssh "$node" "readlink /sys/bus/pci/devices/$bdf/driver 2>/dev/null | xargs -r basename" | tr -d '\r')
+        [[ "$driver" == "vfio-pci" ]] || die "ena_bind_vfio: restore failed on $node $bdf (driver=$driver)"
+    done
+    log "restored secondary ENAs to vfio-pci on $node"
+}
+
+# in_subnet <ip> <cidr_ip> <prefix> — true when <ip> lies within <cidr_ip>/<prefix>.
+in_subnet() {
+    local a b mask
+    a=$(ip_int "$1"); b=$(ip_int "$2")
+    mask=$(( (1 << (32 - $3)) - 1 )); mask=$(( ~mask ))
+    (( (a & mask) == (b & mask) ))
+}
+ip_int() { local IFS=. a b c d; read -r a b c d <<<"$1"; echo $(( a*16777216 + b*65536 + c*256 + d )); }
+
 harness_common() { # harness_common <outfile> <scenario> <msgs> <payload>
     local out=$1 scenario=$2 msgs=$3 payload=$4
     cat >> "$out" <<EOF
@@ -460,12 +542,22 @@ collect_bench_results() {
 
 phase_bench() {
     log "=== benchmark matrix (§12) ==="
-    # Mode 1: tuned kernel UDP (default transport, primary ENA).
-    log "mode: kernel-udp"
+    # Mode 1: tuned kernel UDP (default transport) over the same secondary
+    # ENAs the DPDK modes use, temporarily returned to the kernel ena driver
+    # (plan §12.1), so the baseline is apples-to-apples. The primary ENAs stay
+    # untouched; the secondaries are restored to vfio-pci before any DPDK mode.
+    log "mode: kernel-udp (secondary ENAs returned to the kernel driver)"
     local kA="$RUN_DIR/bench-kernel-a.env" kB="$RUN_DIR/bench-kernel-b.env"
-    write_udp_env "$NODE_A" "$kA" "$IP_B"
-    write_udp_env "$NODE_B" "$kB" "$IP_A"
+    local rxA rxB
+    rxA=$(inventory_json "$NODE_A" | jq -r '.pairs[0].receiver.ipv4')
+    rxB=$(inventory_json "$NODE_B" | jq -r '.pairs[0].receiver.ipv4')
+    ena_bind_kernel "$NODE_A" "$rxB"
+    ena_bind_kernel "$NODE_B" "$rxA"
+    write_udp_sec_env "$NODE_A" "$kA" "$rxB"
+    write_udp_sec_env "$NODE_B" "$kB" "$rxA"
     bench_mode kernel "$kA" "$kB"
+    ena_bind_vfio "$NODE_A"
+    ena_bind_vfio "$NODE_B"
     collect_bench_results kernel
 
     # Mode 2: DPDK ENA Express off (the default; §12.3 primary gate).

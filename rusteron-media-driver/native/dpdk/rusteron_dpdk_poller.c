@@ -188,6 +188,15 @@ int rusteron_dpdk_poller_receive(
         return -1;
     }
 
+    /* The Aeron receiver is a non-EAL thread; register it with DPDK before its
+     * first rx (plan §7.2). The seam is a cheap lcore-id check after the first
+     * call and is a no-op on already-registered/EAL threads. */
+    if (rusteron_dpdk_eal_thread_register() < 0)
+    {
+        rusteron_dpdk_set_error("poller_receive: failed to register thread with DPDK");
+        return -1;
+    }
+
     rusteron_dpdk_transport_t *native = client->runtime;
     rusteron_dpdk_port_t *port = client->port;
     const rusteron_dpdk_port_ops_t *ops = native->ops;
@@ -288,6 +297,12 @@ int rusteron_dpdk_poller_close(aeron_udp_transport_poller_t *poller)
     {
         return 0;
     }
+
+    /* Best-effort unregister (plan §7.2). This runs on the conductor's close
+     * path (main lcore), where the seam is a safe no-op; the registered sender
+     * and receiver network threads are process-lifetime because EAL cannot be
+     * reinitialized (§7.2 line 272). */
+    rusteron_dpdk_eal_thread_unregister();
 
     rusteron_dpdk_poller_state_t *state = (rusteron_dpdk_poller_state_t *)poller->bindings_clientd;
     if (NULL != state)

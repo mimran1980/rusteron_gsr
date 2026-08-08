@@ -11,7 +11,7 @@
 #![cfg(all(feature = "dpdk", target_os = "linux", target_arch = "x86_64"))]
 
 mod common;
-use common::{close, create, last_error, rusteron_dpdk_config_t, TestEnv};
+use common::*;
 
 use serial_test::serial;
 
@@ -24,55 +24,9 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 // Native test hooks (fakes + runtime).
 // ---------------------------------------------------------------------------
 
-/// Mirror of `rusteron_dpdk_rx_stats_t` (14 u64 buckets, plan §7.6).
-#[repr(C)]
-#[derive(Default, Clone, Copy, Debug, PartialEq)]
-struct RxStats {
-    accepted: u64,
-    arp: u64,
-    ipv6: u64,
-    multicast: u64,
-    ethertype: u64,
-    vlan: u64,
-    ip_options: u64,
-    fragment: u64,
-    truncated: u64,
-    protocol: u64,
-    checksum: u64,
-    multi_segment: u64,
-    foreign_dst: u64,
-    unknown_port: u64,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct FakeCapture {
-    data: [u8; 2048],
-    len: u32,
-    ol_flags: u32,
-    l2_len: u16,
-    l3_len: u16,
-    l4_len: u16,
-    udp_pseudo_csum: u16,
-    port_id: u16,
-}
-
 extern "C" {
     fn rusteron_dpdk_transport_bindings() -> *mut aeron_udp_channel_transport_bindings_stct;
-    fn rusteron_dpdk_transport_test_rx_stats(transport: *const c_void, out: *mut RxStats);
-    fn rusteron_dpdk_fake_rx_inject(
-        port_id: u16,
-        frame: *const u8,
-        len: usize,
-        rx_ol_flags: u32,
-        nb_segs: u32,
-    ) -> c_int;
     fn rusteron_dpdk_fake_rx_queued(port_id: u16) -> c_int;
-    fn rusteron_dpdk_fake_capture_count() -> c_int;
-    fn rusteron_dpdk_fake_capture_at(index: c_int, out: *mut FakeCapture) -> c_int;
-    fn rusteron_dpdk_fake_allocated() -> c_int;
-    fn rusteron_dpdk_fake_released() -> c_int;
-    fn rusteron_dpdk_test_set_clock_ms(ms: u64);
 }
 
 // ---------------------------------------------------------------------------
@@ -529,15 +483,6 @@ fn arp_request_for_receiver(sha: [u8; 6], spa: [u8; 4]) -> Vec<u8> {
     f.extend_from_slice(&[0; 6]);
     f.extend_from_slice(&RECEIVER_IP);
     f
-}
-
-fn assert_no_leak() {
-    let allocated = unsafe { rusteron_dpdk_fake_allocated() };
-    let released = unsafe { rusteron_dpdk_fake_released() };
-    assert_eq!(
-        allocated, released,
-        "mbuf leak: allocated={allocated} released={released}"
-    );
 }
 
 // ---------------------------------------------------------------------------

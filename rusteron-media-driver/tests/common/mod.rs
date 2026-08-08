@@ -210,6 +210,40 @@ pub fn dump(transport: *const c_void) -> Dump {
     d
 }
 
+/// Mirror of the fake's capture slot (native/dpdk/fake/rusteron_dpdk_fake_port_ops.c).
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FakeCapture {
+    pub data: [u8; 2048],
+    pub len: u32,
+    pub ol_flags: u32,
+    pub l2_len: u16,
+    pub l3_len: u16,
+    pub l4_len: u16,
+    pub udp_pseudo_csum: u16,
+    pub port_id: u16,
+}
+
+/// Mirror of `rusteron_dpdk_rx_stats_t` (native/dpdk/rusteron_dpdk_rx.c).
+#[repr(C)]
+#[derive(Default, Clone, Copy, Debug, PartialEq)]
+pub struct RxStats {
+    pub accepted: u64,
+    pub arp: u64,
+    pub ipv6: u64,
+    pub multicast: u64,
+    pub ethertype: u64,
+    pub vlan: u64,
+    pub ip_options: u64,
+    pub fragment: u64,
+    pub truncated: u64,
+    pub protocol: u64,
+    pub checksum: u64,
+    pub multi_segment: u64,
+    pub foreign_dst: u64,
+    pub unknown_port: u64,
+}
+
 extern "C" {
     fn rusteron_dpdk_transport_create(config: *const rusteron_dpdk_config_t, transport: *mut *mut c_void) -> c_int;
     fn rusteron_dpdk_transport_close(transport: *mut c_void) -> c_int;
@@ -233,4 +267,34 @@ extern "C" {
     fn rusteron_dpdk_fake_log_count() -> c_int;
     fn rusteron_dpdk_fake_log_at(index: c_int, buf: *mut c_char, buflen: usize);
     fn rusteron_dpdk_fake_eal_reset();
+
+    // Shared native test hooks. These used to be duplicated in every test
+    // file's extern block; only `rusteron_dpdk_transport_bindings` (its
+    // signature references a bindings.rs type) stays file-local.
+    pub fn rusteron_dpdk_transport_test_arp_seed(transport: *mut c_void, ip: *const c_char, mac: *const u8) -> c_int;
+    pub fn rusteron_dpdk_transport_test_rx_stats(transport: *const c_void, out: *mut RxStats);
+    pub fn rusteron_dpdk_fake_rx_inject(
+        port_id: u16,
+        frame: *const u8,
+        len: usize,
+        rx_ol_flags: u32,
+        nb_segs: u32,
+    ) -> c_int;
+    pub fn rusteron_dpdk_fake_set_tx_burst_cap(n: u16);
+    pub fn rusteron_dpdk_fake_set_pool_avail(n: c_int);
+    pub fn rusteron_dpdk_fake_capture_count() -> c_int;
+    pub fn rusteron_dpdk_fake_capture_at(index: c_int, out: *mut FakeCapture) -> c_int;
+    pub fn rusteron_dpdk_fake_allocated() -> c_int;
+    pub fn rusteron_dpdk_fake_released() -> c_int;
+    pub fn rusteron_dpdk_test_set_clock_ms(ms: u64);
+}
+
+/// The mbuf pool must be balanced after every test (allocated == released).
+pub fn assert_no_leak() {
+    let allocated = unsafe { rusteron_dpdk_fake_allocated() };
+    let released = unsafe { rusteron_dpdk_fake_released() };
+    assert_eq!(
+        allocated, released,
+        "mbuf leak: allocated={allocated} released={released}"
+    );
 }

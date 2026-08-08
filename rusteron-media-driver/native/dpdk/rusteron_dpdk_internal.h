@@ -142,6 +142,13 @@ typedef struct rusteron_dpdk_eal_params_stct
 int rusteron_dpdk_eal_init(const rusteron_dpdk_eal_params_t *params, char *errbuf, size_t errlen);
 int rusteron_dpdk_eal_is_initialized(void);
 
+/* Register/unregister the calling thread with DPDK (plan §7.2: "Register Aeron
+ * network threads with DPDK"). Real impl in rusteron_dpdk_eal.c, no-op in
+ * test/rusteron_dpdk_fake_eal.c. Both are safe on already-registered and EAL
+ * threads. */
+int rusteron_dpdk_eal_thread_register(void);
+int rusteron_dpdk_eal_thread_unregister(void);
+
 /* Runtime orchestration (rusteron_dpdk_runtime.c). */
 int rusteron_dpdk_runtime_init(rusteron_dpdk_transport_t *native);
 void rusteron_dpdk_runtime_cleanup(rusteron_dpdk_transport_t *native);

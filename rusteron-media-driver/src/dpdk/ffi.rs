@@ -291,6 +291,8 @@ fn validate_context(context: &AeronDriverContext, config: &DpdkTransportConfig) 
     Ok(())
 }
 
+// ponytail: role is the C getter suffix in the error message — keep it
+// byte-identical to the bindings' aeron_driver_context_get_{role}_wildcard_port_range.
 #[cfg(feature = "dpdk")]
 fn wildcard_port_range(context: &AeronDriverContext, role: &str) -> Result<(u16, u16), DpdkError> {
     let (mut low, mut high) = (0u16, 0u16);

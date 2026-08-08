@@ -127,6 +127,11 @@ impl AeronDriverContext {
     }
 
     /// Retrieve a previously stored dependency of type `V`.
+    ///
+    /// Read counterpart of [`Self::add_dependency`]. Public so external callers
+    /// of the context's resource graph can observe what was stored; the DPDK
+    /// transport retains a clone here (§5.2) and the integration tests use this
+    /// method to verify that retention contract.
     pub fn get_dependency<V: Clone + 'static>(&self) -> Option<V> {
         self.inner.get_dependency()
     }

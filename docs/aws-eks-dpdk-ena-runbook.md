@@ -142,9 +142,12 @@ then watch the same counters as §3.
   it; the script verifies the resulting `EnaSrdSpecification`. The acceptance
   gate keeps it OFF unless it delivers a ≥5% median-p99 improvement at every
   message size with no throughput regression.
-- **Never rebind secondaries to the kernel driver** for the kernel baseline —
-  the primary ENA is the kernel-UDP path. Rebinding would also destroy the
-  DPDK pair until the next bootstrap.
+- **The §12.1 kernel baseline temporarily returns the secondaries to the
+  kernel `ena` driver**, which the acceptance script does and then restores to
+  `vfio-pci` (same driver_override + probe path the bootstrap uses). If the
+  acceptance run fails during the kernel baseline, restore the pair by
+  re-running the node bootstrap (it is idempotent). The primary ENA remains
+  the §13.2 rollback path and is never touched.
 - **Fragments**: the DPDK path never fragments (DF + MTU enforced in the
   DPDK transmit path, unit-tested). The kernel-UDP side is checked with
   tcpdump during acceptance; any `frag` capture fails the run.

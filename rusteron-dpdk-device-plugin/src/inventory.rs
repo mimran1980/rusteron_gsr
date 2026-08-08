@@ -169,6 +169,10 @@ fn validate_port(port: &Port) -> Result<(), String> {
 
 /// Loose check for the `DDDD:BB:DD.F` BDF layout the node bootstrap writes
 /// (`basename` of a `/sys/bus/pci/devices/*` directory, e.g. `0000:00:06.0`).
+///
+/// Shape must match `valid_pci` in rusteron-media-driver/src/dpdk/config.rs —
+/// keep the two in sync if either changes (the media driver is the canonical
+/// `dddd:bb:ss.f` check, and DPDK itself parses the function slot as hex).
 fn is_bdf(s: &str) -> bool {
     let b = s.as_bytes();
     b.len() == 12
@@ -180,7 +184,7 @@ fn is_bdf(s: &str) -> bool {
             .chain(&b[5..7])
             .chain(&b[8..10])
             .all(u8::is_ascii_hexdigit)
-        && b[11].is_ascii_digit()
+        && b[11].is_ascii_hexdigit()
 }
 
 /// Shared test fixtures (used by the inventory and service test suites).

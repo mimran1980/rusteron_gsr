@@ -30,3 +30,14 @@ int rusteron_dpdk_eal_init(const rusteron_dpdk_eal_params_t *params, char *errbu
     rusteron_dpdk_fake_eal_initialized = 1;
     return 0;
 }
+
+/* Thread registration (plan §7.2) is a DPDK-free no-op under the fake EAL. */
+int rusteron_dpdk_eal_thread_register(void)
+{
+    return 0;
+}
+
+int rusteron_dpdk_eal_thread_unregister(void)
+{
+    return 0;
+}

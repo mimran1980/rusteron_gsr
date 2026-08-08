@@ -45,8 +45,8 @@ pub fn selector() -> Result<Selector, DpdkError> {
 pub fn config_from_env() -> Result<DpdkTransportConfig, DpdkError> {
     let sender_cidr = required("RUSTERON_DPDK_SENDER_IPV4_CIDR")?;
     let receiver_cidr = required("RUSTERON_DPDK_RECEIVER_IPV4_CIDR")?;
-    let (sender_addr, sender_prefix) = parse_cidr("sender", &sender_cidr)?;
-    let (receiver_addr, receiver_prefix) = parse_cidr("receiver", &receiver_cidr)?;
+    let (sender_addr, sender_prefix) = parse_cidr("RUSTERON_DPDK_SENDER_IPV4_CIDR", &sender_cidr)?;
+    let (receiver_addr, receiver_prefix) = parse_cidr("RUSTERON_DPDK_RECEIVER_IPV4_CIDR", &receiver_cidr)?;
     let test_vdev = env::var("RUSTERON_DPDK_TEST_VDEV").is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
 
     Ok(DpdkTransportConfig {
@@ -90,13 +90,14 @@ fn ipv4(name: &str, value: &str) -> Result<Ipv4Addr, DpdkError> {
         .map_err(|_| DpdkError::InvalidEnvironment(format!("{name}={value:?} is not a valid IPv4 address")))
 }
 
-/// Parse `address/prefix` into the address and prefix length.
-fn parse_cidr(role: &str, value: &str) -> Result<(Ipv4Addr, u8), DpdkError> {
-    let var = format!("RUSTERON_DPDK_{}_IPV4_CIDR", role.to_uppercase());
+/// Parse `address/prefix` into the address and prefix length. `var` is the full
+/// env var name (e.g. RUSTERON_DPDK_SENDER_IPV4_CIDR), used verbatim in errors
+/// so a role typo can never produce a misleading name.
+fn parse_cidr(var: &str, value: &str) -> Result<(Ipv4Addr, u8), DpdkError> {
     let (ip, prefix) = value.split_once('/').ok_or_else(|| {
         DpdkError::InvalidEnvironment(format!("{var}={value:?} must be address/prefix (e.g. 10.0.0.1/24)"))
     })?;
-    let addr = ipv4(&var, ip)?;
+    let addr = ipv4(var, ip)?;
     let prefix_len: u8 = prefix
         .trim()
         .parse()
