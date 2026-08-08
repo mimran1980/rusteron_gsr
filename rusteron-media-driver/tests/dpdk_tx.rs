@@ -615,7 +615,7 @@ fn oversized_channel_mtu_rejected_at_init() {
     let rc = unsafe {
         let b = &*bindings;
         b.init_func.unwrap()(
-            &*transport,
+            &mut *transport,
             bind.storage_mut(),
             ptr::null_mut(),
             ptr::null_mut(),
