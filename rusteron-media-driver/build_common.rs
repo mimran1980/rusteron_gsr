@@ -251,7 +251,11 @@ fn build_from_source(config: &RusteronBuildConfig, docs_rs: &Path) {
         cmake_config.profile("Release");
         // No -flto: cmake uses GCC which produces GCC LTO archives; rust-lld (LLVM)
         // cannot link GCC LTO bitcode, causing undefined symbols at link time.
-        let release_flags = "-O3 -DNDEBUG -march=native -funroll-loops";
+        // -fPIC: rustc links the final binary as a PIE (-pie); non-PIC static
+        // C objects emit R_X86_64_32 relocations that rust-lld rejects on
+        // distros whose cc doesn't default to PIE (ubuntu masks it via gcc
+        // --enable-default-pie; AL2023's clang does not).
+        let release_flags = "-O3 -DNDEBUG -march=native -funroll-loops -fPIC";
         cmake_config.define("CMAKE_CXX_FLAGS_RELEASE", release_flags);
         cmake_config.define("CMAKE_C_FLAGS_RELEASE", release_flags);
     } else {
@@ -267,7 +271,9 @@ fn build_from_source(config: &RusteronBuildConfig, docs_rs: &Path) {
     // this on; RUSTERON_SANITIZE remains for other sanitizers (thread, undefined, ...).
     // This injects -fsanitize=* flags into the C/C++ compilation via cmake.
     #[allow(unused_mut)]
-    let mut c_flags = "-fcommon".to_string();
+    // Same -fPIC rationale as CMAKE_C_FLAGS_RELEASE above: the debug static
+    // build is also linked into a PIE.
+    let mut c_flags = "-fcommon -fPIC".to_string();
     let mut cxx_flags = String::new();
     println!("cargo:rerun-if-env-changed=RUSTERON_SANITIZE");
     let san_env = std::env::var("RUSTERON_SANITIZE").ok().filter(|s| !s.is_empty());
@@ -582,7 +588,9 @@ fn download_precompiled_binaries(artifacts_dir: &Path) -> Result<(), Box<dyn std
 
     if target_os == "linux" {
         target_os = "ubuntu".to_string();
-        image = "22.04";
+        // DPDK requires libdpdk >= 23.11, which only Ubuntu 24.04 ships
+        // (22.04 has 21.11). Non-dpdk crates keep the 22.04 assets.
+        image = if cfg!(feature = "dpdk") { "24.04" } else { "22.04" };
     }
 
     let asset = format!("https://github.com/gsrxyz/rusteron/releases/download/v{version}/artifacts-{target_os}-{image}-{feature}.tar.gz");

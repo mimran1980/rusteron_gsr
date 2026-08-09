@@ -65,7 +65,7 @@ Ensure the Aeron C libraries are properly installed and available on your system
 <details>
 <summary>Standard Media Driver</summary>
 
-```rust
+```rust,no_run
 // Launches a standalone Aeron Media Driver
 use rusteron_media_driver::*;
 
@@ -111,6 +111,56 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 </details>
+
+---
+
+## DPDK ENA transport (optional, Linux x86_64)
+
+The `dpdk` feature swaps the kernel-socket sender/receiver for a DPDK ENA
+kernel-bypass transport on Amazon Linux 2023 / EKS Nitro. It is selected with
+one environment variable, identically in the standalone binary and the typed
+embedded API:
+
+```sh
+RUSTERON_MEDIA_DRIVER_TRANSPORT=dpdk-ena cargo run -p rusteron-media-driver --features dpdk --bin media_driver
+```
+
+- Absent or `default` (the default) → unchanged socket behaviour.
+- `dpdk-ena` → the DPDK transport. Any configuration, validation, or native
+  failure exits nonzero and never falls back to the socket driver.
+- Anything else → invalid, exits nonzero.
+
+The DPDK configuration is read from the environment (see
+`rusteron-media-driver/src/dpdk/env.rs`): the required values are
+`RUSTERON_DPDK_FILE_PREFIX`, `RUSTERON_DPDK_SENDER_PCI`,
+`RUSTERON_DPDK_SENDER_IPV4_CIDR`, `RUSTERON_DPDK_SENDER_GATEWAY`, and the
+`RUSTERON_DPDK_RECEIVER_*` twins. The Aeron context must be a dedicated-thread
+driver with distinct sender/receiver CPUs, spin idle strategies, disjoint
+wildcard port ranges, and an MTU no larger than `RUSTERON_DPDK_MAX_AERON_MTU`;
+these are set through the standard `AERON_*` environment variables
+(`AERON_SENDER_CPU_AFFINITY`, `AERON_SENDER_IDLE_STRATEGY`,
+`AERON_SENDER_WILDCARD_PORT_RANGE`, `AERON_MTU_LENGTH`, …).
+
+For an embedded deployment that selects the transport through the typed Rust
+API instead of the environment, see
+[`examples/embedded_dpdk.rs`](examples/embedded_dpdk.rs).
+
+### Precompiled DPDK binaries
+
+On Linux x86_64 you can avoid building the Aeron C and DPDK sources at all and
+link the prebuilt archives released with the crate:
+
+```toml
+[dependencies]
+rusteron-media-driver = { version = "0.2", features = ["static", "precompile", "dpdk"] }
+```
+
+This downloads `artifacts-ubuntu-24.04-static` (the DPDK archives require
+libdpdk >= 23.11, which only Ubuntu 24.04 ships) and links
+`librusteron_dpdk*.a` plus the prebuilt Aeron driver statically. libdpdk must
+still be installed on the consumer (`dpdk-devel` on Amazon Linux 2023,
+`libdpdk-dev` on Ubuntu) because the archives reference the `librte_*` shared
+libraries.
 
 ---
 

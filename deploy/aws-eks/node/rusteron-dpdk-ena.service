@@ -1,0 +1,36 @@
+# Reboot-safe node bootstrap for the rusteron-media-driver DPDK ENA pair
+# (plan §9, §10.2). Runs before kubelet brings the node up for scheduling so
+# the secondary ENAs are already vfio-pci-bound and the pair inventory is
+# fresh when the device plugin advertises capacity.
+#
+# Install on each EKS worker node (Amazon Linux 2023):
+#   sudo cp rusteron-dpdk-ena.service /etc/systemd/system/
+#   sudo cp bootstrap-dpdk-ena.sh preflight.sh /usr/local/sbin/
+#   sudo chmod +x /usr/local/sbin/bootstrap-dpdk-ena.sh /usr/local/sbin/preflight.sh
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now rusteron-dpdk-ena.service
+[Unit]
+Description=Rusteron DPDK ENA pair bootstrap (vfio-pci bind + inventory)
+Documentation=file:///usr/local/sbin/bootstrap-dpdk-ena.sh
+# vfio-pci and hugepages are host-level, not a mount/network service; start as
+# soon as the root filesystem is writable and before kubelet schedules pods.
+DefaultDependencies=no
+After=systemd-udev-settle.service
+Before=kubelet.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# kubelet and the device plugin need the inventory; fail the unit loudly if
+# the node cannot host a DPDK pair so scheduling never attempts it.
+ExecStart=/usr/local/sbin/bootstrap-dpdk-ena.sh
+TimeoutStartSec=120
+# Never take down the node for a bootstrap failure — the node stays usable for
+# kernel-UDP workloads; the failure is visible via systemctl status.
+SuccessExitStatus=0
+# Restart on transient IMDS/sysfs races at boot, then give up.
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

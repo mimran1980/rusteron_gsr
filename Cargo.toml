@@ -4,6 +4,12 @@ members = [
     "rusteron-media-driver",
     "rusteron-client",
     "rusteron-archive",
+    # Interop harness (plan §11.2). Off by default; the vdev test script builds
+    # it with `--features dpdk` on a privileged Linux host.
+    "tools/dpdk-harness",
+    # Kubelet device plugin advertising VFIO ENA pairs (plan §10.3). Standalone
+    # tonic gRPC binary; no dependency on the DPDK C stack.
+    "rusteron-dpdk-device-plugin",
 ]
 exclude = ["rusteron-docker-samples/rusteron-dummy-example"]
 resolver = "2"
@@ -12,26 +18,39 @@ resolver = "2"
 
 [workspace.dependencies]
 bindgen         = "0.72"
+cc              = "1.2"
 cmake           = "0.1"
 criterion       = "0.8"
 ctrlc           = "3.5"
 dunce           = "1.0"
+env_logger      = "0.11"
 fd-lock         = "4.0"
 flate2          = { version = "1.1" }
 hdrhistogram    = "7.5"
+hyper-util      = { version = "0.1", features = ["tokio"] }
 itertools       = "0.15"
 log             = "0.4"
 num-format      = "0.4"
 pkg-config      = "0.3"
+prost           = "0.14"
+protox          = "0.9"
 proc-macro2     = "1.0"
 proptest        = "1.11"
 quote           = "1.0"
 regex           = "1.12"
 reqwest         = { version = "0.13", features = ["blocking"], default-features = false }
 rusteron-code-gen = { path = "rusteron-code-gen", version = "=0.2.4" }
+serde           = { version = "1.0", features = ["derive"] }
+serde_json      = "1.0"
 serial_test     = { version = "3.5", features = ["file_locks"] }
 syn             = { version = "2.0", features = ["full"] }
 tar             = "0.4"
+tokio           = { version = "1.52", features = ["rt-multi-thread", "macros", "net", "time", "sync", "signal"] }
+tokio-stream    = "0.1"
+tonic           = "0.14"
+tonic-prost     = "0.14"
+tonic-prost-build = "0.14"
+tower           = "0.5"
 walkdir         = "2.5"
 
 [release]

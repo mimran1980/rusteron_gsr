@@ -1,0 +1,18 @@
+# kustomize base for the DPDK ENA media driver cell (plan §10). Apply with:
+#   kubectl apply -k deploy/aws-eks
+# It installs the device plugin + media driver DaemonSets (both pinned to nodes
+# labelled rusteron-dpdk/ena=true) and the media driver ConfigMap. The node
+# bootstrap (node/bootstrap-dpdk-ena.sh via systemd) prepares the VFIO pairs,
+# hugepages, and CPU reservations on the host before these pods land.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - device-plugin-daemonset.yaml
+  - media-driver-daemonset.yaml
+  - media-driver-config.yaml
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: rusteron-dpdk
+    includeSelectors: false

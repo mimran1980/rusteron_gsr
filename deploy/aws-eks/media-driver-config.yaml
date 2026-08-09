@@ -1,0 +1,19 @@
+# Media Driver tunables shared by every DPDK pod (plan §10.4). Per-pair values
+# (PCI, CIDR, gateway) are injected by the device plugin at Allocate time; the
+# entrypoint (entrypoint.sh) fills any AERON_* it needs from the pod's cpuset,
+# so only the DPDK defaults that differ from rusteron-media-driver's built-ins
+# are pinned here. Values match plan §6.3 defaults.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rusteron-media-driver
+data:
+  # 2 MiB hugepages mounted by the DaemonSet; the DPDK EAL mempools live here.
+  RUSTERON_DPDK_HUGE_DIR: "/dev/hugepages"
+  RUSTERON_DPDK_RX_DESCRIPTORS: "1024"
+  RUSTERON_DPDK_TX_DESCRIPTORS: "1024"
+  RUSTERON_DPDK_MBUFS_PER_PORT: "65536"
+  RUSTERON_DPDK_MEMPOOL_CACHE: "256"
+  RUSTERON_DPDK_BURST_SIZE: "32"
+  # Aeron UDP MTU that fits the DPDK max_aeron_mtu default (plan §6.3).
+  AERON_MTU_LENGTH: "1408"

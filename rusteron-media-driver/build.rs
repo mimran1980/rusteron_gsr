@@ -1,6 +1,9 @@
 // Thin build script: all shared logic lives in rusteron-code-gen/src/build_common.rs,
 // include!d here so cfg!(feature) / env!(CARGO_MANIFEST_DIR) resolve against this crate.
 include!("build_common.rs");
+// DPDK native build is media-driver-specific and deliberately NOT in
+// build_common.rs (which code-gen's build.rs overwrites on every build).
+include!("dpdk_build.rs");
 
 // Unlike client/archive, the driver's aeron wrappers reference socket types
 // (sockaddr_storage, iovec, timespec, ...), so only pthread noise is dropped.
@@ -26,4 +29,11 @@ pub fn main() {
         bindings_snapshot: "media-driver.rs",
         pre_build: RusteronBuildConfig::no_pre_build,
     });
+
+    // The DPDK ENA transport (plan §7.2). Compiling it is the trigger for the
+    // required libdpdk >= 23.11 presence check, so gate the whole call. The
+    // `aeron` submodule is canonicalized inside (only in the from-source path),
+    // so the precompile path never needs it.
+    #[cfg(feature = "dpdk")]
+    build_dpdk_native();
 }
