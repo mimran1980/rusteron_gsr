@@ -20,6 +20,15 @@ and the kernel-UDP rollback path.
   node bootstrap systemd unit on every dedicated node.
 - Node label `rusteron-dpdk/ena=true` on the dedicated nodes and the
   `rusteron-dpdk` taint tolerated by the DaemonSet.
+- Both dedicated nodes in the **same cluster placement group**. Placement group
+  + ENA Express are the dominant inter-node latency levers on Nitro; without a
+  shared placement group the §12 numbers are not representative. The acceptance
+  script reads `placement/placement-group-name` from IMDS on both nodes,
+  warns when it is absent, and fails the run when the two nodes differ.
+- Node kernel cmdline carries `isolcpus`/`nohz_full` for the DPDK pod's CPU set
+  and a `max_cstate` cap (provisioned at launch; needs a node replace). The
+  bootstrap warns when they are missing. `chronyd` active — ENA has no hardware
+  PTP, so DPDK timestamps are software-derived and need a disciplined host clock.
 - Built binaries (see §4 of the acceptance script header):
   - `dpdk-harness` with `--features dpdk` (release),
   - `media_driver` release binary,
@@ -65,7 +74,10 @@ Key environment overrides (all optional):
 | `RUSTERON_ACCEPTANCE_STRESS_FRAC` | 0.7 | stress-load fraction |
 
 The script picks the first two `rusteron-dpdk/ena=true` nodes, so the cell must
-have at least two ready nodes.
+have at least two ready nodes. It verifies both nodes are in the same cluster
+placement group (warn if absent, fail if they differ) and records each node's
+placement group and chrony state in `env-metadata.json`, alongside the existing
+per-node fields (instance type, AZ, kernel, DPDK/ENA versions).
 
 ## 3. Rollout (§13.1)
 
@@ -137,6 +149,14 @@ then watch the same counters as §3.
 
 ## 5. Operational notes
 
+- **Node latency tuning is applied by the bootstrap at every boot** (best
+  effort, never fatal): ethtool IRQ coalescing off (`adaptive-rx off`,
+  `rx/tx-usecs 0`, `rx/tx-frames 0`) and `net.core.busy_poll`/`busy_read = 70`
+  on the primary ENA, plus a boot-time warning if the kernel cmdline lacks
+  `isolcpus`/`nohz_full`/`max_cstate` (those need a node replace). Verify with
+  `ethtool -c <primary>`, `sysctl net.core.busy_poll net.core.busy_read`, and
+  `chronyc tracking` for clock offset. The preflight also warns when `chronyd`
+  is not active.
 - **ENA Express** is toggled per-ENI with `scripts/toggle-ena-express.sh`
   (`on|off`). It requires SRD-capable instance types and an ENA that supports
   it; the script verifies the resulting `EnaSrdSpecification`. The acceptance

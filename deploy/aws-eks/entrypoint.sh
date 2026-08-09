@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Container entrypoint for the rusteron-media-driver DPDK ENA image (plan
-# §10.4). Reads the pod's effective cpuset (kubelet CPU Manager `static`) and
+# §10.4). Reads the pod's effective cpuset (kubelet CPU Manager `static`),
+# reduces it to one logical CPU per physical core (HT sibling threads are
+# excluded — they share execution resources and would wreck latency), then
 # assigns distinct exclusive CPUs to the Aeron conductor, sender and receiver
-# agents. Fails before starting Aeron if fewer than the required exclusive
-# CPUs are present. Then execs the passed command (default: media_driver).
+# agents. Fails before starting Aeron if fewer than the required physical
+# cores are present. Then execs the passed command (default: media_driver).
 #
 # The RUSTERON_DPDK_* PCI/CIDR/gateway values are injected by the device
 # plugin at allocation time; the media_driver binary itself fails fast (and
@@ -46,8 +48,34 @@ if [[ -z "$CPUSET" ]]; then
 fi
 mapfile -t CPUS < <(expand_cpuset "$CPUSET")
 
+# --- HT-sibling exclusion ----------------------------------------------------
+# kubelet CPU Manager static hands guaranteed pods a cpuset that may include
+# both threads of a hyperthreaded core (c7i.metal-24xl = 2 threads/core).
+# Reduce the cpuset to one logical CPU per physical core (lowest sibling)
+# before assigning roles. /proc/cpuinfo is used because the cpu-topology sysfs
+# tree is often masked inside containers.
+declare -A CORE_OF=()                       # logical cpu -> "socket:core"
+if [[ -r /proc/cpuinfo ]]; then
+    while IFS= read -r line; do
+        case "$line" in
+            "processor"*) cpu="${line#*: }" ;;
+            "physical id"*) pkg="${line#*: }" ;;
+            "core id"*) CORE_OF[$cpu]="$pkg:${line#*: }" ;;
+        esac
+    done < /proc/cpuinfo
+fi
+
+declare -A FIRST_OF_CORE=()
+for cpu in "${CPUS[@]}"; do
+    key="${CORE_OF[$cpu]:-$cpu}"            # no SMT info -> treat as its own core
+    if [[ -z "${FIRST_OF_CORE[$key]:-}" ]] || (( cpu < FIRST_OF_CORE[$key] )); then
+        FIRST_OF_CORE[$key]="$cpu"
+    fi
+done
+mapfile -t CPUS < <(for key in "${!FIRST_OF_CORE[@]}"; do echo "${FIRST_OF_CORE[$key]}"; done | sort -n)
+
 if ((${#CPUS[@]} < REQUIRED_CPUS)); then
-    echo "rusteron entrypoint: effective cpuset has ${#CPUS[@]} CPU(s), need >= $REQUIRED_CPUS (conductor + sender + receiver)" >&2
+    echo "rusteron entrypoint: cpuset ${CPUSET} yields ${#CPUS[@]} distinct physical core(s) (HT sibling threads excluded), need >= $REQUIRED_CPUS (conductor + sender + receiver). Raise the DaemonSet cpu request (6 vCPUs guarantees >= 3 physical cores on a 2-thread/core instance)." >&2
     exit 1
 fi
 

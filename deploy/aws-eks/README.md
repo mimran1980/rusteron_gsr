@@ -62,6 +62,10 @@ What it does:
 4. **Inventory** — writes `/var/lib/rusteron-dpdk/ena-pairs.json` atomically
    (temp file + `mv`), recording per role: PCI BDF, VFIO IOMMU group, ENI id,
    MAC, IPv4, prefix length, subnet CIDR, gateway, NUMA node, and health.
+5. **Tune** — applies lowest-latency settings to the primary ENA (ethtool IRQ
+   coalescing off, `net.core.busy_poll`/`busy_read` sysctls) and warns when the
+   kernel cmdline lacks the isolation flags (`isolcpus`/`nohz_full`/
+   `max_cstate`) — those need a node replace to take effect.
 
 The systemd unit (`Type=oneshot`, `RemainAfterExit=yes`) re-runs the bootstrap
 at every boot, so a reboot restores the VFIO bindings and regenerates a fresh
@@ -80,13 +84,26 @@ DPDK pair.
   `node.k8s.amazonaws.com/no_manage=true` so AWS VPC CNI does not claim them.
 - CPU Manager `static` and Topology Manager `single-numa-node`; system/Kubernetes
   CPUs reserved away from the DPDK pod's exclusive CPU set.
+- Both nodes of a cell in the same **cluster placement group** (the dominant
+  §12 latency lever on Nitro; the acceptance script warns if absent and fails
+  if the two nodes are in different groups).
+- Kernel cmdline carries `isolcpus`/`nohz_full` for the DPDK pod's CPU set plus
+  `max_cstate` caps — provisioned at launch time, needs a node replace; the
+  bootstrap warns when they are missing.
+- `chronyd` active — ENA has no hardware PTP, so DPDK timestamps are
+  software-derived and need a disciplined host clock (AL2023 enables chrony by
+  default).
 
 ## 3. Entrypoint
 
 `entrypoint.sh` reads the pod's effective cpuset
-(`/sys/fs/cgroup/cpuset.cpus.effective`), requires at least three exclusive
-CPUs, and assigns the first three to the Aeron conductor, sender, and receiver
-threads via `AERON_CONDUCTOR/SENDER/RECEIVER_CPU_AFFINITY`. It sets the
+(`/sys/fs/cgroup/cpuset.cpus.effective`), excludes HT sibling threads (one
+logical CPU per physical core, so the conductor/sender/receiver never share a
+core), requires at least three distinct physical cores, and assigns the first
+three to the Aeron conductor, sender, and receiver threads via
+`AERON_CONDUCTOR/SENDER/RECEIVER_CPU_AFFINITY`. The DaemonSet requests 6 vCPUs
+so the deduped cpuset is guaranteed ≥ 3 physical cores on a 2-thread/core
+instance. It sets the
 remaining plan §6.4 driver settings (DEDICATED threading, spin idle, disjoint
 wildcard port ranges, `AERON_MTU_LENGTH=1408`) and
 `RUSTERON_MEDIA_DRIVER_TRANSPORT=dpdk-ena`, then `exec`s the media driver.

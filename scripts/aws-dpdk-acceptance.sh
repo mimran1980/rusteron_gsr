@@ -76,6 +76,19 @@ pick_nodes() {
     IP_A=$(kubectl get node "$NODE_A" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}')
     IP_B=$(kubectl get node "$NODE_B" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}')
     log "cell nodes: $NODE_A ($IP_A)  $NODE_B ($IP_B)"
+
+    # Same-cluster placement group is the biggest §12 latency lever (plan §17:
+    # same placement group / spread). Missing = warn (functional runs still fine);
+    # differing groups = die (inter-node benchmark would be unrepresentative).
+    PG_A="$(placement_group "$NODE_A")"
+    PG_B="$(placement_group "$NODE_B")"
+    if [[ -z "$PG_A" || -z "$PG_B" ]]; then
+        log "WARN: node not in a placement group (A='$PG_A' B='$PG_B') — same-cluster placement group required for representative §12 latencies (runbook §2)"
+    elif [[ "$PG_A" != "$PG_B" ]]; then
+        die "nodes in different placement groups ($PG_A vs $PG_B) — move both into one cluster placement group"
+    else
+        log "placement group: $PG_A (both nodes)"
+    fi
 }
 
 nssh() { # nssh <node> <command...>
@@ -87,6 +100,18 @@ nscp() { # nscp <node> <src> <dst>
 }
 
 inventory_json() { nssh "$1" cat /var/lib/rusteron-dpdk/ena-pairs.json; }
+
+# placement_group <node> -> cluster placement group name ('' when none/IMDS err).
+# IMDSv2 token first, IMDSv1 fallback; empty result means "not in a group".
+placement_group() {
+    nssh "$1" 'tok=$(curl -fsS -X PUT http://169.254.169.254/latest/api/token \
+        -H "X-aws-ec2-metadata-token-ttl-seconds: 60" 2>/dev/null) && \
+        curl -fsS -H "X-aws-ec2-metadata-token: $tok" \
+        http://169.254.169.254/latest/meta-data/placement/placement-group-name \
+        2>/dev/null || \
+        curl -fsS http://169.254.169.254/latest/meta-data/placement/placement-group-name \
+        2>/dev/null || true' | tr -d '\r'
+}
 
 # write_pair_env <node> <outfile> <peer_receiver_ip:port>
 #   DPDK env for one node's own ENA pair (both roles), plus the harness MDC
@@ -650,7 +675,7 @@ phase_metadata() {
     meta="$meta, \"git_sha\": \"$(git rev-parse HEAD 2>/dev/null || echo unknown)\""
     meta="$meta, \"cell\": \"$CELL\""
     for node in "$NODE_A" "$NODE_B"; do
-        local ip instance az img kernel kube dpdk_ver ena
+        local ip instance az img kernel kube dpdk_ver ena pg chrony
         ip=$(kubectl get node "$node" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}')
         instance=$(aws ec2 describe-instances --filters "Name=private-ip-address,Values=$ip" \
             --query 'Reservations[].Instances[0].InstanceType' --output text)
@@ -661,7 +686,9 @@ phase_metadata() {
         kube=$(kubectl get node "$node" -o jsonpath='{.status.nodeInfo.kubeletVersion}')
         dpdk_ver=$(nssh "$node" "pkg-config --modversion libdpdk 2>/dev/null || echo unknown" | tr -d '\r')
         ena=$(nssh "$node" "modinfo ena 2>/dev/null | awk '/^version:/{print \$2}' || echo unknown" | tr -d '\r')
-        meta="$meta, \"$node\": { \"internal_ip\": \"$ip\", \"instance_type\": \"$instance\", \"az\": \"$az\", \"os_image\": \"$img\", \"kernel\": \"$kernel\", \"kubelet\": \"$kube\", \"dpdk\": \"$dpdk_ver\", \"ena_driver\": \"$ena\" }"
+        pg=$(placement_group "$node")
+        chrony=$(nssh "$node" "systemctl is-active chronyd 2>/dev/null || echo inactive" | tr -d '\r')
+        meta="$meta, \"$node\": { \"internal_ip\": \"$ip\", \"instance_type\": \"$instance\", \"az\": \"$az\", \"os_image\": \"$img\", \"kernel\": \"$kernel\", \"kubelet\": \"$kube\", \"dpdk\": \"$dpdk_ver\", \"ena_driver\": \"$ena\", \"placement_group\": \"$pg\", \"chrony\": \"$chrony\" }"
     done
     meta="$meta }"
     echo "$meta" | jq . > "$RUN_DIR/env-metadata.json"

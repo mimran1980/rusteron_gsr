@@ -1,12 +1,19 @@
 # Media Driver DaemonSet (plan §10.1/§10.4). One driver per DPDK node, each
-# pod requesting one rusteron.io/dpdk-ena-pair, four whole CPUs, memory, and
+# pod requesting one rusteron.io/dpdk-ena-pair, six whole CPUs, memory, and
 # 2 MiB hugepages under Guaranteed QoS (requests == limits on every resource,
 # so the kubelet's CPU Manager static policy hands it a dedicated cpuset).
+#
+# Six vCPUs rather than four because the entrypoint (entrypoint.sh) excludes
+# HT sibling threads when choosing the conductor/sender/receiver CPUs: on a
+# 2-thread/core instance, N vCPUs are guaranteed to span ceil(N/2) physical
+# cores, so 6 vCPUs guarantees the 3 distinct physical cores the entrypoint
+# requires, while 4 could collapse to 2 (two sibling pairs) and fail.
 #
 # The device plugin injects the pair's /dev/vfio nodes + RUSTERON_DPDK_* env at
 # Allocate time, so no vfio hostPath is declared here. The entrypoint
 # (entrypoint.sh) derives the conductor/sender/receiver CPU affinities from the
-# pod's effective cpuset and fails fast if fewer than 3 CPUs are available.
+# pod's effective cpuset and fails fast if fewer than 3 physical cores remain
+# after HT-sibling exclusion.
 #
 # Nodes are picked by the rusteron-dpdk/ena=true label and taint; the VPC CNI
 # keeps the primary ENA for pod networking, while the two secondary ENAs stay
@@ -40,12 +47,12 @@ spec:
           resources:
             requests:
               rusteron.io/dpdk-ena-pair: "1"
-              cpu: "4"
+              cpu: "6"
               memory: 2Gi
               hugepages-2Mi: 2Gi
             limits:
               rusteron.io/dpdk-ena-pair: "1"
-              cpu: "4"
+              cpu: "6"
               memory: 2Gi
               hugepages-2Mi: 2Gi
           volumeMounts:

@@ -9,6 +9,7 @@
 #   * At least the primary ENA + two secondary ENAs are discoverable.
 #   * The default-route (primary) ENA is NOT among the DPDK candidates.
 #   * IMDS returns a parseable IP/gateway identity for each candidate.
+#   * (soft) chronyd is active so the software-timestamped DPDK clocks agree.
 #
 # Testable against a fake fixture root: set RUSTERON_SYSFS_ROOT and
 # RUSTERON_IMDS_ROOT to the fixture paths (see node/test/test-bootstrap.sh).
@@ -27,6 +28,7 @@ RUSTERON_SKIP_MOUNT_CHECK="${RUSTERON_SKIP_MOUNT_CHECK:-0}"
 
 fail() { echo "preflight FAIL: $*" >&2; exit 1; }
 ok()   { echo "preflight ok: $*"; }
+warn() { echo "preflight warn: $*" >&2; }
 
 # IMDSv2-aware fetch; a non-http root is treated as a local fixture path.
 imds_get() {
@@ -143,5 +145,13 @@ for mac in "${secondaries[@]}"; do
         || fail "secondary $mac missing IMDS identity (eni/ip/cidr)"
     ok "secondary $mac -> eni=$eni ip=$ip cidr=$cidr"
 done
+
+# --- 7. Clock discipline (soft) ---------------------------------------------
+# ENA carries no hardware PTP (plan §17); DPDK timestamps are software-derived,
+# so a disciplined host clock (chrony) keeps offsets comparable across the
+# pair. Not fatal — the transport works regardless — hence warn, not fail.
+if command -v systemctl >/dev/null 2>&1 && ! systemctl is-active --quiet chronyd 2>/dev/null; then
+    warn "chronyd not active — DPDK timestamps are software-only on ENA; enable chrony (runbook §2)"
+fi
 
 echo "preflight PASS"

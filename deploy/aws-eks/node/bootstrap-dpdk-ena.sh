@@ -12,6 +12,9 @@
 #   4. Write /var/lib/rusteron-dpdk/ena-pairs.json atomically, recording the
 #      sender/receiver PCI, IOMMU group, ENI id, MAC, IPv4 CIDR, gateway,
 #      NUMA node, and health state.
+#   5. Tune the primary ENA for lowest-latency kernel traffic (ethtool
+#      coalescing off + busy-poll sysctls) and warn when the kernel cmdline
+#      lacks the isolation flags (isolcpus/nohz_full/max_cstate).
 #
 # Testable against fake fixtures: set RUSTERON_SYSFS_ROOT, RUSTERON_IMDS_ROOT
 # and RUSTERON_STATE_DIR to fixture paths, and RUSTERON_DRY_RUN=1 to skip the
@@ -28,6 +31,7 @@ INVENTORY="$RUSTERON_STATE_DIR/ena-pairs.json"
 
 fail() { echo "bootstrap FAIL: $*" >&2; exit 1; }
 ok()   { echo "bootstrap ok: $*"; }
+warn() { echo "bootstrap warn: $*" >&2; }
 
 # IMDSv2-aware fetch; a non-http root is a local fixture path.
 imds_get() {
@@ -187,3 +191,46 @@ tmp="$INVENTORY.tmp.$$"
 mv "$tmp" "$INVENTORY"
 chmod 0644 "$INVENTORY"
 ok "wrote $INVENTORY atomically"
+
+# --- 5. node latency tuning (best-effort; never fatal) ----------------------
+# Lowest-latency kernel path on the primary ENA (plan §12 latency levers:
+# IRQ coalescing off + busy-poll on the kernel/rollback path), plus a soft
+# check that the kernel cmdline carries the isolation flags (isolcpus/nohz_full
+# can only be applied at node-provision time — needs a replace, so warn).
+tune_primary_ena() {
+    local ifname="$1"
+    if ! command -v ethtool >/dev/null 2>&1; then
+        warn "ethtool not installed — skipping primary-ENA IRQ coalescing tuning"
+        return 0
+    fi
+    [[ -n "$ifname" ]] || { warn "cannot resolve primary ENA netdev — skipping ethtool tuning"; return 0; }
+    if ((RUSTERON_DRY_RUN)); then
+        ok "dry-run: would tune $ifname (adaptive-rx off, rx/tx-usecs 0, busy_poll/read=70)"
+        return 0
+    fi
+    ethtool -C "$ifname" adaptive-rx off 2>/dev/null || true
+    ethtool -C "$ifname" rx-usecs 0 tx-usecs 0 2>/dev/null || true
+    ethtool -C "$ifname" rx-frames 0 tx-frames 0 2>/dev/null || true
+    sysctl -q -w net.core.busy_poll=70 net.core.busy_read=70 2>/dev/null || true
+    ok "tuned $ifname: adaptive-rx off, rx/tx coalescing disabled, busy_poll/read=70"
+}
+
+check_kernel_cmdline() {
+    local cmdline missing=()
+    cmdline="$(cat /proc/cmdline 2>/dev/null || true)"
+    for w in isolcpus nohz_full max_cstate; do
+        [[ "$cmdline" == *"$w="* ]] || missing+=("$w")
+    done
+    ((${#missing[@]})) && warn "kernel cmdline lacks ${missing[*]} — add for the DPDK pod's CPU set (needs node replace; runbook §2)"
+}
+
+primary_ifname=""
+for d in "$RUSTERON_SYSFS_ROOT"/class/net/*; do
+    [[ -d "$d" ]] || continue
+    if [[ "$(cat "$d/address" 2>/dev/null || true)" == "$primary_mac" ]]; then
+        primary_ifname="$(basename "$d")"
+        break
+    fi
+done
+tune_primary_ena "$primary_ifname"
+check_kernel_cmdline
