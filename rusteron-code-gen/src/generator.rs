@@ -2584,8 +2584,8 @@ pub fn generate_rust_code(
                     {
                         let #client_owned = #client_var.clone();
                         Some(Box::new(move |ptr| unsafe {
-                            log::warn!(
-                                "auto-cancelling {} (poll() never resolved it before drop/cancel) to avoid leaking the pending Aeron registration",
+                            log::info!(
+                                "auto-cancelling {} (poll() was never resolved before drop/cancel) to avoid leaking the pending Aeron registration",
                                 stringify!(#async_class_name)
                             );
                             #cancel_fn(#client_owned.get_inner(), *ptr)
