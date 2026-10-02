@@ -10,13 +10,13 @@ WORKDIR /aeron
 #    -DrepoUrl=https://repo1.maven.org/maven2/ \
 #    -Dartifact=io.aeron:aeron-archive:${AERON_VERSION} -DoutputDirectory=/aeron
 
-RUN git clone https://github.com/real-logic/aeron.git . && ./gradlew :aeron-all:jar :aeron-agent:shadowJar
+RUN git clone --depth 1 --branch 1.52.2 https://github.com/real-logic/aeron.git . && ./gradlew :aeron-all:jar :aeron-agent:shadowJar
 
 FROM eclipse-temurin:21
 
 WORKDIR /aeron
-COPY --from=builder /aeron/aeron-all/build/libs/aeron-all-*.jar /aeron
-COPY --from=builder /aeron/aeron-agent/build/libs/aeron-agent-*.jar /aeron/agent/aeron-agent.jar
+COPY --from=builder /aeron/aeron-all/build/libs/aeron-all*.jar /aeron
+COPY --from=builder /aeron/aeron-agent/build/libs/aeron-agent*.jar /aeron/agent/aeron-agent.jar
 
 EXPOSE 8010 8011 8012
 
