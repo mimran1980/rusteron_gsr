@@ -11197,8 +11197,8 @@ impl AeronAsyncAddCounter {
             {
                 let client_for_cancel = client.clone();
                 Some(Box::new(move |ptr| unsafe {
-                    log::warn!(
-                        "auto-cancelling {} (poll() never resolved it before drop/cancel) to avoid leaking the pending Aeron registration",
+                    log::info!(
+                        "auto-cancelling {} (poll() was never resolved before drop/cancel) to avoid leaking the pending Aeron registration",
                         stringify!(AeronAsyncAddCounter)
                     );
                     aeron_async_add_counter_cancel(client_for_cancel.get_inner(), *ptr)
@@ -11590,8 +11590,8 @@ impl AeronAsyncAddExclusivePublication {
             {
                 let client_for_cancel = client.clone();
                 Some(Box::new(move |ptr| unsafe {
-                    log::warn!(
-                        "auto-cancelling {} (poll() never resolved it before drop/cancel) to avoid leaking the pending Aeron registration",
+                    log::info!(
+                        "auto-cancelling {} (poll() was never resolved before drop/cancel) to avoid leaking the pending Aeron registration",
                         stringify!(AeronAsyncAddExclusivePublication)
                     );
                     aeron_async_add_exclusive_publication_cancel(client_for_cancel.get_inner(), *ptr)
@@ -11969,8 +11969,8 @@ impl AeronAsyncAddPublication {
             {
                 let client_for_cancel = client.clone();
                 Some(Box::new(move |ptr| unsafe {
-                    log::warn!(
-                        "auto-cancelling {} (poll() never resolved it before drop/cancel) to avoid leaking the pending Aeron registration",
+                    log::info!(
+                        "auto-cancelling {} (poll() was never resolved before drop/cancel) to avoid leaking the pending Aeron registration",
                         stringify!(AeronAsyncAddPublication)
                     );
                     aeron_async_add_publication_cancel(client_for_cancel.get_inner(), *ptr)
@@ -12417,8 +12417,8 @@ impl AeronAsyncAddSubscription {
             {
                 let client_for_cancel = client.clone();
                 Some(Box::new(move |ptr| unsafe {
-                    log::warn!(
-                        "auto-cancelling {} (poll() never resolved it before drop/cancel) to avoid leaking the pending Aeron registration",
+                    log::info!(
+                        "auto-cancelling {} (poll() was never resolved before drop/cancel) to avoid leaking the pending Aeron registration",
                         stringify!(AeronAsyncAddSubscription)
                     );
                     aeron_async_add_subscription_cancel(client_for_cancel.get_inner(), *ptr)
