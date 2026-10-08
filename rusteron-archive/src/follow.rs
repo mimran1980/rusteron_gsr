@@ -80,7 +80,8 @@ impl FollowingPersistentSubscription {
     }
 
     /// Follows only the recordings whose channel contains `channel_fragment` and that
-    /// `filter` accepts. By default, the live channel's recordings still recording.
+    /// `filter` accepts. By default, those still recording whose channel contains the live
+    /// channel, so set a fragment when the recorded channel differs from the live one.
     #[must_use]
     pub fn recordings(
         mut self,
