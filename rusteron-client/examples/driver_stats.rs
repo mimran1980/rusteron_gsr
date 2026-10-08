@@ -4,8 +4,8 @@
 //! reading the driver's CnC (command-and-control) file via [`AeronCnc`]:
 //!
 //! - all driver/client counters (`counters_reader`),
-//! - the distinct error log with occurrence counts (`error_log_read_once`),
-//! - the loss report (`loss_reporter_read_once`).
+//! - the distinct error log with occurrence counts (`error_log_read_fn`),
+//! - the loss report (`loss_reporter_read_fn`).
 //!
 //! Run it against a live driver by setting `AERON_DIR`; without it, an embedded driver plus
 //! a little traffic (including a deliberate client error) is spun up so there is something
@@ -29,6 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let ctx = AeronContext::new()?;
             ctx.set_dir(&cformat!("{}", driver.dir()))?;
+            ctx.set_error_handler(Some(|code: i32, msg: &str| eprintln!("aeron error {code}: {msg}")))?;
             let aeron = Aeron::new(&ctx)?;
             aeron.start()?;
             let publication = aeron
@@ -88,10 +89,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         },
     )?;
-    println!("({entries} loss entrie(s))");
-
-    if let Some((_aeron, _publication, _subscription, driver)) = _embedded {
-        drop(driver); // stops + joins
-    }
+    println!("({entries} loss entries)");
     Ok(())
 }

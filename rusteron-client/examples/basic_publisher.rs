@@ -35,7 +35,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let publication = aeron
         .async_add_publication(CHANNEL, STREAM_ID)?
         .poll_blocking(Duration::from_secs(5))?;
-    println!("publishing to {} on stream id {STREAM_ID}", CHANNEL.to_str().unwrap());
+    println!("publishing to {} on stream id {STREAM_ID}", CHANNEL.to_str()?);
 
     let mut count: u64 = 0;
     while running.load(Ordering::SeqCst) {
