@@ -31,7 +31,6 @@ fn criterion_benchmark(c: &mut Criterion) {
     let mut pong_child = spawn_pong_process(dir).expect("Failed to spawn pong process");
 
     let context = AeronContext::new().unwrap();
-    context.set_idle_sleep_duration_ns(0).unwrap();
     context.set_dir(&dir_for_client.into_c_string()).unwrap();
     let aeron = Aeron::new(&context).unwrap();
     aeron.start().unwrap();
@@ -80,7 +79,6 @@ fn spawn_pong_process(dir: &str) -> std::io::Result<Child> {
 fn run_pong_process(dir: &str) -> Result<(), Box<dyn std::error::Error>> {
     let context = AeronContext::new()?;
     context.set_dir(&dir.into_c_string())?;
-    context.set_idle_sleep_duration_ns(0)?;
     let aeron = Aeron::new(&context)?;
     aeron.start()?;
     let ping_publication = aeron

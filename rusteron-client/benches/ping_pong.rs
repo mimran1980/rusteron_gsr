@@ -32,8 +32,6 @@ fn criterion_benchmark(c: &mut Criterion) {
         .unwrap();
 
     let context = AeronContext::new().unwrap();
-    println!("idle sleep {}", context.get_idle_sleep_duration_ns());
-    context.set_idle_sleep_duration_ns(0).unwrap();
     context.set_dir(&dir2.into_c_string()).unwrap();
     let aeron = Aeron::new(&context).unwrap();
     aeron.start().unwrap();
@@ -73,7 +71,6 @@ fn criterion_benchmark(c: &mut Criterion) {
 fn run_pong(stop: Arc<AtomicBool>, dir: &str) -> Result<(), Box<dyn std::error::Error>> {
     let context = AeronContext::new()?;
     context.set_dir(&dir.into_c_string())?;
-    context.set_idle_sleep_duration_ns(0)?;
     let aeron = Aeron::new(&context)?;
     aeron.start()?;
     let ping_publication = aeron
