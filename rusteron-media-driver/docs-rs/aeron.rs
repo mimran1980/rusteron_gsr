@@ -8730,6 +8730,7 @@ impl AeronControlledFragmentAssembler {
     pub fn new<AeronControlledFragmentHandlerHandlerImpl: AeronControlledFragmentHandlerCallback + 'static>(
         delegate: Option<&Handler<AeronControlledFragmentHandlerHandlerImpl>>,
     ) -> Result<Self, AeronCError> {
+        let __handler_delegate = delegate;
         let (delegate, delegate_clientd) = (
             {
                 let callback: aeron_controlled_fragment_handler_t = if delegate.is_none() {
@@ -8786,9 +8787,9 @@ impl AeronControlledFragmentAssembler {
         let result = Self {
             inner: CResource::OwnedOnHeap(RcOrArc::new(resource_constructor)),
         };
-        if let Some(__handler) = delegate {
+        if let Some(__handler) = __handler_delegate {
             if let Some(__inner) = result.inner.as_owned() {
-                __inner.add_dependency(__handler.clone());
+                __inner.add_dependency(Handler::clone(__handler));
             }
         }
         Ok(result)
@@ -33806,6 +33807,7 @@ impl AeronFragmentAssembler {
     pub fn new<AeronFragmentHandlerHandlerImpl: AeronFragmentHandlerCallback + 'static>(
         delegate: Option<&Handler<AeronFragmentHandlerHandlerImpl>>,
     ) -> Result<Self, AeronCError> {
+        let __handler_delegate = delegate;
         let (delegate, delegate_clientd) = (
             {
                 let callback: aeron_fragment_handler_t = if delegate.is_none() {
@@ -33845,9 +33847,9 @@ impl AeronFragmentAssembler {
         let result = Self {
             inner: CResource::OwnedOnHeap(RcOrArc::new(resource_constructor)),
         };
-        if let Some(__handler) = delegate {
+        if let Some(__handler) = __handler_delegate {
             if let Some(__inner) = result.inner.as_owned() {
-                __inner.add_dependency(__handler.clone());
+                __inner.add_dependency(Handler::clone(__handler));
             }
         }
         Ok(result)
@@ -35970,6 +35972,7 @@ impl AeronImageControlledFragmentAssembler {
     pub fn new<AeronControlledFragmentHandlerHandlerImpl: AeronControlledFragmentHandlerCallback + 'static>(
         delegate: Option<&Handler<AeronControlledFragmentHandlerHandlerImpl>>,
     ) -> Result<Self, AeronCError> {
+        let __handler_delegate = delegate;
         let (delegate, delegate_clientd) = (
             {
                 let callback: aeron_controlled_fragment_handler_t = if delegate.is_none() {
@@ -36026,9 +36029,9 @@ impl AeronImageControlledFragmentAssembler {
         let result = Self {
             inner: CResource::OwnedOnHeap(RcOrArc::new(resource_constructor)),
         };
-        if let Some(__handler) = delegate {
+        if let Some(__handler) = __handler_delegate {
             if let Some(__inner) = result.inner.as_owned() {
-                __inner.add_dependency(__handler.clone());
+                __inner.add_dependency(Handler::clone(__handler));
             }
         }
         Ok(result)
@@ -36190,6 +36193,7 @@ impl AeronImageFragmentAssembler {
     pub fn new<AeronFragmentHandlerHandlerImpl: AeronFragmentHandlerCallback + 'static>(
         delegate: Option<&Handler<AeronFragmentHandlerHandlerImpl>>,
     ) -> Result<Self, AeronCError> {
+        let __handler_delegate = delegate;
         let (delegate, delegate_clientd) = (
             {
                 let callback: aeron_fragment_handler_t = if delegate.is_none() {
@@ -36234,9 +36238,9 @@ impl AeronImageFragmentAssembler {
         let result = Self {
             inner: CResource::OwnedOnHeap(RcOrArc::new(resource_constructor)),
         };
-        if let Some(__handler) = delegate {
+        if let Some(__handler) = __handler_delegate {
             if let Some(__inner) = result.inner.as_owned() {
-                __inner.add_dependency(__handler.clone());
+                __inner.add_dependency(Handler::clone(__handler));
             }
         }
         Ok(result)

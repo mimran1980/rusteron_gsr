@@ -1239,8 +1239,27 @@ impl CWrapper {
                     // The C struct created here stores every callback/clientd pair it is
                     // given (e.g. fragment assemblers keep their delegate), so clone each
                     // Handler into the new resource's dependencies to keep it alive until
-                    // the C resource is closed.
-                    let handler_deps: Vec<TokenStream> = Self::handler_dependency_registrations(&method.arguments);
+                    // the C resource is closed. `lets` shadows each Handler argument with
+                    // its C callback pointer, so take the Handler under a fresh name first.
+                    let (handler_keeps, handler_deps): (Vec<TokenStream>, Vec<TokenStream>) = method
+                        .arguments
+                        .iter()
+                        .filter(|arg| matches!(arg.processing, ArgProcessing::Handler(_)) && !arg.is_mut_pointer())
+                        .map(|arg| {
+                            let name = arg.as_ident();
+                            let keep = format_ident!("__handler_{}", arg.name);
+                            (
+                                quote! { let #keep = #name; },
+                                quote! {
+                                    if let Some(__handler) = #keep {
+                                        if let Some(__inner) = result.inner.as_owned() {
+                                            __inner.add_dependency(Handler::clone(__handler));
+                                        }
+                                    }
+                                },
+                            )
+                        })
+                        .unzip();
 
                     // Generate logging expression token stream (will be evaluated in closure)
                     let init_log_expr_tokens = Self::generate_arg_logging(&method.arguments, &init_args);
@@ -1276,6 +1295,7 @@ impl CWrapper {
                         #[inline]
                         #(#method_docs)*
                         pub fn #fn_name #where_clause(#(#new_args),*) -> Result<Self, AeronCError> {
+                            #(#handler_keeps)*
                             #(#lets)*
                             // new by using constructor
                             let resource_constructor = ManagedCResource::new(

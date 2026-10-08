@@ -369,6 +369,30 @@ mod tests {
     use std::thread::{JoinHandle, sleep};
     use std::time::{Duration, Instant};
 
+    #[test]
+    fn fragment_assembler_keeps_delegate_alive() -> Result<(), Box<dyn Error>> {
+        struct Delegate(Arc<AtomicBool>);
+        impl Drop for Delegate {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::SeqCst);
+            }
+        }
+        impl AeronFragmentHandlerCallback for Delegate {
+            fn handle_aeron_fragment_handler(&mut self, _: &[u8], _: AeronHeader) {}
+        }
+
+        let dropped = Arc::new(AtomicBool::new(false));
+        let (assembler, delegate) = Handler::with_fragment_assembler(Delegate(dropped.clone()))?;
+        drop(delegate);
+        assert!(
+            !dropped.load(Ordering::SeqCst),
+            "delegate freed while the assembler still points at it"
+        );
+        drop(assembler);
+        assert!(dropped.load(Ordering::SeqCst));
+        Ok(())
+    }
+
     #[derive(Default, Debug)]
     struct ErrorCount {
         error_count: usize,
