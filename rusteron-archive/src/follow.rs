@@ -7,6 +7,8 @@ use std::rc::Rc;
 type ArchiveContextFactory = Box<dyn Fn() -> Result<AeronArchiveContext, AeronCError>>;
 type RecordingFilter = Rc<dyn Fn(&AeronArchiveRecordingDescriptor) -> bool>;
 type ListConsumer = Box<dyn FnMut(AeronArchiveRecordingDescriptor)>;
+/// The newest recording a lookup accepted, and the newest of those on the live stream.
+type Found = Rc<Cell<(Option<(i64, i32)>, Option<(i64, i32)>)>>;
 
 /// A persistent subscription that follows its stream's newest recording.
 ///
@@ -40,10 +42,7 @@ pub struct FollowingPersistentSubscription {
 enum Stage {
     Waiting(Instant),
     Connecting(AeronArchiveAsyncConnect, AeronArchiveContext),
-    Listing(
-        AeronArchiveAsyncListRecordings<ListConsumer>,
-        Rc<Cell<Option<(i64, i32)>>>,
-    ),
+    Listing(AeronArchiveAsyncListRecordings<ListConsumer>, Found),
     Building(AeronArchiveAsyncPersistentSubscription, AeronArchiveContext, i64),
     Following {
         subscription: AeronArchivePersistentSubscription,
@@ -72,7 +71,7 @@ impl FollowingPersistentSubscription {
             stream_id: live.1,
             replay_channel: replay.0.to_owned(),
             replay_stream_id: replay.1,
-            channel_fragment: CString::new(live.0).unwrap_or_default(),
+            channel_fragment: CString::default(),
             filter: Rc::new(|recording| recording.stop_position() == i64::from(AERON_NULL_VALUE)),
             from_start: false,
             retry: Duration::from_secs(1),
@@ -84,8 +83,9 @@ impl FollowingPersistentSubscription {
     }
 
     /// Follows only the recordings whose channel contains `channel_fragment` and that
-    /// `filter` accepts. By default, those still recording whose channel contains the live
-    /// channel, so set a fragment when the recorded channel differs from the live one.
+    /// `filter` accepts. By default, the stream's recordings still recording; when several
+    /// are, the newest on the live channel's media and endpoint wins, so changes to other
+    /// params, such as `mtu` or `term-length` in a new release, do not matter.
     #[must_use]
     pub fn recordings(
         mut self,
@@ -197,13 +197,16 @@ impl FollowingPersistentSubscription {
                     Some(archive) => self.list(&archive)?,
                 }
             }
-            Stage::Listing(mut request, newest) => {
+            Stage::Listing(mut request, found) => {
                 match request.poll().map_err(|e| format!("listing recordings: {e}"))? {
-                    None => Stage::Listing(request, newest),
-                    Some(_) => match newest.get() {
-                        Some((recording_id, session_id)) => self.subscribe(recording_id, session_id)?,
-                        None => return Err("no recording to follow yet".to_owned()),
-                    },
+                    None => Stage::Listing(request, found),
+                    Some(_) => {
+                        let (newest, on_live_stream) = found.get();
+                        match on_live_stream.or(newest) {
+                            Some((recording_id, session_id)) => self.subscribe(recording_id, session_id)?,
+                            None => return Err("no recording to follow yet".to_owned()),
+                        }
+                    }
                 }
             }
             Stage::Building(mut building, context, recording_id) => {
@@ -236,21 +239,27 @@ impl FollowingPersistentSubscription {
     }
 
     fn list(&self, archive: &AeronArchive) -> Result<Stage, String> {
-        let newest = Rc::new(Cell::new(None));
-        let (found, filter) = (Rc::clone(&newest), Rc::clone(&self.filter));
+        let found: Found = Rc::new(Cell::new((None, None)));
+        let (sink, filter, live) = (Rc::clone(&found), Rc::clone(&self.filter), self.live_channel.clone());
         let consumer: ListConsumer = Box::new(move |recording| {
             if filter(&recording) {
-                found.set(
-                    found
-                        .get()
-                        .max(Some((recording.recording_id(), recording.session_id()))),
-                );
+                let candidate = Some((recording.recording_id(), recording.session_id()));
+                let (newest, on_live_stream) = sink.get();
+                let live_stream = stream_identity(recording.original_channel()) == stream_identity(&live);
+                sink.set((
+                    newest.max(candidate),
+                    if live_stream {
+                        on_live_stream.max(candidate)
+                    } else {
+                        on_live_stream
+                    },
+                ));
             }
         });
         let request = archive
             .async_list_recordings_for_uri(0, i32::MAX, &self.channel_fragment, self.stream_id, consumer)
             .map_err(|e| format!("listing recordings: {e}"))?;
-        Ok(Stage::Listing(request, newest))
+        Ok(Stage::Listing(request, found))
     }
 
     fn subscribe(&mut self, recording_id: i64, session_id: i32) -> Result<Stage, String> {
@@ -277,6 +286,19 @@ impl Drop for FollowingPersistentSubscription {
     }
 }
 
+/// What identifies `channel`'s stream across releases: its media, endpoint and control
+/// address. Other params, such as `mtu` or `term-length`, may change freely.
+fn stream_identity(channel: &str) -> (&str, Option<&str>, Option<&str>) {
+    let channel = channel.strip_prefix(SPY_PREFIX).unwrap_or(channel);
+    let (media, params) = channel.split_once('?').unwrap_or((channel, ""));
+    let param = |key: &str| {
+        params
+            .split('|')
+            .find_map(|param| param.strip_prefix(key)?.strip_prefix('='))
+    };
+    (media, param("endpoint"), param("control"))
+}
+
 /// Where to start `recording_id`: where the last one followed was left if it is the same,
 /// else from its start, or from live for a first recording not followed `from_start`.
 fn start_position(resume: Option<(i64, i64)>, recording_id: i64, from_start: bool) -> i64 {
@@ -291,6 +313,23 @@ fn start_position(resume: Option<(i64, i64)>, recording_id: i64, from_start: boo
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stream_identity_ignores_params_a_release_may_change() {
+        let live = stream_identity("aeron:udp?endpoint=host:40123");
+        assert_eq!(
+            stream_identity("aeron:udp?mtu=8192|endpoint=host:40123|term-length=131072"),
+            live
+        );
+        assert_eq!(stream_identity("aeron-spy:aeron:udp?endpoint=host:40123"), live);
+        assert_eq!(stream_identity("aeron:ipc?alias=x"), stream_identity("aeron:ipc"));
+        assert_ne!(stream_identity("aeron:udp?endpoint=host:40124"), live);
+        assert_ne!(
+            stream_identity("aeron:udp?control=host:40123|control-mode=dynamic"),
+            live
+        );
+        assert_ne!(stream_identity("aeron:ipc"), live);
+    }
 
     #[test]
     fn resumes_the_same_recording_and_replays_a_new_one_from_its_start() {
