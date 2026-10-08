@@ -875,67 +875,20 @@ impl std::fmt::Debug for AeronOfferError {
 
 impl std::error::Error for AeronOfferError {}
 
-/// # Handler
-/// **Heap-allocated, reference-counted** callback holder for callbacks the C
-/// client **retains** (fires later, possibly many times, from the conductor thread).
+/// Heap-allocated, reference-counted holder for a callback the C client keeps and
+/// fires later, possibly many times, from the conductor thread.
 ///
-/// `Handler<T>` wraps `Arc<UnsafeCell<T>>`. The callback value lives on the heap
-/// and is freed only when the last clone drops. The raw `clientd` pointer handed
-/// to C is `&T` (via [`Handler::as_raw`]); C keeps firing it for as long as it
-/// holds the callback, so the `Handler` must outlive that — methods that register
-/// a retained callback ([`AeronContext::set_error_handler`], the image lifecycle
-/// handlers on `async_add_subscription`, `set_on_available_image`, …) store a
-/// clone of the `Handler` inside the registering resource (as a dependency), so
-/// the value is guaranteed to outlive the C side's use of it. No manual
-/// `release()` is needed.
+/// C is handed a pointer to the value ([`Handler::as_raw`]), so the value must outlive
+/// C's use of it. Methods that register a retained callback store a clone in the
+/// client's dependencies: a close is asynchronous, and the conductor may still fire
+/// the callback after the resource's handle has dropped. The clones therefore live
+/// until the client drops, one small `Arc` per registration.
 ///
-/// ## Async close: why the handler must outlive the resource, not just the call
+/// For callbacks C fires only during the call, prefer the `*_fn` / `*_once` methods:
+/// the closure stays on the stack, may borrow local state, and allocates nothing.
 ///
-/// The C close for a resource holding one of these handlers (e.g.
-/// `aeron_subscription_close`) is **asynchronous** — it only requests the close;
-/// the conductor thread may still fire the callback (e.g. `on_available_image`)
-/// after `close()`/`drop` has already returned on the calling thread. Freeing the
-/// handler's value as soon as the Rust-side handle is dropped would therefore
-/// risk a use-after-free from that still-in-flight callback.
-///
-/// 0.2.x solves this by cloning the `Handler` into the *client's* dependency
-/// list (not just the subscription's) when the callback is registered — see the
-/// docs on `async_add_subscription` and friends. That keeps the value alive for
-/// the client's entire lifetime, independent of when any individual subscription
-/// or resource closes, so there is no window where the conductor thread can call
-/// into a freed handler. The trade-off is that handler clones accumulate on the
-/// client's dependency list for as long as the client lives (each is just one
-/// small `Arc` clone per registration, dropped in bulk when the client itself
-/// drops).
-///
-/// This differs from the Aeron C++ wrapper, which instead stores the handler
-/// inside the `AsyncAddSubscription` object and deletes it as the *final* step
-/// of `on_cmd_close_subscription`, i.e. it ties the handler's lifetime to the
-/// close actually completing on the conductor thread, rather than to the client.
-/// That avoids the unbounded accumulation this crate accepts, at the cost of a
-/// conductor-side hook. If you are migrating C++ code that assumed
-/// close-then-immediately-free semantics, be aware 0.2.x's handlers instead live
-/// until the client drops.
-///
-/// # Heap vs stack — when to reach for `Handler` vs a `*_fn` / `*_once` method
-///
-/// | Callback kind | Where the closure lives | API |
-/// |---|---|---|
-/// | **Retained** (C stores it; fires later / repeatedly) | **heap** (`Handler`/`Arc`) | `set_error_handler(Some(Handler::new(...)))`, `async_add_subscription(.., Some(&h), ..)`, `poll(Some(&h), limit)` |
-/// | **Sync / call-only** (C fires it during the call, then is done) | **stack** (borrowed `FnMut`, zero allocation) | `poll_fn(\|msg, hdr\| ..., limit)`, the generated `*_once` variants |
-///
-/// Prefer the stack form (`poll_fn`, `*_once`) on the hot path: it borrows the
-/// closure for the duration of the call only, so there is no `Arc`, no heap
-/// allocation, and the closure may borrow local state. Reach for `Handler`
-/// (heap) when the callback must survive past the registering call — image
-/// lifecycle handlers, error handlers, counters callbacks, anything the
-/// conductor invokes asynchronously.
-///
-/// The reference count is atomic (`Arc`), so a `Handler` may be moved to another
-/// thread; it is deliberately **not `Sync`** — callbacks fire from the conductor
-/// thread and must not be shared concurrently.
-///
-/// ## Example
+/// `Send` when `T` is; `Sync` only under the `multi-threaded` feature, since callbacks
+/// fire on the conductor thread.
 ///
 /// ```no_compile
 /// use rusteron_code_gen::Handler;

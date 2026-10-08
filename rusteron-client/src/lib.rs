@@ -703,8 +703,7 @@ mod tests {
         let _ = driver_handle.join().unwrap();
         Ok(())
     }
-    /// C5: test AeronClaim RAII lifecycle — commit round-trip is received.
-    /// Exercises the explicit commit path and position() accessor.
+    /// A committed claim arrives with its bytes and reserved value, at the position it claimed.
     #[test]
     #[serial]
     fn aeron_claim_commit_roundtrip_is_received() -> Result<(), Box<dyn error::Error>> {
@@ -849,8 +848,8 @@ mod tests {
         ]
     }
 
-    /// R3: the in-place position equals C's on headers built through `header_layout`:
-    /// term-id wrap-around, a frame aligned up to the term's end, a reassembled message.
+    /// `AeronHeader::position` equals C's for a wrapped term id, a frame aligned up to its
+    /// term's end, and a reassembled message.
     #[test]
     fn header_position_in_place_matches_aeron_c_on_edge_cases() {
         let cases = [
@@ -882,9 +881,8 @@ mod tests {
         }
     }
 
-    /// R3: header fields read in place equal Aeron C's own reads, for single frames,
-    /// for each fragment of a large message, and for the assembler's header of the
-    /// whole message, whose position must be the publisher's after that message.
+    /// `AeronHeader` reads equal C's for single frames, each fragment of a large message,
+    /// and the assembler's header, whose position is the publisher's after the message.
     #[test]
     #[serial]
     fn header_reads_in_place_match_aeron_c() -> Result<(), Box<dyn error::Error>> {
@@ -982,8 +980,7 @@ mod tests {
         Ok(())
     }
 
-    /// C6: test AeronClaim RAII lifecycle — dropped without commit is aborted.
-    /// Verifies that a dropped claim is not delivered and the publication remains usable.
+    /// A claim dropped uncommitted is aborted: never delivered, and the publication stays usable.
     #[test]
     #[serial]
     fn aeron_claim_dropped_without_commit_is_aborted() -> Result<(), Box<dyn error::Error>> {
@@ -1122,8 +1119,7 @@ mod tests {
         Ok(())
     }
 
-    /// C7: test try_claim_owned failure path — oversized request returns Err cleanly.
-    /// Verifies the error path does not construct an AeronClaim or call abort.
+    /// An oversized `try_claim_owned` returns an error without building or aborting a claim.
     #[test]
     #[serial]
     fn try_claim_owned_failure_is_clean() -> Result<(), Box<dyn error::Error>> {
@@ -1223,10 +1219,7 @@ mod tests {
         Ok(())
     }
 
-    /// C4: regression guard for the latency prime directive — a tight loop on the
-    /// publish hot path (`offer` with the static no-op reserved-value supplier)
-    /// must stay allocation-free. If a future change adds a stray `to_string` /
-    /// `Vec` / clone on the offer path, this fails CI.
+    /// The publish hot path (`offer` with the no-op reserved-value supplier) allocates nothing.
     #[test]
     #[serial]
     fn publish_hot_path_is_allocation_free() -> Result<(), Box<dyn error::Error>> {
@@ -2676,10 +2669,8 @@ mod tests {
         Ok((media_driver_ctx, stop, driver_handle))
     }
 
-    /// C1: exercise the generated `AeronExclusivePublication` surface (the
-    /// `offer_result` / `try_claim_owned` parity added for non-exclusive pubs)
-    /// plus the generated `AeronPublicationConstants` accessors — a slice of the
-    /// generated API that no other test touches end-to-end.
+    /// `AeronExclusivePublication`'s offer and claim results, and the
+    /// `AeronPublicationConstants` accessors, end to end.
     #[test]
     #[serial]
     fn exclusive_publication_result_variants_and_constants() -> Result<(), Box<dyn error::Error>> {
@@ -2762,8 +2753,7 @@ mod tests {
         Ok(())
     }
 
-    /// C2: property tests for the pure-Rust (no driver) logic. Fast and
-    /// deterministic — they fuzz the invariants the unit tests only sample.
+    /// Property tests for the pure-Rust logic (no driver).
     mod property_tests {
         use crate::{
             AeronCError, AeronErrorType, AeronOfferError, AeronStatus, AeronStatusTracker,

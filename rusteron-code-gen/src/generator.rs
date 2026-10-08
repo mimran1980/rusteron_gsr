@@ -1729,7 +1729,7 @@ mod parse_custom_methods_tests {
     #[test]
     #[should_panic(expected = "failed to parse aeron_custom.rs")]
     fn panics_loudly_on_malformed_input() {
-        // Previously this returned an empty map → duplicate-method emission.
+        // An empty skip-list would let the generator emit duplicate methods.
         let _ = parse_custom_methods("impl { not valid rust }}}");
     }
 

@@ -1,8 +1,6 @@
 //! Test/example support: an embedded media driver with RAII teardown.
 //!
-//! Replaces the five-line launch incantation and two-line teardown that tests and examples
-//! previously copied everywhere. The driver stops and joins on `Drop`, so teardown ordering
-//! lives in exactly one place.
+//! The driver stops and joins on `Drop`, so teardown order lives in one place.
 
 use crate::{Aeron, AeronCError, AeronDriver, AeronDriverContext, IntoCString};
 use std::sync::Arc;

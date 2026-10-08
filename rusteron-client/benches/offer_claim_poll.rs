@@ -1,7 +1,7 @@
 //! Latency micro-benchmarks for the publish/claim hot paths.
 //!
-//! Guards the latency prime directive: the typed `offer_result` / `try_claim_owned`
-//! wrappers must add ~zero overhead vs the raw `i64`-returning `offer` / `try_claim`.
+//! The typed `offer_result` / `try_claim_owned` wrappers must cost no more than the raw
+//! `i64`-returning `offer` / `try_claim`.
 //! Run with `cargo bench -p rusteron-client`.
 
 use criterion::{Criterion, criterion_group, criterion_main};
