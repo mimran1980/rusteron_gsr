@@ -21,7 +21,7 @@ We welcome contributions, feedback, and discussions. If you're interested in int
 ## Features
 
 - **Client Setup** – Create and start an Aeron client using Rust.
-- **Publications** – Send messages via `offer()` or `try_claim()`.
+- **Publications** – Send messages via `offer()`, `offer_parts()` (gathered), or zero-copy `try_claim_owned()`.
 - **Subscriptions** – Poll for incoming messages and handle fragments.
 - **Callbacks & Handlers** – React to driver events like availability, errors, and stream lifecycle changes.
 - **Cloneable Wrappers** – All client types are cloneable and share ownership of the underlying C resources.
@@ -42,7 +42,7 @@ rusteron-client = "0.2"
 # Static linking
 rusteron-client = { version = "0.2", features = ["static"] }
 
-# Static linking with precompiled C libraries (best for Mac users, no Java/cmake needed)
+# Static linking with precompiled C libraries (no Java/cmake needed; macOS and Linux)
 rusteron-client = { version = "0.2", features = ["static", "precompile"] }
 
 # Static linking with precompiled C libraries using rustls downloader
@@ -57,7 +57,7 @@ When using the default dynamic configuration, you must ensure Aeron C libraries 
 
 - **`new()` Initialization**: Automatically calls the corresponding `*_init` method.
 - **One-liner connect**: `Aeron::connect(Some(dir))?` builds the context, client, and starts the conductor; build the `AeronContext` yourself for tuned setups. (`AeronArchive::connect(...)` in rusteron-archive.)
-- **Retained images auto-release**: `subscription.image_at_index(i)` / `image_by_session_id(id)` return `Option<AeronImage>` that releases back to the subscription on drop; `for_each_image(|img| …)` borrows without bookkeeping.
+- **Retained images auto-release**: `subscription.image_at_index(i)` / `image_by_session_id(id)` return `Option<AeronImage>` that releases back to the subscription on drop; `for_each_image(|img| …)` borrows without bookkeeping. Drop these handles before calling `subscription.close()`: a handle must not be used after it, and its image may stay mapped until the client closes.
 - **Automatic Cleanup (Partial)**: When possible, `Drop` will invoke the appropriate `*_close` or `*_destroy` methods.
 - **Manual Resource Responsibility**: For methods like `set_aeron()` or where lifetimes aren't managed internally, users are responsible for safety.
 - **Handlers Are Reference-Counted**: Wrap callbacks with `Handler::new(...)`. Methods that register a callback the C client retains keep a clone alive inside the registering resource, so the value is freed automatically — no manual `release()`.
@@ -79,12 +79,22 @@ drops, no manual `release()`:
 ctx.set_error_handler(Some(|code: i32, msg: &str| eprintln!("aeron error {code}: {msg}")))?;
 ```
 
-Keep the returned `Handler` to read the callback's state later:
+Reading state through the returned `Handler` is only safe when the callback runs on the
+reading thread (an agent-invoker client, or synchronous callbacks); otherwise share it
+explicitly:
 
 ```rust,ignore
-let counts = ctx.set_error_handler(Some(ErrorCounter::default()))?.unwrap();
-// ... later
-println!("{} errors", counts.error_count);
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+// The conductor thread runs this callback, so share state through an Arc rather than reading the Handler.
+let errors = Arc::new(AtomicUsize::new(0));
+let counted = errors.clone();
+ctx.set_error_handler(Some(move |_code: i32, _msg: &str| {
+    counted.fetch_add(1, Ordering::Relaxed);
+}))?;
+// ... later, from the application thread
+println!("{} errors", errors.load(Ordering::Relaxed));
 ```
 
 Registration methods that return a resource (e.g. `add_subscription` with image handlers) take
@@ -103,7 +113,26 @@ subscription.poll_fn(|buf: &[u8], header: AeronHeader| {
 
 For messages larger than the MTU, wrap the delegate in an `AeronFragmentAssembler` (it
 reassembles fragments before calling back) — `poll_fn` delivers raw fragments
-only. The ergonomic wrapper is `AeronFragmentClosureAssembler`; its `poll` borrows a `&mut T`
+only. `Handler::with_fragment_assembler` builds the reference-counted pair (it replaces the
+deprecated `Handler::leak_with_fragment_assembler`):
+
+```rust,ignore
+use rusteron_client::{AeronFragmentHandlerCallback, AeronHeader, Handler};
+
+struct OnMessage { bytes: u64 }
+impl AeronFragmentHandlerCallback for OnMessage {
+    fn handle_aeron_fragment_handler(&mut self, msg: &[u8], _header: AeronHeader) {
+        self.bytes += msg.len() as u64; // msg is the whole reassembled message
+    }
+}
+
+// The assembler keeps the delegate alive; keep `on_message` to read its state on this thread.
+let (assembler, on_message) = Handler::with_fragment_assembler(OnMessage { bytes: 0 })?;
+let fragments = subscription.poll(Some(&assembler), 10)?;
+println!("{} bytes so far", on_message.bytes);
+```
+
+To pass state through a stack context instead, use `AeronFragmentClosureAssembler`; its `poll` borrows a `&mut T`
 context for the call (the callback is a `fn` pointer, not a closure, so pass state through
 the context):
 
@@ -166,14 +195,23 @@ let subscription = aeron
     .poll_blocking(Duration::from_secs(5))?;
 
 // offer() returns Ok(position) or a typed AeronOfferError — see "Errors & offer results".
+let mut idle = BackoffIdleStrategy::new();
 loop {
     match publication.offer(b"hello") {
         Ok(_) => break,
-        Err(e) if e.is_retryable() => continue,
+        Err(e) if e.is_retryable() => idle.idle(0),
         Err(e) => return Err(e.into()),
     }
 }
-subscription.poll_fn(|buf: &[u8], _hdr: AeronHeader| println!("got {} bytes", buf.len()), 10)?;
+// The image can appear just after the offer succeeds, so poll until the message arrives.
+let mut received = false;
+while !received {
+    let fragments = subscription.poll_fn(|buf: &[u8], _hdr: AeronHeader| {
+        println!("got {} bytes", buf.len());
+        received = true;
+    }, 10)?;
+    idle.idle(fragments);
+}
 ```
 
 > **Note on `poll_blocking` / `add_*(.., timeout)`:** these block the calling thread in a
@@ -242,7 +280,7 @@ Breaking changes, made because the old design allowed double frees and use-after
 | `Handler` was `Sync` | `Send` only (conductor thread may invoke callbacks) |
 | `offer(buf, supplier)` returned a raw `i64` sentinel | `offer(buf)` → `Result<i64, AeronOfferError>` with `is_retryable()`; supplier form: `offer_with_reserved_value`; raw sentinel: `offer_raw` |
 | `offer_result` / `offer_result_simple` / `try_claim_result` (→ `AeronCError`) | `offer_with_reserved_value` / `offer` / `try_claim` (→ typed `AeronOfferError`) |
-| `poll_fn(f, limit)` | `poll_fn(f, limit)` — `for_each_fragment` removed |
+| `poll_once(f, limit)` / `for_each_fragment(limit, f)` | `poll_fn(f, limit)` (`for_each_fragment` removed) |
 | `Handlers::no_xxx_handler()` per callback | `Handlers::NONE` for any callback parameter |
 
 The full old → new table (destinations, fragment assembler, C strings, driver guard) lives
@@ -250,12 +288,15 @@ in the [root README's migration guide](../README.md#migrating-from-01168-to-02).
 
 ## Examples
 
+- [`examples/basic_publisher.rs`](./examples/basic_publisher.rs) — typed-offer retry loop (port of `basic_publisher.c`)
+- [`examples/basic_subscriber.rs`](./examples/basic_subscriber.rs) — image lifecycle handlers and the zero-allocation `poll_fn` (port of `basic_subscriber.c`)
+- [`examples/non_blocking_publisher.rs`](./examples/non_blocking_publisher.rs) — drives `async_add_publication(..).poll()` from its own loop instead of `poll_blocking`
 - [`examples/basic_pub_sub.rs`](./examples/basic_pub_sub.rs) — minimal pub/sub with fragment assembly
 - [`examples/streaming_rate.rs`](./examples/streaming_rate.rs) — streaming publisher + rate-reporting subscriber (port of `streaming_publisher.c` + `rate_subscriber.c`)
 - [`examples/multi_destination_subscription.rs`](./examples/multi_destination_subscription.rs) — MDS: one manual-control subscription aggregating several endpoints (port of `basic_mds_subscriber.c`)
 - [`examples/driver_stats.rs`](./examples/driver_stats.rs) — CnC tooling: counters, distinct error log, loss report (ports of `aeron_stat.c` / `error_stat.c` / `loss_stat.c`)
-- [`examples/embedded_ping_pong.rs`](./examples/embedded_ping_pong.rs) — RTT ping/pong with `try_claim` (port of `cping`/`cpong`)
-- [`examples/embedded_exclusive_ipc_throughput.rs`](./examples/embedded_exclusive_ipc_throughput.rs) — exclusive-publication IPC throughput
+- [`examples/embedded_ping_pong.rs`](./examples/embedded_ping_pong.rs) — RTT ping/pong with `try_claim` (port of `cping`/`cpong`); starts its own driver unless `AERON_DIR` is set
+- [`examples/embedded_exclusive_ipc_throughput.rs`](./examples/embedded_exclusive_ipc_throughput.rs) — exclusive-publication IPC throughput; starts its own driver unless `AERON_DIR` is set
 - [`examples/request_response.rs`](./examples/request_response.rs) — response channels (aeron 1.44+): request/response wiring via `control-mode=response` + `response-correlation-id` (port of `response_server.c`/`response_client.c`)
 - [`examples/file_transfer.rs`](./examples/file_transfer.rs) — chunked file transfer with fragment reassembly and verification (port of `FileSender`/`FileReceiver`)
 
@@ -276,8 +317,20 @@ For detailed guides and code snippets on Aeron features in Rust, see:
   ```rust,ignore
   match publication.offer(msg) {
       Ok(_) => {}
-      Err(e) if e.is_retryable() => idle.idle(), // retry
-      Err(e) => return Err(e.into()),            // publication gone
+      Err(e) if e.is_retryable() => idle.idle(0), // no work done: back off, then retry
+      Err(e) => return Err(e.into()),             // publication gone
+  }
+  ```
+  Zero-copy `try_claim_owned()` returns an RAII `AeronClaim`; an uncommitted claim aborts on drop:
+  ```rust,ignore
+  match publication.try_claim_owned(msg.len()) {
+      Ok(mut claim) => {
+          claim.data().copy_from_slice(msg);
+          claim.set_reserved_value(Aeron::nano_clock()); // optional; read with header.reserved_value()
+          claim.commit()?;
+      }
+      Err(e) if e.is_retryable() => idle.idle(0),
+      Err(e) => return Err(e.into()),
   }
   ```
   For branch-free hot paths, `offer_raw()` / `try_claim_raw()` return the raw `i64` sentinel.

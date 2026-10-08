@@ -42,7 +42,7 @@ rusteron-media-driver = { version = "0.2", features = ["static"] }
 </details>
 
 <details>
-<summary>Static with precompiled C libs (macOS only)</summary>
+<summary>Static with precompiled C libs (macOS / Linux)</summary>
 
 ```toml
 [dependencies]
@@ -65,19 +65,19 @@ Ensure the Aeron C libraries are properly installed and available on your system
 <details>
 <summary>Standard Media Driver</summary>
 
-```rust
-// Launches a standalone Aeron Media Driver
+```rust,no_run
+// A standalone media driver; `cargo run -p rusteron-media-driver --bin media_driver` ships the same.
 use rusteron_media_driver::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let aeron_context = AeronDriverContext::new()?;
-    aeron_context.set_dir(c"target/test")?;
-
-    let aeron_driver = AeronDriver::new(&aeron_context)?;
-    aeron_driver.start(false)?;
-    println!("Aeron Media Driver started");
-
-    Ok(())
+    let context = AeronDriverContext::new()?;
+    context.set_dir(c"target/aeron")?;
+    let driver = AeronDriver::new(&context)?;
+    driver.start(true)?; // run the conductor duty cycle on this thread
+    println!("media driver running in {}", context.get_dir());
+    loop {
+        driver.main_idle_strategy(driver.main_do_work()?);
+    }
 }
 ```
 
@@ -86,29 +86,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 <details>
 <summary>Embedded Media Driver</summary>
 
-```rust
-// Embeds the media driver directly into the current process
-use rusteron_media_driver::*;
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
-use std::thread;
-use std::time::Duration;
+```rust,no_run
+// Embeds the media driver in this process: unique directory, stopped and joined on drop.
+use rusteron_media_driver::testing::EmbeddedDriver;
+use rusteron_media_driver::Aeron;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let media_driver_ctx = AeronDriverContext::new()?;
-    let (stop, driver_handle) = AeronDriver::launch_embedded(media_driver_ctx.clone(), false);
-
-    let ctx = AeronContext::new()?;
-    ctx.set_dir(&cformat!("{}", media_driver_ctx.get_dir()))?;
-
-    thread::sleep(Duration::from_secs(3)); // Simulated workload
-
-    stop.store(true, Ordering::SeqCst);
-    driver_handle.join().expect("Failed to join driver thread");
-    println!("Embedded Aeron Media Driver stopped");
-
+    let driver = EmbeddedDriver::launch()?; // or EmbeddedDriver::launch_with(|ctx| { /* tune ctx */ Ok(()) })
+    // Applications usually connect with rusteron_client::Aeron::connect_dir(driver.dir()).
+    let aeron = Aeron::connect_dir(driver.dir())?;
+    // add publications / subscriptions on `aeron` ...
+    drop(aeron); // close the client before the driver stops
     Ok(())
 }
 ```
+
+For a caller-built `AeronDriverContext`, `AeronDriver::launch_embedded_guard(ctx, false)` is the RAII form (stops and joins on drop).
 
 </details>
 
