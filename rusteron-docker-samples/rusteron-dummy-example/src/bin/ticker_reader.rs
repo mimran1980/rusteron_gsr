@@ -35,7 +35,11 @@ fn main() -> Result<()> {
                     let last_stopped = recordings.iter().rev().find(|recording| recording.stop_position > 0);
                     info!("found {} recordings [lastStopped={last_stopped:?}]", recordings.len());
 
-                    if let Some(record) = recordings.last() {
+                    // merge only when there is no live stream: a writer restart starts a new session and recording
+                    let live_connected = live_subscription.as_ref().is_some_and(|s| s.is_connected());
+                    if let Some(record) = recordings.last().filter(|_| !live_connected) {
+                        // free the live port before the merge adds it as a destination
+                        live_subscription = None;
                         info!("trying replay merge {record:?}");
                         let replay_channel = format!("aeron:udp?control-mode=manual|session-id={}", record.session_id);
                         let subscription = aeron.add_subscription(
@@ -60,7 +64,7 @@ fn main() -> Result<()> {
 
                         // poll only the merge until it finishes: the archive client must not be used meanwhile
                         let (mut count, mut bytes) = (0usize, 0usize);
-                        while !merge.is_merged() {
+                        while !merge.is_merged() && !shutdown.load(Ordering::Acquire) {
                             let polled = merge.poll_fn(
                                 |buffer, _header| {
                                     count += 1;
@@ -78,6 +82,10 @@ fn main() -> Result<()> {
                             "replay merge finished [merged={}, count={count}, bytes={bytes}]",
                             merge.is_merged()
                         );
+                        // once merged the subscription is on the live stream, so keep reading it as the live one
+                        if merge.is_merged() {
+                            live_subscription = Some(subscription);
+                        }
                     }
 
                     if let Some(record) = last_stopped {
