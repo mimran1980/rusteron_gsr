@@ -670,6 +670,7 @@ pub trait PersistentSubscriptionListener: Send + 'static {
 pub struct PersistentSubscriptionBuilder {
     ctx: AeronArchivePersistentSubscriptionContext,
     listener: Option<Box<dyn PersistentSubscriptionListener>>,
+    aeron: Option<Aeron>,
 }
 
 impl PersistentSubscriptionBuilder {
@@ -678,12 +679,14 @@ impl PersistentSubscriptionBuilder {
         Ok(Self {
             ctx: AeronArchivePersistentSubscriptionContext::new()?,
             listener: None,
+            aeron: None,
         })
     }
 
     /// Set the Aeron client to use.
-    pub fn aeron(self, aeron: &Aeron) -> Result<Self, AeronCError> {
+    pub fn aeron(mut self, aeron: &Aeron) -> Result<Self, AeronCError> {
         self.ctx.set_aeron(aeron)?;
+        self.aeron = Some(aeron.clone());
         Ok(self)
     }
 
@@ -751,6 +754,7 @@ impl PersistentSubscriptionBuilder {
     /// state. If unset the PS allocates one itself. Maps to Aeron's `Context.stateCounter`.
     pub fn state_counter(self, counter: &AeronCounter) -> Result<Self, AeronCError> {
         self.ctx.set_state_counter(counter)?;
+        hand_over(counter);
         Ok(self)
     }
 
@@ -758,6 +762,7 @@ impl PersistentSubscriptionBuilder {
     /// Maps to Aeron's `Context.joinDifferenceCounter`.
     pub fn join_difference_counter(self, counter: &AeronCounter) -> Result<Self, AeronCError> {
         self.ctx.set_join_difference_counter(counter)?;
+        hand_over(counter);
         Ok(self)
     }
 
@@ -765,6 +770,7 @@ impl PersistentSubscriptionBuilder {
     /// Maps to Aeron's `Context.liveLeftCounter`.
     pub fn live_left_counter(self, counter: &AeronCounter) -> Result<Self, AeronCError> {
         self.ctx.set_live_left_counter(counter)?;
+        hand_over(counter);
         Ok(self)
     }
 
@@ -772,12 +778,153 @@ impl PersistentSubscriptionBuilder {
     /// Maps to Aeron's `Context.liveJoinedCounter`.
     pub fn live_joined_counter(self, counter: &AeronCounter) -> Result<Self, AeronCError> {
         self.ctx.set_live_joined_counter(counter)?;
+        hand_over(counter);
         Ok(self)
     }
 
     /// Build the persistent subscription.
     pub fn build(mut self) -> Result<AeronArchivePersistentSubscription, AeronCError> {
         AeronArchivePersistentSubscription::create(self.ctx, self.listener.take())
+    }
+
+    /// Builds the subscription without waiting on the media driver: the counters that
+    /// [`Self::build`] adds one round trip at a time are requested together, and
+    /// [`AeronArchiveAsyncPersistentSubscription::poll`] creates the subscription once
+    /// the driver has registered them. Counters already set on the builder are kept.
+    ///
+    /// # Errors
+    ///
+    /// No Aeron client is set, or a counter could not be requested.
+    pub fn build_async(self) -> Result<AeronArchiveAsyncPersistentSubscription, AeronCError> {
+        let aeron = self
+            .aeron
+            .clone()
+            .ok_or_else(|| AeronCError::with_message(-1, "build_async needs an Aeron client"))?;
+        let set = [
+            self.ctx.get_state_counter(),
+            self.ctx.get_join_difference_counter(),
+            self.ctx.get_live_left_counter(),
+            self.ctx.get_live_joined_counter(),
+        ];
+        let channels = format!(
+            "{} {} {} {}",
+            self.ctx.get_replay_stream_id(),
+            self.ctx.get_replay_channel(),
+            self.ctx.get_live_stream_id(),
+            self.ctx.get_live_channel()
+        );
+        let mut counters = [None, None, None, None];
+        for ((slot, set), (type_id, name)) in counters.iter_mut().zip(&set).zip(PERSISTENT_SUBSCRIPTION_COUNTERS) {
+            if set.get_inner().is_null() {
+                let label = format!("{name}: {channels}");
+                let adding = AeronAsyncAddCounter::new(&aeron, type_id as i32, &[], counter_label(&label))?;
+                *slot = Some(PendingCounter::Adding(adding));
+            }
+        }
+        Ok(AeronArchiveAsyncPersistentSubscription {
+            builder: Some(self),
+            counters,
+        })
+    }
+}
+
+/// The counters a persistent subscription keeps, as Aeron's own build adds them.
+const PERSISTENT_SUBSCRIPTION_COUNTERS: [(u32, &str); 4] = [
+    (
+        AERON_PERSISTENT_SUBSCRIPTION_STATE_TYPE_ID,
+        "Persistent Subscription State",
+    ),
+    (
+        AERON_PERSISTENT_SUBSCRIPTION_JOIN_DIFFERENCE_TYPE_ID,
+        "Persistent Subscription Join Difference",
+    ),
+    (
+        AERON_PERSISTENT_SUBSCRIPTION_LIVE_LEFT_COUNT_TYPE_ID,
+        "Persistent Subscription Live Left Count",
+    ),
+    (
+        AERON_PERSISTENT_SUBSCRIPTION_LIVE_JOINED_COUNT_TYPE_ID,
+        "Persistent Subscription Live Joined Count",
+    ),
+];
+
+/// `label` cut to what a counter holds, as Aeron cuts its own.
+fn counter_label(label: &str) -> &str {
+    let max = aeron_counter_metadata_descriptor_t::default().label.len() - 1;
+    let end = (0..=max.min(label.len()))
+        .rev()
+        .find(|&i| label.is_char_boundary(i))
+        .unwrap_or(0);
+    &label[..end]
+}
+
+/// Leaves `counter` to the persistent subscription context, which closes every counter it
+/// holds, so the Rust handle does not close it a second time.
+fn hand_over(counter: &AeronCounter) {
+    if let Some(inner) = counter.inner.as_owned() {
+        #[cfg(feature = "multi-threaded")]
+        inner.close_already_called.store(true, Ordering::SeqCst);
+        #[cfg(not(feature = "multi-threaded"))]
+        inner.close_already_called.set(true);
+    }
+}
+
+enum PendingCounter {
+    Adding(AeronAsyncAddCounter),
+    Added(AeronCounter),
+}
+
+/// A persistent subscription whose counters the media driver is still registering, from
+/// [`PersistentSubscriptionBuilder::build_async`]. Dropping it cancels the registrations
+/// and closes any counters already added.
+pub struct AeronArchiveAsyncPersistentSubscription {
+    builder: Option<PersistentSubscriptionBuilder>,
+    counters: [Option<PendingCounter>; 4],
+}
+
+impl AeronArchiveAsyncPersistentSubscription {
+    /// The subscription once the driver has registered its counters, `None` until then.
+    ///
+    /// # Errors
+    ///
+    /// The driver refused a counter, or creating the subscription failed. The build is
+    /// over either way.
+    pub fn poll(&mut self) -> Result<Option<AeronArchivePersistentSubscription>, AeronCError> {
+        if self.builder.is_none() {
+            return Err(AeronCError::with_message(
+                -1,
+                "the persistent subscription build is over",
+            ));
+        }
+        let mut waiting = false;
+        for slot in self.counters.iter_mut().flatten() {
+            if let PendingCounter::Adding(adding) = slot {
+                match adding.poll() {
+                    Ok(Some(counter)) => *slot = PendingCounter::Added(counter),
+                    Ok(None) => waiting = true,
+                    Err(e) => {
+                        self.builder = None;
+                        return Err(e);
+                    }
+                }
+            }
+        }
+        if waiting {
+            return Ok(None);
+        }
+        let mut builder = self.builder.take().expect("checked above");
+        let setters = [
+            PersistentSubscriptionBuilder::state_counter,
+            PersistentSubscriptionBuilder::join_difference_counter,
+            PersistentSubscriptionBuilder::live_left_counter,
+            PersistentSubscriptionBuilder::live_joined_counter,
+        ];
+        for (slot, set) in self.counters.iter_mut().zip(setters) {
+            if let Some(PendingCounter::Added(counter)) = slot.take() {
+                builder = set(builder, &counter)?;
+            }
+        }
+        builder.build().map(Some)
     }
 }
 

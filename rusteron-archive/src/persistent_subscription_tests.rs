@@ -1235,6 +1235,133 @@ mod tests {
         Ok(())
     }
 
+    /// `build_async` registers the counters the caller did not set without waiting on the
+    /// driver, then creates a subscription that replays and joins live; closing it
+    /// releases all four counters, the caller's included.
+    #[test]
+    #[serial]
+    fn build_async_creates_a_working_subscription() -> Result<(), Box<dyn Error>> {
+        crate::skip_unless_java!();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().ok();
+
+        let (aeron, archive_context, _media_driver_archive, _archive_error_handler) =
+            start_aeron_archive_with_config("ps_build_async", 9800)?;
+        let archive = AeronArchiveAsyncConnect::new_with_aeron(&archive_context, &aeron)?
+            .poll_blocking(Duration::from_secs(20))
+            .expect("failed to connect to archive");
+
+        let live_channel = "aeron:ipc";
+        let stream_id = 3101;
+        retry_archive_op(Instant::now() + Duration::from_secs(15), || {
+            archive.start_recording(&live_channel.into_c_string(), stream_id, SOURCE_LOCATION_LOCAL, true)
+        })?;
+        let publication = aeron
+            .async_add_publication(&live_channel.into_c_string(), stream_id)?
+            .poll_blocking(Duration::from_secs(5))?;
+        let start = Instant::now();
+        while !publication.is_connected() && start.elapsed() < Duration::from_secs(5) {
+            sleep(Duration::from_millis(10));
+        }
+        for i in 0..10 {
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while publication.offer_raw(format!("Seed-{i}").as_bytes(), Handlers::NONE) <= 0 {
+                assert!(Instant::now() < deadline, "timed out offering seed message");
+                sleep(Duration::from_millis(10));
+            }
+        }
+        let counters_reader = aeron.counters_reader();
+        let session_id = publication.get_constants()?.session_id;
+        let counter_id =
+            crate::testing::find_counter_id_by_session_blocking(&counters_reader, session_id, Duration::from_secs(5))?;
+        let recording_id = RecordingPos::get_recording_id_block(&counters_reader, counter_id, Duration::from_secs(5))?;
+
+        let persistent_counters = || {
+            let mut found = Vec::new();
+            counters_reader.foreach_counter_fn(|_value: i64, _id: i32, type_id: i32, _key: &[u8], label: &str| {
+                if PERSISTENT_SUBSCRIPTION_COUNTERS
+                    .iter()
+                    .any(|(t, _)| *t as i32 == type_id)
+                {
+                    found.push((type_id, label.to_owned()));
+                }
+            });
+            found.sort();
+            found
+        };
+        let own_state = AeronAsyncAddCounter::new(
+            &aeron,
+            AERON_PERSISTENT_SUBSCRIPTION_STATE_TYPE_ID as i32,
+            &[],
+            "own state",
+        )?
+        .poll_blocking(Duration::from_secs(5))?;
+
+        let mut building = persistent_subscription_builder()?
+            .aeron(&aeron)?
+            .archive_context(&archive_context)?
+            .live_channel(live_channel)?
+            .live_stream_id(stream_id)?
+            .replay_channel("aeron:udp?endpoint=localhost:0")?
+            .replay_stream_id(stream_id + 1)?
+            .start_position(0)?
+            .recording_id(recording_id)?
+            .state_counter(&own_state)?
+            .build_async()?;
+        let start = Instant::now();
+        let ps = loop {
+            if let Some(ps) = building.poll()? {
+                break ps;
+            }
+            assert!(
+                start.elapsed() < Duration::from_secs(5),
+                "the counters were never registered"
+            );
+            sleep(Duration::from_millis(1));
+        };
+        drop(building);
+
+        let counters = persistent_counters();
+        let types: Vec<i32> = counters.iter().map(|(type_id, _)| *type_id).collect();
+        assert_eq!(types, [114, 115, 116, 117], "one counter of each type: {counters:?}");
+        assert_eq!(counters[0].1, "own state");
+        let channels = format!("{} aeron:udp?endpoint=localhost:0 {stream_id} aeron:ipc", stream_id + 1);
+        assert_eq!(
+            counters[1].1,
+            format!("Persistent Subscription Join Difference: {channels}")
+        );
+
+        let mut i = 0;
+        let start = Instant::now();
+        while !ps.is_live() && start.elapsed() < Duration::from_secs(30) {
+            assert!(
+                !ps.has_failed(),
+                "persistent subscription failed: {:?}",
+                ps.get_failure_reason()
+            );
+            let _ = publication.offer_raw(format!("Live-{i}").as_bytes(), Handlers::NONE);
+            i += 1;
+            if ps.poll_fn(|_, _| {}, 100)? == 0 {
+                sleep(Duration::from_millis(1));
+            }
+        }
+        assert!(ps.is_live(), "the subscription never joined live");
+
+        ps.close()?;
+        drop(own_state);
+        let start = Instant::now();
+        while !persistent_counters().is_empty() {
+            assert!(
+                start.elapsed() < Duration::from_secs(5),
+                "counters left: {:?}",
+                persistent_counters()
+            );
+            sleep(Duration::from_millis(10));
+        }
+        Ok(())
+    }
+
     /// Resilience: when the live image is lost the persistent subscription falls
     /// back to replay, and when the stream returns it rejoins live — so
     /// `on_live_joined` fires a second time. Mirrors Aeron's
