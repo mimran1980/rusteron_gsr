@@ -19,7 +19,7 @@ To build **rusteron-archive**, ensure the following are installed:
   sudo snap install cmake --classic
   ```
 
-Java, CMake and Clang are only needed to build Aeron C from source (the default). With `features = ["static", "precompile"]` (or `precompile-rustls`) prebuilt libraries are downloaded instead (macOS and Linux); Linux still needs `uuid-dev` and `libbsd-dev` to link.
+  Java, CMake and Clang are only needed to build Aeron C from source (the default). With `features = ["static", "precompile"]` (or `precompile-rustls`) prebuilt libraries are downloaded instead (macOS and Linux); Linux still needs `uuid-dev` and `libbsd-dev` to link.
 
 * **just** (optional): Command runner for build tasks.
 

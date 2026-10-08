@@ -94,8 +94,9 @@ target the architecture's baseline (`x86-64`, `armv8-a`), so they run on any CPU
 Publication, subscription, counter and counters-reader handles are `Send` but **not `Sync`**
 by default; they use `Rc` and may be moved to one owning thread. The `Aeron` client and
 `AeronExclusivePublication` become `Send` only under `multi-threaded`; other handles
-(contexts, images) stay on the thread that created them. Enable `multi-threaded` to swap `Rc` → `Arc` and add `unsafe impl Sync`,
-so `&Handle` can be shared across threads for the ops Aeron C documents as thread-safe
+(contexts, images) stay on the thread that created them. Enable `multi-threaded` to swap
+`Rc` → `Arc` and add `unsafe impl Sync`, so `&Handle` can be shared across threads for the
+ops Aeron C documents as thread-safe
 (`offer` / `try_claim` / `position` / `is_connected`):
 
 ```toml
@@ -277,7 +278,7 @@ Old → new for every renamed/changed API
 | `&"aeron:ipc".into_c_string()` (allocates at runtime) | `c"aeron:ipc"` | See "C strings without hidden allocations" above; `cformat!` for dynamic URIs. |
 | `wrapper.get_inner_mut()` / `ManagedCResource::get_mut()` (safe) | `unsafe …()` | `&mut` from `&self`; the caller must now promise exclusive access. The only internal caller (`clone_struct`) is wrapped in `unsafe` already. |
 | `AeronUriStringBuilder::put_string(&CStr, &str)` / `put_strings(&str, &str)` | `AeronUriStringBuilder::put_str(&CStr, &str)` | Single name, single key type (`&CStr` — pair with `c"media"` or `CStr::from_bytes_until_nul`); `put_strings` removed (no external callers). |
-| `archive.begin_replay(...)`, `start_recording(...)`, … → `Result<_, AeronCError>` | `Result<_, AeronArchiveError>` | Control ops on `AeronArchive` return the typed error (parseable code + message). Constructors, async-connect, and context setters still return `AeronCError`; `From<AeronArchiveError> for AeronCError` keeps `?` working across the boundary. |
+| `archive.start_replay(...)`, `start_recording(...)`, … → `Result<_, AeronCError>` | `Result<_, AeronArchiveError>` | Control ops on `AeronArchive` return the typed error (parseable code + message). Constructors, async-connect, and context setters still return `AeronCError`; `From<AeronArchiveError> for AeronCError` keeps `?` working across the boundary. |
 | `async_add_exclusive_publication.poll(...).get_registration_id()` on the deprecated `exclusive_exclusive` alias | only `aeron_async_add_exclusive_publication_get_registration_id` is exposed | The deprecated `aeron_async_add_exclusive_exclusive_publication_get_registration_id` C alias is dropped (it collided with the canonical name); use the canonical `get_registration_id()`. |
 | `DarwinPthread*`, `OpaquePthread*` wrapper structs in the generated API | removed | Bindgen pthread internals are no longer emitted as wrapper types; socket types the driver wrappers reference (`sockaddr_storage`, `iovec`, …) are retained. |
 
