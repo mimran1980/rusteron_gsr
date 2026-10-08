@@ -254,10 +254,27 @@ impl AeronArchiveAsyncConnect {
     #[inline]
     /// recommend using this method instead of standard `new` as it will link the archive to aeron so if a drop occurs archive is dropped before aeron
     pub fn new_with_aeron(ctx: &AeronArchiveContext, aeron: &Aeron) -> Result<Self, AeronCError> {
-        let resource_async = Self::new(ctx)?;
-        resource_async.inner.add_dependency(aeron.clone());
-        Ok(resource_async)
+        // A terminal poll frees the connect and marks it released, so this deletes only an
+        // abandoned one. The held client outlives it, which keeps cancelling its adds safe.
+        let resource_async = ManagedCResource::new(
+            |connect| unsafe { aeron_archive_async_connect(connect, ctx.into()) },
+            Some(Box::new(|connect| unsafe {
+                aeron_archive_async_connect_delete(*connect)
+            })),
+            false,
+        )?;
+        let result = Self {
+            inner: CResource::OwnedOnHeap(RcOrArc::new(resource_async)),
+        };
+        result.inner.add_dependency(ctx.clone());
+        result.inner.add_dependency(aeron.clone());
+        Ok(result)
     }
+}
+
+unsafe extern "C" {
+    // Exported by the archive client; declared only in Aeron's internal headers.
+    fn aeron_archive_async_connect_delete(connect: *mut aeron_archive_async_connect_t) -> c_int;
 }
 
 /// Marks a request in flight on `archive`, so nothing else consumes the request's
@@ -1926,6 +1943,66 @@ mod tests {
             let polled = AeronArchiveAsyncConnect::new(&context)?.poll_blocking(Duration::from_secs(10))?;
             drop(polled);
             drop(connected);
+            Ok(())
+        })();
+
+        drop(aeron);
+        drop(archive_context);
+        drop(media_driver);
+        drop(pub_error_frame_handler);
+        drop(error_handler);
+        test_result
+    }
+
+    /// Dropping a connect before it completes releases its control subscription and
+    /// publication, as Aeron's own terminal outcomes do.
+    #[test]
+    #[serial]
+    pub fn abandoned_async_connect_releases_its_subscription() -> Result<(), Box<dyn error::Error>> {
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().expect("failed to kill all java processes");
+        let (aeron, archive_context, media_driver, pub_error_frame_handler, error_handler) = start_aeron_archive()?;
+
+        let test_result: Result<(), Box<dyn error::Error>> = (|| {
+            let request_port = find_unused_udp_port(9000).expect("Could not find port");
+            let response_port = find_unused_udp_port(request_port + 1).expect("Could not find port");
+            let context = AeronArchiveContext::new()?;
+            context.set_aeron(&aeron)?;
+            context
+                .set_control_request_channel(&format!("aeron:udp?endpoint=localhost:{request_port}").into_c_string())?;
+            context.set_control_response_channel(
+                &format!("aeron:udp?endpoint=localhost:{response_port}").into_c_string(),
+            )?;
+            let endpoint = format!("endpoint=localhost:{response_port}|");
+            let receivers = || {
+                let mut count = 0;
+                aeron.counters_reader().foreach_counter_fn(|_, _, _, _, label: &str| {
+                    if label.starts_with("rcv-channel:") && label.contains(&endpoint) {
+                        count += 1;
+                    }
+                });
+                count
+            };
+
+            let connect = AeronArchiveAsyncConnect::new_with_aeron(&context, &aeron)?;
+            let start = Instant::now();
+            while receivers() == 0 {
+                assert!(
+                    start.elapsed() < Duration::from_secs(10),
+                    "the subscription never arrived"
+                );
+                thread::sleep(Duration::from_millis(10));
+            }
+            drop(connect);
+
+            let start = Instant::now();
+            while receivers() != 0 {
+                assert!(
+                    start.elapsed() < Duration::from_secs(10),
+                    "the abandoned connect kept its subscription"
+                );
+                thread::sleep(Duration::from_millis(10));
+            }
             Ok(())
         })();
 
