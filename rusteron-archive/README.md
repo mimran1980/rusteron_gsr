@@ -165,6 +165,8 @@ loop {
 }
 ```
 
+[`examples/duty_cycle.rs`](./examples/duty_cycle.rs) runs this loop on one thread with an agent-invoker client: it connects without blocking through `aeron.main_do_work()`, then adds its publication and builds a persistent subscription through `archive.do_work()`.
+
 Blocking archive calls idle with the C client's default backoff strategy between polls (Aeron C++ yields instead); `archive_context.set_idle_strategy(..)` replaces it.
 
 `archive.do_work()` fails only on an archive error its context has no error handler for. Client faults go to the client's error handler, and a lost archive shows as `archive.get_control_response_subscription().is_connected()` turning false.
@@ -255,6 +257,7 @@ For a fully runnable version, see the example and integration tests:
 - [`examples/replay_merge.rs`](./examples/replay_merge.rs) — late-joiner catch-up: replay recorded history, then merge seamlessly onto the live MDC stream (`AeronArchiveReplayMerge`)
 - [`examples/recording_throughput.rs`](./examples/recording_throughput.rs) — recording throughput measurement (publish rate vs archiver catch-up) and `list_recordings` descriptor enumeration
 - [`examples/recording_replication.rs`](./examples/recording_replication.rs) — archive-to-archive replication (`archive.replicate`): a destination archive pulls a finished recording from a source archive and the copy is verified (port of `RecordingReplicator`)
+- [`examples/duty_cycle.rs`](./examples/duty_cycle.rs) — one non-blocking duty cycle on an agent-invoker client: `archive.do_work()`, recording signals, an async connect, publication add and persistent subscription build, and the subscription's replay-then-live handover
 - `persistent_subscription_tests::test_persistent_subscription_listener_live_joined` (callback wiring)
 - `persistent_subscription_integration::test_end_to_end_persistent_subscription` (record → replay → live)
 
