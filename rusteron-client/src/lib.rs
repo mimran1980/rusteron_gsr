@@ -758,13 +758,15 @@ mod tests {
         }
         assert_eq!(publisher.status(), AeronStatus::Connected);
 
-        // Claim a buffer, write into it, and commit.
+        // Claim a buffer, write into it, stamp it, and commit.
         let claim_payload = b"claim-commit-test";
+        let stamp = 0x0123_4567_89ab_cdef_i64;
         let claim_start = Instant::now();
         let mut committed_pos = None;
         while claim_start.elapsed() < Duration::from_secs(2) {
             if let Ok(mut claim) = publisher.try_claim_owned(claim_payload.len()) {
                 claim.data()[..claim_payload.len()].copy_from_slice(claim_payload);
+                claim.set_reserved_value(stamp);
                 let pos = claim.position();
                 let commit_pos = claim.commit()?;
                 committed_pos = Some((commit_pos, pos));
@@ -776,14 +778,14 @@ mod tests {
         let (commit_pos, claim_pos) = committed_pos.expect("try_claim_owned + commit never succeeded");
         assert_eq!(commit_pos, claim_pos, "commit() return should match claim.position()");
 
-        // Receive the committed message and assert the exact bytes.
-        let received = std::cell::Cell::new(false);
+        // Receive the committed message and assert the exact bytes and stamp.
+        let received = std::cell::Cell::new(None);
         let read_start = Instant::now();
-        while read_start.elapsed() < Duration::from_secs(2) && !received.get() {
+        while read_start.elapsed() < Duration::from_secs(2) && received.get().is_none() {
             let _ = subscription.poll_fn(
-                |msg, _header| {
+                |msg, header| {
                     if msg == claim_payload {
-                        received.set(true);
+                        received.set(Some(header.reserved_value()));
                     }
                 },
                 1024,
@@ -791,7 +793,7 @@ mod tests {
             #[cfg(debug_assertions)]
             sleep(Duration::from_millis(10));
         }
-        assert!(received.get(), "did not receive claim message");
+        assert_eq!(received.get(), Some(Some(stamp)), "claim message with its stamp");
 
         assert_eq!(subscription.status(), AeronStatus::Connected);
 

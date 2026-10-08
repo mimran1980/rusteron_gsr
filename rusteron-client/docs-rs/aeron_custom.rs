@@ -1672,6 +1672,13 @@ impl AeronClaim {
         self.position
     }
 
+    /// Stamp the frame's reserved value, e.g. a send timestamp, which subscribers
+    /// read with [`AeronHeader::reserved_value`]. Call before [`Self::commit`].
+    #[inline]
+    pub fn set_reserved_value(&mut self, value: i64) {
+        self.claim.frame_header_mut().reserved_value = value;
+    }
+
     /// Commit the claimed bytes, publishing them to subscribers. Consumes `self`.
     pub fn commit(mut self) -> Result<i64, AeronCError> {
         self.finalised = true;
