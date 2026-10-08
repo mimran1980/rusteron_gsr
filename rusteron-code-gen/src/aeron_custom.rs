@@ -310,43 +310,68 @@ impl AeronHeader {
         }
     }
 
-    /// Session id of this fragment, or `None` if the underlying values lookup
-    /// failed. Collapses the `get_values().frame().session_id()` hop and never
-    /// panics on the fast path.
+    /// The C header in place, `None` for a null handle. Its fields are bound from
+    /// `aeron_image.h`, so reading them needs no FFI call.
+    #[inline]
+    fn layout(&self) -> Option<&header_layout::aeron_header_stct> {
+        // SAFETY: a non-null handle points at Aeron's own `aeron_header_t`, which
+        // `header_layout` binds from the same header, valid for the handler call.
+        unsafe { self.get_inner().cast::<header_layout::aeron_header_stct>().as_ref() }
+    }
+
+    /// The fragment's data frame: in the term buffer, or the assembler's copy of a
+    /// reassembled message's first frame.
+    #[inline]
+    fn data_frame(&self) -> Option<&aeron_data_header_t> {
+        // SAFETY: as in `layout`, the frame outlives the handler call.
+        self.layout().and_then(|header| unsafe { header.frame.as_ref() })
+    }
+
+    /// Session id of this fragment, read in place; `None` for a null header.
     #[inline]
     pub fn session_id(&self) -> Option<i32> {
-        self.get_values().ok().map(|v| v.frame().session_id())
+        self.data_frame().map(|frame| frame.session_id)
     }
 
-    /// Stream id of this fragment, or `None` if the underlying values lookup
-    /// failed. Collapses the `get_values().frame().stream_id()` hop and never
-    /// panics on the fast path.
+    /// Stream id of this fragment, read in place; `None` for a null header.
     #[inline]
     pub fn stream_id(&self) -> Option<i32> {
-        self.get_values().ok().map(|v| v.frame().stream_id())
+        self.data_frame().map(|frame| frame.stream_id)
     }
 
-    /// Reserved value of this fragment, or `None` if the underlying values
-    /// lookup failed. A sender can stamp a timestamp here (see
-    /// [`AeronPublication::offer_timestamped`]) so the receiver can measure
-    /// end-to-end latency.
+    /// Reserved value of this fragment, read in place; `None` for a null header. A
+    /// sender can stamp a timestamp here (see [`AeronClaim::set_reserved_value`]) so
+    /// the receiver can measure end-to-end latency.
     #[inline]
     pub fn reserved_value(&self) -> Option<i64> {
-        self.get_values().ok().map(|v| v.frame().reserved_value())
+        self.data_frame().map(|frame| frame.reserved_value)
     }
 
-    /// Term id of this fragment, or `None` if the underlying values lookup
-    /// failed.
+    /// Term id of this fragment, read in place; `None` for a null header.
     #[inline]
     pub fn term_id(&self) -> Option<i32> {
-        self.get_values().ok().map(|v| v.frame().term_id())
+        self.data_frame().map(|frame| frame.term_id)
     }
 
-    /// Term offset of this fragment, or `None` if the underlying values lookup
-    /// failed.
+    /// Term offset of this fragment, read in place; `None` for a null header.
     #[inline]
     pub fn term_offset(&self) -> Option<i32> {
-        self.get_values().ok().map(|v| v.frame().term_offset())
+        self.data_frame().map(|frame| frame.term_offset)
+    }
+
+    /// The position the image has advanced to on reading this message, past every
+    /// fragment of a reassembled one: Aeron's `aeron_header_position`, read in place.
+    /// 0 for a null header.
+    #[inline]
+    pub fn position(&self) -> i64 {
+        let (Some(header), Some(frame)) = (self.layout(), self.data_frame()) else {
+            return 0;
+        };
+        let occupancy = header.fragmented_frame_length.max(frame.frame_header.frame_length);
+        // AERON_ALIGN(term_offset + occupancy, AERON_LOGBUFFER_FRAME_ALIGNMENT), in u32 as in C.
+        let next_term_offset = ((frame.term_offset.wrapping_add(occupancy) as u32).wrapping_add(31) & !31) as i32;
+        let term_count = i64::from(frame.term_id.wrapping_sub(header.initial_term_id));
+        (term_count << header.position_bits_to_shift) + i64::from(next_term_offset)
     }
 }
 

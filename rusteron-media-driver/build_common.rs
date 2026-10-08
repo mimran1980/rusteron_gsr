@@ -376,22 +376,25 @@ fn build_from_source(config: &RusteronBuildConfig, docs_rs: &Path) {
         println!("cargo:rustc-link-search=native={}", base_lib_dir.join(sub).display());
     }
 
-    let mut builder = bindgen::Builder::default()
-        .clang_arg(format!("-I{}", header_path.display()))
-        // Match the CMAKE_C_STANDARD 11 used to actually compile the Aeron C sources.
-        .clang_arg("-std=gnu11");
-    // On Linux, libclang can end up resolving `<stdatomic.h>` to GCC's own
-    // copy (found via the default system include path) instead of the one
-    // bundled with the libclang/clang version actually doing the parsing.
-    if cfg!(target_os = "linux")
-        && let Ok(output) = std::process::Command::new("clang").arg("-print-resource-dir").output()
-    {
-        let resource_dir = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if !resource_dir.is_empty() {
-            builder = builder.clang_arg(format!("-resource-dir={resource_dir}"));
+    let clang = |include: &Path| {
+        let mut builder = bindgen::Builder::default()
+            .clang_arg(format!("-I{}", include.display()))
+            // Match the CMAKE_C_STANDARD 11 used to actually compile the Aeron C sources.
+            .clang_arg("-std=gnu11");
+        // On Linux, libclang can end up resolving `<stdatomic.h>` to GCC's own
+        // copy (found via the default system include path) instead of the one
+        // bundled with the libclang/clang version actually doing the parsing.
+        if cfg!(target_os = "linux")
+            && let Ok(output) = std::process::Command::new("clang").arg("-print-resource-dir").output()
+        {
+            let resource_dir = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !resource_dir.is_empty() {
+                builder = builder.clang_arg(format!("-resource-dir={resource_dir}"));
+            }
         }
-    }
-    let mut builder = builder
+        builder
+    };
+    let mut builder = clang(&header_path)
         .header("bindings.h")
         .allowlist_function("aeron_.*")
         .allowlist_type("aeron_.*")
@@ -415,6 +418,19 @@ fn build_from_source(config: &RusteronBuildConfig, docs_rs: &Path) {
 
     let out = out_path.join("bindings.rs");
     bindings.write_to_file(out.clone()).expect("Couldn't write bindings!");
+
+    // aeronc.h leaves aeron_header_t opaque. Its fields are in aeron_image.h, which also
+    // pulls in the client conductor's internals, so bind that one struct on its own (with
+    // bindgen's layout asserts) for AeronHeader to read a fragment's fields in place.
+    let header_layout = out_path.join("aeron_header_layout.rs");
+    clang(&aeron_path.join("aeron-client/src/main/c"))
+        .header_contents("aeron_header_layout.h", "#include <aeron_image.h>\n")
+        .allowlist_type("aeron_header_stct")
+        .allowlist_recursively(false)
+        .generate()
+        .expect("Unable to generate the aeron_header_t layout")
+        .write_to_file(&header_layout)
+        .expect("Couldn't write the aeron_header_t layout!");
 
     let mut bindings = rusteron_code_gen::parse_bindings_with_custom(&out, config.extra_custom_code);
     if let Some(expected) = config.expected_wrapper {
@@ -517,7 +533,7 @@ fn build_from_source(config: &RusteronBuildConfig, docs_rs: &Path) {
 
         // copy generated source so docs.rs / precompile paths don't need to build C
         let _ = std::fs::create_dir_all(docs_rs);
-        for rs in [&aeron, &aeron_custom, &out] {
+        for rs in [&aeron, &aeron_custom, &out, &header_layout] {
             fs::copy(rs, docs_rs.join(rs.file_name().unwrap())).expect("Failed to copy source code for docs-rs");
         }
     }
