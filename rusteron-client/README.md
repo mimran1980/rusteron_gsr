@@ -57,7 +57,7 @@ When using the default dynamic configuration, you must ensure Aeron C libraries 
 
 - **`new()` Initialization**: Automatically calls the corresponding `*_init` method.
 - **One-liner connect**: `Aeron::connect(Some(dir))?` builds the context, client, and starts the conductor; build the `AeronContext` yourself for tuned setups. (`AeronArchive::connect(...)` in rusteron-archive.)
-- **Retained images auto-release**: `subscription.image_at_index(i)` / `image_by_session_id(id)` return `Option<AeronImage>` that releases back to the subscription on drop; `for_each_image(|img| …)` borrows without bookkeeping. Drop these handles before calling `subscription.close()`: a handle must not be used after it, and its image may stay mapped until the client closes.
+- **Retained images auto-release**: `subscription.image_at_index(i)` / `image_by_session_id(id)` return `Option<AeronImage>` that releases back to the subscription on drop; `for_each_image(|img| …)` borrows without bookkeeping. Drop these handles before calling `subscription.close()`: a handle must not be used after it, and its image may stay mapped until the client closes. See [`examples/retained_images.rs`](./examples/retained_images.rs).
 - **Automatic Cleanup (Partial)**: When possible, `Drop` will invoke the appropriate `*_close` or `*_destroy` methods.
 - **Manual Resource Responsibility**: For methods like `set_aeron()` or where lifetimes aren't managed internally, users are responsible for safety.
 - **Handlers Are Reference-Counted**: Wrap callbacks with `Handler::new(...)`. Methods that register a callback the C client retains keep a clone alive inside the registering resource, so the value is freed automatically — no manual `release()`.
@@ -299,6 +299,8 @@ in the [root README's migration guide](../README.md#migrating-from-01168-to-02).
 - [`examples/embedded_exclusive_ipc_throughput.rs`](./examples/embedded_exclusive_ipc_throughput.rs) — exclusive-publication IPC throughput; starts its own driver unless `AERON_DIR` is set
 - [`examples/request_response.rs`](./examples/request_response.rs) — response channels (aeron 1.44+): request/response wiring via `control-mode=response` + `response-correlation-id` (port of `response_server.c`/`response_client.c`)
 - [`examples/file_transfer.rs`](./examples/file_transfer.rs) — chunked file transfer with fragment reassembly and verification (port of `FileSender`/`FileReceiver`)
+- [`examples/zero_copy_claim.rs`](./examples/zero_copy_claim.rs) — zero-copy publish with `try_claim_owned` (commit, abort on drop), a send timestamp in `set_reserved_value`, and in-place header reads on the subscriber
+- [`examples/retained_images.rs`](./examples/retained_images.rs) — retained image lifecycle: `for_each_image`, `image_by_session_id`, polling the image directly, `is_closed()` once the publisher goes, and dropping the handle before `subscription.close()`
 
 ---
 
