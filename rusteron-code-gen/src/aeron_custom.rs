@@ -622,12 +622,17 @@ unsafe extern "C" fn rusteron_image_visitor<F: FnMut(&AeronImage)>(
 /// treating it as "still pending" and only surfacing it later as a misleading
 /// [`AeronErrorType::TimedOut`] once `timeout` elapses.
 fn poll_destination_op_to_completion<C: std::fmt::Debug>(
+    client: &Aeron,
     result: &AeronAsyncDestination,
     timeout: std::time::Duration,
     context: C,
 ) -> Result<(), AeronCError> {
+    let invoker = client.uses_agent_invoker();
     let deadline = std::time::Instant::now() + timeout;
     loop {
+        if invoker {
+            client.main_do_work()?;
+        }
         match result.aeron_subscription_async_destination_poll() {
             Ok(v) if v > 0 => {
                 let _ = result.inner.close_resource();
@@ -648,6 +653,15 @@ fn poll_destination_op_to_completion<C: std::fmt::Debug>(
         }
         #[cfg(debug_assertions)]
         std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
+impl Aeron {
+    /// Whether this client's conductor runs only in [`Self::main_do_work`], so blocking
+    /// helpers must call it while they wait.
+    #[inline]
+    fn uses_agent_invoker(&self) -> bool {
+        self.context().get_use_conductor_agent_invoker()
     }
 }
 
@@ -734,7 +748,7 @@ impl AeronSubscription {
             .get_dependency::<Aeron>()
             .ok_or_else(|| AeronCError::with_message(-1, "subscription has no owning Aeron client"))?;
         let result = self.async_add_destination(&client, destination)?;
-        poll_destination_op_to_completion(&result, timeout, (destination, self))
+        poll_destination_op_to_completion(&client, &result, timeout, (destination, self))
     }
 
     /// Note: unlike [`Self::add_destination`], Aeron's C API has no `..._destination_cancel`
@@ -763,7 +777,7 @@ impl AeronSubscription {
             .get_dependency::<Aeron>()
             .ok_or_else(|| AeronCError::with_message(-1, "subscription has no owning Aeron client"))?;
         let result = self.async_remove_destination(&client, destination)?;
-        poll_destination_op_to_completion(&result, timeout, (destination, self))
+        poll_destination_op_to_completion(&client, &result, timeout, (destination, self))
     }
 
 }
@@ -789,7 +803,7 @@ impl AeronExclusivePublication {
             .get_dependency::<Aeron>()
             .ok_or_else(|| AeronCError::with_message(-1, "publication has no owning Aeron client"))?;
         let result = self.async_add_destination(&client, destination)?;
-        poll_destination_op_to_completion(&result, timeout, (destination, self))
+        poll_destination_op_to_completion(&client, &result, timeout, (destination, self))
     }
 
     /// Note: unlike [`Self::add_destination`], Aeron's C API has no `..._destination_cancel`
@@ -818,7 +832,7 @@ impl AeronExclusivePublication {
             .get_dependency::<Aeron>()
             .ok_or_else(|| AeronCError::with_message(-1, "publication has no owning Aeron client"))?;
         let result = self.async_remove_destination(&client, destination)?;
-        poll_destination_op_to_completion(&result, timeout, (destination, self))
+        poll_destination_op_to_completion(&client, &result, timeout, (destination, self))
     }
 
     /// Note: unlike [`Self::add_destination`], Aeron's C API has no `..._destination_cancel`
@@ -865,7 +879,7 @@ impl AeronExclusivePublication {
             .get_dependency::<Aeron>()
             .ok_or_else(|| AeronCError::with_message(-1, "publication has no owning Aeron client"))?;
         let result = self.async_remove_destination_by_id(&client, destination_registration_id)?;
-        poll_destination_op_to_completion(&result, timeout, (destination_registration_id, self))?;
+        poll_destination_op_to_completion(&client, &result, timeout, (destination_registration_id, self))?;
         // The driver acknowledged the command, but per the confirmed upstream bug documented
         // above, that acknowledgement does NOT mean the destination was actually removed —
         // report this honestly as an error rather than a misleading `Ok(())`, so callers
@@ -902,7 +916,7 @@ impl AeronPublication {
             .get_dependency::<Aeron>()
             .ok_or_else(|| AeronCError::with_message(-1, "publication has no owning Aeron client"))?;
         let result = self.async_add_destination(&client, destination)?;
-        poll_destination_op_to_completion(&result, timeout, (destination, self))
+        poll_destination_op_to_completion(&client, &result, timeout, (destination, self))
     }
 
     /// Note: unlike [`Self::add_destination`], Aeron's C API has no `..._destination_cancel`
@@ -931,7 +945,7 @@ impl AeronPublication {
             .get_dependency::<Aeron>()
             .ok_or_else(|| AeronCError::with_message(-1, "publication has no owning Aeron client"))?;
         let result = self.async_remove_destination(&client, destination)?;
-        poll_destination_op_to_completion(&result, timeout, (destination, self))
+        poll_destination_op_to_completion(&client, &result, timeout, (destination, self))
     }
 
     /// Note: unlike [`Self::add_destination`], Aeron's C API has no `..._destination_cancel`
@@ -972,7 +986,7 @@ impl AeronPublication {
             .get_dependency::<Aeron>()
             .ok_or_else(|| AeronCError::with_message(-1, "publication has no owning Aeron client"))?;
         let result = self.async_remove_destination_by_id(&client, destination_registration_id)?;
-        poll_destination_op_to_completion(&result, timeout, (destination_registration_id, self))?;
+        poll_destination_op_to_completion(&client, &result, timeout, (destination_registration_id, self))?;
         // The driver acknowledged the command, but per the confirmed upstream bug documented
         // above, that acknowledgement does NOT mean the destination was actually removed —
         // report this honestly as an error rather than a misleading `Ok(())`, so callers

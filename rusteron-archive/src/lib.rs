@@ -1865,16 +1865,9 @@ mod tests {
             context.set_recording_signal_consumer(Some(move |_signal: AeronArchiveRecordingSignal| {
                 counted.fetch_add(1, Ordering::SeqCst);
             }))?;
-            let connect = AeronArchiveAsyncConnect::new_with_aeron(&context, &client)?;
-            let start = Instant::now();
-            let archive = loop {
-                client.main_do_work()?;
-                if let Some(archive) = connect.poll()? {
-                    break archive;
-                }
-                assert!(start.elapsed() < Duration::from_secs(30), "never connected");
-                thread::yield_now();
-            };
+            // the blocking connect drives the client's conductor itself
+            let archive =
+                AeronArchiveAsyncConnect::new_with_aeron(&context, &client)?.poll_blocking(Duration::from_secs(30))?;
             archive.start_recording(AERON_IPC_STREAM, 7401, SOURCE_LOCATION_LOCAL, true)?;
 
             // nothing else runs this client's conductor, so the publication arrives through do_work

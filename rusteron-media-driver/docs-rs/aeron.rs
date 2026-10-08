@@ -2022,7 +2022,11 @@ impl Aeron {
         let start = std::time::Instant::now();
         loop {
             if let Ok(poller) = AeronAsyncAddCounter::new(self, type_id, key_buffer, label_buffer) {
+                let invoker = poller.agent_invoker_client();
                 while start.elapsed() <= timeout {
+                    if let Some(aeron) = &invoker {
+                        aeron.main_do_work()?;
+                    }
                     if let Some(result) = poller.poll()? {
                         return Ok(result);
                     }
@@ -2161,8 +2165,12 @@ impl AeronAsyncAddCounter {
         if let Some(result) = self.poll()? {
             return Ok(result);
         }
+        let invoker = self.agent_invoker_client();
         let time = std::time::Instant::now();
         while time.elapsed() < timeout {
+            if let Some(aeron) = &invoker {
+                aeron.main_do_work()?;
+            }
             if let Some(result) = self.poll()? {
                 return Ok(result);
             }
@@ -2171,6 +2179,11 @@ impl AeronAsyncAddCounter {
         }
         log::error!("failed async poll for {:?}", self);
         Err(AeronErrorType::TimedOut.into())
+    }
+    #[doc = r"The client a blocking poll must drive, as nothing else runs its agent-invoker conductor."]
+    #[inline]
+    fn agent_invoker_client(&self) -> Option<Aeron> {
+        self.inner.get_dependency::<Aeron>().filter(Aeron::uses_agent_invoker)
     }
 }
 #[derive(Clone)]
@@ -2418,7 +2431,11 @@ impl Aeron {
         let start = std::time::Instant::now();
         loop {
             if let Ok(poller) = AeronAsyncAddExclusivePublication::new(self, uri, stream_id) {
+                let invoker = poller.agent_invoker_client();
                 while start.elapsed() <= timeout {
+                    if let Some(aeron) = &invoker {
+                        aeron.main_do_work()?;
+                    }
                     if let Some(result) = poller.poll()? {
                         return Ok(result);
                     }
@@ -2554,8 +2571,12 @@ impl AeronAsyncAddExclusivePublication {
         if let Some(result) = self.poll()? {
             return Ok(result);
         }
+        let invoker = self.agent_invoker_client();
         let time = std::time::Instant::now();
         while time.elapsed() < timeout {
+            if let Some(aeron) = &invoker {
+                aeron.main_do_work()?;
+            }
             if let Some(result) = self.poll()? {
                 return Ok(result);
             }
@@ -2564,6 +2585,11 @@ impl AeronAsyncAddExclusivePublication {
         }
         log::error!("failed async poll for {:?}", self);
         Err(AeronErrorType::TimedOut.into())
+    }
+    #[doc = r"The client a blocking poll must drive, as nothing else runs its agent-invoker conductor."]
+    #[inline]
+    fn agent_invoker_client(&self) -> Option<Aeron> {
+        self.inner.get_dependency::<Aeron>().filter(Aeron::uses_agent_invoker)
     }
 }
 #[derive(Clone)]
@@ -2802,7 +2828,11 @@ impl Aeron {
         let start = std::time::Instant::now();
         loop {
             if let Ok(poller) = AeronAsyncAddPublication::new(self, uri, stream_id) {
+                let invoker = poller.agent_invoker_client();
                 while start.elapsed() <= timeout {
+                    if let Some(aeron) = &invoker {
+                        aeron.main_do_work()?;
+                    }
                     if let Some(result) = poller.poll()? {
                         return Ok(result);
                     }
@@ -2933,8 +2963,12 @@ impl AeronAsyncAddPublication {
         if let Some(result) = self.poll()? {
             return Ok(result);
         }
+        let invoker = self.agent_invoker_client();
         let time = std::time::Instant::now();
         while time.elapsed() < timeout {
+            if let Some(aeron) = &invoker {
+                aeron.main_do_work()?;
+            }
             if let Some(result) = self.poll()? {
                 return Ok(result);
             }
@@ -2943,6 +2977,11 @@ impl AeronAsyncAddPublication {
         }
         log::error!("failed async poll for {:?}", self);
         Err(AeronErrorType::TimedOut.into())
+    }
+    #[doc = r"The client a blocking poll must drive, as nothing else runs its agent-invoker conductor."]
+    #[inline]
+    fn agent_invoker_client(&self) -> Option<Aeron> {
+        self.inner.get_dependency::<Aeron>().filter(Aeron::uses_agent_invoker)
     }
 }
 #[derive(Clone)]
@@ -3208,7 +3247,11 @@ impl Aeron {
                 on_available_image_handler,
                 on_unavailable_image_handler,
             ) {
+                let invoker = poller.agent_invoker_client();
                 while start.elapsed() <= timeout {
+                    if let Some(aeron) = &invoker {
+                        aeron.main_do_work()?;
+                    }
                     if let Some(result) = poller.poll()? {
                         return Ok(result);
                     }
@@ -3401,8 +3444,12 @@ impl AeronAsyncAddSubscription {
         if let Some(result) = self.poll()? {
             return Ok(result);
         }
+        let invoker = self.agent_invoker_client();
         let time = std::time::Instant::now();
         while time.elapsed() < timeout {
+            if let Some(aeron) = &invoker {
+                aeron.main_do_work()?;
+            }
             if let Some(result) = self.poll()? {
                 return Ok(result);
             }
@@ -3411,6 +3458,11 @@ impl AeronAsyncAddSubscription {
         }
         log::error!("failed async poll for {:?}", self);
         Err(AeronErrorType::TimedOut.into())
+    }
+    #[doc = r"The client a blocking poll must drive, as nothing else runs its agent-invoker conductor."]
+    #[inline]
+    fn agent_invoker_client(&self) -> Option<Aeron> {
+        self.inner.get_dependency::<Aeron>().filter(Aeron::uses_agent_invoker)
     }
 }
 #[derive(Clone)]

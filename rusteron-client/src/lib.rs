@@ -5413,6 +5413,31 @@ mod tests {
         drop(driver);
     }
 
+    #[test]
+    #[serial]
+    fn invoker_mode_blocking_adds_drive_the_conductor() -> Result<(), Box<dyn std::error::Error>> {
+        let driver = rusteron_media_driver::testing::EmbeddedDriver::launch()?;
+        let ctx = AeronContext::new()?;
+        ctx.set_dir(&driver.dir().into_c_string())?;
+        ctx.set_use_conductor_agent_invoker(true)?;
+        let aeron = Aeron::new(&ctx)?;
+        aeron.start()?;
+
+        let timeout = Duration::from_secs(2);
+        let publication = aeron.add_publication(AERON_IPC_STREAM, 2102, timeout)?;
+        let subscription = aeron
+            .async_add_subscription(&manual_control_mode_channel(), 2102, Handlers::NONE, Handlers::NONE)?
+            .poll_blocking(timeout)?;
+        let port = rusteron_media_driver::testing::find_unused_udp_port(20400).ok_or("no free port")?;
+        subscription.add_destination(&udp_endpoint_channel(port), timeout)?;
+
+        drop(subscription);
+        drop(publication);
+        drop(aeron);
+        drop(driver);
+        Ok(())
+    }
+
     // ── Structural teardown verification via memory protection ────────
     //
     // Under the new design, the Rc dependency graph ensures correct

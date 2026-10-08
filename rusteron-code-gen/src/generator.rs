@@ -2759,7 +2759,11 @@ pub fn generate_rust_code(
                             let start = std::time::Instant::now();
                             loop {
                                 if let Ok(poller) = #async_class_name::new(self, #(#async_new_args_name_only),*) {
+                                    let invoker = poller.agent_invoker_client();
                                     while start.elapsed() <= timeout  {
+                                      if let Some(aeron) = &invoker {
+                                          aeron.main_do_work()?;
+                                      }
                                       if let Some(result) = poller.poll()? {
                                           return Ok(result);
                                       }
@@ -2873,8 +2877,12 @@ pub fn generate_rust_code(
                                 return Ok(result);
                             }
 
+                            let invoker = self.agent_invoker_client();
                             let time = std::time::Instant::now();
                             while time.elapsed() < timeout {
+                                if let Some(aeron) = &invoker {
+                                    aeron.main_do_work()?;
+                                }
                                 if let Some(result) = self.poll()? {
                                     return Ok(result);
                                 }
@@ -2883,6 +2891,12 @@ pub fn generate_rust_code(
                             }
                             log::error!("failed async poll for {:?}", self);
                             Err(AeronErrorType::TimedOut.into())
+                        }
+
+                        #[doc = r"The client a blocking poll must drive, as nothing else runs its agent-invoker conductor."]
+                        #[inline]
+                        fn agent_invoker_client(&self) -> Option<Aeron> {
+                            self.inner.get_dependency::<Aeron>().filter(Aeron::uses_agent_invoker)
                         }
                     }
                                 }
