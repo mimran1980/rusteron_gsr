@@ -17,7 +17,7 @@ type ListConsumer = Box<dyn FnMut(AeronArchiveRecordingDescriptor)>;
 /// subscription fails, or sits off the live stream with nothing to read for
 /// [`Self::idle_timeout`], as one does once its publisher's session has gone. The live
 /// stream is taken only from the followed recording's session, never another publisher's.
-/// No step blocks, and a failed lookup is retried after [`Self::retry_after`].
+/// No step blocks, and a failed lookup or subscription is retried after [`Self::retry_after`].
 pub struct FollowingPersistentSubscription {
     aeron: Aeron,
     archive_context: ArchiveContextFactory,
@@ -101,7 +101,7 @@ impl FollowingPersistentSubscription {
         self
     }
 
-    /// How long to wait before retrying a failed lookup; one second by default.
+    /// How long to wait before retrying a failed lookup or subscription; one second by default.
     #[must_use]
     pub fn retry_after(mut self, retry: Duration) -> Self {
         self.retry = retry;
@@ -163,7 +163,7 @@ impl FollowingPersistentSubscription {
                 .get_failure_reason()
                 .map_or_else(String::new, |(_, reason)| reason);
             log::info!("recording {recording_id} failed ({why}); looking for the next");
-            self.stage = Stage::Waiting(now);
+            self.stage = Stage::Waiting(now + self.retry);
         } else if now.duration_since(self.active_at) >= self.idle_timeout {
             log::info!("recording {recording_id} idle off the live stream; looking for the next");
             self.stage = Stage::Waiting(now);
