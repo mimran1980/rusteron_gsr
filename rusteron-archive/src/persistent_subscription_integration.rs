@@ -999,15 +999,17 @@ mod tests {
             counters.get_counter_value(counter_id)
         );
 
-        // Truncate/purge operate on a *stopped* recording. Close the stream, stop recording,
+        // Truncate/purge operate on a *stopped* recording. Stop recording, close the stream,
         // then wait for the stop to take effect (stop_position becomes non-null) before
         // truncating — otherwise the archive rejects it with "cannot truncate active recording".
-        drop(publication);
-        info!("Publication dropped, stopping recording {recording_id}");
+        // Stop before closing: the recording auto-stops when its publication closes, and a
+        // stop request that arrives after that finds no recording.
+        info!("Stopping recording {recording_id}");
         retry_archive_op(Instant::now() + valgrind_timeout(15), || {
             archive.stop_recording_channel_and_stream(&channel.into_c_string(), stream_id)
         })?;
-        info!("Stop recording request sent, waiting for stop to take effect");
+        drop(publication);
+        info!("Stop recording request sent, publication dropped, waiting for stop to take effect");
 
         // Valgrind-aware timeout; 10s normally, 30s under Valgrind
         let deadline = Instant::now() + valgrind_timeout(10);
