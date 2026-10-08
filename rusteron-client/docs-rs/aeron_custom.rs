@@ -207,6 +207,9 @@ impl AeronContext {
     /// Typed variant of [`Self::set_idle_strategy`]: configures the conductor's idle
     /// strategy without stringly-typed names, setting coherent default init args
     /// (override afterwards with [`Self::set_idle_strategy_init_args`] if needed).
+    ///
+    /// This is how to make the conductor busier: [`Self::set_idle_sleep_duration_ns`] does
+    /// not change its sleep once the context exists, only how often it checks timeouts.
     pub fn set_idle_strategy_kind(&self, kind: AeronIdleStrategyKind) -> Result<i32, AeronCError> {
         self.set_idle_strategy_init_args(kind.default_init_args_c())?;
         self.set_idle_strategy(kind.name_c())
@@ -1821,8 +1824,8 @@ macro_rules! impl_publication_methods {
             }
 
             /// Gathering (vectored) publish: offer up to [`MAX_OFFER_PARTS`] buffers as ONE
-            /// message without concatenating them — **zero allocation, zero copy** on the
-            /// caller side (the driver gathers the parts directly).
+            /// message without concatenating them first: no allocation, and the parts are
+            /// copied straight into the term buffer, as `offer` copies its one buffer.
             ///
             /// This is the header+payload send: instead of building a `Vec` per message
             /// (`vec.extend(header); vec.extend(payload); offer(&vec)`), pass the parts:

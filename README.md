@@ -235,7 +235,7 @@ for _ in 0..reconnect_attempts {
 - **Deferred close.** `aeron.close()` no longer frees child resources immediately (the 0.1.x behaviour was a use-after-free). Close is deferred until the last reference drops; drop order is arbitrary. `unsafe close_now()` forces immediate teardown.
 - **Reference-counted handlers.** `Handler::leak()`/`release()` are gone; `Handler::new()` is `Arc`-backed and freed when the last clone drops. Retained-callback setters take the value (closure or trait impl) and return the `Handler`. `Handlers::NONE` covers "no callback".
 - **Typed errors.** `offer`/`try_claim` return `Result<i64, AeronOfferError>` with `is_retryable()`. `AeronCError` construction is allocation-free (never reads `aeron_errmsg()`); `capture_errmsg()` opts into attaching the message. Archive control ops return `Result<_, AeronArchiveError>` (`From` keeps `?` working).
-- **Hot path.** `offer_parts(&[&header, &payload])` is a zero-copy vectored publish; C-string args follow the `c""`/`cformat!`/reuse pattern above.
+- **Hot path.** `offer_parts(&[&header, &payload])` publishes several buffers as one message with no intermediate Vec; C-string args follow the `c""`/`cformat!`/reuse pattern above.
 - **Convenience.** `Aeron::connect_dir`, `AeronDriver::launch_embedded_guard` (RAII), `ChannelUri::add_session_id`, `AeronUriStringBuilder::ipc()/udp()`, retained-image accessors, direct constant getters, and ported samples (basic_publisher/subscriber, ping/pong, file transfer, MDS, request/response).
 
 ## Migrating from 0.1.168 to 0.2
