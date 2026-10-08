@@ -1458,6 +1458,47 @@ mod tests {
         Ok(())
     }
 
+    /// Setting a counter on the builder again closes the counter it replaces.
+    #[test]
+    #[serial]
+    fn replacing_a_builder_counter_closes_the_replaced_one() -> Result<(), Box<dyn Error>> {
+        crate::skip_unless_java!();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().ok();
+
+        let (aeron, _archive_context, _media_driver_archive, _archive_error_handler) =
+            start_aeron_archive_with_config("ps_counter_replace", 9760)?;
+        let state_type = AERON_PERSISTENT_SUBSCRIPTION_STATE_TYPE_ID as i32;
+        let replaced =
+            AeronAsyncAddCounter::new(&aeron, state_type, &[], "replaced")?.poll_blocking(Duration::from_secs(5))?;
+        let kept = AeronAsyncAddCounter::new(&aeron, state_type, &[], "kept")?.poll_blocking(Duration::from_secs(5))?;
+        let builder = persistent_subscription_builder()?
+            .state_counter(&replaced)?
+            .state_counter(&kept)?;
+        drop((replaced, kept, builder));
+
+        let counters_reader = aeron.counters_reader();
+        let open = |wanted: &str| {
+            let mut found = false;
+            counters_reader.foreach_counter_fn(|_value: i64, _id: i32, _type_id: i32, _key: &[u8], label: &str| {
+                found |= label == wanted
+            });
+            found
+        };
+        let start = Instant::now();
+        while open("replaced") || open("kept") {
+            assert!(
+                start.elapsed() < Duration::from_secs(5),
+                "replaced open: {}, kept open: {}",
+                open("replaced"),
+                open("kept")
+            );
+            sleep(Duration::from_millis(10));
+        }
+        Ok(())
+    }
+
     /// A persistent subscription keeps its Aeron client open, so it closes cleanly after
     /// the caller's last handle to the client has gone.
     #[test]

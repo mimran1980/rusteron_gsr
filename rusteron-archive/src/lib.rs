@@ -918,33 +918,38 @@ impl PersistentSubscriptionBuilder {
 
     /// Pre-allocate the state counter so an external observer can read the PS state-machine
     /// state. If unset the PS allocates one itself. Maps to Aeron's `Context.stateCounter`.
+    /// The subscription takes the counter over: it closes it, as does setting the slot again.
     pub fn state_counter(self, counter: &AeronCounter) -> Result<Self, AeronCError> {
+        let previous = self.ctx.get_state_counter().get_inner();
         self.ctx.set_state_counter(counter)?;
-        hand_over(counter);
+        hand_over(previous, counter);
         Ok(self)
     }
 
     /// Counter holding the byte gap between replay and live when the live image is added.
-    /// Maps to Aeron's `Context.joinDifferenceCounter`.
+    /// Maps to Aeron's `Context.joinDifferenceCounter`. Taken over as in [`Self::state_counter`].
     pub fn join_difference_counter(self, counter: &AeronCounter) -> Result<Self, AeronCError> {
+        let previous = self.ctx.get_join_difference_counter().get_inner();
         self.ctx.set_join_difference_counter(counter)?;
-        hand_over(counter);
+        hand_over(previous, counter);
         Ok(self)
     }
 
     /// Counter holding the number of times the PS has dropped off the live stream.
-    /// Maps to Aeron's `Context.liveLeftCounter`.
+    /// Maps to Aeron's `Context.liveLeftCounter`. Taken over as in [`Self::state_counter`].
     pub fn live_left_counter(self, counter: &AeronCounter) -> Result<Self, AeronCError> {
+        let previous = self.ctx.get_live_left_counter().get_inner();
         self.ctx.set_live_left_counter(counter)?;
-        hand_over(counter);
+        hand_over(previous, counter);
         Ok(self)
     }
 
     /// Counter holding the number of times the PS has switched to the live stream.
-    /// Maps to Aeron's `Context.liveJoinedCounter`.
+    /// Maps to Aeron's `Context.liveJoinedCounter`. Taken over as in [`Self::state_counter`].
     pub fn live_joined_counter(self, counter: &AeronCounter) -> Result<Self, AeronCError> {
+        let previous = self.ctx.get_live_joined_counter().get_inner();
         self.ctx.set_live_joined_counter(counter)?;
-        hand_over(counter);
+        hand_over(previous, counter);
         Ok(self)
     }
 
@@ -1030,8 +1035,13 @@ fn counter_label(label: &str) -> &str {
 }
 
 /// Leaves `counter` to the persistent subscription context, which closes every counter it
-/// holds, so the Rust handle does not close it a second time.
-fn hand_over(counter: &AeronCounter) {
+/// holds, so the Rust handle does not close it a second time. The context no longer holds
+/// `previous`, the counter `counter` replaces, so that one is closed here.
+fn hand_over(previous: *mut aeron_counter_t, counter: &AeronCounter) {
+    if !previous.is_null() && previous != counter.get_inner() {
+        // SAFETY: the context held `previous`, so it is open, and nothing else closes it.
+        unsafe { aeron_counter_close(previous, None, std::ptr::null_mut()) };
+    }
     if let Some(inner) = counter.inner.as_owned() {
         #[cfg(feature = "multi-threaded")]
         inner.close_already_called.store(true, Ordering::SeqCst);
