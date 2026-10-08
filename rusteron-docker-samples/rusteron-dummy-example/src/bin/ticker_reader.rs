@@ -115,6 +115,7 @@ fn main() -> Result<()> {
                         let mut idle_since = started;
                         while idle_since.elapsed() < Duration::from_secs(5)
                             && started.elapsed() < Duration::from_secs(60)
+                            && !shutdown.load(Ordering::Acquire)
                         {
                             let read = replay_subscription.poll_fn(
                                 |buffer, _header| {
