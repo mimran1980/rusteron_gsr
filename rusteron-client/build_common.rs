@@ -126,6 +126,8 @@ pub fn rusteron_build_main(config: &RusteronBuildConfig) {
 
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=bindings.h");
+    println!("cargo:rerun-if-env-changed=PUBLISH_ARTIFACTS");
+    println!("cargo:rerun-if-env-changed=RUSTERON_C_MARCH");
 
     // If precompiled artifacts exist (or can be downloaded), use them instead of cmake+java.
     #[cfg(all(any(feature = "precompile", feature = "precompile-rustls"), feature = "static"))]
@@ -248,9 +250,15 @@ fn build_from_source(config: &RusteronBuildConfig, docs_rs: &Path) {
         cmake_config.profile("Release");
         // No -flto: cmake uses GCC which produces GCC LTO archives; rust-lld (LLVM)
         // cannot link GCC LTO bitcode, causing undefined symbols at link time.
-        let release_flags = "-O3 -DNDEBUG -march=native -funroll-loops";
-        cmake_config.define("CMAKE_CXX_FLAGS_RELEASE", release_flags);
-        cmake_config.define("CMAKE_C_FLAGS_RELEASE", release_flags);
+        let var = |name: &str| env::var(name).ok();
+        let release_flags = rusteron_code_gen::c_build::release_c_flags(
+            &var("CARGO_CFG_TARGET_ARCH").unwrap_or_default(),
+            &var("CARGO_CFG_TARGET_VENDOR").unwrap_or_default(),
+            var("PUBLISH_ARTIFACTS").is_some(),
+            var("RUSTERON_C_MARCH").as_deref(),
+        );
+        cmake_config.define("CMAKE_CXX_FLAGS_RELEASE", &release_flags);
+        cmake_config.define("CMAKE_C_FLAGS_RELEASE", &release_flags);
     } else {
         cmake_config.profile("Debug");
     }

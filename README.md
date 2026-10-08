@@ -82,6 +82,13 @@ Replace `rusteron-client` with `rusteron-archive` or `rusteron-media-driver` as 
 
 For full build instructions, see [BUILD.md](./BUILD.md).
 
+### CPU target
+
+A release build from source compiles the Aeron C code for the build machine's CPU
+(`-march=native`). Set `RUSTERON_C_MARCH` (e.g. `x86-64-v3`) when binaries run on
+machines other than the one that built them. The precompiled libraries (`precompile`)
+target the architecture's baseline (`x86-64`, `armv8-a`), so they run on any CPU.
+
 ### Multi-threaded (`Sync`) handles
 
 Handles are `Send` but **not `Sync`** by default — they use `Rc` for single-thread

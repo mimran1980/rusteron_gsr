@@ -8,6 +8,7 @@
 #![doc = include_str!("../README.md")]
 
 mod arg_classifier;
+pub mod c_build;
 mod common;
 mod generator;
 mod parser;
