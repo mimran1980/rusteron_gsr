@@ -9,7 +9,7 @@
 //!   a second, like the C sample's rate reporter.
 //!
 //! ```bash
-//! cargo run --release --features "static precompile" --example streaming_rate
+//! cargo run --release --features examples --example streaming_rate
 //! ```
 
 use rusteron_client::*;
@@ -47,34 +47,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .poll_blocking(Duration::from_secs(5))?;
 
     // ── rate subscriber (rate_subscriber.c) ─────────────────────────────
-    let msgs = Arc::new(AtomicU64::new(0));
-    let bytes = Arc::new(AtomicU64::new(0));
-    let msgs_poll = msgs.clone();
-    let bytes_poll = bytes.clone();
-    let running_sub = running.clone();
-    let subscriber = thread::spawn(move || -> Result<(), AeronCError> {
+    // The subscriber keeps plain counters (single writer, no atomics on the hot path) and
+    // returns them when it stops. It stops once it has seen everything the publisher sent.
+    let target = Arc::new(AtomicU64::new(u64::MAX));
+    let target_sub = target.clone();
+    let subscriber = thread::spawn(move || -> Result<(u64, u64), AeronCError> {
         // fragment assembler so messages larger than the MTU are reassembled
         let mut assembler = AeronFragmentClosureAssembler::new()?;
-        let mut counters = (msgs_poll, bytes_poll);
+        let mut counters = (0u64, 0u64);
         let mut last_report = Instant::now();
         let (mut last_msgs, mut last_bytes) = (0u64, 0u64);
-        while running_sub.load(Ordering::Acquire) {
+        let mut polls = 0u32;
+        let mut drain_deadline = None;
+        loop {
             let fragments = assembler.poll(
                 &subscription,
                 &mut counters,
                 |c, buf, _hdr| {
-                    c.0.fetch_add(1, Ordering::Relaxed);
-                    c.1.fetch_add(buf.len() as u64, Ordering::Relaxed);
+                    c.0 += 1;
+                    c.1 += buf.len() as u64;
                 },
                 FRAGMENT_LIMIT,
             )?;
-            if fragments == 0 {
-                std::hint::spin_loop();
+            polls = polls.wrapping_add(1);
+            // read the clock when idle, or now and then so a saturated poll still reports
+            if fragments > 0 && !polls.is_multiple_of(1024) {
+                continue;
+            }
+            std::hint::spin_loop();
+            let (m, b) = counters;
+            let target = target_sub.load(Ordering::Acquire);
+            if target != u64::MAX {
+                let deadline = *drain_deadline.get_or_insert_with(|| Instant::now() + Duration::from_secs(5));
+                if m >= target || Instant::now() >= deadline {
+                    return Ok(counters);
+                }
             }
             // once-a-second rate report, like the C sample's rate reporter thread
-            if last_report.elapsed() >= Duration::from_secs(1) {
-                let (m, b) = (counters.0.load(Ordering::Relaxed), counters.1.load(Ordering::Relaxed));
-                let secs = last_report.elapsed().as_secs_f64();
+            let secs = last_report.elapsed().as_secs_f64();
+            if secs >= 1.0 {
                 println!(
                     "{:.03} msgs/sec, {:.03} MB/sec, totals {} messages {} MB",
                     (m - last_msgs) as f64 / secs,
@@ -86,7 +97,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 last_report = Instant::now();
             }
         }
-        Ok(())
     });
 
     // ── streaming publisher (streaming_publisher.c) ─────────────────────
@@ -119,14 +129,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         sent as f64 / elapsed.as_secs_f64(),
     );
 
-    // drain, then stop
-    thread::sleep(Duration::from_millis(200));
-    running.store(false, Ordering::Release);
-    subscriber.join().expect("subscriber thread panicked")?;
-
-    let received = msgs.load(Ordering::Relaxed);
+    // tell the subscriber how many to expect; it drains up to that (or 5 s), then returns
+    target.store(sent, Ordering::Release);
+    let (received, _bytes) = subscriber.join().map_err(|_| "subscriber thread panicked")??;
     println!("received {received} messages");
-    assert_eq!(sent, received, "subscriber must observe every published message");
+    if received != sent {
+        return Err(format!("sent {sent} but received {received}").into());
+    }
 
     drop(publication);
     drop(aeron);
