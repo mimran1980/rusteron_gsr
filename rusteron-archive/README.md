@@ -125,9 +125,10 @@ For detailed guides and code snippets on Aeron features in Rust, see:
 ## Safety Considerations
 
 1. **Aeron Lifetime** – The `AeronArchive` depends on an external `Aeron` instance. Ensure `Aeron` outlives all references to the archive.
-2. **Unsafe Bindings** – The module interfaces directly with Aeron’s C API. Improper resource handling can cause undefined behavior.
-3. **Automatic Handler Cleanup** – Handlers are reference-counted; registered callbacks live as long as the resource that registered them and are freed automatically.
-4. **Thread Safety** – Use care when accessing Aeron objects across threads. Synchronize access appropriately.
+2. **Persistent Subscription Lifetime** – A persistent subscription holds no reference to its `Aeron` client or archive context, yet uses both until it closes. Keep them open until the subscription is closed or dropped, as in the [example below](#persistent-subscriptions).
+3. **Unsafe Bindings** – The module interfaces directly with Aeron’s C API. Improper resource handling can cause undefined behavior.
+4. **Automatic Handler Cleanup** – Handlers are reference-counted; registered callbacks live as long as the resource that registered them and are freed automatically.
+5. **Thread Safety** – Use care when accessing Aeron objects across threads. Synchronize access appropriately.
 
 ---
 
@@ -192,7 +193,11 @@ while !ps.is_live() {
     let _ = publication.offer_with_reserved_value(b"live", Handlers::NONE);
     ps.poll_fn(|buf, _hdr| { /* an assembled replayed or live message */ }, 100)?;
 }
+
+// the subscription first, then the archive context and client it uses
 ps.close()?;
+drop(archive_context);
+drop(aeron);
 ```
 
 **Polling & errors.** `ps.poll_fn()` drives the PS state machine *and* the archive async client, so you do not call `archive.poll_for_recording_signals()` separately. Loop on `ps.is_live()`, checking `ps.has_failed()` each iteration (reason via `get_failure_reason()`). The listener's `on_error` covers non-terminal errors; `on_live_left`/`on_live_joined` may fire repeatedly as it falls back and rejoins.

@@ -166,6 +166,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let joined_count = joined.load(Ordering::SeqCst);
+    // close the subscription while the archive context and Aeron client it uses are open
     ps.close()?;
     assert!(
         joined_count >= 2,
