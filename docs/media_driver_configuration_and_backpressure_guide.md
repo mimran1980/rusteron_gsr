@@ -58,7 +58,7 @@ fn publish_message(publication: &AeronPublication, data: &[u8]) -> Result<i64, B
         match publication.offer(data) {
             Ok(position) => return Ok(position),
             Err(e) if e.is_retryable() && Instant::now() < deadline => idle.idle(0),
-            // Closed, MaxPositionExceeded, or still not accepted at the deadline
+            // a fatal error, or still not accepted at the deadline
             Err(e) => return Err(e.into()),
         }
     }

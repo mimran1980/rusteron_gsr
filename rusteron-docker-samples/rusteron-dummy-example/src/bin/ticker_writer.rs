@@ -122,7 +122,7 @@ impl JsonMesssageHandler for AeronRecorder {
                     }
                     return;
                 }
-                // MaxPositionExceeded, or still not accepted at the deadline
+                // a fatal error, or still not accepted at the deadline
                 Err(e) => {
                     warn!("dropped a ticker message [error={e}, payload={msg}]");
                     return;
