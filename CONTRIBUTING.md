@@ -5,7 +5,7 @@ Thanks for your interest in contributing to **rusteron**! Whether you're fixing 
 ## Before You Start
 
 - Submit changes via pull requests from a fork.
-- Run `cargo fmt` and `cargo test` before submitting.
+- Run `cargo fmt --all`, `cargo clippy --all -- --deny warnings` and `cargo test` before submitting (CI enforces all three).
 - All contributions are dual-licensed under MIT and Apache-2.0.
 
 ## Reporting Issues
@@ -14,11 +14,11 @@ Use [GitHub Issues](https://github.com/gsrxyz/rusteron/issues) to report bugs, r
 
 ## Pull Request Workflow
 
-1. Fork the repo and clone it:
+1. Fork the repo and clone it with its Aeron submodules:
    ```bash
-   git clone https://github.com/your-username/rusteron.git
+   git clone --recurse-submodules https://github.com/your-username/rusteron.git
    cd rusteron
-````
+   ```
 
 2. Create a new branch:
 
@@ -29,8 +29,9 @@ Use [GitHub Issues](https://github.com/gsrxyz/rusteron/issues) to report bugs, r
 3. Make changes, run tests, and format:
 
    ```bash
+   cargo fmt --all
+   cargo clippy --all -- --deny warnings
    cargo test
-   cargo fmt
    ```
 
 4. Commit and push:

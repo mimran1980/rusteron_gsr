@@ -16,6 +16,7 @@ git_repository := `git config --get remote.origin.url 2>/dev/null || echo "unkno
 git_branch := `git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown"`
 build_time := `date -u '+%Y-%m-%d_%H:%M:%S'`
 build_by := `whoami`
+aeron_version := `cat rusteron-client/aeron/version.txt`
 
 # =============================================================================
 # Rust
@@ -369,7 +370,7 @@ create-sym-link:
 benchmark-ipc-throughput-java:
   cd ./rusteron-client/aeron; ./gradlew :aeron-all:build; cd -
   cd ./rusteron-client/aeron; ./gradlew :aeron-samples:jar; cd -
-  java -cp ./rusteron-client/aeron/aeron-all/build/libs/aeron-all-1.48.0-SNAPSHOT.jar:./rusteron-client/aeron/aeron-samples/build/libs/aeron-samples-1.48.0-SNAPSHOT.jar \
+  java -cp ./rusteron-client/aeron/aeron-all/build/libs/aeron-all-{{aeron_version}}.jar:./rusteron-client/aeron/aeron-samples/build/libs/aeron-samples-{{aeron_version}}.jar \
     --add-opens java.base/jdk.internal.misc=ALL-UNNAMED \
     -Daeron.dir=target/aeron \
     -Daeron.term.buffer.sparse.file=false \
@@ -417,7 +418,7 @@ benchmark-ipc-throughput-rust-profiler:
 # Java embedded ping-pong
 benchmark-embedded-ping-pong-java:
   cd ./rusteron-client/aeron; ./gradlew :aeron-samples:jar; cd -
-  java -cp ./rusteron-client/aeron/aeron-all/build/libs/aeron-all-1.48.0-SNAPSHOT.jar:./rusteron-client/aeron/aeron-samples/build/libs/aeron-samples-1.48.0-SNAPSHOT.jar \
+  java -cp ./rusteron-client/aeron/aeron-all/build/libs/aeron-all-{{aeron_version}}.jar:./rusteron-client/aeron/aeron-samples/build/libs/aeron-samples-{{aeron_version}}.jar \
     --add-opens java.base/jdk.internal.misc=ALL-UNNAMED \
     -Daeron.dir=target/aeron \
     -Daeron.term.buffer.sparse.file=false \

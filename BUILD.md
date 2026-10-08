@@ -7,7 +7,7 @@ To build **rusteron-archive**, ensure the following are installed:
 - **Rust**: Install via [rustup.rs](https://rustup.rs/)
   ```bash
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-````
+  ```
 
 * **Java 17+**: Required for Aeron C bindings.
 
@@ -18,6 +18,8 @@ To build **rusteron-archive**, ensure the following are installed:
   # or
   sudo snap install cmake --classic
   ```
+
+Java, CMake and Clang are only needed to build Aeron C from source (the default). With `features = ["static", "precompile"]` (or `precompile-rustls`) prebuilt libraries are downloaded instead (macOS and Linux); Linux still needs `uuid-dev` and `libbsd-dev` to link.
 
 * **just** (optional): Command runner for build tasks.
 
@@ -83,6 +85,4 @@ Initialize submodules:
 
 ```bash
 git submodule update --init --recursive
-```
-
 ```

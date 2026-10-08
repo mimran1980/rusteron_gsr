@@ -18,13 +18,15 @@ We compared Aeron’s `EmbeddedExclusiveIpcThroughput` benchmark in Java with th
 ### Java
 ```bash
 just benchmark-ipc-throughput-java
-````
+```
 
 ### Rust
 
+Run the driver in one terminal and the benchmark in another; the recipe sets `AERON_DIR`, so the example uses that driver instead of embedding its own.
+
 ```bash
-just run-aeron-media-driver-rust
-just benchmark-ipc-throughput-rust
+just run-aeron-media-driver-rust        # terminal 1
+just benchmark-ipc-throughput-rust      # terminal 2
 ```
 
 ## Results
@@ -80,6 +82,17 @@ Rust consistently outperformed Java by \~3.5x in this benchmark.
 * Main run: 10,000,000 messages (32-byte payload)
 * Channels: `aeron:udp?endpoint=localhost:20123` and `:20124`
 * Regular (not exclusive) publications used.
+
+### How to Run
+
+```bash
+# Rust (the recipe sets AERON_DIR, so it needs a running driver)
+just run-aeron-media-driver-rust          # terminal 1
+just benchmark-embedded-ping-pong-rust    # terminal 2 (examples/embedded_ping_pong.rs)
+
+# Java (embeds its own driver; needs the Aeron jars, see the IPC section)
+just benchmark-embedded-ping-pong-java
+```
 
 ### Rust
 
