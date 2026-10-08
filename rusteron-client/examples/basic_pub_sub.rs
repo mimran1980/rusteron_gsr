@@ -1,54 +1,71 @@
-use log::error;
+//! # Basic pub/sub
+//!
+//! One process publishes and subscribes on an IPC stream through an embedded media driver.
+//! Messages are 1 MiB, larger than the MTU, so the subscriber reassembles them with a
+//! fragment assembler.
+//!
+//! ```bash
+//! cargo run --release --example basic_pub_sub
+//! ```
+
 use rusteron_client::*;
-use std::cell::Cell;
-use std::error;
+use rusteron_media_driver::testing::EmbeddedDriver;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-pub fn main() -> Result<(), Box<dyn error::Error>> {
-    let ctx = AeronContext::new()?;
+const STREAM_ID: i32 = 123;
+const MESSAGE_LEN: usize = 1024 * 1024;
+const MESSAGES: usize = 100;
 
-    // set the directory
-    // ctx.set_dir(&cformat!("{}", media_driver_ctx.get_dir()))?;
+struct Counter {
+    count: usize,
+    bad: usize,
+}
 
-    // Install the built-in error logger so async client errors are surfaced (Aeron samples
-    // always set an error handler on the context). Keep it alive for the run, then release.
-    let error_handler = Handler::new(AeronErrorHandlerLogger);
-    ctx.set_error_handler(Some(error_handler.clone()))?;
-
-    println!("creating client");
-    let aeron = Aeron::new(&ctx)?;
-    println!("starting client");
-
-    aeron.start()?;
-    println!("client started");
-    let publisher = aeron
-        .async_add_publication(AERON_IPC_STREAM, 123)?
-        .poll_blocking(Duration::from_secs(5))?;
-    // Wait for a subscriber before offering (Aeron's BasicPublisher checks is_connected()).
-    let conn_start = std::time::Instant::now();
-    while !publisher.is_connected() && conn_start.elapsed() < Duration::from_secs(5) {
-        std::thread::sleep(Duration::from_millis(10));
+impl AeronFragmentHandlerCallback for Counter {
+    fn handle_aeron_fragment_handler(&mut self, buffer: &[u8], header: AeronHeader) {
+        // count bad messages instead of asserting: a panic cannot unwind into C and aborts
+        if buffer.len() != MESSAGE_LEN || buffer.iter().any(|&b| b != b'1') {
+            self.bad += 1;
+        }
+        self.count += 1;
+        println!(
+            "received message at position {} ({} bytes)",
+            header.position(),
+            buffer.len()
+        );
     }
-    println!("created publisher");
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let driver = EmbeddedDriver::launch()?;
+    let ctx = AeronContext::new()?;
+    ctx.set_dir(&cformat!("{}", driver.dir()))?;
+    ctx.set_error_handler(Some(|code: i32, msg: &str| eprintln!("aeron error {code}: {msg}")))?;
+    let aeron = Aeron::new(&ctx)?;
+    aeron.start()?;
 
     let subscription = aeron
-        .async_add_subscription(AERON_IPC_STREAM, 123, Handlers::NONE, Handlers::NONE)?
+        .async_add_subscription(AERON_IPC_STREAM, STREAM_ID, Handlers::NONE, Handlers::NONE)?
         .poll_blocking(Duration::from_secs(5))?;
-    println!("created subscription");
+    // offer() reports NotConnected until the image links; the publisher loop retries it
+    let publication = aeron
+        .async_add_publication(AERON_IPC_STREAM, STREAM_ID)?
+        .poll_blocking(Duration::from_secs(5))?;
 
-    // pick a large enough size to confirm fragment assembler is working
-    let large_string_len = 1024 * 1024;
-    println!("string length: {large_string_len}");
-
-    let _publisher_handler = {
+    let running = Arc::new(AtomicBool::new(true));
+    let publisher = {
+        let running = running.clone();
         std::thread::spawn(move || {
-            loop {
-                // Typed offer: retry the retryable errors, stop on fatal ones.
-                match publisher.offer("1".repeat(large_string_len).as_bytes()) {
-                    Ok(_) => {}
-                    Err(e) if e.is_retryable() => error!("failed to send message ({e}); retrying"),
+            let message = vec![b'1'; MESSAGE_LEN];
+            let mut idle = BackoffIdleStrategy::new();
+            while running.load(Ordering::Acquire) {
+                match publication.offer(&message) {
+                    Ok(_) => idle.reset(),
+                    Err(e) if e.is_retryable() => idle.idle(0),
                     Err(e) => {
-                        error!("publication gone ({e}); stopping publisher thread");
+                        eprintln!("publication gone: {e}");
                         break;
                     }
                 }
@@ -56,44 +73,21 @@ pub fn main() -> Result<(), Box<dyn error::Error>> {
         })
     };
 
-    struct FragmentHandler {
-        count: Cell<usize>,
-        large_string_len: usize,
-    }
-
-    impl AeronFragmentHandlerCallback for FragmentHandler {
-        fn handle_aeron_fragment_handler(&mut self, buffer: &[u8], header: AeronHeader) {
-            println!(
-                "received a message from aeron [position: {:?}, msg length:{}]",
-                header.position(),
-                buffer.len()
-            );
-
-            // Increment count
-            self.count.set(self.count.get() + 1);
-
-            // Check if the message matches the expected pattern
-            assert_eq!(buffer, "1".repeat(self.large_string_len).as_bytes());
-        }
-    }
-    // if you don't need fragmentation support use Handler::new instead
-    let (closure, _inner) = Handler::with_fragment_assembler(FragmentHandler {
-        count: Cell::new(0),
-        large_string_len,
-    })?;
-
-    // Back off the poll loop when there's no work — Aeron's samples drive their loops with an
-    // `IdleStrategy` (idle(fragments)) instead of a bare tight loop.
+    // use Handler::new instead if messages never exceed the MTU
+    let (assembler, counter) = Handler::with_fragment_assembler(Counter { count: 0, bad: 0 })?;
     let mut idle = BackoffIdleStrategy::new();
     loop {
-        if _inner.count.get() > 100 {
+        idle.idle(subscription.poll(Some(&assembler), 10)?);
+        if counter.count >= MESSAGES {
             break;
         }
-        let fragments = subscription.poll(Some(&closure), 1024)?;
-        idle.idle(fragments);
     }
 
-    println!("stopping client");
-
+    running.store(false, Ordering::Release);
+    publisher.join().map_err(|_| "publisher thread panicked")?;
+    if counter.bad > 0 {
+        return Err(format!("{} corrupt messages", counter.bad).into());
+    }
+    println!("received {} messages", counter.count);
     Ok(())
 }
