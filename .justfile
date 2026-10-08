@@ -397,7 +397,7 @@ benchmark-ipc-throughput-rust:
   AERON_RECEIVER_IDLE_STRATEGY=noop \
   AERON_DIR=target/aeron \
   AERON_TERM_BUFFER_SPARSE_FILE=false \
-  cargo run --release --package rusteron-client --example embedded_exclusive_ipc_throughput
+  cargo run --release --package rusteron-client --features examples --example embedded_exclusive_ipc_throughput
 
 # Rust IPC throughput with perf profiling
 benchmark-ipc-throughput-rust-profiler:
@@ -448,11 +448,11 @@ benchmark-embedded-ping-pong-rust:
   AERON_RECEIVER_IDLE_STRATEGY=noop \
   AERON_DIR=target/aeron \
   AERON_TERM_BUFFER_SPARSE_FILE=false \
-  cargo run --release --package rusteron-client --example embedded_ping_pong
+  cargo run --release --package rusteron-client --features examples --example embedded_ping_pong
 
 # Rust ping-pong with profiler codesign
 benchmark-embedded-ping-pong-rust-profiler:
-  cargo build --features static --release --package rusteron-client --example embedded_ping_pong
+  cargo build --features "static examples" --release --package rusteron-client --example embedded_ping_pong
   codesign -s - -vvv --entitlements instruments.plist ./target/release/examples/embedded_ping_pong
   AERON_DIR=target/aeron \
   ./target/release/examples/embedded_ping_pong
