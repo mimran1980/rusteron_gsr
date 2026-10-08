@@ -645,7 +645,10 @@ pub fn persistent_subscription_builder() -> Result<PersistentSubscriptionBuilder
 /// In the poll loop, prefer the state queries `is_live()` / `is_replaying()` /
 /// `has_failed()` for control flow and treat this listener as observational
 /// (logging/metrics). See Aeron's `PersistentSubscriptionListener`.
-pub trait PersistentSubscriptionListener: Send + 'static {
+///
+/// Callbacks run on the thread that polls the subscription, so a listener may hold
+/// thread-local state such as `Rc`.
+pub trait PersistentSubscriptionListener: 'static {
     /// Called when the persistent subscription transitions to consuming from the
     /// live stream. Can fire more than once: if the live image is lost the
     /// subscription falls back to replay and this fires again on rejoin.
@@ -1483,6 +1486,25 @@ mod tests {
         drop(pub_error_frame_handler);
         drop(error_handler);
         test_result
+    }
+
+    /// A listener may hold thread-local state: its callbacks run on the polling thread.
+    #[test]
+    fn persistent_subscription_listener_may_hold_rc_state() -> Result<(), AeronCError> {
+        struct Joins(std::rc::Rc<Cell<u32>>);
+        impl PersistentSubscriptionListener for Joins {
+            fn on_live_joined(&self) {
+                self.0.set(self.0.get() + 1);
+            }
+        }
+        let joins = std::rc::Rc::new(Cell::new(0));
+        PersistentSubscriptionBuilder::new()?.listener(Joins(std::rc::Rc::clone(&joins)))?;
+        assert_eq!(
+            std::rc::Rc::strong_count(&joins),
+            1,
+            "the unbuilt builder drops its listener"
+        );
+        Ok(())
     }
 
     /// The non-blocking list returns what the blocking one does, one poll at a time, and
