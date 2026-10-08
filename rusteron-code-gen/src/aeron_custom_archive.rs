@@ -91,8 +91,9 @@ pub struct AeronArchiveError {
 }
 
 impl AeronArchiveError {
-    /// Parses the `errorCode=N` the C archive client embeds in error text (both
-    /// `poll_for_error_response` payloads and `AeronCError` `lastError` messages).
+    /// Parses the `errorCode=N` the C archive client embeds in the `aeron_errmsg` text of a
+    /// failed request (and so in `AeronCError` `lastError` messages), not in
+    /// `poll_for_error_response` payloads.
     /// Falls back to [`AeronArchiveErrorCode::Generic`] when no code is present.
     pub fn parse(message: &str) -> Self {
         let code = message
@@ -400,8 +401,12 @@ impl AeronArchive {
 
 impl AeronArchive {
     /// Typed variant of [`Self::poll_for_error_response_as_string`]: polls the control
-    /// response stream once and returns the parsed archive error, or `Ok(None)` when the
-    /// stream is clean.
+    /// response stream once and returns the archive error it carries, or `Ok(None)` when
+    /// the stream is clean.
+    ///
+    /// The C call copies only the archive's message text, which has no `errorCode=N`, so the
+    /// returned `code` is always [`AeronArchiveErrorCode::Generic`]. Blocking calls return the
+    /// typed code in their own `Err`.
     ///
     /// Do not call it, or any other request on this archive, while an `AeronArchiveReplayMerge`
     /// on it is in progress: the merge reads the same responses, and one taken here stalls it

@@ -244,7 +244,7 @@ loop {
 
 For a fully runnable version, see the example and integration tests:
 - [`examples/persistent_subscription.rs`](./examples/persistent_subscription.rs) — standalone demo (run with `cargo run --release --features "static precompile" --example persistent_subscription`)
-- [`examples/archive_error_handling.rs`](./examples/archive_error_handling.rs) — error handlers on both contexts, recording signals, typed control-session errors via `archive.poll_for_error()` / `AeronArchiveError::parse` (the archive's `errorCode=N` recovered from the message text), and detecting/reconnecting after the archive goes down
+- [`examples/archive_error_handling.rs`](./examples/archive_error_handling.rs) — error handlers on both contexts, recording signals, typed control-session errors (blocking calls return `AeronArchiveError` with `e.code`; `archive.poll_for_error()` drains unsolicited ones, always with `Generic` code), and detecting/reconnecting after the archive goes down
 - [`examples/persistent_subscription_failover.rs`](./examples/persistent_subscription_failover.rs) — failure modes: the live stream dies (`on_live_left`), and the subscription rejoins it (`on_live_joined`) once the publisher resumes the same session where it stopped
 - [`examples/async_requests.rs`](./examples/async_requests.rs) — times blocking archive calls (list recordings, start a replay, build a persistent subscription) against their non-blocking forms, which never hold the calling thread for more than one short poll
 - [`examples/replay_merge.rs`](./examples/replay_merge.rs) — late-joiner catch-up: replay recorded history, then merge seamlessly onto the live MDC stream (`AeronArchiveReplayMerge`)
