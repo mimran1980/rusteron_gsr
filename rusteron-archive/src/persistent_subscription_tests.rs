@@ -1198,7 +1198,7 @@ mod tests {
         // Drive the persistent subscription: keep the live stream active by
         // publishing, and poll so it replays then joins live. Aeron types are
         // !Send, so this all happens on the test thread. `ps.poll_fn()` drives
-        // the archive client internally, so no `archive.poll_for_recording_signals()`.
+        // its own archive client.
         let mut i = 0;
         let start = Instant::now();
         while !ps.is_live() && start.elapsed() < Duration::from_secs(30) {
@@ -1953,7 +1953,8 @@ mod tests {
         assert!(joined.load(Ordering::SeqCst) >= 1, "never went live initially");
 
         // Phase 2: tear down the exclusive publication -> live image is lost ->
-        // PS falls back to replay (on_live_left fires, is_replaying() becomes true).
+        // on_live_left fires and the PS re-reads the recording, replaying anything
+        // recorded past its position before it waits for live again.
         drop(publication);
         let deadline = Instant::now() + Duration::from_secs(30);
         while ps.is_live() && Instant::now() < deadline {

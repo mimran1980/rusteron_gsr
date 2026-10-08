@@ -4,9 +4,9 @@
 //! rides through the loss of the live stream:
 //!
 //! 1. replay + join live (`on_live_joined`);
-//! 2. the live publication dies → the subscription **falls back to replay**
-//!    (`on_live_left`, `is_replaying()`), losing nothing — the archive keeps recording
-//!    history it already has;
+//! 2. the live publication dies → `on_live_left`: the subscription re-reads the recording,
+//!    replays anything recorded past its position (nothing here, as the stream stopped)
+//!    and waits for live again;
 //! 3. the live stream comes back, resumed where it stopped → it **rejoins live**
 //!    (`on_live_joined` again). Aeron refuses a live stream that restarts behind what the
 //!    subscription has seen; for a publisher that restarts from scratch, see
@@ -96,7 +96,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         fn on_live_left(&self) {
             self.left.fetch_add(1, Ordering::SeqCst);
-            println!("[listener] on_live_left — falling back to replay");
+            println!("[listener] on_live_left — live stream lost");
         }
         fn on_error(&self, code: i32, msg: &str) {
             eprintln!("[listener] error {code}: {msg}");
@@ -152,7 +152,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         sleep(Duration::from_millis(10));
     }
     assert!(left.load(Ordering::SeqCst) >= 1, "never detected loss of live stream");
-    println!("now replaying from the archive (is_replaying = {})", ps.is_replaying());
+    println!(
+        "live stream lost; waiting to rejoin (is_replaying = {})",
+        ps.is_replaying()
+    );
 
     // ── Phase 3: the live stream comes back — rejoin ─────────────────────
     // Aeron refuses a live stream behind what the subscription has already seen, so a
@@ -189,7 +192,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         errors.lock().unwrap().clone()
     );
     println!(
-        "failover complete: joined live {joined_count} time(s), fell back {} time(s)",
+        "failover complete: joined live {joined_count} time(s), lost it {} time(s)",
         left.load(Ordering::SeqCst)
     );
     Ok(())

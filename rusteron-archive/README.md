@@ -162,6 +162,8 @@ loop {
 }
 ```
 
+`archive.do_work()` fails only on an archive error its context has no error handler for. Client faults go to the client's error handler, and a lost archive shows as `archive.get_control_response_subscription().is_connected()` turning false.
+
 ---
 
 ## Persistent Subscriptions
@@ -202,9 +204,10 @@ let ps = PersistentSubscriptionBuilder::new_with_aeron(&archive_context, &aeron)
     .listener(MyListener { live_joined: live_joined.clone() })?
     .build()?;
 
-// Drive it: replay runs, then it joins live. `ps.poll_fn()` drives the archive
-// client internally, so no `archive.poll_for_recording_signals()` is needed. Check
-// `has_failed()` each iteration (terminal failure) and stop once `is_live()`.
+// Drive it: replay runs, then it joins live. `ps.poll_fn()` drives its own archive
+// client, so it needs nothing from `archive` (a control loop still calls
+// `archive.do_work()` each cycle; see Duty Cycle). Check `has_failed()` each
+// iteration (terminal failure) and stop once `is_live()`.
 while !ps.is_live() {
     if ps.has_failed() {
         panic!("persistent subscription failed: {:?}", ps.get_failure_reason());
@@ -244,7 +247,7 @@ loop {
 For a fully runnable version, see the example and integration tests:
 - [`examples/persistent_subscription.rs`](./examples/persistent_subscription.rs) — standalone demo (run with `cargo run --release --features "static precompile" --example persistent_subscription`)
 - [`examples/archive_error_handling.rs`](./examples/archive_error_handling.rs) — error handlers on both contexts, recording signals, typed control-session errors via `archive.poll_for_error()` / `AeronArchiveError::parse` (the archive's `errorCode=N` recovered from the message text), and detecting/reconnecting after the archive goes down
-- [`examples/persistent_subscription_failover.rs`](./examples/persistent_subscription_failover.rs) — failure modes: live stream dies → automatic fallback to replay (`on_live_left`), then rejoins live when it returns
+- [`examples/persistent_subscription_failover.rs`](./examples/persistent_subscription_failover.rs) — failure modes: the live stream dies (`on_live_left`), and the subscription rejoins it (`on_live_joined`) once the publisher resumes the same session where it stopped; for a publisher that restarts from scratch, see `FollowingPersistentSubscription`
 - [`examples/replay_merge.rs`](./examples/replay_merge.rs) — late-joiner catch-up: replay recorded history, then merge seamlessly onto the live MDC stream (`AeronArchiveReplayMerge`)
 - [`examples/recording_throughput.rs`](./examples/recording_throughput.rs) — recording throughput measurement (publish rate vs archiver catch-up) and `list_recordings` descriptor enumeration
 - [`examples/recording_replication.rs`](./examples/recording_replication.rs) — archive-to-archive replication (`archive.replicate`): a destination archive pulls a finished recording from a source archive and the copy is verified (port of `RecordingReplicator`)

@@ -158,10 +158,14 @@ impl AeronArchive {
     /// Every persistent subscription poll also runs an agent-invoker client's conductor,
     /// so with many persistent subscriptions on one client, give it its conductor thread.
     ///
+    /// Client conductor faults go only to the client's error handler, and a lost archive
+    /// is not reported here: [`Self::get_control_response_subscription`] stops being
+    /// connected instead.
+    ///
     /// # Errors
     ///
-    /// The conductor failed, or the archive returned an error and the context has no
-    /// error handler.
+    /// The archive returned an error and the context has no error handler, or a control
+    /// response could not be read.
     #[inline]
     pub fn do_work(&self) -> Result<i32, AeronCError> {
         let aeron = self.aeron();
@@ -500,7 +504,8 @@ impl AeronArchive {
 ///
 /// Until the request completes, fails or is dropped, the archive's blocking calls fail,
 /// its signal and error polls read nothing, and a replay merge on it must not be polled.
-/// Recording signals that arrive meanwhile still reach the context's signal consumer.
+/// Recording signals that arrive meanwhile still reach the context's signal consumer, but
+/// archive errors for other requests are dropped.
 pub struct AeronArchiveAsyncStartReplay {
     archive: AeronArchive,
     poller: AeronArchiveControlResponsePoller,
