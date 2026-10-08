@@ -120,6 +120,10 @@ harness = false
 name    = "offer_claim_poll"
 harness = false
 
+[[bench]]
+name    = "offer_poll_ipc"
+harness = false
+
 [package.metadata.docs.rs]
 features        = ["static", "precompile"]
 default-target  = "aarch64-apple-darwin"
