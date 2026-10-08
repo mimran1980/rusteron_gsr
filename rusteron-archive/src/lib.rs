@@ -689,8 +689,8 @@ impl AeronArchivePersistentSubscription {
     ///
     /// The context is consumed and owned by the subscription from this point on —
     /// it will be closed when the subscription is closed, so it must not be used
-    /// afterwards. The context's Aeron client and archive context must outlive the
-    /// subscription; [`PersistentSubscriptionBuilder::build`] keeps them open.
+    /// afterwards. Keep the context's Aeron client and archive context open until the
+    /// subscription is closed or dropped.
     pub fn create(
         ctx: AeronArchivePersistentSubscriptionContext,
         listener: Option<Box<dyn PersistentSubscriptionListener>>,
@@ -833,11 +833,49 @@ pub trait PersistentSubscriptionListener: 'static {
 /// Builder for configuring and creating a persistent subscription.
 /// This provides a fluent interface for setting up a persistent subscription
 /// with proper CString handling.
+///
+/// The subscription holds no reference to the Aeron client or archive context given
+/// here, yet uses both from the moment they are set. Keep them open until the
+/// subscription is closed or dropped, or until the builder or its
+/// [`Self::build_async`] request is dropped unbuilt: dropping either earlier is a
+/// use-after-free.
+///
+/// # Examples
+///
+/// ```no_run
+/// use rusteron_archive::*;
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let context = AeronContext::new()?;
+/// let aeron = Aeron::new(&context)?;
+/// aeron.start()?;
+/// let archive_context = AeronArchiveContext::new()?;
+/// archive_context.set_aeron(&aeron)?;
+///
+/// let subscription = PersistentSubscriptionBuilder::new()?
+///     .aeron(&aeron)?
+///     .archive_context(&archive_context)?
+///     .recording_id(0)?
+///     .live_channel("aeron:ipc")?
+///     .live_stream_id(1001)?
+///     .replay_channel("aeron:udp?endpoint=localhost:0")?
+///     .replay_stream_id(1002)?
+///     .build()?;
+/// while !subscription.is_live() && !subscription.has_failed() {
+///     subscription.poll_fn(|message, _header| println!("{} bytes", message.len()), 10)?;
+/// }
+///
+/// // the subscription first, then the archive context and client it uses
+/// subscription.close()?;
+/// drop(archive_context);
+/// drop(aeron);
+/// # Ok(())
+/// # }
+/// ```
 pub struct PersistentSubscriptionBuilder {
     ctx: AeronArchivePersistentSubscriptionContext,
     listener: Option<Box<dyn PersistentSubscriptionListener>>,
     aeron: Option<Aeron>,
-    archive_context: Option<AeronArchiveContext>,
 }
 
 impl PersistentSubscriptionBuilder {
@@ -847,7 +885,6 @@ impl PersistentSubscriptionBuilder {
             ctx: AeronArchivePersistentSubscriptionContext::new()?,
             listener: None,
             aeron: None,
-            archive_context: None,
         })
     }
 
@@ -859,9 +896,8 @@ impl PersistentSubscriptionBuilder {
     }
 
     /// Set the archive context to use.
-    pub fn archive_context(mut self, ctx: &AeronArchiveContext) -> Result<Self, AeronCError> {
+    pub fn archive_context(self, ctx: &AeronArchiveContext) -> Result<Self, AeronCError> {
         self.ctx.set_archive_context(ctx)?;
-        self.archive_context = Some(ctx.clone());
         Ok(self)
     }
 
@@ -956,26 +992,18 @@ impl PersistentSubscriptionBuilder {
         Ok(self)
     }
 
-    /// Build the persistent subscription. It keeps the Aeron client and archive context open
-    /// until it closes.
+    /// Build the persistent subscription. Keep its Aeron client and archive context open
+    /// until it is closed or dropped.
     pub fn build(mut self) -> Result<AeronArchivePersistentSubscription, AeronCError> {
-        let subscription = AeronArchivePersistentSubscription::create(self.ctx, self.listener.take())?;
-        // the subscription uses both until its C close, and they drop after it in this order
-        if let Some(inner) = subscription.inner.as_owned() {
-            if let Some(context) = self.archive_context.take() {
-                inner.add_dependency(context);
-            }
-            if let Some(aeron) = self.aeron.take() {
-                inner.add_dependency(aeron);
-            }
-        }
-        Ok(subscription)
+        AeronArchivePersistentSubscription::create(self.ctx, self.listener.take())
     }
 
     /// Builds the subscription without waiting on the media driver: the counters that
     /// [`Self::build`] adds one round trip at a time are requested together, and
     /// [`AeronArchiveAsyncPersistentSubscription::poll`] creates the subscription once
-    /// the driver has registered them. Counters already set on the builder are kept.
+    /// the driver has registered them. Counters already set on the builder are kept. Keep
+    /// the Aeron client and archive context open as for [`Self::build`], and while the
+    /// request is pending.
     ///
     /// # Errors
     ///

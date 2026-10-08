@@ -44,9 +44,11 @@ enum Stage {
         AeronArchiveAsyncListRecordings<ListConsumer>,
         Rc<Cell<Option<(i64, i32)>>>,
     ),
-    Building(AeronArchiveAsyncPersistentSubscription, i64),
+    Building(AeronArchiveAsyncPersistentSubscription, AeronArchiveContext, i64),
     Following {
         subscription: AeronArchivePersistentSubscription,
+        // The subscription's archive client uses this context.
+        _context: AeronArchiveContext,
         recording_id: i64,
     },
 }
@@ -54,7 +56,8 @@ enum Stage {
 impl FollowingPersistentSubscription {
     /// Follows the recordings of `live`, a channel and stream id, replaying them to `replay`.
     /// `archive_context` makes a fresh context, with the archive's control channels, for
-    /// each connection to the archive.
+    /// each connection to the archive. The follower keeps a clone of `aeron`, and each
+    /// context, open until the subscription that uses them has closed.
     pub fn new(
         aeron: &Aeron,
         archive_context: impl Fn() -> Result<AeronArchiveContext, AeronCError> + 'static,
@@ -202,17 +205,18 @@ impl FollowingPersistentSubscription {
                     },
                 }
             }
-            Stage::Building(mut building, recording_id) => {
+            Stage::Building(mut building, context, recording_id) => {
                 match building
                     .poll()
                     .map_err(|e| format!("subscribing to recording {recording_id}: {e}"))?
                 {
-                    None => Stage::Building(building, recording_id),
+                    None => Stage::Building(building, context, recording_id),
                     Some(subscription) => {
                         log::info!("following recording {recording_id} of stream {}", self.stream_id);
                         self.active_at = Instant::now();
                         Stage::Following {
                             subscription,
+                            _context: context,
                             recording_id,
                         }
                     }
@@ -259,7 +263,14 @@ impl FollowingPersistentSubscription {
             .and_then(|b| b.start_position(start))
             .and_then(PersistentSubscriptionBuilder::build_async)
             .map_err(|e| format!("subscribing to recording {recording_id}: {e}"))?;
-        Ok(Stage::Building(building, recording_id))
+        Ok(Stage::Building(building, context, recording_id))
+    }
+}
+
+impl Drop for FollowingPersistentSubscription {
+    fn drop(&mut self) {
+        // closes the subscription while the client and contexts it uses are still open
+        self.stage = Stage::Waiting(Instant::now());
     }
 }
 

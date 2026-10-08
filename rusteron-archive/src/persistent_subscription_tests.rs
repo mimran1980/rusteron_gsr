@@ -1337,6 +1337,67 @@ mod tests {
         Ok(())
     }
 
+    /// The follower closes its subscription before the client and archive contexts it uses,
+    /// so it drops cleanly when it holds the client's last handles.
+    #[test]
+    #[serial]
+    fn follower_closes_its_subscription_before_its_client() -> Result<(), Box<dyn Error>> {
+        crate::skip_unless_java!();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().ok();
+
+        let (aeron, archive_context, _media_driver_archive, _archive_error_handler) =
+            start_aeron_archive_with_config("ps_follow_drop", 9990)?;
+        let archive = AeronArchiveAsyncConnect::new_with_aeron(&archive_context, &aeron)?
+            .poll_blocking(Duration::from_secs(20))
+            .expect("failed to connect to archive");
+        let stream_id = 3501;
+        retry_archive_op(Instant::now() + Duration::from_secs(15), || {
+            archive.start_recording(&"aeron:ipc".into_c_string(), stream_id, SOURCE_LOCATION_LOCAL, false)
+        })?;
+        let publication = aeron
+            .async_add_exclusive_publication(&"aeron:ipc".into_c_string(), stream_id)?
+            .poll_blocking(Duration::from_secs(5))?;
+        let counters_reader = aeron.counters_reader();
+        let session_id = publication.get_constants()?.session_id;
+        let counter_id =
+            crate::testing::find_counter_id_by_session_blocking(&counters_reader, session_id, Duration::from_secs(5))?;
+        RecordingPos::get_recording_id_block(&counters_reader, counter_id, Duration::from_secs(5))?;
+
+        let client_context = AeronContext::new()?;
+        client_context.set_dir(&aeron.context().get_dir().into_c_string())?;
+        let client = Aeron::new(&client_context)?;
+        client.start()?;
+        let request = archive_context.get_control_request_channel().to_owned();
+        let response = archive_context.get_control_response_channel().to_owned();
+        let factory_client = client.clone();
+        let mut follower = FollowingPersistentSubscription::new(
+            &client,
+            move || {
+                let context = AeronArchiveContext::new()?;
+                context.set_aeron(&factory_client)?;
+                context.set_control_request_channel(&request.as_str().into_c_string())?;
+                context.set_control_response_channel(&response.as_str().into_c_string())?;
+                Ok(context)
+            },
+            ("aeron:ipc", stream_id),
+            ("aeron:udp?endpoint=localhost:0", stream_id + 1),
+        )
+        .retry_after(Duration::from_millis(50));
+        drop(client);
+
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while !follower.is_live() {
+            assert!(Instant::now() < deadline, "the follower never went live");
+            follower.poll_fn(|_, _| {}, 10);
+            sleep(Duration::from_millis(1));
+        }
+        drop(follower);
+        drop(publication);
+        Ok(())
+    }
+
     /// By default the follower takes only recordings of its live channel, not a newer one
     /// of the same stream id on another channel.
     #[test]
@@ -1670,68 +1731,6 @@ mod tests {
             );
             sleep(Duration::from_millis(10));
         }
-        Ok(())
-    }
-
-    /// A persistent subscription keeps its archive context open, so it connects and closes
-    /// cleanly after the caller's handle to the context has gone.
-    #[test]
-    #[serial]
-    fn persistent_subscription_keeps_its_archive_context_open() -> Result<(), Box<dyn Error>> {
-        crate::skip_unless_java!();
-        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
-
-        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().ok();
-
-        let (aeron, archive_context, _media_driver_archive, _archive_error_handler) =
-            start_aeron_archive_with_config("ps_context_anchor", 9790)?;
-        let ps = {
-            let context = AeronArchiveContext::new()?;
-            context.set_aeron(&aeron)?;
-            context.set_control_request_channel(&archive_context.get_control_request_channel().into_c_string())?;
-            context.set_control_response_channel(&archive_context.get_control_response_channel().into_c_string())?;
-            persistent_subscription_builder()?
-                .aeron(&aeron)?
-                .archive_context(&context)?
-                .recording_id(0)?
-                .live_channel("aeron:ipc")?
-                .live_stream_id(3501)?
-                .replay_channel("aeron:udp?endpoint=localhost:0")?
-                .replay_stream_id(3502)?
-                .build()?
-        };
-        // polling connects the subscription's archive client through the context
-        for _ in 0..100 {
-            let _ = ps.poll_fn(|_, _| {}, 10);
-            sleep(Duration::from_millis(1));
-        }
-        ps.close()?;
-        Ok(())
-    }
-
-    /// A persistent subscription keeps its Aeron client open, so it closes cleanly after
-    /// the caller's last handle to the client has gone.
-    #[test]
-    #[serial]
-    fn persistent_subscription_keeps_its_aeron_client_open() -> Result<(), Box<dyn Error>> {
-        crate::skip_unless_java!();
-        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
-
-        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().ok();
-
-        let (aeron, archive_context, _media_driver_archive, _archive_error_handler) =
-            start_aeron_archive_with_config("ps_aeron_anchor", 9750)?;
-        let ps = persistent_subscription_builder()?
-            .aeron(&aeron)?
-            .archive_context(&archive_context)?
-            .recording_id(0)?
-            .live_channel("aeron:ipc")?
-            .live_stream_id(3401)?
-            .replay_channel("aeron:udp?endpoint=localhost:0")?
-            .replay_stream_id(3402)?
-            .build()?;
-        drop(aeron);
-        ps.close()?;
         Ok(())
     }
 
