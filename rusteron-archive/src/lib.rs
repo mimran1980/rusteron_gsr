@@ -72,8 +72,12 @@ impl RecordingPos {
         unsafe { aeron_archive_recording_pos_find_counter_id_by_recording_id(counter_reader.get_inner(), recording_id) }
     }
 
-    /// Return the recordingId embedded in the key of the given counter
-    /// if it is indeed a "recording position" counter. Otherwise return -1.
+    /// The recording id in the key of `counter_id`, a recording position counter, retried
+    /// until `wait` elapses.
+    ///
+    /// # Errors
+    ///
+    /// The counter is not an allocated recording position counter within `wait`.
     pub fn get_recording_id_block(
         counters_reader: &AeronCountersReader,
         counter_id: i32,
@@ -91,8 +95,11 @@ impl RecordingPos {
         return result;
     }
 
-    /// Return the recordingId embedded in the key of the given counter
-    /// if it is indeed a "recording position" counter. Otherwise return -1.
+    /// The recording id in the key of `counter_id`, a recording position counter.
+    ///
+    /// # Errors
+    ///
+    /// The counter is not an allocated recording position counter.
     pub fn get_recording_id(counters_reader: &AeronCountersReader, counter_id: i32) -> Result<i64, AeronCError> {
         /// The type id for an Aeron Archive recording position counter.
         /// In Aeron Java, this is AeronCounters.ARCHIVE_RECORDING_POSITION_TYPE_ID (which is typically 100).
@@ -587,6 +594,10 @@ macro_rules! impl_archive_position_methods {
         impl $pub_type {
             /// Retrieves the current active live archive position using the Aeron counters.
             /// Returns an error if not found.
+            ///
+            /// Each call scans every counter for this session's recording position. In a loop,
+            /// find the counter id once with [`RecordingPos::find_counter_id_by_session`] and read
+            /// it with [`AeronCountersReader::get_counter_value`].
             pub fn get_archive_position(&self) -> Result<i64, AeronCError> {
                 if let Some(aeron) = self.inner.get_dependency::<Aeron>() {
                     let counter_reader = &aeron.counters_reader();
@@ -613,6 +624,9 @@ macro_rules! impl_archive_position_methods {
 
             /// Checks if the publication's current position is within a specified inclusive length
             /// of the archive position.
+            ///
+            /// Scans every counter on each call, as [`Self::get_archive_position`] does; cache the
+            /// counter id when spinning on it.
             pub fn is_archive_position_with(&self, length_inclusive: usize) -> bool {
                 let archive_position = self.get_archive_position().unwrap_or(-1);
                 if archive_position < 0 {

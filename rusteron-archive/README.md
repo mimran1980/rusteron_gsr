@@ -107,7 +107,7 @@ For comprehensive details on how handler registration, callbacks, error checking
 - [rusteron-client: Errors & Offer Results](../rusteron-client/README.md#errors--offer-results)
 - [rusteron-client: Idle Strategies](../rusteron-client/README.md#idle-strategies)
 
-Archive control operations (`begin_replay`, `start_recording`, …) return
+Archive control operations (`start_recording`, `start_replay`, `stop_recording_subscription`, …) return
 `Result<_, AeronArchiveError>` — a typed code (`AeronArchiveErrorCode`) plus the archive's
 message. Constructors, async-connect, and context setters return `AeronCError`;
 `From<AeronArchiveError> for AeronCError` keeps `?` working across both.
@@ -142,6 +142,8 @@ For detailed guides and code snippets on Aeron features in Rust, see:
 6. **Replay Setup**: Configure replay target/channel.
 7. **Subscribe and Receive** replayed messages.
 
+See [`examples/record_and_replay.rs`](./examples/record_and_replay.rs) for this workflow end to end (`cargo run --release --features "static precompile" --example record_and_replay`).
+
 ---
 
 ## Duty Cycle
@@ -163,6 +165,8 @@ loop {
 }
 ```
 
+Blocking archive calls idle with the C client's default backoff strategy between polls (Aeron C++ yields instead); `archive_context.set_idle_strategy(..)` replaces it.
+
 `archive.do_work()` fails only on an archive error its context has no error handler for. Client faults go to the client's error handler, and a lost archive shows as `archive.get_control_response_subscription().is_connected()` turning false.
 
 ---
@@ -175,7 +179,7 @@ A **persistent subscription** replays a recording from a start position, then se
 - **How it works**: [Aeron Wiki — Persistent Subscriptions](https://github.com/aeron-io/aeron/wiki/Persistent-Subscriptions)
 - **Background on publications/subscriptions**: [Aeron docs](https://aeron.io/docs/aeron/publications-subscriptions/)
 
-Rusteron exposes it via `persistent_subscription_builder()` and the `PersistentSubscriptionListener` trait — a 1:1 wrapper over the Aeron C API (`aeron_archive_persistent_subscription_*`), mirroring Aeron's `PersistentSubscription.Context` field-for-field.
+Rusteron exposes it via `PersistentSubscriptionBuilder::new_with_aeron(&archive_context, &aeron)` (one client for the subscription and its archive context), `build()` or the non-blocking `build_async()`, and the `PersistentSubscriptionListener` trait — a 1:1 wrapper over the Aeron C API (`aeron_archive_persistent_subscription_*`), mirroring Aeron's `PersistentSubscription.Context` field-for-field.
 
 ```rust,ignore
 use rusteron_archive::*;
@@ -211,9 +215,9 @@ let ps = PersistentSubscriptionBuilder::new_with_aeron(&archive_context, &aeron)
 // iteration (terminal failure) and stop once `is_live()`.
 while !ps.is_live() {
     if ps.has_failed() {
-        panic!("persistent subscription failed: {:?}", ps.get_failure_reason());
+        return Err(format!("persistent subscription failed: {:?}", ps.get_failure_reason()).into());
     }
-    let _ = publication.offer_with_reserved_value(b"live", Handlers::NONE);
+    let _ = publication.offer(b"live"); // NotConnected/BackPressured are fine to skip in a demo
     ps.poll_fn(|buf, _hdr| { /* an assembled replayed or live message */ }, 100)?;
 }
 
@@ -243,6 +247,7 @@ loop {
 ```
 
 For a fully runnable version, see the example and integration tests:
+- [`examples/record_and_replay.rs`](./examples/record_and_replay.rs) — the Typical Workflow end to end: record a stream, find the recording and replay it
 - [`examples/persistent_subscription.rs`](./examples/persistent_subscription.rs) — standalone demo (run with `cargo run --release --features "static precompile" --example persistent_subscription`)
 - [`examples/archive_error_handling.rs`](./examples/archive_error_handling.rs) — error handlers on both contexts, recording signals, typed control-session errors (blocking calls return `AeronArchiveError` with `e.code`; `archive.poll_for_error()` drains unsolicited ones, always with `Generic` code), and detecting/reconnecting after the archive goes down
 - [`examples/persistent_subscription_failover.rs`](./examples/persistent_subscription_failover.rs) — failure modes: the live stream dies (`on_live_left`), and the subscription rejoins it (`on_live_joined`) once the publisher resumes the same session where it stopped
