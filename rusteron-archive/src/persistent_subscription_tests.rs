@@ -1337,6 +1337,94 @@ mod tests {
         Ok(())
     }
 
+    /// By default the follower takes only recordings of its live channel, not a newer one
+    /// of the same stream id on another channel.
+    #[test]
+    #[serial]
+    fn follower_follows_only_its_live_channels_recordings() -> Result<(), Box<dyn Error>> {
+        crate::skip_unless_java!();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().ok();
+
+        let (aeron, archive_context, _media_driver_archive, _archive_error_handler) =
+            start_aeron_archive_with_config("ps_follow_channel", 9980)?;
+        let archive = AeronArchiveAsyncConnect::new_with_aeron(&archive_context, &aeron)?
+            .poll_blocking(Duration::from_secs(20))
+            .expect("failed to connect to archive");
+        let stream_id = 3401;
+        let port = find_unused_udp_port(20500).expect("Could not find port");
+        let udp = format!("aeron:udp?endpoint=localhost:{port}");
+        let counters_reader = aeron.counters_reader();
+        // the UDP recording starts second, so it is the newer one
+        let mut publications = Vec::new();
+        for channel in ["aeron:ipc", udp.as_str()] {
+            retry_archive_op(Instant::now() + Duration::from_secs(15), || {
+                archive.start_recording(&channel.into_c_string(), stream_id, SOURCE_LOCATION_LOCAL, false)
+            })?;
+            let publication = aeron
+                .async_add_exclusive_publication(&channel.into_c_string(), stream_id)?
+                .poll_blocking(Duration::from_secs(5))?;
+            for i in 0..5 {
+                let message = format!("{channel}-{i}");
+                let deadline = Instant::now() + Duration::from_secs(10);
+                while publication.offer_raw(message.as_bytes(), Handlers::NONE) <= 0 {
+                    assert!(Instant::now() < deadline, "timed out offering {message}");
+                    sleep(Duration::from_millis(1));
+                }
+            }
+            let session_id = publication.get_constants()?.session_id;
+            let counter_id = crate::testing::find_counter_id_by_session_blocking(
+                &counters_reader,
+                session_id,
+                Duration::from_secs(5),
+            )?;
+            RecordingPos::get_recording_id_block(&counters_reader, counter_id, Duration::from_secs(5))?;
+            publications.push(publication);
+        }
+
+        let request = archive_context.get_control_request_channel().to_owned();
+        let response = archive_context.get_control_response_channel().to_owned();
+        let client = aeron.clone();
+        let mut follower = FollowingPersistentSubscription::new(
+            &aeron,
+            move || {
+                let context = AeronArchiveContext::new()?;
+                context.set_aeron(&client)?;
+                context.set_control_request_channel(&request.as_str().into_c_string())?;
+                context.set_control_response_channel(&response.as_str().into_c_string())?;
+                Ok(context)
+            },
+            ("aeron:ipc", stream_id),
+            ("aeron:udp?endpoint=localhost:0", stream_id + 1),
+        )
+        .from_start()
+        .retry_after(Duration::from_millis(50));
+
+        let mut received = Vec::new();
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while received.len() < 5 {
+            assert!(Instant::now() < deadline, "received only {received:?}");
+            follower.poll_fn(
+                |message, _| received.push(String::from_utf8_lossy(message).into_owned()),
+                10,
+            );
+            sleep(Duration::from_millis(1));
+        }
+        assert_eq!(
+            received,
+            [
+                "aeron:ipc-0",
+                "aeron:ipc-1",
+                "aeron:ipc-2",
+                "aeron:ipc-3",
+                "aeron:ipc-4"
+            ]
+        );
+        drop(publications);
+        Ok(())
+    }
+
     /// A followed subscription that fails is rebuilt only after `retry_after`.
     #[test]
     #[serial]

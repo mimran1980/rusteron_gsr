@@ -70,7 +70,7 @@ impl FollowingPersistentSubscription {
             stream_id: live.1,
             replay_channel: replay.0.to_owned(),
             replay_stream_id: replay.1,
-            channel_fragment: CString::default(),
+            channel_fragment: CString::new(live.0).unwrap_or_default(),
             filter: Rc::new(|recording| recording.stop_position() == i64::from(AERON_NULL_VALUE)),
             from_start: false,
             retry: Duration::from_secs(1),
@@ -82,7 +82,7 @@ impl FollowingPersistentSubscription {
     }
 
     /// Follows only the recordings whose channel contains `channel_fragment` and that
-    /// `filter` accepts. By default, every recording of the stream still recording.
+    /// `filter` accepts. By default, the live channel's recordings still recording.
     #[must_use]
     pub fn recordings(
         mut self,
