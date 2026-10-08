@@ -3153,9 +3153,19 @@ mod tests {
         rusteron_media_driver::testing::EmbeddedDriver,
         Handler<TestErrorCount>,
     ) {
+        setup_aeron_for_uaf_test_with(|_| Ok(()))
+    }
+
+    fn setup_aeron_for_uaf_test_with(
+        configure: impl FnOnce(&AeronDriverContext) -> Result<(), rusteron_media_driver::AeronCError>,
+    ) -> (
+        Aeron,
+        rusteron_media_driver::testing::EmbeddedDriver,
+        Handler<TestErrorCount>,
+    ) {
         rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
 
-        let driver = rusteron_media_driver::testing::EmbeddedDriver::launch().unwrap();
+        let driver = rusteron_media_driver::testing::EmbeddedDriver::launch_with(configure).unwrap();
 
         let ctx = AeronContext::new().unwrap();
         ctx.set_dir(&driver.dir().into_c_string()).unwrap();
@@ -5505,8 +5515,8 @@ mod tests {
     /// drops (triggering deferred `aeron_close()`), `mprotect(PROT_NONE)` on the
     /// publication's page causes a SIGBUS on access, confirming the memory was freed.
     ///
-    /// This test is `#[ignore]` because it uses `mprotect(PROT_NONE)` which
-    /// affects an entire VM page.  If other live heap allocations share the
+    /// It uses `mprotect(PROT_NONE)`, which affects an entire VM page.  If other live
+    /// heap allocations share the
     /// same page as the freed Aeron resource the process may crash during
     /// teardown too, so we call `std::process::abort` on detection and
     /// `std::process::exit(0)` on the no-crash path.
@@ -5553,7 +5563,12 @@ mod tests {
                 signal(SIGBUS, uaf_sigbus_handler);
                 signal(SIGSEGV, uaf_sigbus_handler);
 
-                let (aeron, driver, error_handler) = setup_aeron_for_uaf_test();
+                // the child never shuts its driver down, so it reuses one dir that the next
+                // run's driver deletes on start, rather than leaving a new dir every run
+                let (aeron, driver, error_handler) = setup_aeron_for_uaf_test_with(|ctx| {
+                    let dir = std::env::temp_dir().join("aeron-rusteron-mprotect-test");
+                    ctx.set_dir(&dir.display().to_string().into_c_string()).map(|_| ())
+                });
                 let publisher = aeron
                     .add_publication(AERON_IPC_STREAM, 1006, Duration::from_secs(5))
                     .unwrap();
