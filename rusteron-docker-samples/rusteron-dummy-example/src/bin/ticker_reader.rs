@@ -1,11 +1,8 @@
 use log::{error, info};
 use rusteron_archive::*;
 use rusteron_dummy_example::{archive_connect, init_logger, start_media_driver, TICKER_CHANNEL, TICKER_STREAM_ID};
-use std::fmt::Debug;
-use std::ops::Deref;
 use std::sync::atomic::Ordering;
-use std::time::Duration;
-use tokio::time::Instant;
+use std::time::{Duration, Instant};
 use websocket_lite::Result;
 
 fn main() -> Result<()> {
@@ -26,151 +23,116 @@ fn main() -> Result<()> {
     let mut live_log_time = Instant::now().checked_sub(Duration::from_secs(300)).unwrap();
     let live_log = Duration::from_secs(30);
 
-    let record_reader = Handler::new(RecorderDescriptorReader::default());
-    let replay_msg_count_handler = Handler::new(MessageCountHandler::default());
-    let live_msg_count_handler = Handler::new(MessageCountHandler::default());
-
-    let channel = TICKER_CHANNEL;
     let stream_id = TICKER_STREAM_ID;
-
+    let (mut live_count, mut live_bytes) = (0usize, 0usize);
     let mut live_subscription: Option<AeronSubscription> = None;
 
     while !shutdown.load(Ordering::Acquire) {
         if archive_log_time.elapsed() > archive_log {
             archive_log_time = Instant::now();
-            unsafe {
-                record_reader.get_mut().reset();
-            }
-            match archive.list_recordings_for_uri(
-                0,
-                i32::MAX,
-                &channel.into_c_string(),
-                stream_id,
-                Some(&record_reader),
-            ) {
+            match archive.collect_recordings(|recording| recording.stream_id == stream_id) {
                 Ok(recordings) => {
-                    info!(
-                        "found {recordings} recordings [stopPos={:?}]",
-                        record_reader.last_recording_with_stop_position
-                    );
+                    let last_stopped = recordings.iter().rev().find(|recording| recording.stop_position > 0);
+                    info!("found {} recordings [lastStopped={last_stopped:?}]", recordings.len());
 
-                    if let Some(record) = &record_reader.last_recording {
+                    if let Some(record) = recordings.last() {
                         info!("trying replay merge {record:?}");
-                        let session_id = record.session_id;
-
-                        let replay_channel = format!("aeron:udp?control-mode=manual|session-id={session_id}");
-                        info!("replay channel {replay_channel}");
+                        let replay_channel = format!("aeron:udp?control-mode=manual|session-id={}", record.session_id);
                         let subscription = aeron.add_subscription(
-                            &replay_channel.clone().into_c_string(),
-                            TICKER_STREAM_ID,
+                            &replay_channel.as_str().into_c_string(),
+                            stream_id,
                             Handlers::NONE,
                             Handlers::NONE,
                             Duration::from_secs(5),
                         )?;
-
-                        let replay_destination = "aeron:udp?endpoint=localhost:0".to_string();
-                        info!("replay destination {replay_destination}");
-
-                        let live_destination = format!("aeron:udp?endpoint={TICKER_CHANNEL}");
-                        info!("live destination {live_destination}");
-
                         let merge = AeronArchiveReplayMerge::new(
                             &subscription,
                             &archive,
-                            &replay_channel.clone().into_c_string(),
-                            &replay_destination.clone().into_c_string(),
-                            &live_destination.clone().into_c_string(),
+                            &replay_channel.as_str().into_c_string(),
+                            c"aeron:udp?endpoint=localhost:0",
+                            // the writer's channel is already a full URI
+                            &TICKER_CHANNEL.into_c_string(),
                             record.recording_id,
                             record.start_position,
                             Aeron::epoch_clock(),
                             10_000,
                         )?;
 
+                        // poll only the merge until it finishes: the archive client must not be used meanwhile
+                        let (mut count, mut bytes) = (0usize, 0usize);
                         while !merge.is_merged() {
-                            merge.poll_fn(
-                                |buff, _header| {
-                                    println!("buffer {buff:?}");
+                            let polled = merge.poll_fn(
+                                |buffer, _header| {
+                                    count += 1;
+                                    bytes += buffer.len();
                                 },
                                 1024,
-                            )?;
+                            );
+                            // a failed merge (including its progress timeout) returns Err
+                            if let Err(e) = polled {
+                                error!("replay merge failed: {e}");
+                                break;
+                            }
                         }
+                        info!(
+                            "replay merge finished [merged={}, count={count}, bytes={bytes}]",
+                            merge.is_merged()
+                        );
                     }
 
-                    if let Some(record) = &record_reader.last_recording_with_stop_position {
-                        let params = AeronArchiveReplayParams::new(
-                            0,
-                            i32::MAX,
-                            record.start_position,
-                            record.stop_position - record.start_position,
-                            0,
-                            0,
+                    if let Some(record) = last_stopped {
+                        let params = AeronArchiveReplayParams::builder()
+                            .position(record.start_position)
+                            .length(record.stop_position - record.start_position)
+                            .build()?;
+                        // keep the subscription bound for the whole replay: the archive replays to its port
+                        let replay_subscription = aeron.add_subscription(
+                            c"aeron:udp?endpoint=localhost:0",
+                            stream_id,
+                            Handlers::NONE,
+                            Handlers::NONE,
+                            Duration::from_secs(5),
                         )?;
-
-                        // change from ephemeral port to real port
-                        let replay_channel = aeron
-                            .add_subscription(
-                                &"aeron:udp?endpoint=localhost:0".into_c_string(),
-                                stream_id,
-                                Handlers::NONE,
-                                Handlers::NONE,
-                                Duration::from_secs(5),
-                            )?
-                            .try_resolve_channel_endpoint_port_as_string(4096)?;
-                        let recording_id = record.recording_id();
-                        assert_eq!(record.recording_id(), recording_id);
-                        info!(
-                            "resolved replay channel: {replay_channel} [recording_id={recording_id}, replayingRecord={record:?}"
-                        );
-                        assert_eq!(record.recording_id(), recording_id);
-
-                        let replay_session_id = archive.start_replay(
-                            recording_id,
-                            &replay_channel.clone().into_c_string(),
+                        let replay_channel = replay_subscription.try_resolve_channel_endpoint_port_as_string(4096)?;
+                        info!("replaying {record:?} to {replay_channel}");
+                        archive.start_replay(
+                            record.recording_id,
+                            &replay_channel.into_c_string(),
                             stream_id,
                             &params,
                         )?;
-                        let session_id = replay_session_id as i32;
 
-                        let channel_replay = format!("{channel}|session-id={session_id}");
-                        info!("replay subscription {channel_replay}");
-                        let available_image_handler = Handler::new(AeronAvailableImageLogger);
-                        let unavailable_image_handler = Handler::new(AeronUnavailableImageLogger);
-                        match aeron.add_subscription(
-                            &channel_replay.to_string().into_c_string(),
-                            stream_id,
-                            Some(&available_image_handler),
-                            Some(&unavailable_image_handler),
-                            Duration::from_secs(5),
-                        ) {
-                            Ok(subscription) => {
-                                unsafe {
-                                    replay_msg_count_handler.get_mut().reset();
-                                }
-                                let time = Instant::now();
-
-                                let mut count = 0;
-                                while subscription.poll(Some(&replay_msg_count_handler), 1000).is_ok()
-                                    && !subscription.is_closed()
-                                    && time.elapsed() < Duration::from_secs(60)
-                                    && (count > 0 || time.elapsed() < Duration::from_secs(5))
-                                {
+                        let (mut count, mut bytes) = (0usize, 0usize);
+                        let started = Instant::now();
+                        let mut idle_since = started;
+                        while idle_since.elapsed() < Duration::from_secs(5)
+                            && started.elapsed() < Duration::from_secs(60)
+                        {
+                            let read = replay_subscription.poll_fn(
+                                |buffer, _header| {
                                     count += 1;
-                                    // prevent live sub from building up
-                                    if let Some(live_subscription) = &live_subscription {
-                                        let _ = live_subscription.poll(Some(&live_msg_count_handler), 1000);
-                                    }
-                                }
-
-                                info!(
-                                    "replay finished of last inactive recording [took={:?} {:?}]",
-                                    time.elapsed(),
-                                    *replay_msg_count_handler
-                                );
+                                    bytes += buffer.len();
+                                },
+                                1000,
+                            )?;
+                            if read > 0 {
+                                idle_since = Instant::now();
                             }
-                            Err(err) => {
-                                error!("failed to subscribe to replay channel in time {err:?}");
+                            // prevent live sub from building up
+                            if let Some(live_subscription) = &live_subscription {
+                                live_subscription.poll_fn(
+                                    |buffer, _header| {
+                                        live_count += 1;
+                                        live_bytes += buffer.len();
+                                    },
+                                    1000,
+                                )?;
                             }
                         }
+                        info!(
+                            "replay finished of last inactive recording [took={:?}, count={count}, bytes={bytes}]",
+                            started.elapsed()
+                        );
                     }
                 }
                 Err(e) => {
@@ -183,7 +145,7 @@ fn main() -> Result<()> {
         if live_subscription.is_none() {
             live_subscription = aeron
                 .add_subscription(
-                    &channel.to_string().into_c_string(),
+                    &TICKER_CHANNEL.into_c_string(),
                     stream_id,
                     Handlers::NONE,
                     Handlers::NONE,
@@ -193,71 +155,23 @@ fn main() -> Result<()> {
         }
 
         if let Some(live_subscription) = &live_subscription {
-            let _ = live_subscription.poll(Some(&live_msg_count_handler), 1000);
+            live_subscription.poll_fn(
+                |buffer, _header| {
+                    live_count += 1;
+                    live_bytes += buffer.len();
+                },
+                1000,
+            )?;
         }
 
         if live_log_time.elapsed() > live_log {
             live_log_time = Instant::now();
-            info!("live channel sent {:?} since previous log", *live_msg_count_handler);
-            unsafe {
-                live_msg_count_handler.get_mut().reset();
-            }
+            info!("live channel sent {live_count} messages, {live_bytes} bytes since previous log");
+            (live_count, live_bytes) = (0, 0);
         }
     }
 
     info!("shutting down");
 
     Ok(())
-}
-
-#[derive(Debug, Default)]
-struct RecorderDescriptorReader {
-    last_recording_with_stop_position: Option<AeronArchiveRecordingDescriptor>,
-    last_recording: Option<AeronArchiveRecordingDescriptor>,
-}
-
-impl RecorderDescriptorReader {
-    fn reset(&mut self) {
-        self.last_recording_with_stop_position = None;
-        self.last_recording = None;
-    }
-}
-
-impl AeronArchiveRecordingDescriptorConsumerFuncCallback for RecorderDescriptorReader {
-    fn handle_aeron_archive_recording_descriptor_consumer_func(
-        &mut self,
-        recording_descriptor: AeronArchiveRecordingDescriptor,
-    ) {
-        info!("found recording {recording_descriptor:?}");
-        let copy = recording_descriptor.clone_struct();
-        if recording_descriptor.stop_position > 0 {
-            self.last_recording_with_stop_position = Some(copy.clone_struct());
-        }
-        assert_eq!(copy.recording_id, recording_descriptor.recording_id);
-        assert_eq!(copy.control_session_id, recording_descriptor.control_session_id);
-        assert_eq!(copy.mtu_length, recording_descriptor.mtu_length);
-        assert_eq!(copy.source_identity_length, recording_descriptor.source_identity_length);
-        assert_eq!(copy.deref(), recording_descriptor.deref());
-        self.last_recording = Some(copy);
-    }
-}
-
-#[derive(Debug, Default)]
-struct MessageCountHandler {
-    count: usize,
-    bytes: usize,
-}
-
-impl MessageCountHandler {
-    fn reset(&mut self) {
-        self.count = 0;
-        self.bytes = 0;
-    }
-}
-
-impl AeronFragmentHandlerCallback for MessageCountHandler {
-    fn handle_aeron_fragment_handler(&mut self, buffer: &[u8], _header: AeronHeader) {
-        self.count += 1;
-        self.bytes += buffer.len();
-    }
 }

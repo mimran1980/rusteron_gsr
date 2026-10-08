@@ -5,8 +5,7 @@ use futures_util::{SinkExt, StreamExt};
 use log::{error, info};
 use rusteron_archive::*;
 use signal_hook::consts::{SIGINT, SIGQUIT, SIGTERM};
-use std::io;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
@@ -34,13 +33,22 @@ pub fn start_media_driver() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
+/// Streams `subscription` from `url` into `handler`, reconnecting on errors, until `stop` is set.
 pub async fn download_ws(
     url: &str,
     subscription: Subscribe,
     mut handler: impl JsonMesssageHandler,
+    stop: &AtomicBool,
 ) -> websocket_lite::Result<()> {
-    loop {
-        let mut client = ClientBuilder::new(url)?.async_connect().await?;
+    while !stop.load(Ordering::Acquire) {
+        let mut client = match ClientBuilder::new(url)?.async_connect().await {
+            Ok(client) => client,
+            Err(e) => {
+                error!("connect {url}: {e}");
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                continue;
+            }
+        };
         let request = Message::text(serde_json::to_string(&subscription)?);
         info!("{url} sending request: {subscription:#?}");
         if let Err(e) = client.send(request).await {
@@ -48,6 +56,9 @@ pub async fn download_ws(
             continue;
         }
         while let Some(msg) = client.next().await {
+            if stop.load(Ordering::Acquire) {
+                return Ok(());
+            }
             let msg = match msg {
                 Ok(msg) => msg,
                 Err(e) => {
@@ -56,7 +67,10 @@ pub async fn download_ws(
                 }
             };
             match msg.opcode() {
-                Opcode::Text => handler.on_msg(msg.as_text().expect("should be text message")),
+                Opcode::Text => match msg.as_text() {
+                    Some(text) => handler.on_msg(text),
+                    None => error!("text frame is not valid UTF-8"),
+                },
                 Opcode::Binary => {
                     error!("unsupported binary format");
                 }
@@ -69,118 +83,39 @@ pub async fn download_ws(
             }
         }
     }
+    Ok(())
 }
 
 pub fn init_logger() {
     env_logger::Builder::new().filter_level(log::LevelFilter::Info).init()
 }
 
-pub fn archive_connect() -> Result<(AeronArchive, Aeron), io::Error> {
-    let request_control_channel = &std::env::var("AERON_ARCHIVE_CONTROL_CHANNEL")
-        .expect("missing environment variable AERON_ARCHIVE_CONTROL_CHANNEL");
-    let response_control_channel = &std::env::var("AERON_ARCHIVE_CONTROL_RESPONSE_CHANNEL")
-        .expect("missing environment variable AERON_ARCHIVE_CONTROL_RESPONSE_CHANNEL");
-    let recording_events_channel = &std::env::var("AERON_ARCHIVE_REPLICATION_CHANNEL")
-        .expect("missing environment variable AERON_ARCHIVE_REPLICATION_CHANNEL");
-
-    let start = Instant::now();
-
-    while start.elapsed() < Duration::from_secs(30) {
-        match AeronContext::new() {
-            Ok(aeron_context) => {
-                let error_handler = Handler::new(AeronErrorHandlerLogger);
-                aeron_context.set_error_handler(Some(error_handler)).unwrap();
-
-                match Aeron::new(&aeron_context) {
-                    Ok(aeron) => {
-                        match aeron.start() {
-                            Ok(_) => {
-                                info!(
-                            "Successfully connected to aeron client, now trying to connect to archive... [aeronVersion={}, errors={:?}, closed={}]",
-                            Aeron::version_full(),
-                            Aeron::errmsg(),
-                            aeron.is_closed()
-                        );
-
-                                match AeronArchiveContext::new() {
-                                    Ok(archive_context) => {
-                                        if let Err(e) = archive_context.set_aeron(&aeron) {
-                                            error!("Failed to set Aeron on archive context: {e:?}");
-                                            continue;
-                                        }
-                                        if let Err(e) = archive_context.set_control_request_channel(
-                                            &request_control_channel.as_str().into_c_string(),
-                                        ) {
-                                            error!("Failed to set archive control request channel: {e:?}");
-                                            continue;
-                                        }
-                                        if let Err(e) = archive_context.set_control_response_channel(
-                                            &response_control_channel.as_str().into_c_string(),
-                                        ) {
-                                            error!("Failed to set archive control response channel: {e:?}");
-                                            continue;
-                                        }
-                                        if let Err(e) = archive_context.set_recording_events_channel(
-                                            &recording_events_channel.as_str().into_c_string(),
-                                        ) {
-                                            error!("Failed to set archive recording events channel: {e:?}");
-                                            continue;
-                                        }
-                                        match AeronArchiveAsyncConnect::new_with_aeron(&archive_context, &aeron) {
-                                            Ok(connect) => match connect.poll_blocking(Duration::from_secs(10)) {
-                                                Ok(archive) => {
-                                                    let i = archive.get_archive_id();
-                                                    assert!(i > 0);
-                                                    info!("aeron archive media driver is up [connected with archive id {i}]");
-                                                    return Ok((archive, aeron));
-                                                }
-                                                Err(e) => {
-                                                    error!("Failed to poll and connect to Aeron archive: {e:?}");
-                                                }
-                                            },
-                                            Err(e) => {
-                                                error!("Failed to create AeronArchiveAsyncConnect with the given context - {e:?}");
-                                            }
-                                        }
-                                    }
-                                    Err(c) => error!("failed to create aeron context: {c:?}"),
-                                }
-                            }
-                            Err(e) => {
-                                error!("error creating archive context: {e:?}");
-                                error!("aeron error: {}", Aeron::errmsg());
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        error!(
-                            "error creating aeron client [aeron_dir={:?}, error={:?}]",
-                            aeron_context.get_dir(),
-                            e
-                        );
-
-                        if let Ok(entries) = std::fs::read_dir("/dev/shm") {
-                            info!("/dev/shm has {} files", entries.count());
-                        } else {
-                            error!("Unable to read directory /dev/shm");
-                        }
-                    }
-                }
+/// Connects a client (with an error handler) and an archive, retrying for up to 30 s while
+/// the media driver and archive start.
+pub fn archive_connect() -> websocket_lite::Result<(AeronArchive, Aeron)> {
+    let request = std::env::var("AERON_ARCHIVE_CONTROL_CHANNEL")?;
+    let response = std::env::var("AERON_ARCHIVE_CONTROL_RESPONSE_CHANNEL")?;
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let attempt = AeronContext::new().and_then(|context| {
+            context.set_error_handler(Some(AeronErrorHandlerLogger))?;
+            let aeron = Aeron::new(&context)?;
+            aeron.start()?;
+            let archive = AeronArchive::connect(&aeron, &request, &response, None, Duration::from_secs(10))?;
+            Ok((archive, aeron))
+        });
+        match attempt {
+            Ok((archive, aeron)) => {
+                info!("connected to the archive [archiveId={}]", archive.get_archive_id());
+                return Ok((archive, aeron));
             }
-            Err(e) => {
-                error!("error creating aeron context: {e:?}");
+            Err(e) if Instant::now() < deadline => {
+                error!("connecting to the archive: {e}; retrying");
+                sleep(Duration::from_secs(5));
             }
+            Err(e) => return Err(e.into()),
         }
-        info!("waiting for aeron to start up, retrying...");
-        sleep(Duration::from_secs(5));
     }
-
-    assert!(
-        start.elapsed() < Duration::from_secs(60),
-        "failed to start up aeron media driver"
-    );
-
-    Err(std::io::Error::other("unable to start up aeron media driver client"))
 }
 
 pub fn register_exit_signals() -> websocket_lite::Result<Arc<AtomicBool>> {

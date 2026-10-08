@@ -42,7 +42,7 @@ Podman is preferred for its simplicity and lack of daemon dependency.
    ```bash
    just podman-build
    # Builds all container images using Podman.
-````
+   ```
 
 2. **Deploy Locally with Podman**
 
