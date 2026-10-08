@@ -713,11 +713,28 @@ impl CWrapper {
 
 
 
-                let register_handlers = if uses_self && !retained_handler_registrations.is_empty() {
+                let mut register_handlers = if uses_self && !retained_handler_registrations.is_empty() {
                     quote! { #(#retained_handler_registrations)* }
                 } else {
                     quote! {}
                 };
+                // C copies the pair's handler and clientd and may fire them until the client
+                // closes (close handlers fire inside that close), so the client keeps the pair
+                // and, through it, its Handler. Remove cannot release it: dependencies only grow.
+                if matches!(
+                    method.fn_name.as_str(),
+                    "aeron_add_available_counter_handler"
+                        | "aeron_add_unavailable_counter_handler"
+                        | "aeron_add_close_handler"
+                ) {
+                    register_handlers.extend(quote! {
+                        if result >= 0 {
+                            if let Some(__inner) = self.inner.as_owned() {
+                                __inner.add_dependency(pair.clone());
+                            }
+                        }
+                    });
+                }
 
                 let mut additional_methods = vec![];
                 let set_closed = quote! {};

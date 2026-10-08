@@ -393,6 +393,70 @@ mod tests {
         Ok(())
     }
 
+    /// Client-level handlers registered from temporaries stay alive until the client
+    /// closes, and the close handler fires during that close.
+    #[test]
+    #[serial]
+    fn client_keeps_counter_and_close_handlers_alive() -> Result<(), Box<dyn Error>> {
+        struct Watched {
+            closed: Arc<AtomicUsize>,
+            dropped: Arc<AtomicUsize>,
+        }
+        impl Drop for Watched {
+            fn drop(&mut self) {
+                self.dropped.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+        impl AeronCloseClientCallback for Watched {
+            fn handle_aeron_on_close_client(&mut self) {
+                self.closed.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+        impl AeronAvailableCounterCallback for Watched {
+            fn handle_aeron_on_available_counter(&mut self, _: AeronCountersReader, _: i64, _: i32) {}
+        }
+        impl AeronUnavailableCounterCallback for Watched {
+            fn handle_aeron_on_unavailable_counter(&mut self, _: AeronCountersReader, _: i64, _: i32) {}
+        }
+
+        let media_driver_ctx = AeronDriverContext::new()?;
+        media_driver_ctx.set_dir_delete_on_shutdown(true)?;
+        media_driver_ctx.set_dir_delete_on_start(true)?;
+        media_driver_ctx.set_dir(&format!("{}{}", media_driver_ctx.get_dir(), Aeron::epoch_clock()).into_c_string())?;
+        let (stop, driver_handle) =
+            rusteron_media_driver::AeronDriver::launch_embedded(media_driver_ctx.clone(), false);
+
+        let ctx = AeronContext::new()?;
+        ctx.set_dir(&media_driver_ctx.get_dir().into_c_string())?;
+        let aeron = Aeron::new(&ctx)?;
+        aeron.start()?;
+
+        let closed = Arc::new(AtomicUsize::new(0));
+        let dropped = Arc::new(AtomicUsize::new(0));
+        let watched = || {
+            Handler::new(Watched {
+                closed: closed.clone(),
+                dropped: dropped.clone(),
+            })
+        };
+        aeron.add_close_handler(&AeronCloseClientPair::new(Some(&watched()))?)?;
+        aeron.add_available_counter_handler(&AeronAvailableCounterPair::new(Some(&watched()))?)?;
+        aeron.add_unavailable_counter_handler(&AeronUnavailableCounterPair::new(Some(&watched()))?)?;
+        assert_eq!(
+            dropped.load(Ordering::SeqCst),
+            0,
+            "handlers freed while the client still points at them"
+        );
+
+        drop(aeron);
+        assert_eq!(closed.load(Ordering::SeqCst), 1);
+        assert_eq!(dropped.load(Ordering::SeqCst), 3);
+
+        stop.store(true, Ordering::SeqCst);
+        let _ = driver_handle.join().unwrap();
+        Ok(())
+    }
+
     #[derive(Default, Debug)]
     struct ErrorCount {
         error_count: usize,

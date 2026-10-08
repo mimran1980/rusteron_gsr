@@ -61539,6 +61539,11 @@ impl Aeron {
                 .join(", ")
             );
             let result = aeron_add_available_counter_handler(self.get_inner(), pair.get_inner());
+            if result >= 0 {
+                if let Some(__inner) = self.inner.as_owned() {
+                    __inner.add_dependency(pair.clone());
+                }
+            }
             #[cfg(feature = "log-c-bindings")]
             log::info!("  -> {:?}", result);
             if result < 0 {
@@ -61597,6 +61602,11 @@ impl Aeron {
                 .join(", ")
             );
             let result = aeron_add_unavailable_counter_handler(self.get_inner(), pair.get_inner());
+            if result >= 0 {
+                if let Some(__inner) = self.inner.as_owned() {
+                    __inner.add_dependency(pair.clone());
+                }
+            }
             #[cfg(feature = "log-c-bindings")]
             log::info!("  -> {:?}", result);
             if result < 0 {
@@ -61655,6 +61665,11 @@ impl Aeron {
                 .join(", ")
             );
             let result = aeron_add_close_handler(self.get_inner(), pair.get_inner());
+            if result >= 0 {
+                if let Some(__inner) = self.inner.as_owned() {
+                    __inner.add_dependency(pair.clone());
+                }
+            }
             #[cfg(feature = "log-c-bindings")]
             log::info!("  -> {:?}", result);
             if result < 0 {
