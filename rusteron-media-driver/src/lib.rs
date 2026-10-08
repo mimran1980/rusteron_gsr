@@ -116,6 +116,42 @@ impl AeronDriverContext {
     pub fn set_shared_idle_strategy_kind(&self, kind: AeronIdleStrategyKind) -> Result<i32, AeronCError> {
         self.set_shared_idle_strategy(kind.name_c())
     }
+
+    /// Reads this process's cgroup cpuset and spreads the driver's agents over it when
+    /// cpuset affinity is on (`AERON_DRIVER_CPUSET_AFFINITY` or [`Self::set_cpuset_affinity`]),
+    /// as `aeronmd` does; nothing otherwise. Call before the driver starts.
+    ///
+    /// # Errors
+    ///
+    /// Cpuset affinity is on but this is not Linux, or the cpuset could not be read or does
+    /// not suit the agents' configured affinities.
+    pub fn apply_cgroup_cpuset_affinity(&self) -> Result<(), AeronCError> {
+        // SAFETY: the context is live, and the driver has not started reading it.
+        let result = unsafe { aeron_driver_apply_cpuset_affinity(self.get_inner()) };
+        if result < 0 {
+            return Err(AeronCError::from_code(result).capture_errmsg());
+        }
+        Ok(())
+    }
+
+    /// Pins each driver agent thread, as it starts, to the CPU set for its role
+    /// (`AERON_CONDUCTOR_CPU_AFFINITY` and the like, or [`Self::set_conductor_cpu_affinity`]
+    /// and its siblings), as `aeronmd` does. An on-start function already set still runs
+    /// after it, so set any other one first. Call before the driver starts.
+    pub fn set_thread_affinity_on_start(&self) {
+        let context = self.get_inner();
+        // SAFETY: the context is live and its agents have not started, so nothing else reads
+        // these fields; Aeron's affinity function takes the driver context as its state.
+        unsafe {
+            (*context).agent_on_start_func_delegate = (*context).agent_on_start_func;
+            (*context).agent_on_start_state_delegate = (*context).agent_on_start_state;
+            aeron_driver_context_set_agent_on_start_function(
+                context,
+                Some(aeron_set_thread_affinity_on_start),
+                context.cast(),
+            );
+        }
+    }
 }
 
 impl AeronDriver {
@@ -391,6 +427,57 @@ mod tests {
 
         println!("{:#?}", ctx);
 
+        Ok(())
+    }
+
+    /// Cpuset affinity is off by default, so applying it changes nothing.
+    #[test]
+    fn cgroup_cpuset_affinity_is_a_no_op_when_off() -> Result<(), AeronCError> {
+        AeronDriverContext::new()?.apply_cgroup_cpuset_affinity()
+    }
+
+    /// Off Linux, Aeron refuses cpuset affinity rather than ignoring it.
+    #[test]
+    #[cfg(not(target_os = "linux"))]
+    fn cgroup_cpuset_affinity_is_refused_off_linux() -> Result<(), AeronCError> {
+        let context = AeronDriverContext::new()?;
+        context.set_cpuset_affinity(true)?;
+        assert!(context.apply_cgroup_cpuset_affinity().is_err());
+        Ok(())
+    }
+
+    /// Aeron's affinity function runs as each agent starts, and still calls the on-start
+    /// function set before it.
+    #[test]
+    fn thread_affinity_on_start_keeps_the_previous_on_start_function() -> Result<(), Box<dyn std::error::Error>> {
+        struct Roles(Arc<std::sync::Mutex<Vec<String>>>);
+        impl AeronAgentStartFuncCallback for Roles {
+            fn handle_aeron_agent_on_start_func(&mut self, role: &str) {
+                self.0.lock().unwrap().push(role.to_owned());
+            }
+        }
+
+        let context = AeronDriverContext::new()?;
+        context.set_dir(&format!("{}{}", context.get_dir(), Aeron::nano_clock()).into_c_string())?;
+        context.set_dir_delete_on_start(true)?;
+        context.set_dir_delete_on_shutdown(true)?;
+        context.set_threading_mode(aeron_threading_mode_enum::AERON_THREADING_MODE_DEDICATED)?;
+        context.set_conductor_cpu_affinity(0)?;
+        let roles = Arc::new(std::sync::Mutex::new(Vec::new()));
+        context.set_agent_on_start_function(Some(Roles(Arc::clone(&roles))))?;
+        context.set_thread_affinity_on_start();
+        let installed = context.get_agent_on_start_function().map(|f| f as *const ());
+        assert_eq!(installed, Some(aeron_set_thread_affinity_on_start as *const ()));
+
+        let driver = AeronDriver::launch_embedded_guard(context.clone(), false);
+        let start = std::time::Instant::now();
+        while roles.lock().unwrap().len() < 4 && start.elapsed() < Duration::from_secs(5) {
+            sleep(Duration::from_millis(10));
+        }
+        driver.join()?;
+        let mut seen = roles.lock().unwrap().clone();
+        seen.sort();
+        assert_eq!(seen, ["aeron-md-nra", "conductor", "receiver", "sender"]);
         Ok(())
     }
 }
