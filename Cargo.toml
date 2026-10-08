@@ -2,6 +2,7 @@
 members = [
     "rusteron-code-gen",
     "rusteron-media-driver",
+    "rusteron-media-driver/links-test",
     "rusteron-client",
     "rusteron-archive",
 ]

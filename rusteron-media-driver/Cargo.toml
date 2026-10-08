@@ -11,6 +11,7 @@ documentation = "https://gsrxyz.github.io/rusteron/rusteron_media_driver/index.h
 description = "Implements the Aeron Media Driver, a core component for managing messaging between producers and consumers. It uses the Aeron C bindings from aeron-driver module."
 keywords = ["aeron", "low-latency", "media-driver", "aeron-c-bindings", "networking"]
 categories = ["network-programming"]
+links = "aeron_driver"
 
 exclude = [
     "aeron/.gradle/**",

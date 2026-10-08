@@ -114,6 +114,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ---
 
+## Building C against Aeron's headers
+
+The crate declares `links = "aeron_driver"`, so a dependent's build script can compile C
+(a custom UDP transport, say) against the vendored Aeron sources:
+
+| Variable | Directory |
+|---|---|
+| `DEP_AERON_DRIVER_INCLUDE` | the media driver's headers |
+| `DEP_AERON_DRIVER_CLIENT_INCLUDE` | the client headers they include |
+| `DEP_AERON_DRIVER_AERON_ROOT` | the Aeron source tree |
+
 ## Contributing & License
 
 See the root [README](https://github.com/gsrxyz/rusteron#readme) and [CONTRIBUTING.md](https://github.com/gsrxyz/rusteron/blob/main/CONTRIBUTING.md). Build requirements are in [BUILD.md](https://github.com/gsrxyz/rusteron/blob/main/BUILD.md).

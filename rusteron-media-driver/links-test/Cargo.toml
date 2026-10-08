@@ -1,0 +1,15 @@
+[package]
+name = "rusteron-media-driver-links-test"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Checks that rusteron-media-driver exports its Aeron header paths to dependents' build scripts"
+
+[package.metadata.release]
+release = false
+
+[dependencies]
+rusteron-media-driver = { path = ".." }
+
+[build-dependencies]
+cc = "1"

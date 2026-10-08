@@ -115,6 +115,13 @@ fn emit_link_libs(link_type: &LinkType, config: &RusteronBuildConfig) {
 }
 
 pub fn rusteron_build_main(config: &RusteronBuildConfig) {
+    // A crate with a `links` key hands these to its dependents' build scripts as
+    // DEP_<LINKS>_INCLUDE, DEP_<LINKS>_CLIENT_INCLUDE and DEP_<LINKS>_AERON_ROOT.
+    let aeron_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("aeron");
+    println!("cargo:include={}", aeron_root.join(config.header_subdir).display());
+    println!("cargo:client_include={}", aeron_root.join("aeron-client/src/main/c").display());
+    println!("cargo:aeron_root={}", aeron_root.display());
+
     // Skip build script when building on docs.rs
     let docs_rs = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("docs-rs");
     if std::env::var("DOCS_RS").is_ok() {
@@ -369,7 +376,6 @@ fn build_from_source(config: &RusteronBuildConfig, docs_rs: &Path) {
         println!("cargo:rustc-link-search=native={}", base_lib_dir.join(sub).display());
     }
 
-    println!("cargo:include={}", header_path.display());
     let mut builder = bindgen::Builder::default()
         .clang_arg(format!("-I{}", header_path.display()))
         // Match the CMAKE_C_STANDARD 11 used to actually compile the Aeron C sources.
