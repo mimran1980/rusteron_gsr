@@ -11,7 +11,9 @@
 //! cargo run --release --features "static precompile" --example recording_throughput
 //! ```
 
-use rusteron_archive::testing::{EmbeddedArchiveMediaDriverProcess, find_unused_udp_port};
+use rusteron_archive::testing::{
+    EmbeddedArchiveMediaDriverProcess, find_counter_id_by_session_blocking, find_unused_udp_port,
+};
 use rusteron_archive::*;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
@@ -87,7 +89,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ── how long until the archiver has everything on disk? ──────────────
     let session_id = publication.get_constants()?.session_id;
     let counters = aeron.counters_reader();
-    let counter_id = RecordingPos::find_counter_id_by_session(&counters, session_id);
+    let counter_id = find_counter_id_by_session_blocking(&counters, session_id, Duration::from_secs(5))?;
     let recording_id = RecordingPos::get_recording_id_block(&counters, counter_id, Duration::from_secs(5))?;
     let target = publication.position();
     let catchup_start = Instant::now();

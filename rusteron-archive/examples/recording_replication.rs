@@ -13,7 +13,9 @@
 //! cargo run --release --features "static precompile" --example recording_replication
 //! ```
 
-use rusteron_archive::testing::{EmbeddedArchiveMediaDriverProcess, find_unused_udp_port};
+use rusteron_archive::testing::{
+    EmbeddedArchiveMediaDriverProcess, find_counter_id_by_session_blocking, find_unused_udp_port,
+};
 use rusteron_archive::*;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
@@ -96,7 +98,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let session_id = publication.get_constants()?.session_id;
     let counters = src.aeron.counters_reader();
-    let counter_id = RecordingPos::find_counter_id_by_session(&counters, session_id);
+    let counter_id = find_counter_id_by_session_blocking(&counters, session_id, Duration::from_secs(5))?;
     let src_recording_id = RecordingPos::get_recording_id_block(&counters, counter_id, Duration::from_secs(5))?;
     let stop_position = publication.position();
     let deadline = Instant::now() + Duration::from_secs(10);
@@ -113,7 +115,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let params = AeronArchiveReplicationParams::builder().build()?;
     let replication_id = dst.archive.replicate(
         src_recording_id,
-        &cformat!("{}", src.control_request_channel.clone()),
+        &cformat!("{}", src.control_request_channel),
         dst.archive.get_archive_context().get_control_request_stream_id(), // archives share the default control stream id
         &params,
     )?;
@@ -123,10 +125,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let deadline = Instant::now() + Duration::from_secs(30);
     let mut replicated: Option<AeronArchiveRecordingDescriptor> = None;
     while Instant::now() < deadline {
-        dst.archive.poll_for_recording_signals()?;
-        if let Some(err) = dst.archive.poll_for_error()? {
-            return Err(format!("destination archive error: {err}").into());
-        }
+        // One duty-cycle step: dispatches a recording signal, or returns the archive error
+        // (this context has no archive error handler).
+        dst.archive
+            .do_work()
+            .map_err(|e| format!("destination archive error: {e}"))?;
         let mut count = 0i32;
         let mut found = None;
         dst.archive.list_recordings_fn(&mut count, 0, 100, |descriptor| {

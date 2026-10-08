@@ -14,7 +14,9 @@
 //! cargo run --release --features "static precompile" --example replay_merge
 //! ```
 
-use rusteron_archive::testing::{EmbeddedArchiveMediaDriverProcess, find_unused_udp_port};
+use rusteron_archive::testing::{
+    EmbeddedArchiveMediaDriverProcess, find_counter_id_by_session_blocking, find_unused_udp_port,
+};
 use rusteron_archive::*;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -74,12 +76,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         true,
     )?;
 
-    // Publish history, throttled so the archiver keeps up (`is_archive_position_with`).
+    // Resolve the recording counter once: `is_archive_position_with` rescans every counter per call.
+    let counters = aeron.counters_reader();
+    let counter_id = find_counter_id_by_session_blocking(&counters, session_id, Duration::from_secs(10))?;
+
+    // Publish the history as fast as flow control allows, then pace the live phase so the
+    // archiver stays caught up.
     let published = Arc::new(AtomicU64::new(0));
     let running = Arc::new(AtomicBool::new(true));
     let publisher = {
         let published = published.clone();
         let running = running.clone();
+        let counters = aeron.counters_reader();
         std::thread::spawn(move || {
             let mut n = 0u64;
             while running.load(Ordering::Acquire) {
@@ -98,7 +106,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 published.store(n, Ordering::Release);
                 if n > HISTORY_MESSAGES {
                     // live phase: pace it and let the archiver stay caught up
-                    while !publication.is_archive_position_with(0) {
+                    while counters.get_counter_value(counter_id) < publication.position() {
                         sleep(Duration::from_micros(300));
                     }
                 }
@@ -111,11 +119,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("{HISTORY_MESSAGES} historical messages recorded; late joiner starting");
 
     // ── The late joiner: replay history, then merge onto the live stream ──
-    let counters = aeron.counters_reader();
-    let mut counter_id = -1;
-    while counter_id < 0 {
-        counter_id = RecordingPos::find_counter_id_by_session(&counters, session_id);
-    }
     let recording_id = RecordingPos::get_recording_id_block(&counters, counter_id, Duration::from_secs(5))?;
 
     let subscription = aeron.add_subscription(
@@ -140,7 +143,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut received = 0u64;
     let deadline = Instant::now() + Duration::from_secs(60);
     while !replay_merge.is_merged() {
-        assert!(!replay_merge.has_failed(), "replay merge failed");
+        if replay_merge.has_failed() {
+            return Err("replay merge failed".into());
+        }
         if Instant::now() > deadline {
             return Err("timed out waiting for replay merge".into());
         }
