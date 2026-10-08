@@ -7,7 +7,10 @@
 //! 2. the live publication dies → the subscription **falls back to replay**
 //!    (`on_live_left`, `is_replaying()`), losing nothing — the archive keeps recording
 //!    history it already has;
-//! 3. the live stream comes back → it **rejoins live** (`on_live_joined` again).
+//! 3. the live stream comes back, resumed where it stopped → it **rejoins live**
+//!    (`on_live_joined` again). Aeron refuses a live stream that restarts behind what the
+//!    subscription has seen; for a publisher that restarts from scratch, see
+//!    `FollowingPersistentSubscription`.
 //!
 //! Requires `java` on PATH (an embedded Java Archive is started for you).
 //!
@@ -104,9 +107,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let left = Arc::new(AtomicUsize::new(0));
     let errors: Arc<Mutex<Vec<(i32, String)>>> = Arc::new(Mutex::new(Vec::new()));
 
-    let ps = persistent_subscription_builder()?
-        .aeron(&aeron)?
-        .archive_context(&archive_context)?
+    // one client for the subscription and its archive context
+    let ps = PersistentSubscriptionBuilder::new_with_aeron(&archive_context, &aeron)?
         .live_channel(live_channel)?
         .live_stream_id(stream_id)?
         .replay_channel("aeron:udp?endpoint=localhost:0")?
@@ -136,6 +138,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ── Phase 2: the live stream dies ────────────────────────────────────
     println!("phase 2: dropping the live publication (upstream service dies)...");
+    // where the stream stopped, so the restarted publisher can resume it there
+    let constants = publication.get_constants()?;
+    let stopped_at = publication.position();
     drop(publication);
     let deadline = Instant::now() + Duration::from_secs(30);
     while ps.is_live() && Instant::now() < deadline {
@@ -150,9 +155,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("now replaying from the archive (is_replaying = {})", ps.is_replaying());
 
     // ── Phase 3: the live stream comes back — rejoin ─────────────────────
-    println!("phase 3: restoring the live publication...");
+    // Aeron refuses a live stream behind what the subscription has already seen, so a
+    // restarted publisher resumes the same session where it stopped.
+    println!("phase 3: resuming the live publication where it stopped...");
+    let resumed = live_channel.parse::<AeronUriStringBuilder>()?;
+    resumed.session_id(&constants.session_id().to_string())?;
+    resumed.set_initial_position(
+        stopped_at,
+        constants.initial_term_id(),
+        constants.term_buffer_length() as i32,
+    )?;
+    let resumed = resumed.build(bindings::AERON_URI_MAX_LENGTH as usize)?;
     publication = aeron
-        .async_add_exclusive_publication(&cformat!("{live_channel}"), stream_id)?
+        .async_add_exclusive_publication(&cformat!("{resumed}"), stream_id)?
         .poll_blocking(Duration::from_secs(5))?;
     let deadline = Instant::now() + Duration::from_secs(30);
     while joined.load(Ordering::SeqCst) < 2 && Instant::now() < deadline {
