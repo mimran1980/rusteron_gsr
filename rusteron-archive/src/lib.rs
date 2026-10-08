@@ -686,7 +686,8 @@ impl AeronArchivePersistentSubscription {
     ///
     /// The context is consumed and owned by the subscription from this point on —
     /// it will be closed when the subscription is closed, so it must not be used
-    /// afterwards.
+    /// afterwards. The context's Aeron client must outlive the subscription;
+    /// [`PersistentSubscriptionBuilder::build`] keeps it open.
     pub fn create(
         ctx: AeronArchivePersistentSubscriptionContext,
         listener: Option<Box<dyn PersistentSubscriptionListener>>,
@@ -944,9 +945,14 @@ impl PersistentSubscriptionBuilder {
         Ok(self)
     }
 
-    /// Build the persistent subscription.
+    /// Build the persistent subscription. It keeps the Aeron client open until it closes.
     pub fn build(mut self) -> Result<AeronArchivePersistentSubscription, AeronCError> {
-        AeronArchivePersistentSubscription::create(self.ctx, self.listener.take())
+        let subscription = AeronArchivePersistentSubscription::create(self.ctx, self.listener.take())?;
+        // the subscription's C close uses the client, so the client must close after it
+        if let (Some(aeron), Some(inner)) = (self.aeron.take(), subscription.inner.as_owned()) {
+            inner.add_dependency(aeron);
+        }
+        Ok(subscription)
     }
 
     /// Builds the subscription without waiting on the media driver: the counters that

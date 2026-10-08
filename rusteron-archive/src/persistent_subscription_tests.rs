@@ -1458,6 +1458,32 @@ mod tests {
         Ok(())
     }
 
+    /// A persistent subscription keeps its Aeron client open, so it closes cleanly after
+    /// the caller's last handle to the client has gone.
+    #[test]
+    #[serial]
+    fn persistent_subscription_keeps_its_aeron_client_open() -> Result<(), Box<dyn Error>> {
+        crate::skip_unless_java!();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().ok();
+
+        let (aeron, archive_context, _media_driver_archive, _archive_error_handler) =
+            start_aeron_archive_with_config("ps_aeron_anchor", 9750)?;
+        let ps = persistent_subscription_builder()?
+            .aeron(&aeron)?
+            .archive_context(&archive_context)?
+            .recording_id(0)?
+            .live_channel("aeron:ipc")?
+            .live_stream_id(3401)?
+            .replay_channel("aeron:udp?endpoint=localhost:0")?
+            .replay_stream_id(3402)?
+            .build()?;
+        drop(aeron);
+        ps.close()?;
+        Ok(())
+    }
+
     /// Resilience: when the live image is lost the persistent subscription falls
     /// back to replay, and when the stream returns it rejoins live — so
     /// `on_live_joined` fires a second time. Mirrors Aeron's
