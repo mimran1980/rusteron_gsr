@@ -1400,6 +1400,60 @@ mod tests {
         Ok(())
     }
 
+    /// The follower gives each archive context from its factory its own client, so the factory
+    /// needs only the archive's channels.
+    #[test]
+    #[serial]
+    fn follower_gives_each_archive_context_its_client() -> Result<(), Box<dyn Error>> {
+        crate::skip_unless_java!();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().ok();
+
+        let (aeron, archive_context, _media_driver_archive, _archive_error_handler) =
+            start_aeron_archive_with_config("ps_follow_client", 9985)?;
+        let archive = AeronArchiveAsyncConnect::new_with_aeron(&archive_context, &aeron)?
+            .poll_blocking(Duration::from_secs(20))
+            .expect("failed to connect to archive");
+        let stream_id = 3601;
+        retry_archive_op(Instant::now() + Duration::from_secs(15), || {
+            archive.start_recording(&"aeron:ipc".into_c_string(), stream_id, SOURCE_LOCATION_LOCAL, false)
+        })?;
+        let publication = aeron
+            .async_add_exclusive_publication(&"aeron:ipc".into_c_string(), stream_id)?
+            .poll_blocking(Duration::from_secs(5))?;
+        let counters_reader = aeron.counters_reader();
+        let session_id = publication.get_constants()?.session_id;
+        let counter_id =
+            crate::testing::find_counter_id_by_session_blocking(&counters_reader, session_id, Duration::from_secs(5))?;
+        RecordingPos::get_recording_id_block(&counters_reader, counter_id, Duration::from_secs(5))?;
+
+        let request = archive_context.get_control_request_channel().to_owned();
+        let response = archive_context.get_control_response_channel().to_owned();
+        let mut follower = FollowingPersistentSubscription::new(
+            &aeron,
+            move || {
+                let context = AeronArchiveContext::new()?;
+                context.set_control_request_channel(&request.as_str().into_c_string())?;
+                context.set_control_response_channel(&response.as_str().into_c_string())?;
+                Ok(context)
+            },
+            ("aeron:ipc", stream_id),
+            ("aeron:udp?endpoint=localhost:0", stream_id + 1),
+        )
+        .retry_after(Duration::from_millis(50));
+
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while !follower.is_live() {
+            assert!(Instant::now() < deadline, "the follower never went live");
+            follower.poll_fn(|_, _| {}, 10);
+            sleep(Duration::from_millis(1));
+        }
+        drop(follower);
+        drop(publication);
+        Ok(())
+    }
+
     /// The follower closes its subscription before the client and archive contexts it uses,
     /// so it drops cleanly when it holds the client's last handles.
     #[test]

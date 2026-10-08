@@ -56,8 +56,9 @@ enum Stage {
 impl FollowingPersistentSubscription {
     /// Follows the recordings of `live`, a channel and stream id, replaying them to `replay`.
     /// `archive_context` makes a fresh context, with the archive's control channels, for
-    /// each connection to the archive. The follower keeps a clone of `aeron`, and each
-    /// context, open until the subscription that uses them has closed.
+    /// each connection to the archive; the follower sets `aeron` as its client. The follower
+    /// keeps a clone of `aeron`, and each context, open until the subscription that uses
+    /// them has closed.
     pub fn new(
         aeron: &Aeron,
         archive_context: impl Fn() -> Result<AeronArchiveContext, AeronCError> + 'static,
@@ -227,7 +228,11 @@ impl FollowingPersistentSubscription {
     }
 
     fn context(&self) -> Result<AeronArchiveContext, String> {
-        (self.archive_context)().map_err(|e| format!("making an archive context: {e}"))
+        let context = (self.archive_context)().map_err(|e| format!("making an archive context: {e}"))?;
+        context
+            .set_aeron(&self.aeron)
+            .map_err(|e| format!("making an archive context: {e}"))?;
+        Ok(context)
     }
 
     fn list(&self, archive: &AeronArchive) -> Result<Stage, String> {
