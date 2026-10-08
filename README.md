@@ -64,14 +64,14 @@ rusteron-client = "0.2"
 rusteron-client = { version = "0.2", features = ["static"] }
 ```
 
-**macOS-only precompiled static libs:**
+**Precompiled static libs (macOS and Linux, no cmake or Java needed):**
 
 ```toml
 [dependencies]
 rusteron-client = { version = "0.2", features = ["static", "precompile"] }
 ```
 
-**macOS-only precompiled static libs with rustls downloader:**
+**Precompiled static libs with rustls downloader (macOS and Linux):**
 
 ```toml
 [dependencies]
@@ -91,8 +91,10 @@ target the architecture's baseline (`x86-64`, `armv8-a`), so they run on any CPU
 
 ### Multi-threaded (`Sync`) handles
 
-Handles are `Send` but **not `Sync`** by default — they use `Rc` for single-thread
-ownership. Enable `multi-threaded` to swap `Rc` → `Arc` and add `unsafe impl Sync`,
+Publication, subscription, counter and counters-reader handles are `Send` but **not `Sync`**
+by default; they use `Rc` and may be moved to one owning thread. The `Aeron` client and
+`AeronExclusivePublication` become `Send` only under `multi-threaded`; other handles
+(contexts, images) stay on the thread that created them. Enable `multi-threaded` to swap `Rc` → `Arc` and add `unsafe impl Sync`,
 so `&Handle` can be shared across threads for the ops Aeron C documents as thread-safe
 (`offer` / `try_claim` / `position` / `is_connected`):
 
@@ -102,9 +104,14 @@ rusteron-client = { version = "0.2", features = ["multi-threaded"] }
 ```
 
 ```rust,ignore
-// Each clone shares the same underlying C publication.
-let t1 = { let p = publication.clone(); thread::spawn(move || { p.offer(b"hello")?; }) };
-let t2 = { let p = publication.clone(); thread::spawn(move || { p.offer(b"world")?; }) };
+// AeronPublication is Sync under `multi-threaded`, so threads share `&publication`.
+std::thread::scope(|s| -> Result<(), AeronOfferError> {
+    let a = s.spawn(|| publication.offer(b"hello"));
+    let b = s.spawn(|| publication.offer(b"world"));
+    a.join().expect("publisher thread panicked")?;
+    b.join().expect("publisher thread panicked")?;
+    Ok(())
+})?;
 ```
 
 > **The flag only lifts the Rust-side barrier — it does not make the underlying Aeron
@@ -141,19 +148,18 @@ Build tasks use [`just`](https://github.com/casey/just). Run `just` to list comm
 
 ```rust,no_run
 use rusteron_client::{
-    Aeron, AeronContext, AeronErrorHandlerLogger, AeronHeader, Handler, Handlers, IntoCString,
+    cformat, Aeron, AeronContext, AeronErrorHandlerLogger, AeronHeader, BackoffIdleStrategy,
+    Handlers, IdleStrategy,
 };
-use rusteron_media_driver::{AeronDriver, AeronDriverContext};
-use std::time::Duration;
+use rusteron_media_driver::testing::EmbeddedDriver;
+use std::time::{Duration, Instant};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Embedded media driver. `launch_embedded_guard` returns a RAII guard that
-    // stops the driver on drop — no manual `stop` flag / join needed.
-    let driver_ctx = AeronDriverContext::new()?;
-    let driver = AeronDriver::launch_embedded_guard(driver_ctx.clone(), false);
+    // Unique directory; stopped and joined when `driver` drops, after the client.
+    let driver = EmbeddedDriver::launch()?;
 
     let ctx = AeronContext::new()?;
-    ctx.set_dir(&cformat!("{}", driver_ctx.get_dir()))?;
+    ctx.set_dir(&cformat!("{}", driver.dir()))?;
     // Error handler is Option (None = silently drop async client errors).
     // The Aeron samples always set a logger so failures are visible.
     ctx.set_error_handler(Some(AeronErrorHandlerLogger))?;
@@ -176,24 +182,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // offer returns Ok(position) or a typed AeronOfferError; retry the
     // retryable ones (back-pressure / admin action / not connected),
     // surface the fatal ones (closed / max position exceeded).
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut idle = BackoffIdleStrategy::new();
     loop {
         match publication.offer(b"Hello, Aeron!") {
             Ok(_) => break,
-            Err(e) if e.is_retryable() => continue,
+            Err(e) if e.is_retryable() && Instant::now() < deadline => idle.idle(0),
             Err(e) => return Err(e.into()),
         }
     }
 
-    // `poll_fn` runs the closure per fragment (zero allocation); use a fragment
-    // assembler for messages larger than the MTU.
-    subscription.poll_fn(
-        |msg: &[u8], header: AeronHeader| {
-            println!("received {} bytes at position {:?}", msg.len(), header.position());
-        },
-        10,
-    )?;
-
-    driver.join().ok();
+    // The subscription's image can appear just after the offer succeeds, so poll
+    // until the message arrives. `poll_fn` runs the closure per fragment (zero
+    // allocation); use a fragment assembler for messages larger than the MTU.
+    let mut received = false;
+    while !received {
+        if Instant::now() >= deadline {
+            return Err("no message received".into());
+        }
+        let fragments = subscription.poll_fn(
+            |msg: &[u8], header: AeronHeader| {
+                println!("received {} bytes at position {}", msg.len(), header.position());
+                received = true;
+            },
+            10,
+        )?;
+        idle.idle(fragments);
+    }
     Ok(())
 }
 ```
@@ -253,7 +268,7 @@ Old → new for every renamed/changed API
 | `publication.offer_result(buf, supplier)` → `Result<_, AeronCError>` | `publication.offer_with_reserved_value(buf, supplier)` → `Result<_, AeronOfferError>` | Typed offer errors with `is_retryable()`. |
 | `publication.offer_result_simple(buf)` | `publication.offer(buf)` | The common no-supplier case is now the flagship name. |
 | `try_claim_result(len, claim)` / `try_claim_owned` → `AeronCError` | `try_claim(len, claim)` / `try_claim_owned` → `AeronOfferError` | Same RAII `AeronClaim`; typed error. |
-| `subscription.poll_fn(f, limit)` | `subscription.poll_fn(f, limit)` | Same on `AeronImage` / `AeronArchiveReplayMerge`. `_once` read as "one fragment". |
+| `subscription.poll_once(f, limit)` | `subscription.poll_fn(f, limit)` | Renamed (`_once` read as "one fragment"); same on `AeronImage` / `AeronArchiveReplayMerge`. |
 | `subscription.for_each_fragment(limit, f)` | `subscription.poll_fn(f, limit)` | Removed (alias with the arguments in the opposite order). |
 | `sub.poll(assembler.process(&mut ctx, f), limit)` | `assembler.poll(&sub, &mut ctx, f, limit)` | `process()` leaked a raw ctx pointer past the borrow (UAF hazard); the new form scopes it. |
 | `Handlers::no_available_image_handler()`, `no_unavailable_image_handler()`, … | `Handlers::NONE` | One constant, any callback parameter, full inference. Old helpers removed. |
@@ -261,7 +276,7 @@ Old → new for every renamed/changed API
 | `AeronCnc::new(dir)` | `AeronCnc::open(&CStr)` or `AeronCnc::read(&CStr, \|cnc\| { … })` | `new_on_heap`/`read_on_partial_stack` renamed; now accept `&CStr` (not `&str`/`&CString`). `read` = scoped (zero-alloc, preferred for one-shot), `open` = owned handle (for repeated polling). |
 | `&"aeron:ipc".into_c_string()` (allocates at runtime) | `c"aeron:ipc"` | See "C strings without hidden allocations" above; `cformat!` for dynamic URIs. |
 | `wrapper.get_inner_mut()` / `ManagedCResource::get_mut()` (safe) | `unsafe …()` | `&mut` from `&self`; the caller must now promise exclusive access. The only internal caller (`clone_struct`) is wrapped in `unsafe` already. |
-| `ChannelUriStringBuilder::put_string(&CStr, &str)` / `put_strings(&str, &str)` | `put_str(&CStr, &str)` | Single name, single key type (`&CStr` — pair with `c"media"` or `CStr::from_bytes_until_nul`); `put_strings` removed (no external callers). |
+| `AeronUriStringBuilder::put_string(&CStr, &str)` / `put_strings(&str, &str)` | `AeronUriStringBuilder::put_str(&CStr, &str)` | Single name, single key type (`&CStr` — pair with `c"media"` or `CStr::from_bytes_until_nul`); `put_strings` removed (no external callers). |
 | `archive.begin_replay(...)`, `start_recording(...)`, … → `Result<_, AeronCError>` | `Result<_, AeronArchiveError>` | Control ops on `AeronArchive` return the typed error (parseable code + message). Constructors, async-connect, and context setters still return `AeronCError`; `From<AeronArchiveError> for AeronCError` keeps `?` working across the boundary. |
 | `async_add_exclusive_publication.poll(...).get_registration_id()` on the deprecated `exclusive_exclusive` alias | only `aeron_async_add_exclusive_publication_get_registration_id` is exposed | The deprecated `aeron_async_add_exclusive_exclusive_publication_get_registration_id` C alias is dropped (it collided with the canonical name); use the canonical `get_registration_id()`. |
 | `DarwinPthread*`, `OpaquePthread*` wrapper structs in the generated API | removed | Bindgen pthread internals are no longer emitted as wrapper types; socket types the driver wrappers reference (`sockaddr_storage`, `iovec`, …) are retained. |

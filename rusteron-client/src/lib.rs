@@ -243,6 +243,11 @@ impl IdleStrategy for BackoffIdleStrategy {
     }
 }
 
+// rustdoc sets cfg(doctest), not cfg(test), so this compiles the root README's code blocks.
+#[cfg(doctest)]
+#[doc = include_str!("../../README.md")]
+mod readme_doctests {}
+
 #[cfg(test)]
 mod idle_strategy_tests {
     use super::*;
@@ -2968,9 +2973,6 @@ mod tests {
             }
         }
     }
-
-    #[doc = include_str!("../../README.md")]
-    mod readme_tests {}
 
     #[cfg(test)]
     mod spin_poll_tests {
