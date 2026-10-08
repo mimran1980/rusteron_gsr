@@ -68,10 +68,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     while !publication.is_connected() && start.elapsed() < Duration::from_secs(5) {
         sleep(Duration::from_millis(10));
     }
+    let seed_deadline = Instant::now() + Duration::from_secs(5);
     for i in 0..10 {
         let m = format!("Seed-{i}");
-        while publication.offer(m.as_bytes()).is_err() {
-            sleep(Duration::from_millis(1));
+        loop {
+            match publication.offer(m.as_bytes()) {
+                Ok(_) => break,
+                Err(e) if e.is_retryable() && Instant::now() < seed_deadline => sleep(Duration::from_millis(1)),
+                Err(e) => return Err(e.into()),
+            }
         }
     }
     let session_id = publication.get_constants()?.session_id;

@@ -109,8 +109,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         sleep(Duration::from_millis(10));
     }
     for i in 0..10 {
-        while publication.offer(format!("History-{i}").as_bytes()).is_err() {
-            sleep(Duration::from_millis(1));
+        let message = format!("History-{i}");
+        loop {
+            match publication.offer(message.as_bytes()) {
+                Ok(_) => break,
+                Err(e) if e.is_retryable() => sleep(Duration::from_millis(1)),
+                Err(e) => return Err(e.into()),
+            }
         }
     }
     let counters = aeron.counters_reader();
@@ -141,7 +146,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     list.report("list recordings");
 
-    let params = AeronArchiveReplayParams::new(-1, i32::MAX, 0, publication.position(), 0, 0)?;
+    let params = AeronArchiveReplayParams::builder()
+        .position(0)
+        .length(publication.position())
+        .build()?;
     let mut replay = Timings::default();
     for round in 0..ROUNDS {
         let start = Instant::now();

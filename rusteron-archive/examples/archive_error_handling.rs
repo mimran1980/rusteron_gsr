@@ -2,11 +2,15 @@
 //!
 //! The patterns every archive application needs, in one place:
 //!
-//! 1. **Error handlers on both contexts** — async client errors otherwise vanish.
-//! 2. **Recording signal consumer** — the archive's own lifecycle events (START/STOP/EXTEND).
-//! 3. **`poll_for_error_response`** — archive control-session errors (e.g. replaying a
-//!    recording that does not exist) arrive asynchronously on the control channel; poll for
-//!    them after requests, and periodically.
+//! 1. **Error handlers on both contexts** — without one, the client's default handler
+//!    prints and exits the process, and the archive context drops errors that arrive
+//!    during other calls.
+//! 2. **Recording signal consumer** — the archive's own lifecycle events (START/STOP/EXTEND),
+//!    delivered from `archive.do_work()`.
+//! 3. **Typed control-session errors** — a blocking call returns the archive's refusal
+//!    as an `AeronArchiveError` (match on `e.code`); errors for requests no longer
+//!    awaited arrive later on the control channel, so drain them each cycle with
+//!    `archive.do_work()` (to the context's error handler) or `archive.poll_for_error()`.
 //! 4. **Archive down** — control requests fail with a timeout-class error; detect it,
 //!    then reconnect with bounded retries.
 //!
@@ -65,13 +69,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }))?;
 
     // ── 2. Recording signals: the archive announces recording lifecycle events ──
-    struct SignalLogger;
+    struct SignalLogger(Arc<AtomicUsize>);
     impl AeronArchiveRecordingSignalConsumerFuncCallback for SignalLogger {
         fn handle_aeron_archive_recording_signal_consumer_func(&mut self, signal: AeronArchiveRecordingSignal) {
+            self.0.fetch_add(1, Ordering::SeqCst);
             println!("[recording signal] {:?}", signal.signal());
         }
     }
-    archive_context.set_recording_signal_consumer(Some(SignalLogger))?;
+    let signals = Arc::new(AtomicUsize::new(0));
+    archive_context.set_recording_signal_consumer(Some(SignalLogger(signals.clone())))?;
 
     let archive =
         AeronArchiveAsyncConnect::new_with_aeron(&archive_context, &aeron)?.poll_blocking(Duration::from_secs(10))?;
@@ -80,35 +86,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         archive.control_session_id()
     );
 
-    // ── 3. Control-session errors arrive asynchronously: poll for them ──
-    // Ask the archive to replay a recording that does not exist. The call itself
-    // fails (or the error response arrives on the control channel shortly after) —
-    // poll_for_error_response is how you drain those without killing the session.
+    // Record something so the archive has signals to send. Signals reach the consumer
+    // from do_work, once a cycle.
+    archive.start_recording(c"aeron:ipc", 5000, SOURCE_LOCATION_LOCAL, true)?;
+    let publication = aeron
+        .async_add_publication(c"aeron:ipc", 5000)?
+        .poll_blocking(Duration::from_secs(5))?;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while signals.load(Ordering::SeqCst) == 0 && Instant::now() < deadline {
+        archive.do_work()?;
+        sleep(Duration::from_millis(1));
+    }
+    assert!(signals.load(Ordering::SeqCst) >= 1, "no recording signal");
+    // the recording stops with its publication; the STOP signal arrives on a later do_work
+    drop(publication);
+
+    // ── 3. Control-session errors ──
+    // Ask the archive to replay a recording that does not exist: the blocking call
+    // returns the refusal, typed.
     let bogus_recording_id = 424242;
     let params = AeronArchiveReplayParams::builder().position(0).length(100).build()?;
-    let replay = archive.start_replay(
+    let replay_port = find_unused_udp_port(events_port + 1).expect("no free port");
+    let Err(e) = archive.start_replay(
         bogus_recording_id,
-        &cformat!(
-            "aeron:udp?endpoint=localhost:{}",
-            find_unused_udp_port(events_port + 1).unwrap()
-        ),
+        &cformat!("aeron:udp?endpoint=localhost:{replay_port}"),
         9999,
         &params,
-    );
-    match replay {
-        Err(e) => {
-            // the archive's error code travels inside the message text; parse it out
-            let typed = AeronArchiveError::parse(&format!("{:?}", e));
-            println!("[expected] replay failed with {:?}", typed.code);
-            assert_eq!(typed.code, AeronArchiveErrorCode::UnknownRecording);
-        }
-        Ok(_) => {
-            // some archive versions report via the control channel instead
-            if let Some(err) = archive.poll_for_error()? {
-                println!("[expected] archive error response: {:?} — {}", err.code, err.message);
-            }
-        }
-    }
+    ) else {
+        return Err("replaying a missing recording succeeded".into());
+    };
+    println!("[expected] replay failed with {:?}: {}", e.code, e.message);
+    assert_eq!(e.code, AeronArchiveErrorCode::UnknownRecording);
 
     // A healthy control loop polls for error responses (and recording signals)
     // even when nothing seems wrong. `do_work` is the once-a-cycle call: it runs the
@@ -135,6 +143,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     let aeron_context2 = AeronContext::new()?;
     aeron_context2.set_dir(&cformat!("target/aeron/{id}_err2/shm"))?;
+    aeron_context2.set_error_handler(Some(|code: i32, msg: &str| eprintln!("[client error] {code}: {msg}")))?;
     let aeron2 = Aeron::new(&aeron_context2)?;
     aeron2.start()?;
     let archive_context2 = AeronArchiveContext::new()?;
@@ -142,6 +151,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     archive_context2.set_control_request_channel(&cformat!("{request_channel}"))?;
     archive_context2.set_control_response_channel(&cformat!("{response_channel}"))?;
     archive_context2.set_recording_events_channel(&cformat!("{events_channel}"))?;
+    archive_context2.set_error_handler(Some(|code: i32, msg: &str| eprintln!("[archive error] {code}: {msg}")))?;
     let deadline = Instant::now() + Duration::from_secs(30);
     let archive2 = loop {
         match AeronArchiveAsyncConnect::new_with_aeron(&archive_context2, &aeron2)

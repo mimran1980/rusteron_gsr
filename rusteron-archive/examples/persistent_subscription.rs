@@ -40,9 +40,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &format!("aeron:udp?endpoint=localhost:{events_port}"),
     )?;
 
-    // Aeron client + archive context. The archive context is reused by the
-    // persistent subscription below, so we build it explicitly rather than via
-    // `archive_connect()` (which hides it).
+    // Aeron client + archive context built by hand: the persistent subscription below
+    // takes this context and client (new_with_aeron), which the testing helper
+    // `process.archive_connect()` does not return.
     let aeron_context = AeronContext::new()?;
     aeron_context.set_dir(&cformat!("{aeron_dir}"))?;
     aeron_context.set_client_name(&cformat!("ps-example-{id}"))?;
@@ -72,8 +72,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     for i in 0..10 {
         let msg = format!("History-{i}");
-        while publication.offer(msg.as_bytes()).is_err() {
-            sleep(Duration::from_millis(1));
+        loop {
+            match publication.offer(msg.as_bytes()) {
+                Ok(_) => break,
+                Err(e) if e.is_retryable() => sleep(Duration::from_millis(1)),
+                Err(e) => return Err(e.into()),
+            }
         }
     }
     println!("seeded 10 historical messages");
@@ -148,7 +152,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         live_sent += 1;
         let msg = format!("Live-{live_sent}");
         let _ = publication.offer_with_reserved_value(msg.as_bytes(), Some(&send_timestamp_supplier));
-        let fragments = ps.poll_fn(|buf, _hdr| println!("  fragment ({} bytes)", buf.len()), 100)?;
+        let fragments = ps.poll_fn(
+            |buf, hdr| match hdr.reserved_value().filter(|&sent| sent > 0) {
+                // read in place from the frame header; history was published without a stamp
+                Some(sent) => println!(
+                    "  fragment ({} bytes), {} ns after send",
+                    buf.len(),
+                    Aeron::nano_clock() - sent
+                ),
+                None => println!("  fragment ({} bytes)", buf.len()),
+            },
+            100,
+        )?;
         if fragments == 0 {
             sleep(Duration::from_millis(1));
         }
