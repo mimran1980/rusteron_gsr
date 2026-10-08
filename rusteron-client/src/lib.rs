@@ -1973,6 +1973,15 @@ mod tests {
         let reader = aeron.counters_reader();
         assert_eq!(reader.get_counter_label(counter_id, 256)?, "label_buffer");
         assert_eq!(reader.get_counter_key(counter_id)?, "key".as_bytes());
+
+        let mut dst = String::with_capacity(64);
+        assert!(reader.get_counter_label_into(-1, &mut dst).is_err());
+        assert_eq!(dst.as_bytes(), b"");
+        let utf8_counter = aeron.add_counter(124, &[], "lbl\u{e9}", Duration::from_secs(5))?;
+        let utf8_id = utf8_counter.get_constants()?.counter_id;
+        // 4 bytes split the 2-byte char, so only the valid prefix is kept.
+        assert_eq!(reader.get_counter_label(utf8_id, 4)?.as_bytes(), b"lbl");
+        assert_eq!(reader.get_counter_label(utf8_id, 5)?, "lbl\u{e9}");
         let buffers = AeronCountersReaderBuffers::default();
         reader.get_buffers(&buffers)?;
 

@@ -1501,14 +1501,24 @@ impl AeronCountersReader {
     #[inline]
     #[doc = "Get the label for a counter."]
     pub fn get_counter_label_into(&self, counter_id: i32, dst: &mut String) -> Result<(), AeronCError> {
-        unsafe {
-            let capacity = dst.capacity();
-            let vec = dst.as_mut_vec();
-            vec.set_len(capacity);
-            let written = self.counter_label(counter_id, &mut vec[..])? as usize;
-            vec.set_len(std::cmp::min(written, capacity));
+        let capacity = dst.capacity();
+        // SAFETY: nothing reads the String until it is cut to a validated UTF-8 prefix.
+        let vec = unsafe { dst.as_mut_vec() };
+        vec.clear();
+        vec.resize(capacity, 0);
+        match self.counter_label(counter_id, &mut vec[..]) {
+            Ok(written) => {
+                // Labels are raw bytes, so a short buffer can split a multibyte char.
+                let written = (written as usize).min(capacity);
+                let valid = std::str::from_utf8(&vec[..written]).map_or_else(|e| e.valid_up_to(), str::len);
+                vec.truncate(valid);
+                Ok(())
+            }
+            Err(e) => {
+                vec.clear();
+                Err(e)
+            }
         }
-        Ok(())
     }
 
     #[inline]
