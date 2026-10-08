@@ -94,7 +94,7 @@ impl AeronAgentRunner {
             stringify!(aeron_agent_runner_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -340,7 +340,7 @@ impl From<aeron_agent_runner_t> for AeronAgentRunner {
     #[inline]
     fn from(value: aeron_agent_runner_t) -> Self {
         AeronAgentRunner {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -415,8 +415,9 @@ pub type CleanupBox<T> = Box<dyn FnMut(*mut *mut T) -> i32 + Send>;
 pub enum CResource<T> {
     OwnedOnHeap(RcOrArc<ManagedCResource<T>>),
     #[doc = " Always initialised by construction (zeroed or `new(v)`). Never store"]
-    #[doc = " `uninit()` — `Clone` and `get()` assume it's valid."]
-    OwnedOnStack(std::mem::MaybeUninit<T>),
+    #[doc = " `uninit()` — `Clone` and `get()` assume it's valid. `UnsafeCell` because"]
+    #[doc = " C writes through the pointer `get()` hands out from `&self`."]
+    OwnedOnStack(std::cell::UnsafeCell<std::mem::MaybeUninit<T>>),
     Borrowed(*mut T),
 }
 impl<T: Clone> Clone for CResource<T> {
@@ -424,7 +425,9 @@ impl<T: Clone> Clone for CResource<T> {
         unsafe {
             match self {
                 CResource::OwnedOnHeap(r) => CResource::OwnedOnHeap(r.clone()),
-                CResource::OwnedOnStack(r) => CResource::OwnedOnStack(MaybeUninit::new(r.assume_init_ref().clone())),
+                CResource::OwnedOnStack(r) => {
+                    CResource::OwnedOnStack(MaybeUninit::new((*r.get()).assume_init_ref().clone()).into())
+                }
                 CResource::Borrowed(r) => CResource::Borrowed(r.clone()),
             }
         }
@@ -435,7 +438,7 @@ impl<T> CResource<T> {
     pub fn get(&self) -> *mut T {
         match self {
             CResource::OwnedOnHeap(r) => r.get(),
-            CResource::OwnedOnStack(r) => r.as_ptr() as *mut T,
+            CResource::OwnedOnStack(r) => r.get().cast(),
             CResource::Borrowed(r) => *r,
         }
     }
@@ -532,7 +535,7 @@ impl<T> std::fmt::Debug for CResource<T> {
                 write!(f, "{name} heap({:?})", r)
             }
             CResource::OwnedOnStack(r) => {
-                write!(f, "{name} stack({:?})", *r)
+                write!(f, "{name} stack({:?})", r.get())
             }
             CResource::Borrowed(r) => {
                 write!(f, "{name} borrowed ({:?})", r)
@@ -1600,7 +1603,7 @@ impl AeronAsyncAddCounter {
             stringify!(aeron_async_add_counter_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -1686,7 +1689,7 @@ impl From<aeron_async_add_counter_t> for AeronAsyncAddCounter {
     #[inline]
     fn from(value: aeron_async_add_counter_t) -> Self {
         AeronAsyncAddCounter {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -2001,7 +2004,7 @@ impl AeronAsyncAddExclusivePublication {
             stringify!(aeron_async_add_exclusive_publication_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -2093,7 +2096,7 @@ impl From<aeron_async_add_exclusive_publication_t> for AeronAsyncAddExclusivePub
     #[inline]
     fn from(value: aeron_async_add_exclusive_publication_t) -> Self {
         AeronAsyncAddExclusivePublication {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -2407,7 +2410,7 @@ impl AeronAsyncAddPublication {
             stringify!(aeron_async_add_publication_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -2494,7 +2497,7 @@ impl From<aeron_async_add_publication_t> for AeronAsyncAddPublication {
     #[inline]
     fn from(value: aeron_async_add_publication_t) -> Self {
         AeronAsyncAddPublication {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -2799,7 +2802,7 @@ impl AeronAsyncAddSubscription {
             stringify!(aeron_async_add_subscription_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -2891,7 +2894,7 @@ impl From<aeron_async_add_subscription_t> for AeronAsyncAddSubscription {
     #[inline]
     fn from(value: aeron_async_add_subscription_t) -> Self {
         AeronAsyncAddSubscription {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -3280,7 +3283,7 @@ impl AeronAsyncDestinationById {
             stringify!(aeron_async_destination_by_id_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline(always)]
@@ -3347,7 +3350,7 @@ impl From<aeron_async_destination_by_id_t> for AeronAsyncDestinationById {
     #[inline]
     fn from(value: aeron_async_destination_by_id_t) -> Self {
         AeronAsyncDestinationById {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -3879,7 +3882,7 @@ impl From<aeron_async_destination_t> for AeronAsyncDestination {
     #[inline]
     fn from(value: aeron_async_destination_t) -> Self {
         AeronAsyncDestination {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -3934,7 +3937,7 @@ impl AeronAsyncGetNextAvailableSessionId {
             stringify!(aeron_async_get_next_available_session_id_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -4034,7 +4037,7 @@ impl From<aeron_async_get_next_available_session_id_t> for AeronAsyncGetNextAvai
     #[inline]
     fn from(value: aeron_async_get_next_available_session_id_t) -> Self {
         AeronAsyncGetNextAvailableSessionId {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -4112,7 +4115,7 @@ impl AeronBufferClaim {
             stringify!(aeron_buffer_claim_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -4241,7 +4244,7 @@ impl From<aeron_buffer_claim_t> for AeronBufferClaim {
     #[inline]
     fn from(value: aeron_buffer_claim_t) -> Self {
         AeronBufferClaim {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -4340,7 +4343,7 @@ impl AeronClientRegisteringResource {
             stringify!(aeron_client_registering_resource_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline(always)]
@@ -4407,7 +4410,7 @@ impl From<aeron_client_registering_resource_t> for AeronClientRegisteringResourc
     #[inline]
     fn from(value: aeron_client_registering_resource_t) -> Self {
         AeronClientRegisteringResource {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -4531,7 +4534,7 @@ impl AeronCncConstants {
             stringify!(aeron_cnc_constants_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -4638,7 +4641,7 @@ impl From<aeron_cnc_constants_t> for AeronCncConstants {
     #[inline]
     fn from(value: aeron_cnc_constants_t) -> Self {
         AeronCncConstants {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -4792,7 +4795,7 @@ impl AeronCncMetadata {
             stringify!(aeron_cnc_metadata_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -4914,7 +4917,7 @@ impl From<aeron_cnc_metadata_t> for AeronCncMetadata {
     #[inline]
     fn from(value: aeron_cnc_metadata_t) -> Self {
         AeronCncMetadata {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -5007,7 +5010,7 @@ impl AeronCnc {
         #[cfg(feature = "extra-logging")]
         log::debug!("creating zeroed empty resource on stack {}", stringify!(aeron_cnc_t));
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -5381,7 +5384,7 @@ impl From<aeron_cnc_t> for AeronCnc {
     #[inline]
     fn from(value: aeron_cnc_t) -> Self {
         AeronCnc {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -6664,7 +6667,7 @@ impl From<aeron_context_t> for AeronContext {
     #[inline]
     fn from(value: aeron_context_t) -> Self {
         AeronContext {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -6885,7 +6888,7 @@ impl From<aeron_controlled_fragment_assembler_t> for AeronControlledFragmentAsse
     #[inline]
     fn from(value: aeron_controlled_fragment_assembler_t) -> Self {
         AeronControlledFragmentAssembler {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -6965,7 +6968,7 @@ impl AeronCounterConstants {
             stringify!(aeron_counter_constants_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -7044,7 +7047,7 @@ impl From<aeron_counter_constants_t> for AeronCounterConstants {
     #[inline]
     fn from(value: aeron_counter_constants_t) -> Self {
         AeronCounterConstants {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -7181,7 +7184,7 @@ impl AeronCounterMetadataDescriptor {
             stringify!(aeron_counter_metadata_descriptor_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -7272,7 +7275,7 @@ impl From<aeron_counter_metadata_descriptor_t> for AeronCounterMetadataDescripto
     #[inline]
     fn from(value: aeron_counter_metadata_descriptor_t) -> Self {
         AeronCounterMetadataDescriptor {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -7369,7 +7372,7 @@ impl AeronCounter {
             stringify!(aeron_counter_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -7507,7 +7510,7 @@ impl From<aeron_counter_t> for AeronCounter {
     #[inline]
     fn from(value: aeron_counter_t) -> Self {
         AeronCounter {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -7638,7 +7641,7 @@ impl AeronCounterValueDescriptor {
             stringify!(aeron_counter_value_descriptor_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -7725,7 +7728,7 @@ impl From<aeron_counter_value_descriptor_t> for AeronCounterValueDescriptor {
     #[inline]
     fn from(value: aeron_counter_value_descriptor_t) -> Self {
         AeronCounterValueDescriptor {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -7848,7 +7851,7 @@ impl AeronCountersReaderBuffers {
             stringify!(aeron_counters_reader_buffers_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -7937,7 +7940,7 @@ impl From<aeron_counters_reader_buffers_t> for AeronCountersReaderBuffers {
     #[inline]
     fn from(value: aeron_counters_reader_buffers_t) -> Self {
         AeronCountersReaderBuffers {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -8036,7 +8039,7 @@ impl AeronCountersReader {
             stringify!(aeron_counters_reader_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -8547,7 +8550,7 @@ impl From<aeron_counters_reader_t> for AeronCountersReader {
     #[inline]
     fn from(value: aeron_counters_reader_t) -> Self {
         AeronCountersReader {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -8619,7 +8622,7 @@ impl AeronDataHeaderAsLongs {
             stringify!(aeron_data_header_as_longs_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -8690,7 +8693,7 @@ impl From<aeron_data_header_as_longs_t> for AeronDataHeaderAsLongs {
     #[inline]
     fn from(value: aeron_data_header_as_longs_t) -> Self {
         AeronDataHeaderAsLongs {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -8826,7 +8829,7 @@ impl AeronDataHeader {
             stringify!(aeron_data_header_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -8917,7 +8920,7 @@ impl From<aeron_data_header_t> for AeronDataHeader {
     #[inline]
     fn from(value: aeron_data_header_t) -> Self {
         AeronDataHeader {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -9048,7 +9051,7 @@ impl AeronError {
         #[cfg(feature = "extra-logging")]
         log::debug!("creating zeroed empty resource on stack {}", stringify!(aeron_error_t));
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -9163,7 +9166,7 @@ impl From<aeron_error_t> for AeronError {
     #[inline]
     fn from(value: aeron_error_t) -> Self {
         AeronError {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -9263,7 +9266,7 @@ impl AeronExclusivePublication {
             stringify!(aeron_exclusive_publication_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -9730,7 +9733,7 @@ impl From<aeron_exclusive_publication_t> for AeronExclusivePublication {
     #[inline]
     fn from(value: aeron_exclusive_publication_t) -> Self {
         AeronExclusivePublication {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -9966,7 +9969,7 @@ impl From<aeron_fragment_assembler_t> for AeronFragmentAssembler {
     #[inline]
     fn from(value: aeron_fragment_assembler_t) -> Self {
         AeronFragmentAssembler {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -10045,7 +10048,7 @@ impl AeronFrameHeader {
             stringify!(aeron_frame_header_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -10128,7 +10131,7 @@ impl From<aeron_frame_header_t> for AeronFrameHeader {
     #[inline]
     fn from(value: aeron_frame_header_t) -> Self {
         AeronFrameHeader {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -10220,7 +10223,7 @@ impl AeronHeader {
         #[cfg(feature = "extra-logging")]
         log::debug!("creating zeroed empty resource on stack {}", stringify!(aeron_header_t));
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -10378,7 +10381,7 @@ impl From<aeron_header_t> for AeronHeader {
     #[inline]
     fn from(value: aeron_header_t) -> Self {
         AeronHeader {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -10491,7 +10494,7 @@ impl AeronHeaderValuesFrame {
             stringify!(aeron_header_values_frame_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -10594,7 +10597,7 @@ impl From<aeron_header_values_frame_t> for AeronHeaderValuesFrame {
     #[inline]
     fn from(value: aeron_header_values_frame_t) -> Self {
         AeronHeaderValuesFrame {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -10721,7 +10724,7 @@ impl AeronHeaderValues {
             stringify!(aeron_header_values_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -10800,7 +10803,7 @@ impl From<aeron_header_values_t> for AeronHeaderValues {
     #[inline]
     fn from(value: aeron_header_values_t) -> Self {
         AeronHeaderValues {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -10899,7 +10902,7 @@ impl AeronIdleStrategy {
             stringify!(aeron_idle_strategy_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -11069,7 +11072,7 @@ impl From<aeron_idle_strategy_t> for AeronIdleStrategy {
     #[inline]
     fn from(value: aeron_idle_strategy_t) -> Self {
         AeronIdleStrategy {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -11174,7 +11177,7 @@ impl AeronImageConstants {
             stringify!(aeron_image_constants_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -11285,7 +11288,7 @@ impl From<aeron_image_constants_t> for AeronImageConstants {
     #[inline]
     fn from(value: aeron_image_constants_t) -> Self {
         AeronImageConstants {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -11550,7 +11553,7 @@ impl From<aeron_image_controlled_fragment_assembler_t> for AeronImageControlledF
     #[inline]
     fn from(value: aeron_image_controlled_fragment_assembler_t) -> Self {
         AeronImageControlledFragmentAssembler {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -11748,7 +11751,7 @@ impl From<aeron_image_fragment_assembler_t> for AeronImageFragmentAssembler {
     #[inline]
     fn from(value: aeron_image_fragment_assembler_t) -> Self {
         AeronImageFragmentAssembler {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -11796,7 +11799,7 @@ impl AeronImage {
         #[cfg(feature = "extra-logging")]
         log::debug!("creating zeroed empty resource on stack {}", stringify!(aeron_image_t));
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -12760,7 +12763,7 @@ impl From<aeron_image_t> for AeronImage {
     #[inline]
     fn from(value: aeron_image_t) -> Self {
         AeronImage {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -12842,7 +12845,7 @@ impl AeronIovec {
         #[cfg(feature = "extra-logging")]
         log::debug!("creating zeroed empty resource on stack {}", stringify!(aeron_iovec_t));
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -12923,7 +12926,7 @@ impl From<aeron_iovec_t> for AeronIovec {
     #[inline]
     fn from(value: aeron_iovec_t) -> Self {
         AeronIovec {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -13053,7 +13056,7 @@ impl AeronIpcChannelParams {
             stringify!(aeron_ipc_channel_params_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -13148,7 +13151,7 @@ impl From<aeron_ipc_channel_params_t> for AeronIpcChannelParams {
     #[inline]
     fn from(value: aeron_ipc_channel_params_t) -> Self {
         AeronIpcChannelParams {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -13247,7 +13250,7 @@ impl AeronLogBuffer {
             stringify!(aeron_log_buffer_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline(always)]
@@ -13314,7 +13317,7 @@ impl From<aeron_log_buffer_t> for AeronLogBuffer {
     #[inline]
     fn from(value: aeron_log_buffer_t) -> Self {
         AeronLogBuffer {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -13531,7 +13534,7 @@ impl AeronLogbufferMetadata {
             stringify!(aeron_logbuffer_metadata_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -13758,7 +13761,7 @@ impl From<aeron_logbuffer_metadata_t> for AeronLogbufferMetadata {
     #[inline]
     fn from(value: aeron_logbuffer_metadata_t) -> Self {
         AeronLogbufferMetadata {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -13900,7 +13903,7 @@ impl AeronLossReporterEntry {
             stringify!(aeron_loss_reporter_entry_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -13991,7 +13994,7 @@ impl From<aeron_loss_reporter_entry_t> for AeronLossReporterEntry {
     #[inline]
     fn from(value: aeron_loss_reporter_entry_t) -> Self {
         AeronLossReporterEntry {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -14113,7 +14116,7 @@ impl AeronLossReporter {
             stringify!(aeron_loss_reporter_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -14399,7 +14402,7 @@ impl From<aeron_loss_reporter_t> for AeronLossReporter {
     #[inline]
     fn from(value: aeron_loss_reporter_t) -> Self {
         AeronLossReporter {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -14519,7 +14522,7 @@ impl AeronMappedBuffer {
             stringify!(aeron_mapped_buffer_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -14600,7 +14603,7 @@ impl From<aeron_mapped_buffer_t> for AeronMappedBuffer {
     #[inline]
     fn from(value: aeron_mapped_buffer_t) -> Self {
         AeronMappedBuffer {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -14720,7 +14723,7 @@ impl AeronMappedFile {
             stringify!(aeron_mapped_file_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -14861,7 +14864,7 @@ impl From<aeron_mapped_file_t> for AeronMappedFile {
     #[inline]
     fn from(value: aeron_mapped_file_t) -> Self {
         AeronMappedFile {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -14990,7 +14993,7 @@ impl AeronMappedRawLog {
             stringify!(aeron_mapped_raw_log_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -15154,7 +15157,7 @@ impl From<aeron_mapped_raw_log_t> for AeronMappedRawLog {
     #[inline]
     fn from(value: aeron_mapped_raw_log_t) -> Self {
         AeronMappedRawLog {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -15290,7 +15293,7 @@ impl AeronNakHeader {
             stringify!(aeron_nak_header_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -15381,7 +15384,7 @@ impl From<aeron_nak_header_t> for AeronNakHeader {
     #[inline]
     fn from(value: aeron_nak_header_t) -> Self {
         AeronNakHeader {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -15514,7 +15517,7 @@ impl AeronAvailableCounterPair {
             stringify!(aeron_on_available_counter_pair_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -15589,7 +15592,7 @@ impl From<aeron_on_available_counter_pair_t> for AeronAvailableCounterPair {
     #[inline]
     fn from(value: aeron_on_available_counter_pair_t) -> Self {
         AeronAvailableCounterPair {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -15722,7 +15725,7 @@ impl AeronCloseClientPair {
             stringify!(aeron_on_close_client_pair_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -15797,7 +15800,7 @@ impl From<aeron_on_close_client_pair_t> for AeronCloseClientPair {
     #[inline]
     fn from(value: aeron_on_close_client_pair_t) -> Self {
         AeronCloseClientPair {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -15930,7 +15933,7 @@ impl AeronUnavailableCounterPair {
             stringify!(aeron_on_unavailable_counter_pair_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -16005,7 +16008,7 @@ impl From<aeron_on_unavailable_counter_pair_t> for AeronUnavailableCounterPair {
     #[inline]
     fn from(value: aeron_on_unavailable_counter_pair_t) -> Self {
         AeronUnavailableCounterPair {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -16126,7 +16129,7 @@ impl AeronOptionHeader {
             stringify!(aeron_option_header_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -16201,7 +16204,7 @@ impl From<aeron_option_header_t> for AeronOptionHeader {
     #[inline]
     fn from(value: aeron_option_header_t) -> Self {
         AeronOptionHeader {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -16327,7 +16330,7 @@ impl AeronPerThreadError {
             stringify!(aeron_per_thread_error_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -16406,7 +16409,7 @@ impl From<aeron_per_thread_error_t> for AeronPerThreadError {
     #[inline]
     fn from(value: aeron_per_thread_error_t) -> Self {
         AeronPerThreadError {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -16570,7 +16573,7 @@ impl AeronPublicationConstants {
             stringify!(aeron_publication_constants_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -16693,7 +16696,7 @@ impl From<aeron_publication_constants_t> for AeronPublicationConstants {
     #[inline]
     fn from(value: aeron_publication_constants_t) -> Self {
         AeronPublicationConstants {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -16805,7 +16808,7 @@ impl AeronPublicationErrorValues {
             stringify!(aeron_publication_error_values_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -16937,7 +16940,7 @@ impl From<aeron_publication_error_values_t> for AeronPublicationErrorValues {
     #[inline]
     fn from(value: aeron_publication_error_values_t) -> Self {
         AeronPublicationErrorValues {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -16994,7 +16997,7 @@ impl AeronPublication {
             stringify!(aeron_publication_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -17420,7 +17423,7 @@ impl From<aeron_publication_t> for AeronPublication {
     #[inline]
     fn from(value: aeron_publication_t) -> Self {
         AeronPublication {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -17545,7 +17548,7 @@ impl AeronResolutionHeaderIpv4 {
             stringify!(aeron_resolution_header_ipv4_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -17639,7 +17642,7 @@ impl From<aeron_resolution_header_ipv4_t> for AeronResolutionHeaderIpv4 {
     #[inline]
     fn from(value: aeron_resolution_header_ipv4_t) -> Self {
         AeronResolutionHeaderIpv4 {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -17765,7 +17768,7 @@ impl AeronResolutionHeaderIpv6 {
             stringify!(aeron_resolution_header_ipv6_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -17859,7 +17862,7 @@ impl From<aeron_resolution_header_ipv6_t> for AeronResolutionHeaderIpv6 {
     #[inline]
     fn from(value: aeron_resolution_header_ipv6_t) -> Self {
         AeronResolutionHeaderIpv6 {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -17982,7 +17985,7 @@ impl AeronResolutionHeader {
             stringify!(aeron_resolution_header_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -18065,7 +18068,7 @@ impl From<aeron_resolution_header_t> for AeronResolutionHeader {
     #[inline]
     fn from(value: aeron_resolution_header_t) -> Self {
         AeronResolutionHeader {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -18195,7 +18198,7 @@ impl AeronResponseSetupHeader {
             stringify!(aeron_response_setup_header_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -18278,7 +18281,7 @@ impl From<aeron_response_setup_header_t> for AeronResponseSetupHeader {
     #[inline]
     fn from(value: aeron_response_setup_header_t) -> Self {
         AeronResponseSetupHeader {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -18414,7 +18417,7 @@ impl AeronRttmHeader {
             stringify!(aeron_rttm_header_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -18505,7 +18508,7 @@ impl From<aeron_rttm_header_t> for AeronRttmHeader {
     #[inline]
     fn from(value: aeron_rttm_header_t) -> Self {
         AeronRttmHeader {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -18650,7 +18653,7 @@ impl AeronSetupHeader {
             stringify!(aeron_setup_header_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -18753,7 +18756,7 @@ impl From<aeron_setup_header_t> for AeronSetupHeader {
     #[inline]
     fn from(value: aeron_setup_header_t) -> Self {
         AeronSetupHeader {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -18892,7 +18895,7 @@ impl AeronStatusMessageHeader {
             stringify!(aeron_status_message_header_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -19011,7 +19014,7 @@ impl From<aeron_status_message_header_t> for AeronStatusMessageHeader {
     #[inline]
     fn from(value: aeron_status_message_header_t) -> Self {
         AeronStatusMessageHeader {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -19130,7 +19133,7 @@ impl AeronStatusMessageOptionalHeader {
             stringify!(aeron_status_message_optional_header_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -19201,7 +19204,7 @@ impl From<aeron_status_message_optional_header_t> for AeronStatusMessageOptional
     #[inline]
     fn from(value: aeron_status_message_optional_header_t) -> Self {
         AeronStatusMessageOptionalHeader {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -19324,7 +19327,7 @@ impl AeronStrToPtrHashMapKey {
             stringify!(aeron_str_to_ptr_hash_map_key_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -19407,7 +19410,7 @@ impl From<aeron_str_to_ptr_hash_map_key_t> for AeronStrToPtrHashMapKey {
     #[inline]
     fn from(value: aeron_str_to_ptr_hash_map_key_t) -> Self {
         AeronStrToPtrHashMapKey {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -19542,7 +19545,7 @@ impl AeronStrToPtrHashMap {
             stringify!(aeron_str_to_ptr_hash_map_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -19633,7 +19636,7 @@ impl From<aeron_str_to_ptr_hash_map_t> for AeronStrToPtrHashMap {
     #[inline]
     fn from(value: aeron_str_to_ptr_hash_map_t) -> Self {
         AeronStrToPtrHashMap {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -19770,7 +19773,7 @@ impl AeronSubscriptionConstants {
             stringify!(aeron_subscription_constants_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -19865,7 +19868,7 @@ impl From<aeron_subscription_constants_t> for AeronSubscriptionConstants {
     #[inline]
     fn from(value: aeron_subscription_constants_t) -> Self {
         AeronSubscriptionConstants {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -19965,7 +19968,7 @@ impl AeronSubscription {
             stringify!(aeron_subscription_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -20671,7 +20674,7 @@ impl From<aeron_subscription_t> for AeronSubscription {
     #[inline]
     fn from(value: aeron_subscription_t) -> Self {
         AeronSubscription {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -22861,7 +22864,7 @@ impl From<aeron_t> for Aeron {
     #[inline]
     fn from(value: aeron_t) -> Self {
         Aeron {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
             _context: None,
         }
     }
@@ -22991,7 +22994,7 @@ impl AeronUdpChannelParams {
             stringify!(aeron_udp_channel_params_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -23118,7 +23121,7 @@ impl From<aeron_udp_channel_params_t> for AeronUdpChannelParams {
     #[inline]
     fn from(value: aeron_udp_channel_params_t) -> Self {
         AeronUdpChannelParams {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -23239,7 +23242,7 @@ impl AeronUriParam {
             stringify!(aeron_uri_param_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -23322,7 +23325,7 @@ impl From<aeron_uri_param_t> for AeronUriParam {
     #[inline]
     fn from(value: aeron_uri_param_t) -> Self {
         AeronUriParam {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -23443,7 +23446,7 @@ impl AeronUriParams {
             stringify!(aeron_uri_params_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -23722,7 +23725,7 @@ impl From<aeron_uri_params_t> for AeronUriParams {
     #[inline]
     fn from(value: aeron_uri_params_t) -> Self {
         AeronUriParams {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -23823,7 +23826,7 @@ impl AeronUriStringBuilder {
             stringify!(aeron_uri_string_builder_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -24075,7 +24078,7 @@ impl From<aeron_uri_string_builder_t> for AeronUriStringBuilder {
     #[inline]
     fn from(value: aeron_uri_string_builder_t) -> Self {
         AeronUriStringBuilder {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }
@@ -24161,7 +24164,7 @@ impl AeronUri {
         #[cfg(feature = "extra-logging")]
         log::debug!("creating zeroed empty resource on stack {}", stringify!(aeron_uri_t));
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
         }
     }
     #[inline]
@@ -24422,7 +24425,7 @@ impl From<aeron_uri_t> for AeronUri {
     #[inline]
     fn from(value: aeron_uri_t) -> Self {
         AeronUri {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
         }
     }
 }

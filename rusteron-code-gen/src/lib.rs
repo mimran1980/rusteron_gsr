@@ -902,9 +902,21 @@ mod test {
         assert!(borrowed.close_resource().is_ok());
         assert_eq!(10, borrowed_value);
 
-        let stack = CResource::OwnedOnStack(std::mem::MaybeUninit::new(20));
+        let stack = CResource::OwnedOnStack(std::mem::MaybeUninit::new(20).into());
         assert!(stack.close_resource().is_ok());
         assert_eq!(20, unsafe { *stack.get() });
+    }
+
+    // C fills stack structs (claims, constants, header values) through `get()`
+    // on `&self`; run under Miri to catch a write through a read-only borrow.
+    #[test]
+    fn stack_resource_is_writable_through_shared_get() {
+        let stack = CResource::OwnedOnStack(std::mem::MaybeUninit::new(20).into());
+        let shared = &stack;
+        unsafe { *shared.get() = 30 };
+        assert_eq!(30, unsafe { *stack.get() });
+        let cloned = stack.clone();
+        assert_eq!(30, unsafe { *cloned.get() });
     }
 
     // NOTE: test_drop_does_not_call_cleanup_if_check_for_is_closed_* removed

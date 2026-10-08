@@ -1375,7 +1375,7 @@ impl CWrapper {
                     log::debug!("creating zeroed empty resource on stack {}", stringify!(#type_name));
 
                     Self {
-                        inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+                        inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
                     }
                 }
             };
@@ -3251,7 +3251,7 @@ pub fn generate_rust_code(
             #[inline]
             fn from(value: #type_name) -> Self {
                 #class_name {
-                    inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+                    inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
                     #(#new_ref_set_none)*
                 }
             }

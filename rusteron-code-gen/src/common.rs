@@ -39,8 +39,9 @@ pub type CleanupBox<T> = Box<dyn FnMut(*mut *mut T) -> i32 + Send>;
 pub enum CResource<T> {
     OwnedOnHeap(RcOrArc<ManagedCResource<T>>),
     /// Always initialised by construction (zeroed or `new(v)`). Never store
-    /// `uninit()` — `Clone` and `get()` assume it's valid.
-    OwnedOnStack(std::mem::MaybeUninit<T>),
+    /// `uninit()` — `Clone` and `get()` assume it's valid. `UnsafeCell` because
+    /// C writes through the pointer `get()` hands out from `&self`.
+    OwnedOnStack(std::cell::UnsafeCell<std::mem::MaybeUninit<T>>),
     Borrowed(*mut T),
 }
 
@@ -56,7 +57,9 @@ impl<T: Clone> Clone for CResource<T> {
         unsafe {
             match self {
                 CResource::OwnedOnHeap(r) => CResource::OwnedOnHeap(r.clone()),
-                CResource::OwnedOnStack(r) => CResource::OwnedOnStack(MaybeUninit::new(r.assume_init_ref().clone())),
+                CResource::OwnedOnStack(r) => {
+                    CResource::OwnedOnStack(MaybeUninit::new((*r.get()).assume_init_ref().clone()).into())
+                }
                 CResource::Borrowed(r) => CResource::Borrowed(r.clone()),
             }
         }
@@ -68,7 +71,7 @@ impl<T> CResource<T> {
     pub fn get(&self) -> *mut T {
         match self {
             CResource::OwnedOnHeap(r) => r.get(),
-            CResource::OwnedOnStack(r) => r.as_ptr() as *mut T,
+            CResource::OwnedOnStack(r) => r.get().cast(),
             CResource::Borrowed(r) => *r,
         }
     }
@@ -175,7 +178,7 @@ impl<T> std::fmt::Debug for CResource<T> {
                 write!(f, "{name} heap({:?})", r)
             }
             CResource::OwnedOnStack(r) => {
-                write!(f, "{name} stack({:?})", *r)
+                write!(f, "{name} stack({:?})", r.get())
             }
             CResource::Borrowed(r) => {
                 write!(f, "{name} borrowed ({:?})", r)
