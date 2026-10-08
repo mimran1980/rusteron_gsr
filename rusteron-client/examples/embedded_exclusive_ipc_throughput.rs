@@ -1,5 +1,8 @@
 use rusteron_client::*;
+use rusteron_media_driver::testing::EmbeddedDriver;
+use std::error::Error;
 use std::ffi::CStr;
+use std::hint::spin_loop;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -9,11 +12,24 @@ use std::time::{Duration, Instant};
 
 const BURST_LENGTH: usize = 1_000_000;
 const MESSAGE_LENGTH: usize = 32;
+const FRAGMENT_COUNT_LIMIT: usize = 10;
 static CHANNEL: &CStr = AERON_IPC_STREAM;
 const STREAM_ID: i32 = 1001;
 
-/// this code is based on Aeron samples EmbeddedExclusiveIpcThroughput
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// Port of Aeron's EmbeddedExclusiveIpcThroughput sample; runs until Ctrl-C.
+///
+/// Set `AERON_DIR` to use a running media driver; otherwise one is embedded.
+fn main() -> Result<(), Box<dyn Error>> {
+    // declared first so the driver outlives the client
+    let driver = match std::env::var_os("AERON_DIR") {
+        Some(_) => None,
+        None => Some(EmbeddedDriver::launch()?),
+    };
+    let dir = match &driver {
+        Some(driver) => driver.dir().to_string(),
+        None => std::env::var("AERON_DIR")?,
+    };
+
     let running = Arc::new(AtomicBool::new(true));
 
     println!("message length {MESSAGE_LENGTH}, channel {CHANNEL:?}");
@@ -21,16 +37,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let running_ctrl_c = Arc::clone(&running);
     ctrlc::set_handler(move || {
         running_ctrl_c.store(false, Ordering::SeqCst);
-    })
-    .expect("Error setting Ctrl-C handler");
+    })?;
 
     let running_publisher = Arc::clone(&running);
     let running_subscriber = Arc::clone(&running);
 
     let ctx = AeronContext::new()?;
-    let error_handler = Handler::new(AeronErrorHandlerLogger);
-    ctx.set_error_handler(Some(error_handler.clone()))?;
-    let dir = std::env::var("AERON_DIR").expect("AERON_DIR must be set");
+    ctx.set_error_handler(Some(|code: i32, msg: &str| eprintln!("aeron error {code}: {msg}")))?;
     ctx.set_dir(&cformat!("{dir}"))?;
     let aeron = Aeron::new(&ctx)?;
     aeron.start()?;
@@ -43,14 +56,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .async_add_subscription(CHANNEL, STREAM_ID, Handlers::NONE, Handlers::NONE)?
         .poll_blocking(Duration::from_secs(5))?;
 
-    let subscriber_thread = thread::spawn(move || {
-        let mut image_rate_subscriber = ImageRateSubscriber::new(running_subscriber, subscription, MESSAGE_LENGTH);
-        image_rate_subscriber.run();
-        Ok::<_, AeronCError>(())
-    });
+    let subscriber_thread =
+        thread::spawn(move || ImageRateSubscriber::new(running_subscriber, subscription, MESSAGE_LENGTH).run());
 
-    Publisher::new(running_publisher, publication).run();
-    subscriber_thread.join().expect("Subscriber thread failed").unwrap();
+    let published = Publisher::new(running_publisher, publication).run();
+    subscriber_thread.join().expect("subscriber thread panicked")?;
+    published?;
 
     Ok(())
 }
@@ -65,80 +76,68 @@ impl Publisher {
         Publisher { running, publication }
     }
 
-    fn run(&self) {
-        let mut back_pressure_count = 0;
-        let mut total_message_count = 0;
+    fn run(&self) -> Result<(), AeronOfferError> {
+        let mut back_pressure_count = 0u64;
+        let mut total_message_count = 0u64;
         let buffer = vec![1u8; MESSAGE_LENGTH];
 
-        while self.running.load(Ordering::Acquire) {
+        'publish: while self.running.load(Ordering::Acquire) {
             loop {
                 match self.publication.offer(&buffer) {
                     Ok(_) => break,
-                    Err(e) if e.is_fatal() => {
-                        // Fatal -> publication gone; stop the benchmark instead of spinning.
-                        eprintln!("publication gone ({e}); stopping");
-                        self.running.store(false, Ordering::Release);
-                        break;
+                    Err(e) if e.is_retryable() => {
+                        back_pressure_count += 1;
+                        if !self.running.load(Ordering::Acquire) {
+                            break 'publish;
+                        }
+                        spin_loop();
                     }
-                    Err(_) => {}
-                }
-                back_pressure_count += 1;
-                if !self.running.load(Ordering::Acquire) {
-                    let back_pressure_ratio = back_pressure_count as f64 / total_message_count as f64;
-                    println!("Publisher back pressure ratio: {back_pressure_ratio:.6}");
-                    return;
+                    Err(e) => {
+                        // stop the subscriber too, rather than leave it polling a dead stream
+                        self.running.store(false, Ordering::Release);
+                        return Err(e);
+                    }
                 }
             }
             total_message_count += 1;
         }
 
-        let back_pressure_ratio = back_pressure_count as f64 / total_message_count as f64;
+        let back_pressure_ratio = back_pressure_count as f64 / total_message_count.max(1) as f64;
         println!("Publisher back pressure ratio: {back_pressure_ratio:.6}");
+        Ok(())
     }
 }
 
 struct ImageRateSubscriber {
     running: Arc<AtomicBool>,
     subscription: AeronSubscription,
-    poll_handler: Handler<MsgCount>,
     message_length: usize,
     start_time: Instant,
 }
 
-struct MsgCount {
-    message_count: usize,
-}
-
-impl AeronFragmentHandlerCallback for MsgCount {
-    fn handle_aeron_fragment_handler(&mut self, _buffer: &[u8], _header: AeronHeader) {
-        self.message_count += 1;
-    }
-}
-
 impl ImageRateSubscriber {
     fn new(running: Arc<AtomicBool>, subscription: AeronSubscription, message_length: usize) -> Self {
-        let poll_handler = Handler::new(MsgCount { message_count: 0 });
         ImageRateSubscriber {
             running,
             subscription,
-            poll_handler,
             message_length,
             start_time: Instant::now(),
         }
     }
 
-    fn run(&mut self) {
-        let mut next_check = BURST_LENGTH;
+    fn run(&mut self) -> Result<(), AeronCError> {
+        let mut message_count = 0usize;
         while self.running.load(Ordering::Acquire) {
-            self.subscription
-                .poll(Some(&self.poll_handler), MESSAGE_LENGTH)
-                .unwrap();
+            let fragments = self
+                .subscription
+                .poll_fn(|_, _| message_count += 1, FRAGMENT_COUNT_LIMIT)?;
+            if fragments == 0 {
+                spin_loop();
+            }
 
-            let handler = unsafe { self.poll_handler.get_mut() };
-            if handler.message_count >= next_check && self.start_time.elapsed() >= Duration::from_secs(1) {
-                next_check += BURST_LENGTH;
+            if message_count >= BURST_LENGTH && self.start_time.elapsed() >= Duration::from_secs(1) {
                 let elapsed = self.start_time.elapsed().as_secs_f64();
-                let rate = handler.message_count as f64 / elapsed;
+                let rate = message_count as f64 / elapsed;
                 let throughput = rate * self.message_length as f64;
 
                 use num_format::{Locale, ToFormattedString};
@@ -149,8 +148,9 @@ impl ImageRateSubscriber {
                 );
 
                 self.start_time = Instant::now();
-                handler.message_count = 0;
+                message_count = 0;
             }
         }
+        Ok(())
     }
 }
