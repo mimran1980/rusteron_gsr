@@ -153,7 +153,7 @@ Each object is driven by its own call, once a cycle:
 | `Aeron` client | Nothing with its conductor thread (the default). With the agent invoker, `aeron.main_do_work()`. | `archive.do_work()` makes this call for you. |
 | `AeronArchive` | `archive.do_work()` | Runs an agent-invoker client's conductor, then hands one recording signal to the context's consumer, or one archive error to its error handler. |
 | Persistent subscription | `ps.poll_fn(..)` | Drives its own archive client. With the agent invoker every poll also runs the client's conductor, so many persistent subscriptions on one client should use its conductor thread. |
-| Async list or replay request | `request.poll()` | While one is pending, `archive.do_work()` reads nothing from the archive. |
+| Async list or replay request | `request.poll()` | While one is pending, `archive.do_work()` reads nothing from the archive and its signal and error polls fail. `poll` has no timeout of its own: give up after your own deadline. |
 
 ```rust,ignore
 loop {

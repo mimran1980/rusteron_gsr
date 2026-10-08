@@ -722,19 +722,16 @@ impl CWrapper {
                 let mut additional_methods = vec![];
                 let set_closed = quote! {};
                 // These archive calls read the control responses without Aeron's reentrancy
-                // check, so while an async request is in flight they would take its responses.
+                // check, so while an async request is in flight they fail as Aeron's own
+                // calls do, rather than take its responses.
                 let in_flight_guard = match method.fn_name.as_str() {
-                    "aeron_archive_poll_for_recording_signals" | "aeron_archive_check_for_error_response" => quote! {
+                    "aeron_archive_poll_for_recording_signals"
+                    | "aeron_archive_check_for_error_response"
+                    | "aeron_archive_poll_for_error_response" => quote! {
                         if unsafe { (*self.get_inner()).is_in_callback } {
-                            return Ok(0);
-                        }
-                    },
-                    "aeron_archive_poll_for_error_response" => quote! {
-                        if unsafe { (*self.get_inner()).is_in_callback } {
-                            if let Some(end) = buffer.first_mut() {
-                                *end = 0;
-                            }
-                            return Ok(0);
+                            return Err(AeronArchiveError::parse(
+                                "an async archive request is in flight, and its poll reads the archive's responses",
+                            ));
                         }
                     },
                     _ => quote! {},

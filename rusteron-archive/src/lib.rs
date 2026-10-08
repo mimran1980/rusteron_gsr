@@ -171,6 +171,9 @@ impl AeronArchive {
         } else {
             0
         };
+        if self.get_inner_ref().is_in_callback {
+            return Ok(conductor);
+        }
         Ok(conductor + self.poll_for_recording_signals()?)
     }
 
@@ -259,7 +262,7 @@ impl AeronArchiveAsyncConnect {
 
 /// Marks a request in flight on `archive`, so nothing else consumes the request's
 /// responses: Aeron rejects its blocking calls as made within a callback, and its
-/// signal and error polls read nothing.
+/// signal and error polls fail the same way.
 fn set_request_in_flight(archive: &AeronArchive, in_flight: bool) {
     // SAFETY: the archive is live, and not `Sync`, so nothing writes the flag concurrently.
     unsafe { (*archive.get_inner()).is_in_callback = in_flight };
@@ -319,9 +322,11 @@ impl AeronArchive {
 /// answered so far, so nothing waits on an archive that may be remote.
 ///
 /// The archive has one response stream, so until the request completes, fails or is
-/// dropped, the archive's blocking calls fail, its signal and error polls read nothing,
-/// and a replay merge on it must not be polled. Dropped mid-way, the archive still sends
-/// the rest, and refuses another listing on this session until it has. In
+/// dropped, the archive's blocking calls and its signal and error polls fail, and a
+/// replay merge on it must not be polled. Dropped mid-way, the archive still sends the
+/// rest, and refuses another listing on this session until it has. [`Self::poll`] has no
+/// timeout of its own: give up after your own deadline, or once
+/// [`AeronArchive::get_control_response_subscription`] stops being connected. In
 /// conductor-invoker mode, keep calling [`Aeron::main_do_work`] meanwhile.
 pub struct AeronArchiveAsyncListRecordings<F> {
     archive: AeronArchive,
@@ -329,9 +334,6 @@ pub struct AeronArchiveAsyncListRecordings<F> {
     // The poller holds this consumer's address until `finish`.
     _consumer: Handler<F>,
     record_count: i32,
-    remaining: i32,
-    timeout: Duration,
-    deadline: Instant,
     in_flight: bool,
     count: Option<i32>,
 }
@@ -360,15 +362,11 @@ impl<F: FnMut(AeronArchiveRecordingDescriptor) + 'static> AeronArchiveAsyncListR
             ));
         }
         set_request_in_flight(archive, true);
-        let timeout = Duration::from_nanos(archive.get_archive_context().get_message_timeout_ns());
         Ok(Self {
             archive: archive.clone(),
             poller,
             _consumer: consumer,
             record_count,
-            remaining: record_count,
-            timeout,
-            deadline: Instant::now() + timeout,
             in_flight: true,
             count: None,
         })
@@ -381,9 +379,7 @@ impl<F> AeronArchiveAsyncListRecordings<F> {
     ///
     /// # Errors
     ///
-    /// The archive answered with an error, its response stream disconnected, or no
-    /// descriptor arrived within the archive context's message timeout. The request is
-    /// over either way.
+    /// The archive answered with an error. The request is over then.
     pub fn poll(&mut self) -> Result<Option<i32>, AeronCError> {
         if !self.in_flight {
             return self
@@ -391,40 +387,16 @@ impl<F> AeronArchiveAsyncListRecordings<F> {
                 .map(Some)
                 .ok_or_else(|| AeronCError::with_message(-1, "the list-recordings request failed"));
         }
-        let fragments = match self.poller.poll() {
-            Ok(fragments) => fragments,
-            Err(e) => {
-                self.finish();
-                return Err(e);
-            }
-        };
-        let remaining = self.poller.remaining_record_count();
-        if self.poller.is_dispatch_complete() {
+        if let Err(e) = self.poller.poll() {
             self.finish();
-            self.count = Some(self.record_count - remaining);
+            return Err(e);
+        }
+        if self.poller.is_dispatch_complete() {
+            // read before `finish` resets the poller
+            let count = self.record_count - self.poller.remaining_record_count();
+            self.finish();
+            self.count = Some(count);
             return Ok(self.count);
-        }
-        let now = Instant::now();
-        if remaining != self.remaining {
-            self.remaining = remaining;
-            self.deadline = now + self.timeout;
-        }
-        if fragments == 0 {
-            // SAFETY: the archive, and so its response subscription, is live.
-            if !unsafe { aeron_subscription_is_connected(self.archive.get_inner_ref().subscription) } {
-                self.finish();
-                return Err(AeronCError::with_message(
-                    -1,
-                    "the archive's response stream is not connected",
-                ));
-            }
-            if now > self.deadline {
-                self.finish();
-                return Err(AeronCError::with_message(
-                    AeronErrorType::TimedOut.code(),
-                    "timed out awaiting recording descriptors",
-                ));
-            }
         }
         Ok(None)
     }
@@ -484,12 +456,10 @@ impl AeronArchive {
             return Err(AeronCError::with_message(-1, "the start-replay request was not sent"));
         }
         set_request_in_flight(self, true);
-        let timeout = Duration::from_nanos(self.get_archive_context().get_message_timeout_ns());
         Ok(AeronArchiveAsyncStartReplay {
             archive: self.clone(),
             poller: AeronArchiveControlResponsePoller::from(inner.control_response_poller),
             correlation_id,
-            deadline: Instant::now() + timeout,
             in_flight: true,
             replay_session_id: None,
         })
@@ -499,15 +469,16 @@ impl AeronArchive {
 /// A start-replay request in flight. Each [`Self::poll`] takes what the archive has
 /// answered so far, so nothing waits on an archive that may be remote.
 ///
-/// Until the request completes, fails or is dropped, the archive's blocking calls fail,
-/// its signal and error polls read nothing, and a replay merge on it must not be polled.
-/// Recording signals that arrive meanwhile still reach the context's signal consumer, but
-/// archive errors for other requests are dropped.
+/// Until the request completes, fails or is dropped, the archive's blocking calls and its
+/// signal and error polls fail, and a replay merge on it must not be polled. Recording
+/// signals that arrive meanwhile still reach the context's signal consumer, but archive
+/// errors for other requests are dropped. [`Self::poll`] has no timeout of its own: give
+/// up after your own deadline, or once [`AeronArchive::get_control_response_subscription`]
+/// stops being connected.
 pub struct AeronArchiveAsyncStartReplay {
     archive: AeronArchive,
     poller: AeronArchiveControlResponsePoller,
     correlation_id: i64,
-    deadline: Instant,
     in_flight: bool,
     replay_session_id: Option<i64>,
 }
@@ -517,8 +488,7 @@ impl AeronArchiveAsyncStartReplay {
     ///
     /// # Errors
     ///
-    /// The archive refused the replay, its response stream disconnected, or no answer
-    /// arrived within the archive context's message timeout. The request is over either way.
+    /// The archive refused the replay. The request is over then.
     pub fn poll(&mut self) -> Result<Option<i64>, AeronCError> {
         if !self.in_flight {
             return self
@@ -526,13 +496,10 @@ impl AeronArchiveAsyncStartReplay {
                 .map(Some)
                 .ok_or_else(|| AeronCError::with_message(-1, "the start-replay request failed"));
         }
-        let fragments = match self.poller.poll() {
-            Ok(fragments) => fragments,
-            Err(e) => {
-                self.finish();
-                return Err(e);
-            }
-        };
+        if let Err(e) = self.poller.poll() {
+            self.finish();
+            return Err(e);
+        }
         let archive = self.archive.get_inner_ref();
         let response = self.poller.get_inner_ref();
         if response.is_poll_complete && response.control_session_id == archive.control_session_id {
@@ -567,23 +534,6 @@ impl AeronArchiveAsyncStartReplay {
                 };
                 self.finish();
                 return outcome;
-            }
-        }
-        if fragments == 0 {
-            // SAFETY: the archive, and so its response subscription, is live.
-            if !unsafe { aeron_subscription_is_connected(archive.subscription) } {
-                self.finish();
-                return Err(AeronCError::with_message(
-                    -1,
-                    "the archive's response stream is not connected",
-                ));
-            }
-            if Instant::now() > self.deadline {
-                self.finish();
-                return Err(AeronCError::with_message(
-                    AeronErrorType::TimedOut.code(),
-                    "timed out awaiting the start-replay response",
-                ));
             }
         }
         Ok(None)
@@ -1830,15 +1780,16 @@ mod tests {
                 archive.async_list_recordings(0, 100, |_| {}).is_err(),
                 "one request at a time"
             );
-            // the archive's signal and error polls leave the request's responses alone
+            // the archive's signal and error polls refuse rather than take the responses
             thread::sleep(Duration::from_millis(200));
-            let pump_until = Instant::now() + Duration::from_millis(500);
-            while Instant::now() < pump_until {
-                archive.poll_for_recording_signals()?;
-                archive.check_for_error_response()?;
-                assert_eq!(archive.poll_for_error_response_as_string(256)?, "");
-                thread::yield_now();
-            }
+            assert!(archive.poll_for_recording_signals().is_err());
+            assert!(archive.check_for_error_response().is_err());
+            assert!(archive.poll_for_error_response_as_string(256).is_err());
+            assert_eq!(
+                archive.do_work()?,
+                0,
+                "do_work reads nothing from the archive meanwhile"
+            );
             assert_eq!(poll_until_done(|| request.poll())?, 2);
             assert_eq!(*listed.borrow(), expected);
             assert_eq!(request.poll()?, Some(2), "a completed request keeps its count");

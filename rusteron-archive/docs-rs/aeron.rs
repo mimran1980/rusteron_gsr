@@ -8745,7 +8745,9 @@ impl AeronArchive {
 `count_p` out param that indicates the number of recording signals dispatched."]
     pub fn poll_for_recording_signals(&self) -> Result<i32, AeronArchiveError> {
         if unsafe { (*self.get_inner()).is_in_callback } {
-            return Ok(0);
+            return Err(AeronArchiveError::parse(
+                "an async archive request is in flight, and its poll reads the archive's responses",
+            ));
         }
         unsafe {
             let mut mut_result: i32 = Default::default();
@@ -8779,10 +8781,9 @@ impl AeronArchive {
     #[doc = " -1 if an error occurs while attempting to read from the subscription."]
     pub fn poll_for_error_response(&self, buffer: &mut [u8]) -> Result<i32, AeronArchiveError> {
         if unsafe { (*self.get_inner()).is_in_callback } {
-            if let Some(end) = buffer.first_mut() {
-                *end = 0;
-            }
-            return Ok(0);
+            return Err(AeronArchiveError::parse(
+                "an async archive request is in flight, and its poll reads the archive's responses",
+            ));
         }
         unsafe {
             #[cfg(feature = "log-c-bindings")]
@@ -8860,7 +8861,9 @@ impl AeronArchive {
     #[doc = " -1 if an error is found and no error handler is specified.  The error message can be retrieved by calling aeron_errmsg()"]
     pub fn check_for_error_response(&self) -> Result<i32, AeronArchiveError> {
         if unsafe { (*self.get_inner()).is_in_callback } {
-            return Ok(0);
+            return Err(AeronArchiveError::parse(
+                "an async archive request is in flight, and its poll reads the archive's responses",
+            ));
         }
         unsafe {
             #[cfg(feature = "log-c-bindings")]
