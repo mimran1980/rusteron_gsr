@@ -119,7 +119,7 @@ impl AeronDriverContext {
 
     /// Reads this process's cgroup cpuset and spreads the driver's agents over it when
     /// cpuset affinity is on (`AERON_DRIVER_CPUSET_AFFINITY` or [`Self::set_cpuset_affinity`]),
-    /// as `aeronmd` does; nothing otherwise. Call before the driver starts.
+    /// as `aeronmd` does; nothing otherwise. Call once, before the driver starts.
     ///
     /// # Errors
     ///
@@ -137,12 +137,19 @@ impl AeronDriverContext {
     /// Pins each driver agent thread, as it starts, to the CPU set for its role
     /// (`AERON_CONDUCTOR_CPU_AFFINITY` and the like, or [`Self::set_conductor_cpu_affinity`]
     /// and its siblings), as `aeronmd` does. An on-start function already set still runs
-    /// after it, so set any other one first. Call before the driver starts.
+    /// after it, so set any other one first. Call before [`AeronDriver::new`] or
+    /// [`AeronDriver::launch_embedded`], which hand the on-start function to the agents.
     pub fn set_thread_affinity_on_start(&self) {
         let context = self.get_inner();
         // SAFETY: the context is live and its agents have not started, so nothing else reads
         // these fields; Aeron's affinity function takes the driver context as its state.
         unsafe {
+            // installing it again would make it its own delegate, which calls itself forever
+            if (*context).agent_on_start_func.map(|f| f as *const ())
+                == Some(aeron_set_thread_affinity_on_start as *const ())
+            {
+                return;
+            }
             (*context).agent_on_start_func_delegate = (*context).agent_on_start_func;
             (*context).agent_on_start_state_delegate = (*context).agent_on_start_state;
             aeron_driver_context_set_agent_on_start_function(
@@ -443,6 +450,19 @@ mod tests {
         let context = AeronDriverContext::new()?;
         context.set_cpuset_affinity(true)?;
         assert!(context.apply_cgroup_cpuset_affinity().is_err());
+        Ok(())
+    }
+
+    /// Installing the affinity function again keeps the earlier on-start function as its
+    /// delegate, rather than making the affinity function call itself.
+    #[test]
+    fn thread_affinity_on_start_installs_once() -> Result<(), AeronCError> {
+        let context = AeronDriverContext::new()?;
+        context.set_thread_affinity_on_start();
+        context.set_thread_affinity_on_start();
+        // SAFETY: the context is live and no driver reads it.
+        let delegate = unsafe { (*context.get_inner()).agent_on_start_func_delegate }.map(|f| f as *const ());
+        assert_ne!(delegate, Some(aeron_set_thread_affinity_on_start as *const ()));
         Ok(())
     }
 
