@@ -721,6 +721,24 @@ impl CWrapper {
 
                 let mut additional_methods = vec![];
                 let set_closed = quote! {};
+                // These archive calls read the control responses without Aeron's reentrancy
+                // check, so while an async request is in flight they would take its responses.
+                let in_flight_guard = match method.fn_name.as_str() {
+                    "aeron_archive_poll_for_recording_signals" | "aeron_archive_check_for_error_response" => quote! {
+                        if unsafe { (*self.get_inner()).is_in_callback } {
+                            return Ok(0);
+                        }
+                    },
+                    "aeron_archive_poll_for_error_response" => quote! {
+                        if unsafe { (*self.get_inner()).is_in_callback } {
+                            if let Some(end) = buffer.first_mut() {
+                                *end = 0;
+                            }
+                            return Ok(0);
+                        }
+                    },
+                    _ => quote! {},
+                };
 
                 Self::add_mut_string_methods_if_applicable(method, &fn_name, uses_self, &method_docs, &mut additional_methods);
 
@@ -839,6 +857,7 @@ impl CWrapper {
                         #(#method_docs)*
                         pub fn #fn_name #where_clause(#possible_self #(#fn_arguments),*) -> #return_type {
                             #set_closed
+                            #in_flight_guard
                             unsafe {
                                 let mut mut_result: #rt = Default::default();
 
@@ -871,6 +890,7 @@ impl CWrapper {
                         #(#method_docs)*
                         pub fn #fn_name #where_clause(#possible_self #(#fn_arguments),*) -> #return_type {
                             #set_closed
+                            #in_flight_guard
                             #handler_prelude
                             unsafe {
                                 #[cfg(feature = "log-c-bindings")]

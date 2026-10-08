@@ -232,8 +232,9 @@ impl AeronArchiveAsyncConnect {
     }
 }
 
-/// Marks a request in flight on `archive`, so its blocking calls fail fast instead of
-/// consuming the request's responses: Aeron rejects them as made within a callback.
+/// Marks a request in flight on `archive`, so nothing else consumes the request's
+/// responses: Aeron rejects its blocking calls as made within a callback, and its
+/// signal and error polls read nothing.
 fn set_request_in_flight(archive: &AeronArchive, in_flight: bool) {
     // SAFETY: the archive is live, and not `Sync`, so nothing writes the flag concurrently.
     unsafe { (*archive.get_inner()).is_in_callback = in_flight };
@@ -293,7 +294,8 @@ impl AeronArchive {
 /// answered so far, so nothing waits on an archive that may be remote.
 ///
 /// The archive has one response stream, so until the request completes, fails or is
-/// dropped, the archive's blocking calls fail. Dropped mid-way, the archive still sends
+/// dropped, the archive's blocking calls fail, its signal and error polls read nothing,
+/// and a replay merge on it must not be polled. Dropped mid-way, the archive still sends
 /// the rest, and refuses another listing on this session until it has. In
 /// conductor-invoker mode, keep calling [`Aeron::main_do_work`] meanwhile.
 pub struct AeronArchiveAsyncListRecordings<F> {
@@ -472,7 +474,8 @@ impl AeronArchive {
 /// A start-replay request in flight. Each [`Self::poll`] takes what the archive has
 /// answered so far, so nothing waits on an archive that may be remote.
 ///
-/// Until the request completes, fails or is dropped, the archive's blocking calls fail.
+/// Until the request completes, fails or is dropped, the archive's blocking calls fail,
+/// its signal and error polls read nothing, and a replay merge on it must not be polled.
 /// Recording signals that arrive meanwhile still reach the context's signal consumer.
 pub struct AeronArchiveAsyncStartReplay {
     archive: AeronArchive,
@@ -1732,6 +1735,15 @@ mod tests {
                 archive.async_list_recordings(0, 100, |_| {}).is_err(),
                 "one request at a time"
             );
+            // the archive's signal and error polls leave the request's responses alone
+            thread::sleep(Duration::from_millis(200));
+            let pump_until = Instant::now() + Duration::from_millis(500);
+            while Instant::now() < pump_until {
+                archive.poll_for_recording_signals()?;
+                archive.check_for_error_response()?;
+                assert_eq!(archive.poll_for_error_response_as_string(256)?, "");
+                thread::yield_now();
+            }
             assert_eq!(poll_until_done(|| request.poll())?, 2);
             assert_eq!(*listed.borrow(), expected);
             assert_eq!(request.poll()?, Some(2), "a completed request keeps its count");
