@@ -38,6 +38,14 @@ mod tests {
     use std::thread::sleep;
     use std::time::{Duration, Instant};
 
+    /// Accepts recordings still in progress on exactly `channel`.
+    fn recording_on(channel: &str) -> impl Fn(&AeronArchiveRecordingDescriptor) -> bool + 'static {
+        let channel = channel.to_owned();
+        move |recording| {
+            recording.stop_position() == i64::from(AERON_NULL_VALUE) && recording.original_channel() == channel
+        }
+    }
+
     /// Retry an archive control operation until `deadline`
     fn retry_archive_op<T, F>(deadline: Instant, mut op: F) -> Result<T, AeronArchiveError>
     where
@@ -1306,6 +1314,7 @@ mod tests {
             },
             (channel, stream_id),
             ("aeron:udp?endpoint=localhost:0", stream_id + 1),
+            recording_on(channel),
         )
         .from_start()
         .retry_after(Duration::from_millis(50))
@@ -1440,6 +1449,7 @@ mod tests {
             },
             ("aeron:ipc", stream_id),
             ("aeron:udp?endpoint=localhost:0", stream_id + 1),
+            recording_on("aeron:ipc"),
         )
         .retry_after(Duration::from_millis(50));
 
@@ -1500,6 +1510,7 @@ mod tests {
             },
             ("aeron:ipc", stream_id),
             ("aeron:udp?endpoint=localhost:0", stream_id + 1),
+            recording_on("aeron:ipc"),
         )
         .retry_after(Duration::from_millis(50));
         drop(client);
@@ -1515,8 +1526,78 @@ mod tests {
         Ok(())
     }
 
-    /// A release that changes the publisher's channel params, here adding `mtu` ahead of the
-    /// endpoint, still leaves the follower following the stream's active recording.
+    /// With no recording its filter accepts, the follower waits rather than follow another
+    /// channel's recording of the same stream id, so it never delivers that channel's data.
+    #[test]
+    #[serial]
+    fn follower_never_follows_another_channels_recording() -> Result<(), Box<dyn Error>> {
+        crate::skip_unless_java!();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().ok();
+
+        let (aeron, archive_context, _media_driver_archive, _archive_error_handler) =
+            start_aeron_archive_with_config("ps_follow_other", 9965)?;
+        let archive = AeronArchiveAsyncConnect::new_with_aeron(&archive_context, &aeron)?
+            .poll_blocking(Duration::from_secs(20))
+            .expect("failed to connect to archive");
+        let stream_id = 3901;
+        let port = find_unused_udp_port(20700).expect("Could not find port");
+        let other = format!("aeron:udp?endpoint=localhost:{port}");
+        retry_archive_op(Instant::now() + Duration::from_secs(15), || {
+            archive.start_recording(&other.as_str().into_c_string(), stream_id, SOURCE_LOCATION_LOCAL, false)
+        })?;
+        let publication = aeron
+            .async_add_exclusive_publication(&other.as_str().into_c_string(), stream_id)?
+            .poll_blocking(Duration::from_secs(5))?;
+        for i in 0..5 {
+            let message = format!("other-{i}");
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while publication.offer_raw(message.as_bytes(), Handlers::NONE) <= 0 {
+                assert!(Instant::now() < deadline, "timed out offering {message}");
+                sleep(Duration::from_millis(1));
+            }
+        }
+        let counters_reader = aeron.counters_reader();
+        let session_id = publication.get_constants()?.session_id;
+        let counter_id =
+            crate::testing::find_counter_id_by_session_blocking(&counters_reader, session_id, Duration::from_secs(5))?;
+        RecordingPos::get_recording_id_block(&counters_reader, counter_id, Duration::from_secs(5))?;
+
+        let request = archive_context.get_control_request_channel().to_owned();
+        let response = archive_context.get_control_response_channel().to_owned();
+        let mut follower = FollowingPersistentSubscription::new(
+            &aeron,
+            move || {
+                let context = AeronArchiveContext::new()?;
+                context.set_control_request_channel(&request.as_str().into_c_string())?;
+                context.set_control_response_channel(&response.as_str().into_c_string())?;
+                Ok(context)
+            },
+            ("aeron:ipc", stream_id),
+            ("aeron:udp?endpoint=localhost:0", stream_id + 1),
+            recording_on("aeron:ipc"),
+        )
+        .from_start()
+        .retry_after(Duration::from_millis(50));
+
+        let mut received = Vec::new();
+        let until = Instant::now() + Duration::from_secs(3);
+        while Instant::now() < until {
+            follower.poll_fn(
+                |message, _| received.push(String::from_utf8_lossy(message).into_owned()),
+                10,
+            );
+            assert_eq!(follower.recording_id(), None, "followed another channel's recording");
+            sleep(Duration::from_millis(1));
+        }
+        assert!(received.is_empty(), "delivered another channel's data: {received:?}");
+        drop(publication);
+        Ok(())
+    }
+
+    /// A filter on the endpoint keeps the follower on its stream when a release changes the
+    /// channel's other params, here adding `mtu` ahead of the endpoint.
     #[test]
     #[serial]
     fn follower_follows_the_active_recording_when_uri_params_change() -> Result<(), Box<dyn Error>> {
@@ -1563,6 +1644,13 @@ mod tests {
             },
             (live.as_str(), stream_id),
             ("aeron:udp?endpoint=localhost:0", stream_id + 1),
+            {
+                let endpoint = format!("endpoint=localhost:{port}");
+                move |recording: &AeronArchiveRecordingDescriptor| {
+                    recording.stop_position() == i64::from(AERON_NULL_VALUE)
+                        && recording.original_channel().contains(&endpoint)
+                }
+            },
         )
         .retry_after(Duration::from_millis(50));
 
@@ -1578,8 +1666,8 @@ mod tests {
         Ok(())
     }
 
-    /// By default the follower takes only recordings of its live channel, not a newer one
-    /// of the same stream id on another channel.
+    /// The follower takes only recordings its filter accepts, not a newer one of the same
+    /// stream id on another channel.
     #[test]
     #[serial]
     fn follower_follows_only_its_live_channels_recordings() -> Result<(), Box<dyn Error>> {
@@ -1638,6 +1726,7 @@ mod tests {
             },
             ("aeron:ipc", stream_id),
             ("aeron:udp?endpoint=localhost:0", stream_id + 1),
+            recording_on("aeron:ipc"),
         )
         .from_start()
         .retry_after(Duration::from_millis(50));
@@ -1711,8 +1800,8 @@ mod tests {
             // the driver refuses a UDP live channel without an endpoint, so the subscription fails
             ("aeron:udp", stream_id),
             ("aeron:udp?endpoint=localhost:0", stream_id + 1),
+            recording_on("aeron:ipc"),
         )
-        .recordings(c"aeron:ipc", |_| true)
         .retry_after(Duration::from_secs(10));
 
         let (mut followed, start) = (false, Instant::now());

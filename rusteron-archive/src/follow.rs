@@ -1,20 +1,17 @@
 //! A persistent subscription that follows its stream's newest recording.
 
 use super::*;
-use std::ffi::{CStr, CString};
 use std::rc::Rc;
 
 type ArchiveContextFactory = Box<dyn Fn() -> Result<AeronArchiveContext, AeronCError>>;
 type RecordingFilter = Rc<dyn Fn(&AeronArchiveRecordingDescriptor) -> bool>;
 type ListConsumer = Box<dyn FnMut(AeronArchiveRecordingDescriptor)>;
-/// The newest recording a lookup accepted, and the newest of those on the live stream.
-type Found = Rc<Cell<(Option<(i64, i32)>, Option<(i64, i32)>)>>;
 
 /// A persistent subscription that follows its stream's newest recording.
 ///
 /// A restarted publisher records a new session, and a persistent subscription on the old
 /// recording then fails. This one lists the archive's recordings again and continues with
-/// the newest that [`Self::recordings`] accepts: from its start, or from the last message
+/// the newest that the caller's filter accepts: from its start, or from the last message
 /// delivered if it is still the recording it was following. It looks again when the
 /// subscription fails, or sits off the live stream with nothing to read for
 /// [`Self::idle_timeout`], as one does once its publisher's session has gone. The live
@@ -27,8 +24,7 @@ pub struct FollowingPersistentSubscription {
     stream_id: i32,
     replay_channel: String,
     replay_stream_id: i32,
-    channel_fragment: CString,
-    filter: RecordingFilter,
+    accepts: RecordingFilter,
     from_start: bool,
     retry: Duration,
     idle_timeout: Duration,
@@ -42,7 +38,10 @@ pub struct FollowingPersistentSubscription {
 enum Stage {
     Waiting(Instant),
     Connecting(AeronArchiveAsyncConnect, AeronArchiveContext),
-    Listing(AeronArchiveAsyncListRecordings<ListConsumer>, Found),
+    Listing(
+        AeronArchiveAsyncListRecordings<ListConsumer>,
+        Rc<Cell<Option<(i64, i32)>>>,
+    ),
     Building(AeronArchiveAsyncPersistentSubscription, AeronArchiveContext, i64),
     Following {
         subscription: AeronArchivePersistentSubscription,
@@ -54,15 +53,39 @@ enum Stage {
 
 impl FollowingPersistentSubscription {
     /// Follows the recordings of `live`, a channel and stream id, replaying them to `replay`.
+    /// `accepts` decides which recordings of the stream id belong to the stream; the
+    /// follower takes the newest it accepts, never another, and waits while there is none.
     /// `archive_context` makes a fresh context, with the archive's control channels, for
     /// each connection to the archive; the follower sets `aeron` as its client. The follower
     /// keeps a clone of `aeron`, and each context, open until the subscription that uses
     /// them has closed.
+    ///
+    /// # Examples
+    ///
+    /// Follows recordings still in progress on one endpoint, whatever other params a new
+    /// release gives the channel:
+    ///
+    /// ```no_run
+    /// # use rusteron_archive::*;
+    /// # fn follow(aeron: &Aeron, make_context: impl Fn() -> Result<AeronArchiveContext, AeronCError> + 'static) {
+    /// let follower = FollowingPersistentSubscription::new(
+    ///     aeron,
+    ///     make_context,
+    ///     ("aeron:udp?endpoint=feed-host:40123", 1001),
+    ///     ("aeron:udp?endpoint=localhost:0", 1002),
+    ///     |recording| {
+    ///         recording.stop_position() == i64::from(bindings::AERON_NULL_VALUE)
+    ///             && recording.original_channel().contains("endpoint=feed-host:40123")
+    ///     },
+    /// );
+    /// # }
+    /// ```
     pub fn new(
         aeron: &Aeron,
         archive_context: impl Fn() -> Result<AeronArchiveContext, AeronCError> + 'static,
         live: (&str, i32),
         replay: (&str, i32),
+        accepts: impl Fn(&AeronArchiveRecordingDescriptor) -> bool + 'static,
     ) -> Self {
         Self {
             aeron: aeron.clone(),
@@ -71,8 +94,7 @@ impl FollowingPersistentSubscription {
             stream_id: live.1,
             replay_channel: replay.0.to_owned(),
             replay_stream_id: replay.1,
-            channel_fragment: CString::default(),
-            filter: Rc::new(|recording| recording.stop_position() == i64::from(AERON_NULL_VALUE)),
+            accepts: Rc::new(accepts),
             from_start: false,
             retry: Duration::from_secs(1),
             idle_timeout: Duration::from_secs(5),
@@ -80,21 +102,6 @@ impl FollowingPersistentSubscription {
             stage: Stage::Waiting(Instant::now()),
             resume: None,
         }
-    }
-
-    /// Follows only the recordings whose channel contains `channel_fragment` and that
-    /// `filter` accepts. By default, the stream's recordings still recording; when several
-    /// are, the newest on the live channel's media and endpoint wins, so changes to other
-    /// params, such as `mtu` or `term-length` in a new release, do not matter.
-    #[must_use]
-    pub fn recordings(
-        mut self,
-        channel_fragment: &CStr,
-        filter: impl Fn(&AeronArchiveRecordingDescriptor) -> bool + 'static,
-    ) -> Self {
-        self.channel_fragment = channel_fragment.to_owned();
-        self.filter = Rc::new(filter);
-        self
     }
 
     /// Replays the first recording from its start instead of joining the live stream.
@@ -197,16 +204,13 @@ impl FollowingPersistentSubscription {
                     Some(archive) => self.list(&archive)?,
                 }
             }
-            Stage::Listing(mut request, found) => {
+            Stage::Listing(mut request, newest) => {
                 match request.poll().map_err(|e| format!("listing recordings: {e}"))? {
-                    None => Stage::Listing(request, found),
-                    Some(_) => {
-                        let (newest, on_live_stream) = found.get();
-                        match on_live_stream.or(newest) {
-                            Some((recording_id, session_id)) => self.subscribe(recording_id, session_id)?,
-                            None => return Err("no recording to follow yet".to_owned()),
-                        }
-                    }
+                    None => Stage::Listing(request, newest),
+                    Some(_) => match newest.get() {
+                        Some((recording_id, session_id)) => self.subscribe(recording_id, session_id)?,
+                        None => return Err("no recording to follow yet".to_owned()),
+                    },
                 }
             }
             Stage::Building(mut building, context, recording_id) => {
@@ -239,27 +243,21 @@ impl FollowingPersistentSubscription {
     }
 
     fn list(&self, archive: &AeronArchive) -> Result<Stage, String> {
-        let found: Found = Rc::new(Cell::new((None, None)));
-        let (sink, filter, live) = (Rc::clone(&found), Rc::clone(&self.filter), self.live_channel.clone());
+        let newest = Rc::new(Cell::new(None));
+        let (found, accepts) = (Rc::clone(&newest), Rc::clone(&self.accepts));
         let consumer: ListConsumer = Box::new(move |recording| {
-            if filter(&recording) {
-                let candidate = Some((recording.recording_id(), recording.session_id()));
-                let (newest, on_live_stream) = sink.get();
-                let live_stream = stream_identity(recording.original_channel()) == stream_identity(&live);
-                sink.set((
-                    newest.max(candidate),
-                    if live_stream {
-                        on_live_stream.max(candidate)
-                    } else {
-                        on_live_stream
-                    },
-                ));
+            if accepts(&recording) {
+                found.set(
+                    found
+                        .get()
+                        .max(Some((recording.recording_id(), recording.session_id()))),
+                );
             }
         });
         let request = archive
-            .async_list_recordings_for_uri(0, i32::MAX, &self.channel_fragment, self.stream_id, consumer)
+            .async_list_recordings_for_uri(0, i32::MAX, c"", self.stream_id, consumer)
             .map_err(|e| format!("listing recordings: {e}"))?;
-        Ok(Stage::Listing(request, found))
+        Ok(Stage::Listing(request, newest))
     }
 
     fn subscribe(&mut self, recording_id: i64, session_id: i32) -> Result<Stage, String> {
@@ -286,19 +284,6 @@ impl Drop for FollowingPersistentSubscription {
     }
 }
 
-/// What identifies `channel`'s stream across releases: its media, endpoint and control
-/// address. Other params, such as `mtu` or `term-length`, may change freely.
-fn stream_identity(channel: &str) -> (&str, Option<&str>, Option<&str>) {
-    let channel = channel.strip_prefix(SPY_PREFIX).unwrap_or(channel);
-    let (media, params) = channel.split_once('?').unwrap_or((channel, ""));
-    let param = |key: &str| {
-        params
-            .split('|')
-            .find_map(|param| param.strip_prefix(key)?.strip_prefix('='))
-    };
-    (media, param("endpoint"), param("control"))
-}
-
 /// Where to start `recording_id`: where the last one followed was left if it is the same,
 /// else from its start, or from live for a first recording not followed `from_start`.
 fn start_position(resume: Option<(i64, i64)>, recording_id: i64, from_start: bool) -> i64 {
@@ -313,23 +298,6 @@ fn start_position(resume: Option<(i64, i64)>, recording_id: i64, from_start: boo
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn stream_identity_ignores_params_a_release_may_change() {
-        let live = stream_identity("aeron:udp?endpoint=host:40123");
-        assert_eq!(
-            stream_identity("aeron:udp?mtu=8192|endpoint=host:40123|term-length=131072"),
-            live
-        );
-        assert_eq!(stream_identity("aeron-spy:aeron:udp?endpoint=host:40123"), live);
-        assert_eq!(stream_identity("aeron:ipc?alias=x"), stream_identity("aeron:ipc"));
-        assert_ne!(stream_identity("aeron:udp?endpoint=host:40124"), live);
-        assert_ne!(
-            stream_identity("aeron:udp?control=host:40123|control-mode=dynamic"),
-            live
-        );
-        assert_ne!(stream_identity("aeron:ipc"), live);
-    }
 
     #[test]
     fn resumes_the_same_recording_and_replays_a_new_one_from_its_start() {
