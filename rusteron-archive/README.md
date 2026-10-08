@@ -125,7 +125,7 @@ For detailed guides and code snippets on Aeron features in Rust, see:
 ## Safety Considerations
 
 1. **Aeron Lifetime** – The `AeronArchive` depends on an external `Aeron` instance. Ensure `Aeron` outlives all references to the archive.
-2. **Persistent Subscription Lifetime** – A persistent subscription holds no reference to its `Aeron` client or archive context, yet uses both until it closes. Keep them open until the subscription is closed or dropped, as in the [example below](#persistent-subscriptions). Building it also points the archive context at the subscription's client, so build with `PersistentSubscriptionBuilder::new_with_aeron(&archive_context, &aeron)`, which sets one client on both. Without a client the subscription makes its own and closes it, and the archive context must not be used again afterwards.
+2. **Persistent Subscription Lifetime** – A persistent subscription keeps the `Aeron` client and archive context given to its builder open until it closes. Building it also points the archive context at the subscription's client, so build with `PersistentSubscriptionBuilder::new_with_aeron(&archive_context, &aeron)`, which sets one client on both. Without a client the subscription makes its own and closes it, and the archive context must not be used again afterwards.
 3. **Unsafe Bindings** – The module interfaces directly with Aeron’s C API. Improper resource handling can cause undefined behavior.
 4. **Automatic Handler Cleanup** – Handlers are reference-counted; registered callbacks live as long as the resource that registered them and are freed automatically.
 5. **Thread Safety** – Use care when accessing Aeron objects across threads. Synchronize access appropriately.
@@ -216,10 +216,7 @@ while !ps.is_live() {
     ps.poll_fn(|buf, _hdr| { /* an assembled replayed or live message */ }, 100)?;
 }
 
-// the subscription first, then the archive context and client it uses
 ps.close()?;
-drop(archive_context);
-drop(aeron);
 ```
 
 **Polling & errors.** `ps.poll_fn()` drives the PS state machine *and* its own archive client, so it needs nothing from your `AeronArchive`; see [Duty Cycle](#duty-cycle) for what else to call each cycle. Loop on `ps.is_live()`, checking `ps.has_failed()` each iteration (reason via `get_failure_reason()`). The listener's `on_error` covers non-terminal errors; `on_live_left`/`on_live_joined` may fire repeatedly as it falls back and rejoins.

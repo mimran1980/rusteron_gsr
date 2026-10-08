@@ -179,7 +179,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let sent = start.elapsed();
         let (subscription, longest, total) = poll_until_done(|| building.poll())?;
         subscribe.add_async(sent, longest, total);
-        // the subscription closes while the archive context and client it uses are open
         subscription.close()?;
     }
     subscribe.report("persistent subscription");

@@ -158,7 +158,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("joined live {joined_count} time(s); sent {live_sent} live messages; done");
 
     assert!(joined_count >= 1, "did not join live; errors: {:?}", errors);
-    // close the subscription while the archive context and Aeron client it uses are open
     ps.close()?;
     Ok(())
 }
