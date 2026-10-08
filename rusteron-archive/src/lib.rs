@@ -982,10 +982,15 @@ impl PersistentSubscriptionBuilder {
             self.ctx.get_live_left_counter(),
             self.ctx.get_live_joined_counter(),
         ];
+        // the replay channel as Aeron's build rewrites it before labelling its counters
+        let replay = self.ctx.get_replay_channel();
+        let replay = replay
+            .parse::<AeronUriStringBuilder>()
+            .and_then(|uri| uri.rejoin(false)?.build(AERON_URI_MAX_LENGTH as usize))
+            .unwrap_or_else(|_| replay.to_owned());
         let channels = format!(
-            "{} {} {} {}",
+            "{} {replay} {} {}",
             self.ctx.get_replay_stream_id(),
-            self.ctx.get_replay_channel(),
             self.ctx.get_live_stream_id(),
             self.ctx.get_live_channel()
         );

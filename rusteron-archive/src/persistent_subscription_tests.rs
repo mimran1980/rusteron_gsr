@@ -1386,6 +1386,30 @@ mod tests {
             found.sort();
             found
         };
+        let configured = || -> Result<PersistentSubscriptionBuilder, AeronCError> {
+            persistent_subscription_builder()?
+                .aeron(&aeron)?
+                .archive_context(&archive_context)?
+                .live_channel(live_channel)?
+                .live_stream_id(stream_id)?
+                .replay_channel("aeron:udp?endpoint=localhost:0")?
+                .replay_stream_id(stream_id + 1)?
+                .start_position(0)?
+                .recording_id(recording_id)
+        };
+        // the labels Aeron's own build gives the counters
+        let own_build = configured()?.build()?;
+        let own_build_labels = persistent_counters();
+        own_build.close()?;
+        let start = Instant::now();
+        while !persistent_counters().is_empty() {
+            assert!(
+                start.elapsed() < Duration::from_secs(5),
+                "the own build's counters stayed"
+            );
+            sleep(Duration::from_millis(10));
+        }
+
         let own_state = AeronAsyncAddCounter::new(
             &aeron,
             AERON_PERSISTENT_SUBSCRIPTION_STATE_TYPE_ID as i32,
@@ -1394,17 +1418,7 @@ mod tests {
         )?
         .poll_blocking(Duration::from_secs(5))?;
 
-        let mut building = persistent_subscription_builder()?
-            .aeron(&aeron)?
-            .archive_context(&archive_context)?
-            .live_channel(live_channel)?
-            .live_stream_id(stream_id)?
-            .replay_channel("aeron:udp?endpoint=localhost:0")?
-            .replay_stream_id(stream_id + 1)?
-            .start_position(0)?
-            .recording_id(recording_id)?
-            .state_counter(&own_state)?
-            .build_async()?;
+        let mut building = configured()?.state_counter(&own_state)?.build_async()?;
         let start = Instant::now();
         let ps = loop {
             if let Some(ps) = building.poll()? {
@@ -1422,10 +1436,10 @@ mod tests {
         let types: Vec<i32> = counters.iter().map(|(type_id, _)| *type_id).collect();
         assert_eq!(types, [114, 115, 116, 117], "one counter of each type: {counters:?}");
         assert_eq!(counters[0].1, "own state");
-        let channels = format!("{} aeron:udp?endpoint=localhost:0 {stream_id} aeron:ipc", stream_id + 1);
         assert_eq!(
-            counters[1].1,
-            format!("Persistent Subscription Join Difference: {channels}")
+            counters[1..],
+            own_build_labels[1..],
+            "labelled as Aeron's own build labels them"
         );
 
         let mut i = 0;
