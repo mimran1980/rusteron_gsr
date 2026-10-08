@@ -654,10 +654,10 @@ fn poll_destination_op_to_completion<C: std::fmt::Debug>(
 impl AeronSubscription {
     /// A retained image handle for `index`, or `None` when no such image exists.
     ///
-    /// The C client retains the image on this call; the returned [`AeronImage`] releases it
-    /// automatically when the last clone drops (no manual `aeron_image_release`). If the
-    /// subscription is closed first, the release is skipped — the C client has already
-    /// reclaimed the image.
+    /// The returned [`AeronImage`] releases the image when its last clone drops. Until then
+    /// the image stays valid even once it becomes unavailable: [`AeronImage::is_closed`]
+    /// turns true, polling reads nothing more, and its log buffer stays mapped. Closing the
+    /// subscription releases the image too, so the handle must not be used after that.
     pub fn image_at_index(&self, index: usize) -> Option<AeronImage> {
         let image = unsafe { aeron_subscription_image_at_index(self.get_inner(), index) };
         self.wrap_retained_image(image)
@@ -682,9 +682,10 @@ impl AeronSubscription {
             },
             Some(Box::new(move |ctx| unsafe {
                 // skip the release if the subscription was closed first — the C client
-                // reclaimed the image during the subscription close
+                // reclaimed the image during the subscription close. Unlike
+                // `aeron_subscription_image_release`, this also releases an unavailable image.
                 if !subscription.get_inner().is_null() {
-                    aeron_subscription_image_release(subscription.get_inner(), *ctx)
+                    aeron_image_release(*ctx)
                 } else {
                     0
                 }

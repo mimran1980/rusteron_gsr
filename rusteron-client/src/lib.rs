@@ -4662,7 +4662,7 @@ mod tests {
             let session_id = image.get_constants().unwrap().session_id();
             assert!(subscription.image_by_session_id(session_id).is_some());
             assert!(subscription.image_by_session_id(session_id ^ 0x5555_5555).is_none());
-            drop(image); // releases via aeron_subscription_image_release
+            drop(image); // releases the image
         }
         // still healthy afterwards: roundtrip works
         assert!(subscription.poll_fn(|_, _| {}, 4).is_ok());
@@ -4673,6 +4673,97 @@ mod tests {
         drop(image); // must be a safe no-op, not a UAF release
 
         drop(publisher);
+        drop(aeron);
+        teardown_aeron_after_uaf_test(driver, error_handler);
+    }
+
+    /// A retained image that has become unavailable is still released when its handle
+    /// drops, rather than lingering, log buffer mapped, until the client closes.
+    #[test]
+    #[serial]
+    fn retained_image_is_released_after_it_becomes_unavailable() {
+        unsafe extern "C" {
+            fn aeron_image_refcnt_acquire(image: *mut aeron_image_t) -> i64;
+        }
+        let driver = rusteron_media_driver::testing::EmbeddedDriver::launch_with(|ctx| {
+            ctx.set_publication_linger_timeout_ns(Duration::from_millis(50).as_nanos() as u64)
+                .map(|_| ())
+        })
+        .unwrap();
+        let ctx = AeronContext::new().unwrap();
+        ctx.set_dir(&driver.dir().into_c_string()).unwrap();
+        let aeron = Aeron::new(&ctx).unwrap();
+        aeron.start().unwrap();
+        let publication = aeron
+            .add_publication(AERON_IPC_STREAM, 1902, Duration::from_secs(5))
+            .unwrap();
+        let subscription = aeron
+            .add_subscription(
+                AERON_IPC_STREAM,
+                1902,
+                Handlers::NONE,
+                Handlers::NONE,
+                Duration::from_secs(5),
+            )
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while subscription.image_count().unwrap_or(0) == 0 && Instant::now() < deadline {
+            sleep(Duration::from_millis(10));
+        }
+        let first = subscription.image_at_index(0).expect("image at 0");
+        let second = subscription.image_at_index(0).expect("image at 0");
+        // SAFETY: `second` keeps the image retained for every read.
+        let refcnt = || unsafe { aeron_image_refcnt_acquire(second.get_inner()) };
+        assert_eq!(refcnt(), 3, "the subscription and both handles hold the image");
+
+        drop(publication);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while refcnt() > 2 && Instant::now() < deadline {
+            // polling lets the client drop the subscription's own reference
+            let _ = subscription.poll_fn(|_, _| {}, 1);
+            sleep(Duration::from_millis(10));
+        }
+        assert!(second.is_closed());
+        assert_eq!(refcnt(), 2, "only the two handles hold the unavailable image");
+
+        drop(first);
+        assert_eq!(refcnt(), 1, "dropping a handle releases the unavailable image");
+        drop(second);
+        drop(subscription);
+        drop(aeron);
+        drop(driver);
+    }
+
+    /// Closing the subscription releases a retained image with it, and the C client then
+    /// frees the image, so dropping the handle afterwards must not release it again.
+    #[test]
+    #[serial]
+    fn retained_image_dropped_after_its_subscription_closes_is_not_released_again() {
+        let (aeron, driver, error_handler) = setup_aeron_for_uaf_test();
+        let publication = aeron
+            .add_publication(AERON_IPC_STREAM, 1903, Duration::from_secs(5))
+            .unwrap();
+        let subscription = aeron
+            .add_subscription(
+                AERON_IPC_STREAM,
+                1903,
+                Handlers::NONE,
+                Handlers::NONE,
+                Duration::from_secs(5),
+            )
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while subscription.image_count().unwrap_or(0) == 0 && Instant::now() < deadline {
+            sleep(Duration::from_millis(10));
+        }
+        let image = subscription.image_at_index(0).expect("image at 0");
+
+        subscription.close().unwrap();
+        // gives the client conductor time to free the image
+        sleep(Duration::from_millis(200));
+        drop(image);
+
+        drop(publication);
         drop(aeron);
         teardown_aeron_after_uaf_test(driver, error_handler);
     }
