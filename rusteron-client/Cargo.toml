@@ -124,6 +124,10 @@ harness = false
 name    = "offer_poll_ipc"
 harness = false
 
+[[bench]]
+name    = "header_reads"
+harness = false
+
 [package.metadata.docs.rs]
 features        = ["static", "precompile"]
 default-target  = "aarch64-apple-darwin"
