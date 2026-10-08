@@ -141,16 +141,16 @@ impl FollowingPersistentSubscription {
             self.advance();
             return 0;
         };
-        let mut last = None;
-        let read = subscription
-            .poll_fn(
-                |message, header| {
-                    last = Some(header.position());
-                    handler(message, header);
-                },
-                fragment_limit,
-            )
-            .unwrap_or(0);
+        let (mut last, mut read) = (None, 0);
+        // the subscription's own count includes work other than fragments
+        let _ = subscription.poll_fn(
+            |message, header| {
+                last = Some(header.position());
+                read += 1;
+                handler(message, header);
+            },
+            fragment_limit,
+        );
         let now = Instant::now();
         if let Some(position) = last {
             self.resume = Some((*recording_id, position));

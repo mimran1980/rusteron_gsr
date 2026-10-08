@@ -1276,9 +1276,15 @@ mod tests {
             while received.len() < count {
                 assert!(Instant::now() < deadline, "received only {received:?}");
                 let recording_id = follower.recording_id().unwrap_or(-1);
-                follower.poll_fn(
+                let before = received.len();
+                let read = follower.poll_fn(
                     |message, _| received.push((recording_id, String::from_utf8_lossy(message).into_owned())),
                     10,
+                );
+                assert_eq!(
+                    read as usize,
+                    received.len() - before,
+                    "poll_fn returns the fragments read"
                 );
                 sleep(Duration::from_millis(1));
             }
