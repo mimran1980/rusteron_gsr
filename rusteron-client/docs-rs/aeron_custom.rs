@@ -8,19 +8,15 @@ pub static AERON_IPC_STREAM: &std::ffi::CStr = c"aeron:ipc";
 /// your own iovec array for larger gathers.
 pub const MAX_OFFER_PARTS: usize = 8;
 
-// SAFETY: these handles wrap `Rc` (via `CResource::OwnedOnHeap`) by default, so they
-// are `!Send + !Sync` in principle. `Rc` (non-atomic refcount) is kept for latency.
-// The supported usage pattern is to MOVE a handle to a single owning thread (e.g. a
-// dedicated publisher/subscriber thread) and use it exclusively there; `Send` is
-// retained unconditionally to allow that one-time hand-off even without the
-// `multi-threaded` feature.
-//
-// `Send` over a plain `Rc` is technically unsound in the general case (cloning the
-// handle and using clones from two different threads concurrently races the
-// non-atomic refcount) — this is a deliberate, documented "accepted unsoundness"
-// trade-off for latency: callers must not clone these handles across threads or use
-// one handle from multiple threads concurrently unless `multi-threaded` (below,
-// atomic `Arc`) is enabled.
+// SAFETY: not sound without `multi-threaded`. These handles wrap `Rc` (via
+// `CResource::OwnedOnHeap`), a non-atomic refcount kept for latency, and a publication,
+// subscription or counter also holds an `Rc` clone of its `Aeron` client. Even a single
+// moved handle therefore shares the client's refcount with the thread that created it:
+// dropping the handle on its new thread while the original thread clones or drops the
+// client (as every `add_*` does) races that refcount, which can close the client early
+// or leak it. `Send` is kept so a handle can be handed to a dedicated thread; that is
+// safe only while no other thread touches the client's refcount, or with
+// `multi-threaded` (below, atomic `Arc`).
 //
 // `Sync` is intentionally NOT implemented by default: sharing `&Handle` across
 // threads would let two threads `Rc::clone` concurrently and race the refcount.
@@ -234,8 +230,8 @@ impl AeronContext {
 ///
 /// **Scoped read** (zero allocation, preferred for one-shot queries):
 /// ```ignore
-/// AeronCnc::read(driver_ctx.get_dir(), |cnc| {
-///     cnc.foreach_counter_fn(|value, id, type_id, key, label| {
+/// AeronCnc::read(&cformat!("{}", driver_ctx.get_dir()), |cnc| {
+///     cnc.counters_reader().foreach_counter_fn(|value, id, _type_id, _key, label| {
 ///         println!("{id}: {label} = {value}");
 ///     });
 /// })?;
@@ -245,7 +241,7 @@ impl AeronContext {
 ///
 /// **Owned handle** (for repeated polling, e.g. a stats dashboard):
 /// ```ignore
-/// let cnc = AeronCnc::open(driver_ctx.get_dir())?;
+/// let cnc = AeronCnc::open(&cformat!("{}", driver_ctx.get_dir()))?;
 /// loop {
 ///     let heartbeat = cnc.to_driver_heartbeat();
 ///     // ... poll counters, error log, etc. ...
@@ -677,6 +673,11 @@ impl AeronSubscription {
     /// turns true, polling reads nothing more, and its log buffer stays mapped. Drop the
     /// handles before calling [`Self::close`]: after it, a handle must not be used, and its
     /// image may stay mapped until the client closes.
+    ///
+    /// The image is one publisher session: a publisher that reconnects with a new session
+    /// is a new image, so poll the subscription, or fetch the new image, to follow it. To
+    /// keep an image passed to an image callback, whose arguments are valid only during the
+    /// call, retain it here (or with [`Self::image_by_session_id`]) on your own subscription.
     pub fn image_at_index(&self, index: usize) -> Option<AeronImage> {
         let image = unsafe { aeron_subscription_image_at_index(self.get_inner(), index) };
         self.wrap_retained_image(image)
@@ -1442,8 +1443,8 @@ impl AeronUriStringBuilder {
     ///
     /// # Example
     /// ```ignore
-    /// let builder = AeronUriStringBuilder::default();
-    /// builder.remove(std::ffi::CStr::from_bytes_until_nul(b"tags\0").unwrap())?;
+    /// let builder: AeronUriStringBuilder = "aeron:udp?endpoint=localhost:20121|tags=1,2".parse()?;
+    /// builder.remove(c"tags")?;
     /// ```
     #[inline]
     pub fn remove(&self, key: &std::ffi::CStr) -> Result<i32, AeronCError> {
@@ -1461,7 +1462,7 @@ impl AeronUriStringBuilder {
     ///
     /// # Example
     /// ```ignore
-    /// let builder = AeronUriStringBuilder::default();
+    /// let builder: AeronUriStringBuilder = "aeron:udp?endpoint=localhost:20121|tags=1,2".parse()?;
     /// builder.remove_str("tags")?;
     /// ```
     #[inline]
@@ -2309,7 +2310,7 @@ impl Default for AeronStatusTracker {
 /// - port not `0..=65535` or not a decimal integer
 /// - host contains characters outside the safe allowlist (alphanumeric,
 ///   `-`, `.`, `:` for IPv4, `[]` for IPv6 bracketing)
-/// - URI separator characters (`?`, `=`, `:`, `/`) appear unescaped
+/// - URI separator characters (`?`, `=`, `/`) appear in the endpoint
 ///
 /// # Example
 /// ```ignore
