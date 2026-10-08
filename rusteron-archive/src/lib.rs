@@ -141,6 +141,17 @@ impl RecordingPos {
     }
 }
 
+/// # Exclusive use of the archive client
+///
+/// The merge reads its replay and recording-position responses from the archive client's
+/// shared control response stream. Until it has merged or failed, poll only the merge and use
+/// that archive client for nothing else: `do_work`, `poll_for_error`, signal polls, blocking
+/// calls such as `get_max_recorded_position` or `start_replay`, and async list or replay
+/// requests all read the same stream and skip responses that are not theirs, stalling the
+/// merge until its progress timeout. Archive errors reach the caller as `Err` from the merge's
+/// own poll, and [`Self::has_failed`] reports a failed merge.
+impl AeronArchiveReplayMerge {}
+
 impl AeronArchive {
     pub fn aeron(&self) -> Aeron {
         self.get_archive_context().get_aeron()
@@ -151,8 +162,8 @@ impl AeronArchive {
     /// context's consumer, or one archive error to its error handler. Call it once a cycle,
     /// and poll each persistent subscription and async request on its own; while a request
     /// is in flight its poll reads the archive's responses, and this reads none. Do not call
-    /// it while polling an [`AeronArchiveReplayMerge`] on this archive: the merge reads the
-    /// same responses, and one taken here stalls it until its progress timeout.
+    /// it while an [`AeronArchiveReplayMerge`] on this archive is in progress: the merge
+    /// reads the same responses, and one taken here stalls it until its progress timeout.
     ///
     /// Every persistent subscription poll also runs an agent-invoker client's conductor,
     /// so with many persistent subscriptions on one client, give it its conductor thread.

@@ -154,6 +154,7 @@ Each object is driven by its own call, once a cycle:
 | `AeronArchive` | `archive.do_work()` | Runs an agent-invoker client's conductor, then hands one recording signal to the context's consumer, or one archive error to its error handler. |
 | Persistent subscription | `ps.poll_fn(..)` | Drives its own archive client. With the agent invoker every poll also runs the client's conductor, so many persistent subscriptions on one client should use its conductor thread. |
 | Async list or replay request | `request.poll()` | While one is pending, `archive.do_work()` reads nothing from the archive and its signal and error polls fail. `poll` has no timeout of its own: give up after your own deadline. |
+| `AeronArchiveReplayMerge` | `merge.poll_fn(..)` | Until it has merged or failed, poll only the merge and leave its archive client alone: `archive.do_work()`, `poll_for_error`, blocking calls and async requests read the same responses, skip the merge's, and stall it until its progress timeout. Archive errors come back as `Err` from the merge's poll. |
 
 ```rust,ignore
 loop {

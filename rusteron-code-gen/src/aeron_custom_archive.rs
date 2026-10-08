@@ -403,9 +403,10 @@ impl AeronArchive {
     /// response stream once and returns the parsed archive error, or `Ok(None)` when the
     /// stream is clean.
     ///
-    /// Do not call it while polling an `AeronArchiveReplayMerge` on this archive: the merge
-    /// reads the same responses, and one taken here stalls it until its progress timeout.
-    /// The merge reports archive errors itself, as `Err` from its poll.
+    /// Do not call it, or any other request on this archive, while an `AeronArchiveReplayMerge`
+    /// on it is in progress: the merge reads the same responses, and one taken here stalls it
+    /// until its progress timeout. The merge reports archive errors itself, as `Err` from its
+    /// poll.
     pub fn poll_for_error(&self) -> Result<Option<AeronArchiveError>, AeronCError> {
         let message = self.poll_for_error_response_as_string(4096)?;
         if message.is_empty() {
