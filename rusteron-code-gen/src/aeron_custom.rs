@@ -656,8 +656,9 @@ impl AeronSubscription {
     ///
     /// The returned [`AeronImage`] releases the image when its last clone drops. Until then
     /// the image stays valid even once it becomes unavailable: [`AeronImage::is_closed`]
-    /// turns true, polling reads nothing more, and its log buffer stays mapped. Closing the
-    /// subscription releases the image too, so the handle must not be used after that.
+    /// turns true, polling reads nothing more, and its log buffer stays mapped. Drop the
+    /// handles before calling [`Self::close`]: after it, a handle must not be used, and its
+    /// image may stay mapped until the client closes.
     pub fn image_at_index(&self, index: usize) -> Option<AeronImage> {
         let image = unsafe { aeron_subscription_image_at_index(self.get_inner(), index) };
         self.wrap_retained_image(image)
