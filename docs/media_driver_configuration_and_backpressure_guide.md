@@ -19,63 +19,47 @@ For tuning guides, system properties, and thread models:
 
 With `rusteron-media-driver`, you can embed the C-based Media Driver directly in your Rust process:
 
-```rust
+```rust,no_run
+use rusteron_media_driver::bindings::aeron_threading_mode_t;
 use rusteron_media_driver::{AeronDriver, AeronDriverContext};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ctx = AeronDriverContext::new()?;
-    
-    // Set threading model:
-    // - "SHARED": Conductor, Sender, and Receiver run on a single thread (default/dev friendly)
-    // - "DEDICATED": Conductor, Sender, and Receiver each run on their own thread (low latency)
-    use rusteron_media_driver::bindings::aeron_threading_mode_t;
+
+    // DEDICATED (the default): conductor, sender and receiver each get a thread, for the lowest latency.
+    // SHARED: all three share one thread, for dev boxes and tests.
     ctx.set_threading_mode(aeron_threading_mode_t::AERON_THREADING_MODE_SHARED)?;
-    
-    // Customize directory path and term buffer sizes
-    ctx.set_dir("/tmp/aeron-rust")?;
-    
-    // Launch driver
-    let driver = AeronDriver::new(&ctx)?;
-    driver.start(true)?; // true = block until started
+    ctx.set_dir(c"/tmp/aeron-rust")?;
+    ctx.set_term_buffer_length(16 * 1024 * 1024)?;
 
-    // Application logic here...
+    // runs the driver's duty cycle on a background thread; stops and joins on drop
+    let _driver = AeronDriver::launch_embedded_guard(ctx, false);
 
+    // application logic here; clients connect with Aeron::connect_dir("/tmp/aeron-rust")
     Ok(())
 }
 ```
 
+For tests, `rusteron_media_driver::testing::EmbeddedDriver::launch_with(|ctx| { ctx.set_threading_mode(..)?; Ok(()) })` also picks a unique directory.
+
 ### 2. Handling Publication Back-Pressure (`BACK_PRESSURED`)
 
-When calling `.offer()`, Aeron returns `BACK_PRESSURED` (error code `-2`) if the client's internal ring buffers are full (meaning the publisher is faster than the subscriber or the driver). The idiomatic pattern is to use an idle strategy to back off before retrying:
+`offer` returns `Err(AeronOfferError::BackPressured)` when the publication has reached its publisher limit: the slowest subscriber (or the sender's flow control) has not consumed enough of the term buffer. `is_retryable()` is true for it, for `AdminAction` (term rotation) and for `NotConnected`; the other errors are fatal. The idiomatic pattern is to idle, then retry, up to your own deadline:
 
-```rust
-use rusteron_client::{Aeron, AeronContext, Handlers};
-use std::thread::sleep;
+```rust,no_run
+use rusteron_client::{AeronPublication, BackoffIdleStrategy, IdleStrategy};
 use std::time::{Duration, Instant};
 
-fn publish_message(publication: &AeronPublication, data: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+fn publish_message(publication: &AeronPublication, data: &[u8]) -> Result<i64, Box<dyn std::error::Error>> {
     let deadline = Instant::now() + Duration::from_secs(5);
-    
+    // pick the idle by latency budget: BusySpinIdleStrategy, YieldingIdleStrategy, BackoffIdleStrategy, ...
+    let mut idle = BackoffIdleStrategy::new();
     loop {
         match publication.offer(data) {
-            Ok(position) => {
-                // Message successfully offered at the returned position
-                return Ok(());
-            }
-            Err(err) if err.is_retryable() => {
-                if Instant::now() >= deadline {
-                    return Err("Publishing timed out due to persistent back-pressure".into());
-                }
-                
-                // Back off. You can use different idle strategies:
-                // - BusySpin: loop {} (lowest latency, 100% CPU usage)
-                // - Yielding: std::thread::yield_now()
-                // - Sleeping: std::thread::sleep(...)
-                sleep(Duration::from_millis(1));
-            }
-            Err(err) => {
-                return Err(format!("Fatal publication offer error: {:?}", err).into());
-            }
+            Ok(position) => return Ok(position),
+            Err(e) if e.is_retryable() && Instant::now() < deadline => idle.idle(0),
+            // Closed, MaxPositionExceeded, or still not accepted at the deadline
+            Err(e) => return Err(e.into()),
         }
     }
 }

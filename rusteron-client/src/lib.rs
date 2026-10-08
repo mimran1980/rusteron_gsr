@@ -248,6 +248,14 @@ impl IdleStrategy for BackoffIdleStrategy {
 #[doc = include_str!("../../README.md")]
 mod readme_doctests {}
 
+#[cfg(doctest)]
+#[doc = include_str!("../../docs/mdc_mds_guide.md")]
+mod mdc_mds_guide_doctests {}
+
+#[cfg(doctest)]
+#[doc = include_str!("../../docs/media_driver_configuration_and_backpressure_guide.md")]
+mod media_driver_guide_doctests {}
+
 #[cfg(test)]
 mod idle_strategy_tests {
     use super::*;

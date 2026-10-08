@@ -20,7 +20,7 @@ For in-depth concepts, architectural details, and protocol mechanics:
 
 To programmatically control the destinations bound to a subscription, specify `control-mode=manual` on the channel URI.
 
-```rust
+```rust,no_run
 use rusteron_client::*;
 use std::time::Duration;
 
@@ -29,33 +29,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let aeron = Aeron::new(&ctx)?;
     aeron.start()?;
 
-    // 1. Configure the subscription in manual control mode
-    let mds_channel = AeronUriStringBuilder::new_zeroed_on_heap();
-    mds_channel.init_new()?;
-    mds_channel.media(Media::Udp)?.control_mode(ControlMode::Manual)?;
-
+    // 1. A subscription in manual control mode
     let subscription = aeron
-        .async_add_subscription(
-            &cformat!("{mds_channel}"), 
-            1003, 
-            Handlers::NONE, 
-            Handlers::NONE
-        )?
+        .async_add_subscription(c"aeron:udp?control-mode=manual", 1003, Handlers::NONE, Handlers::NONE)?
         .poll_blocking(Duration::from_secs(5))?;
 
     // 2. Add destination endpoints dynamically
     let destination_a = AeronUriStringBuilder::udp("127.0.0.1:20201")?.build(256)?;
     let destination_b = AeronUriStringBuilder::udp("127.0.0.1:20202")?.build(256)?;
-    
     subscription.add_destination(&cformat!("{destination_a}"), Duration::from_secs(5))?;
     subscription.add_destination(&cformat!("{destination_b}"), Duration::from_secs(5))?;
 
-    // 3. Poll normally — messages from both ports will merge
+    // 3. Poll normally: messages from both ports merge
     loop {
         subscription.poll_fn(
-            |buf, header| {
-                println!("Received {} bytes on stream {}", buf.len(), header.stream_id());
-            },
+            |buf, header| println!("Received {} bytes on stream {:?}", buf.len(), header.stream_id()),
             16,
         )?;
     }
@@ -66,7 +54,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 You can dynamically detach endpoints as network paths change or servers fail:
 
-```rust
+```rust,ignore
 // Remove a destination from the subscription
 subscription.remove_destination(&cformat!("{destination_a}"), Duration::from_secs(5))?;
 ```
+
+### 3. MDC Publication (Dynamic Control Mode)
+
+A publication with a control endpoint and `control-mode=dynamic` sends to every subscriber that registers with it. Each subscriber names its own endpoint and the publisher's control address:
+
+```rust,no_run
+use rusteron_client::*;
+use std::time::Duration;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let aeron = Aeron::connect(None)?;
+
+    let mdc = AeronUriStringBuilder::udp_control("127.0.0.1:20200", ControlMode::Dynamic)?.build(256)?;
+    let publication = aeron.add_publication(&cformat!("{mdc}"), 1004, Duration::from_secs(5))?;
+
+    let subscription = aeron.add_subscription(
+        c"aeron:udp?endpoint=127.0.0.1:20201|control=127.0.0.1:20200",
+        1004,
+        Handlers::NONE,
+        Handlers::NONE,
+        Duration::from_secs(5),
+    )?;
+    println!("connected: {} / {}", publication.is_connected(), subscription.is_connected());
+    Ok(())
+}
+```
+
+Runnable versions: [`multi_destination_subscription.rs`](../rusteron-client/examples/multi_destination_subscription.rs) (manual MDS) and [`replay_merge.rs`](../rusteron-archive/examples/replay_merge.rs) (a replay merged onto a live MDC stream).
