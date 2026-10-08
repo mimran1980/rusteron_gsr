@@ -1337,6 +1337,37 @@ mod tests {
         Ok(())
     }
 
+    /// `new_with_aeron` points the archive context at the given client from the start, so the
+    /// subscription and the context share one client.
+    #[test]
+    #[serial]
+    fn new_with_aeron_gives_the_subscription_and_context_one_client() -> Result<(), Box<dyn Error>> {
+        crate::skip_unless_java!();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().ok();
+
+        let (aeron, archive_context, _media_driver_archive, _archive_error_handler) =
+            start_aeron_archive_with_config("ps_new_with_aeron", 9796)?;
+        let other_context = AeronContext::new()?;
+        other_context.set_dir(&aeron.context().get_dir().into_c_string())?;
+        let other = Aeron::new(&other_context)?;
+        other.start()?;
+
+        let builder = PersistentSubscriptionBuilder::new_with_aeron(&archive_context, &other)?;
+        assert_eq!(archive_context.get_aeron().get_inner(), other.get_inner());
+        let ps = builder
+            .recording_id(0)?
+            .live_channel("aeron:ipc")?
+            .live_stream_id(3701)?
+            .replay_channel("aeron:udp?endpoint=localhost:0")?
+            .replay_stream_id(3702)?
+            .build()?;
+        assert_eq!(archive_context.get_aeron().get_inner(), other.get_inner());
+        ps.close()?;
+        Ok(())
+    }
+
     /// Building a persistent subscription points its archive context at the subscription's
     /// client, which is why the two should share one.
     #[test]

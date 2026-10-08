@@ -111,9 +111,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // A healthy control loop polls for error responses (and recording signals)
-    // even when nothing seems wrong:
+    // even when nothing seems wrong. `do_work` is the once-a-cycle call: it runs the
+    // client's conductor when it uses the agent invoker, then hands one recording
+    // signal to the consumer or one archive error to the error handler.
     assert!(archive.poll_for_error()?.is_none(), "unexpected archive error");
-    archive.poll_for_recording_signals()?;
+    archive.do_work()?;
 
     // ── 4. Archive down: detect, then reconnect with bounded retries ──
     println!("stopping the archive process to simulate an outage...");

@@ -252,9 +252,7 @@ impl FollowingPersistentSubscription {
         let start = start_position(self.resume, recording_id, self.from_start);
         self.resume = Some((recording_id, start));
         let context = self.context()?;
-        let building = PersistentSubscriptionBuilder::new()
-            .and_then(|b| b.aeron(&self.aeron))
-            .and_then(|b| b.archive_context(&context))
+        let building = PersistentSubscriptionBuilder::new_with_aeron(&context, &self.aeron)
             .and_then(|b| b.recording_id(recording_id))
             .and_then(|b| b.live_channel(&ChannelUri::add_session_id(&self.live_channel, session_id)))
             .and_then(|b| b.live_stream_id(self.stream_id))

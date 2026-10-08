@@ -149,6 +149,30 @@ impl AeronArchive {
         self.get_archive_context().get_aeron()
     }
 
+    /// One duty-cycle step for this archive and its Aeron client: runs the client's
+    /// conductor when it uses the agent invoker, then hands one recording signal to the
+    /// context's consumer, or one archive error to its error handler. Call it once a cycle,
+    /// and poll each persistent subscription and async request on its own; while a request
+    /// is in flight its poll reads the archive's responses, and this reads none.
+    ///
+    /// Every persistent subscription poll also runs an agent-invoker client's conductor,
+    /// so with many persistent subscriptions on one client, give it its conductor thread.
+    ///
+    /// # Errors
+    ///
+    /// The conductor failed, or the archive returned an error and the context has no
+    /// error handler.
+    #[inline]
+    pub fn do_work(&self) -> Result<i32, AeronCError> {
+        let aeron = self.aeron();
+        let conductor = if aeron.context().get_use_conductor_agent_invoker() {
+            aeron.main_do_work()?
+        } else {
+            0
+        };
+        Ok(conductor + self.poll_for_recording_signals()?)
+    }
+
     /// Find the latest recording matching a predicate.
     /// Returns the recording with the highest recording_id that matches the predicate.
     pub fn find_recording<F>(&self, mut predicate: F) -> Result<Option<RecordingDescriptor>, AeronCError>
@@ -839,8 +863,8 @@ pub trait PersistentSubscriptionListener: 'static {
 /// The subscription holds no reference to the Aeron client or archive context given
 /// here, so keep both open until it is closed or dropped: dropping either earlier is a
 /// use-after-free. Building also points the archive context at the subscription's
-/// client, so give [`Self::aeron`] the client already set on the context, as below.
-/// Without one, the subscription makes its own client and closes it when it closes,
+/// client, so build with [`Self::new_with_aeron`], which sets one client on both, as
+/// below. Without a client, the subscription makes its own and closes it when it closes,
 /// after which the context must not be used to connect again.
 ///
 /// # Examples
@@ -853,11 +877,8 @@ pub trait PersistentSubscriptionListener: 'static {
 /// let aeron = Aeron::new(&context)?;
 /// aeron.start()?;
 /// let archive_context = AeronArchiveContext::new()?;
-/// archive_context.set_aeron(&aeron)?;
 ///
-/// let subscription = PersistentSubscriptionBuilder::new()?
-///     .aeron(&aeron)?
-///     .archive_context(&archive_context)?
+/// let subscription = PersistentSubscriptionBuilder::new_with_aeron(&archive_context, &aeron)?
 ///     .recording_id(0)?
 ///     .live_channel("aeron:ipc")?
 ///     .live_stream_id(1001)?
@@ -889,6 +910,14 @@ impl PersistentSubscriptionBuilder {
             listener: None,
             aeron: None,
         })
+    }
+
+    /// A builder whose subscription and `archive_context` both use `aeron`, which it sets on
+    /// the context too, so neither is left pointing at another client. Close the
+    /// subscription first, then drop `archive_context`, then `aeron`.
+    pub fn new_with_aeron(archive_context: &AeronArchiveContext, aeron: &Aeron) -> Result<Self, AeronCError> {
+        archive_context.set_aeron(aeron)?;
+        Self::new()?.aeron(aeron)?.archive_context(archive_context)
     }
 
     /// Set the Aeron client to use.
@@ -1832,6 +1861,82 @@ mod tests {
                 thread::sleep(Duration::from_millis(10));
             }
             drop(publications);
+            Ok(())
+        })();
+
+        drop(aeron);
+        drop(archive_context);
+        drop(media_driver);
+        drop(pub_error_frame_handler);
+        drop(error_handler);
+        test_result
+    }
+
+    /// `do_work` runs an agent-invoker client's conductor and hands the archive's recording
+    /// signals to the context's consumer, and needs nothing from a client with its own
+    /// conductor thread.
+    #[test]
+    #[serial]
+    pub fn do_work_drives_the_client_conductor_and_recording_signals() -> Result<(), Box<dyn error::Error>> {
+        use std::sync::atomic::AtomicUsize;
+
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().expect("failed to kill all java processes");
+        let (aeron, archive_context, media_driver, pub_error_frame_handler, error_handler) = start_aeron_archive()?;
+
+        let test_result: Result<(), Box<dyn error::Error>> = (|| {
+            let threaded = AeronArchiveAsyncConnect::new_with_aeron(&archive_context.clone(), &aeron)?
+                .poll_blocking(Duration::from_secs(30))
+                .expect("failed to connect to aeron archive media driver");
+            threaded.do_work()?;
+
+            let client_context = AeronContext::new()?;
+            client_context.set_dir(&aeron.context().get_dir().into_c_string())?;
+            client_context.set_use_conductor_agent_invoker(true)?;
+            let client = Aeron::new(&client_context)?;
+            client.start()?;
+            let signals = Arc::new(AtomicUsize::new(0));
+            let counted = Arc::clone(&signals);
+            let context = AeronArchiveContext::new()?;
+            context.set_aeron(&client)?;
+            context.set_control_request_channel(&archive_context.get_control_request_channel().into_c_string())?;
+            context.set_control_response_channel(&archive_context.get_control_response_channel().into_c_string())?;
+            context.set_recording_signal_consumer(Some(move |_signal: AeronArchiveRecordingSignal| {
+                counted.fetch_add(1, Ordering::SeqCst);
+            }))?;
+            let connect = AeronArchiveAsyncConnect::new_with_aeron(&context, &client)?;
+            let start = Instant::now();
+            let archive = loop {
+                client.main_do_work()?;
+                if let Some(archive) = connect.poll()? {
+                    break archive;
+                }
+                assert!(start.elapsed() < Duration::from_secs(30), "never connected");
+                thread::yield_now();
+            };
+            archive.start_recording(AERON_IPC_STREAM, 7401, SOURCE_LOCATION_LOCAL, true)?;
+
+            // nothing else runs this client's conductor, so the publication arrives through do_work
+            let adding = client.async_add_exclusive_publication(AERON_IPC_STREAM, 7401)?;
+            let start = Instant::now();
+            let publication = loop {
+                archive.do_work()?;
+                if let Some(publication) = adding.poll()? {
+                    break publication;
+                }
+                assert!(
+                    start.elapsed() < Duration::from_secs(10),
+                    "the publication never arrived"
+                );
+                thread::yield_now();
+            };
+            let start = Instant::now();
+            while signals.load(Ordering::SeqCst) == 0 {
+                archive.do_work()?;
+                let _ = publication.offer(b"do-work");
+                assert!(start.elapsed() < Duration::from_secs(10), "no recording signal arrived");
+                thread::yield_now();
+            }
             Ok(())
         })();
 

@@ -125,7 +125,7 @@ For detailed guides and code snippets on Aeron features in Rust, see:
 ## Safety Considerations
 
 1. **Aeron Lifetime** – The `AeronArchive` depends on an external `Aeron` instance. Ensure `Aeron` outlives all references to the archive.
-2. **Persistent Subscription Lifetime** – A persistent subscription holds no reference to its `Aeron` client or archive context, yet uses both until it closes. Keep them open until the subscription is closed or dropped, as in the [example below](#persistent-subscriptions). Building it also points the archive context at the subscription's client, so set the same client on both (`archive_context.set_aeron(&aeron)` and `.aeron(&aeron)`). Without `.aeron(..)` the subscription makes its own client and closes it, and the archive context must not be used again afterwards.
+2. **Persistent Subscription Lifetime** – A persistent subscription holds no reference to its `Aeron` client or archive context, yet uses both until it closes. Keep them open until the subscription is closed or dropped, as in the [example below](#persistent-subscriptions). Building it also points the archive context at the subscription's client, so build with `PersistentSubscriptionBuilder::new_with_aeron(&archive_context, &aeron)`, which sets one client on both. Without a client the subscription makes its own and closes it, and the archive context must not be used again afterwards.
 3. **Unsafe Bindings** – The module interfaces directly with Aeron’s C API. Improper resource handling can cause undefined behavior.
 4. **Automatic Handler Cleanup** – Handlers are reference-counted; registered callbacks live as long as the resource that registered them and are freed automatically.
 5. **Thread Safety** – Use care when accessing Aeron objects across threads. Synchronize access appropriately.
@@ -141,6 +141,26 @@ For detailed guides and code snippets on Aeron features in Rust, see:
 5. **Locate the Recording** using archive queries.
 6. **Replay Setup**: Configure replay target/channel.
 7. **Subscribe and Receive** replayed messages.
+
+---
+
+## Duty Cycle
+
+Each object is driven by its own call, once a cycle:
+
+| Object | Call | Notes |
+|---|---|---|
+| `Aeron` client | Nothing with its conductor thread (the default). With the agent invoker, `aeron.main_do_work()`. | `archive.do_work()` makes this call for you. |
+| `AeronArchive` | `archive.do_work()` | Runs an agent-invoker client's conductor, then hands one recording signal to the context's consumer, or one archive error to its error handler. |
+| Persistent subscription | `ps.poll_fn(..)` | Drives its own archive client. With the agent invoker every poll also runs the client's conductor, so many persistent subscriptions on one client should use its conductor thread. |
+| Async list or replay request | `request.poll()` | While one is pending, `archive.do_work()` reads nothing from the archive. |
+
+```rust,ignore
+loop {
+    archive.do_work()?;
+    ps.poll_fn(|message, _header| { /* a replayed or live message */ }, 100)?;
+}
+```
 
 ---
 
@@ -171,9 +191,8 @@ impl PersistentSubscriptionListener for MyListener {
 }
 let live_joined = Arc::new(AtomicUsize::new(0));
 
-let ps = persistent_subscription_builder()?
-    .aeron(&aeron)?
-    .archive_context(&archive_context)?
+// one client for the subscription and its archive context
+let ps = PersistentSubscriptionBuilder::new_with_aeron(&archive_context, &aeron)?
     .live_channel(live_channel)?        // the live stream to join
     .live_stream_id(stream_id)?
     .replay_channel("aeron:udp?endpoint=localhost:0")?  // scratch channel for the replay
@@ -200,7 +219,7 @@ drop(archive_context);
 drop(aeron);
 ```
 
-**Polling & errors.** `ps.poll_fn()` drives the PS state machine *and* the archive async client, so you do not call `archive.poll_for_recording_signals()` separately. Loop on `ps.is_live()`, checking `ps.has_failed()` each iteration (reason via `get_failure_reason()`). The listener's `on_error` covers non-terminal errors; `on_live_left`/`on_live_joined` may fire repeatedly as it falls back and rejoins.
+**Polling & errors.** `ps.poll_fn()` drives the PS state machine *and* its own archive client, so it needs nothing from your `AeronArchive`; see [Duty Cycle](#duty-cycle) for what else to call each cycle. Loop on `ps.is_live()`, checking `ps.has_failed()` each iteration (reason via `get_failure_reason()`). The listener's `on_error` covers non-terminal errors; `on_live_left`/`on_live_joined` may fire repeatedly as it falls back and rejoins.
 
 **Fragment assembly (already done for you).** Unlike `AeronSubscription`, the persistent subscription **reassembles fragments internally** — the C `aeron_archive_persistent_subscription_poll` routes each image through `aeron_image_fragment_assembler_handler`, so your handler receives whole messages directly. Just poll:
 

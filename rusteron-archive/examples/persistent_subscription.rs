@@ -113,9 +113,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 4. Build the persistent subscription. start_from_beginning replays from the
     //    start; use start_from_live() to skip straight to the live stream.
-    let ps = persistent_subscription_builder()?
-        .aeron(&aeron)?
-        .archive_context(&archive_context)?
+    // one client for the subscription and its archive context
+    let ps = PersistentSubscriptionBuilder::new_with_aeron(&archive_context, &aeron)?
         .live_channel(live_channel.to_str()?)?
         .live_stream_id(stream_id)?
         .replay_channel("aeron:udp?endpoint=localhost:0")? // ephemeral scratch channel
@@ -130,9 +129,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("persistent subscription created, replaying then joining live...");
 
     // 5. Drive it: keep publishing so the live image stays active; poll until live.
-    //    `ps.poll_fn()` runs the PS state machine (and drives the archive async client)
-    //    internally, so — unlike a manual replay loop — there is no need to call
-    //    `archive.poll_for_recording_signals()` here. Abort if the PS fails terminally.
+    //    `ps.poll_fn()` runs the PS state machine and drives its own archive client, so it
+    //    needs nothing from `archive` (whose `do_work()` a control loop would call each
+    //    cycle). Abort if the PS fails terminally.
     //
     //    Each live message carries a send timestamp in the frame's reserved-value field:
     //    Aeron invokes the supplier synchronously inside `offer`, handing it the whole
