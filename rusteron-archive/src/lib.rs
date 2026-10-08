@@ -689,8 +689,8 @@ impl AeronArchivePersistentSubscription {
     ///
     /// The context is consumed and owned by the subscription from this point on —
     /// it will be closed when the subscription is closed, so it must not be used
-    /// afterwards. The context's Aeron client must outlive the subscription;
-    /// [`PersistentSubscriptionBuilder::build`] keeps it open.
+    /// afterwards. The context's Aeron client and archive context must outlive the
+    /// subscription; [`PersistentSubscriptionBuilder::build`] keeps them open.
     pub fn create(
         ctx: AeronArchivePersistentSubscriptionContext,
         listener: Option<Box<dyn PersistentSubscriptionListener>>,
@@ -837,6 +837,7 @@ pub struct PersistentSubscriptionBuilder {
     ctx: AeronArchivePersistentSubscriptionContext,
     listener: Option<Box<dyn PersistentSubscriptionListener>>,
     aeron: Option<Aeron>,
+    archive_context: Option<AeronArchiveContext>,
 }
 
 impl PersistentSubscriptionBuilder {
@@ -846,6 +847,7 @@ impl PersistentSubscriptionBuilder {
             ctx: AeronArchivePersistentSubscriptionContext::new()?,
             listener: None,
             aeron: None,
+            archive_context: None,
         })
     }
 
@@ -857,8 +859,9 @@ impl PersistentSubscriptionBuilder {
     }
 
     /// Set the archive context to use.
-    pub fn archive_context(self, ctx: &AeronArchiveContext) -> Result<Self, AeronCError> {
+    pub fn archive_context(mut self, ctx: &AeronArchiveContext) -> Result<Self, AeronCError> {
         self.ctx.set_archive_context(ctx)?;
+        self.archive_context = Some(ctx.clone());
         Ok(self)
     }
 
@@ -953,12 +956,18 @@ impl PersistentSubscriptionBuilder {
         Ok(self)
     }
 
-    /// Build the persistent subscription. It keeps the Aeron client open until it closes.
+    /// Build the persistent subscription. It keeps the Aeron client and archive context open
+    /// until it closes.
     pub fn build(mut self) -> Result<AeronArchivePersistentSubscription, AeronCError> {
         let subscription = AeronArchivePersistentSubscription::create(self.ctx, self.listener.take())?;
-        // the subscription's C close uses the client, so the client must close after it
-        if let (Some(aeron), Some(inner)) = (self.aeron.take(), subscription.inner.as_owned()) {
-            inner.add_dependency(aeron);
+        // the subscription uses both until its C close, and they drop after it in this order
+        if let Some(inner) = subscription.inner.as_owned() {
+            if let Some(context) = self.archive_context.take() {
+                inner.add_dependency(context);
+            }
+            if let Some(aeron) = self.aeron.take() {
+                inner.add_dependency(aeron);
+            }
         }
         Ok(subscription)
     }

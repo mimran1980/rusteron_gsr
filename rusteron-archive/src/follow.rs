@@ -44,11 +44,9 @@ enum Stage {
         AeronArchiveAsyncListRecordings<ListConsumer>,
         Rc<Cell<Option<(i64, i32)>>>,
     ),
-    Building(AeronArchiveAsyncPersistentSubscription, AeronArchiveContext, i64),
+    Building(AeronArchiveAsyncPersistentSubscription, i64),
     Following {
         subscription: AeronArchivePersistentSubscription,
-        // The subscription's archive client uses this context.
-        _context: AeronArchiveContext,
         recording_id: i64,
     },
 }
@@ -203,18 +201,17 @@ impl FollowingPersistentSubscription {
                     },
                 }
             }
-            Stage::Building(mut building, context, recording_id) => {
+            Stage::Building(mut building, recording_id) => {
                 match building
                     .poll()
                     .map_err(|e| format!("subscribing to recording {recording_id}: {e}"))?
                 {
-                    None => Stage::Building(building, context, recording_id),
+                    None => Stage::Building(building, recording_id),
                     Some(subscription) => {
                         log::info!("following recording {recording_id} of stream {}", self.stream_id);
                         self.active_at = Instant::now();
                         Stage::Following {
                             subscription,
-                            _context: context,
                             recording_id,
                         }
                     }
@@ -261,7 +258,7 @@ impl FollowingPersistentSubscription {
             .and_then(|b| b.start_position(start))
             .and_then(PersistentSubscriptionBuilder::build_async)
             .map_err(|e| format!("subscribing to recording {recording_id}: {e}"))?;
-        Ok(Stage::Building(building, context, recording_id))
+        Ok(Stage::Building(building, recording_id))
     }
 }
 
