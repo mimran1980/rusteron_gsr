@@ -417,6 +417,162 @@ impl<F> Drop for AeronArchiveAsyncListRecordings<F> {
     }
 }
 
+unsafe extern "C" {
+    // Exported by the archive client; declared only in Aeron's internal headers.
+    fn aeron_archive_recording_signal_dispatch_signal(
+        ctx: *mut aeron_archive_context_t,
+        signal: *mut aeron_archive_recording_signal_t,
+    );
+}
+
+impl AeronArchive {
+    /// Starts replaying `recording_id` to `replay_channel` and `replay_stream_id` without
+    /// blocking: [`AeronArchiveAsyncStartReplay::poll`] returns the replay session id once
+    /// the archive accepts.
+    ///
+    /// # Errors
+    ///
+    /// Another request is in flight on this archive, `replay_channel` asks for a response
+    /// channel (use [`Self::start_replay`]), or the request was not sent.
+    pub fn async_start_replay(
+        &self,
+        recording_id: i64,
+        replay_channel: &std::ffi::CStr,
+        replay_stream_id: i32,
+        params: &AeronArchiveReplayParams,
+    ) -> Result<AeronArchiveAsyncStartReplay, AeronCError> {
+        let inner = self.get_inner_ref();
+        if inner.is_in_callback {
+            return Err(AeronCError::with_message(-1, "another archive request is in flight"));
+        }
+        if replay_channel.to_string_lossy().contains("control-mode=response") {
+            return Err(AeronCError::with_message(
+                -1,
+                "response-channel replays need start_replay",
+            ));
+        }
+        let correlation_id = self.next_correlation_id();
+        let proxy = AeronArchiveProxy::from(inner.archive_proxy);
+        if !proxy.replay(correlation_id, recording_id, replay_channel, replay_stream_id, params) {
+            return Err(AeronCError::with_message(-1, "the start-replay request was not sent"));
+        }
+        set_request_in_flight(self, true);
+        let timeout = Duration::from_nanos(self.get_archive_context().get_message_timeout_ns());
+        Ok(AeronArchiveAsyncStartReplay {
+            archive: self.clone(),
+            poller: AeronArchiveControlResponsePoller::from(inner.control_response_poller),
+            correlation_id,
+            deadline: Instant::now() + timeout,
+            in_flight: true,
+            replay_session_id: None,
+        })
+    }
+}
+
+/// A start-replay request in flight. Each [`Self::poll`] takes what the archive has
+/// answered so far, so nothing waits on an archive that may be remote.
+///
+/// Until the request completes, fails or is dropped, the archive's blocking calls fail.
+/// Recording signals that arrive meanwhile still reach the context's signal consumer.
+pub struct AeronArchiveAsyncStartReplay {
+    archive: AeronArchive,
+    poller: AeronArchiveControlResponsePoller,
+    correlation_id: i64,
+    deadline: Instant,
+    in_flight: bool,
+    replay_session_id: Option<i64>,
+}
+
+impl AeronArchiveAsyncStartReplay {
+    /// The replay session id once the archive accepts the replay, `None` until then.
+    ///
+    /// # Errors
+    ///
+    /// The archive refused the replay, its response stream disconnected, or no answer
+    /// arrived within the archive context's message timeout. The request is over either way.
+    pub fn poll(&mut self) -> Result<Option<i64>, AeronCError> {
+        if !self.in_flight {
+            return self
+                .replay_session_id
+                .map(Some)
+                .ok_or_else(|| AeronCError::with_message(-1, "the start-replay request failed"));
+        }
+        let fragments = match self.poller.poll() {
+            Ok(fragments) => fragments,
+            Err(e) => {
+                self.finish();
+                return Err(e);
+            }
+        };
+        let archive = self.archive.get_inner_ref();
+        let response = self.poller.get_inner_ref();
+        if response.is_poll_complete && response.control_session_id == archive.control_session_id {
+            if response.is_recording_signal {
+                let mut signal = aeron_archive_recording_signal_t {
+                    control_session_id: response.control_session_id,
+                    recording_id: response.recording_id,
+                    subscription_id: response.subscription_id,
+                    position: response.position,
+                    recording_signal_code: response.recording_signal_code,
+                };
+                // SAFETY: the archive, and so its context, is live.
+                unsafe { aeron_archive_recording_signal_dispatch_signal(archive.ctx, &mut signal) };
+            } else if response.correlation_id == self.correlation_id {
+                let outcome = if response.is_code_error {
+                    // SAFETY: the poller keeps its error message for this response.
+                    let message = unsafe { response.error_message.as_ref() }
+                        .map(|m| unsafe { std::ffi::CStr::from_ptr(m) }.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+                    Err(AeronCError::with_message(
+                        -1,
+                        format!("replay refused, archive error {}: {message}", response.relevant_id),
+                    ))
+                } else if response.is_code_ok {
+                    self.replay_session_id = Some(response.relevant_id);
+                    Ok(self.replay_session_id)
+                } else {
+                    Err(AeronCError::with_message(
+                        -1,
+                        format!("unexpected response code {}", response.code_value),
+                    ))
+                };
+                self.finish();
+                return outcome;
+            }
+        }
+        if fragments == 0 {
+            // SAFETY: the archive, and so its response subscription, is live.
+            if !unsafe { aeron_subscription_is_connected(archive.subscription) } {
+                self.finish();
+                return Err(AeronCError::with_message(
+                    -1,
+                    "the archive's response stream is not connected",
+                ));
+            }
+            if Instant::now() > self.deadline {
+                self.finish();
+                return Err(AeronCError::with_message(
+                    AeronErrorType::TimedOut.code(),
+                    "timed out awaiting the start-replay response",
+                ));
+            }
+        }
+        Ok(None)
+    }
+
+    fn finish(&mut self) {
+        if std::mem::take(&mut self.in_flight) {
+            set_request_in_flight(&self.archive, false);
+        }
+    }
+}
+
+impl Drop for AeronArchiveAsyncStartReplay {
+    fn drop(&mut self) {
+        self.finish();
+    }
+}
+
 macro_rules! impl_archive_position_methods {
     ($pub_type:ty) => {
         impl $pub_type {
@@ -1602,6 +1758,105 @@ mod tests {
                 thread::sleep(Duration::from_millis(10));
             }
             drop(publications);
+            Ok(())
+        })();
+
+        drop(aeron);
+        drop(archive_context);
+        drop(media_driver);
+        drop(pub_error_frame_handler);
+        drop(error_handler);
+        test_result
+    }
+
+    /// The non-blocking start-replay returns a session whose replay delivers the recording,
+    /// holds off blocking calls while in flight, and reports the archive's refusal.
+    #[test]
+    #[serial]
+    pub fn async_start_replay_replays_a_recording() -> Result<(), Box<dyn error::Error>> {
+        fn poll_until_done(request: &mut AeronArchiveAsyncStartReplay) -> Result<i64, AeronCError> {
+            let start = Instant::now();
+            loop {
+                if let Some(session) = request.poll()? {
+                    return Ok(session);
+                }
+                assert!(start.elapsed() < Duration::from_secs(10), "the request never completed");
+                thread::yield_now();
+            }
+        }
+
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().expect("failed to kill all java processes");
+        let (aeron, archive_context, media_driver, pub_error_frame_handler, error_handler) = start_aeron_archive()?;
+
+        let test_result: Result<(), Box<dyn error::Error>> = (|| {
+            let archive = AeronArchiveAsyncConnect::new_with_aeron(&archive_context.clone(), &aeron)?
+                .poll_blocking(Duration::from_secs(30))
+                .expect("failed to connect to aeron archive media driver");
+            archive.start_recording(AERON_IPC_STREAM, 7201, SOURCE_LOCATION_LOCAL, true)?;
+            let publication = aeron.add_publication(AERON_IPC_STREAM, 7201, Duration::from_secs(5))?;
+            for i in 0..3 {
+                let message = format!("r-{i}");
+                let start = Instant::now();
+                while publication.offer(message.as_bytes()).is_err() {
+                    assert!(start.elapsed() < Duration::from_secs(5), "could not offer {message}");
+                    thread::sleep(Duration::from_millis(1));
+                }
+            }
+            let counters = aeron.counters_reader();
+            let session_id = publication.get_constants()?.session_id;
+            let counter_id =
+                testing::find_counter_id_by_session_blocking(&counters, session_id, Duration::from_secs(5))?;
+            let recording_id = RecordingPos::get_recording_id_block(&counters, counter_id, Duration::from_secs(5))?;
+            let start = Instant::now();
+            while counters.get_counter_value(counter_id) < publication.position() {
+                assert!(
+                    start.elapsed() < Duration::from_secs(5),
+                    "the recording never caught up"
+                );
+                thread::sleep(Duration::from_millis(1));
+            }
+
+            let params = AeronArchiveReplayParams::new(-1, i32::MAX, 0, publication.position(), 0, 0)?;
+            let mut request = archive.async_start_replay(recording_id, AERON_IPC_STREAM, 7202, &params)?;
+            assert!(
+                archive.get_recording_position(recording_id).is_err(),
+                "blocking calls wait for the request"
+            );
+            let replay_session = poll_until_done(&mut request)?;
+            assert_eq!(
+                request.poll()?,
+                Some(replay_session),
+                "a completed request keeps its session"
+            );
+            archive.get_recording_position(recording_id)?;
+
+            let replay_channel = format!("aeron:ipc?session-id={}", replay_session as i32);
+            let replay = aeron.add_subscription(
+                &replay_channel.into_c_string(),
+                7202,
+                Handlers::NONE,
+                Handlers::NONE,
+                Duration::from_secs(5),
+            )?;
+            let mut replayed = Vec::new();
+            let start = Instant::now();
+            while replayed.len() < 3 {
+                assert!(start.elapsed() < Duration::from_secs(10), "replayed only {replayed:?}");
+                replay.poll_fn(
+                    |message, _| replayed.push(String::from_utf8_lossy(message).into_owned()),
+                    10,
+                )?;
+            }
+            assert_eq!(replayed, ["r-0", "r-1", "r-2"]);
+
+            let mut refused = archive.async_start_replay(recording_id + 1_000, AERON_IPC_STREAM, 7203, &params)?;
+            let error = poll_until_done(&mut refused).expect_err("an unknown recording is refused");
+            assert!(
+                error.message().unwrap_or_default().contains("replay refused"),
+                "{error:?}"
+            );
+            archive.get_recording_position(recording_id)?;
             Ok(())
         })();
 
