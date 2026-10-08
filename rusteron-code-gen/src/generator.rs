@@ -2415,6 +2415,24 @@ pub fn generate_rust_code(
                     .replace(&format!("{}_", client_class.without_name), "")
                     .replace("async_", "")
             );
+            // A context owner (archive connect) holds the client in C, set through
+            // `set_aeron`, rather than as a Rust dependency of the poller.
+            let owner_client_fallback = if client_class
+                .methods
+                .iter()
+                .any(|m| m.fn_name == format!("{}_get_aeron", client_class.without_name))
+            {
+                quote! {
+                    .or_else(|| {
+                        self.inner
+                            .get_dependency::<#client_type>()
+                            .map(|owner| owner.get_aeron())
+                            .filter(|aeron| !aeron.get_inner().is_null())
+                    })
+                }
+            } else {
+                quote! {}
+            };
 
             let init_args: Vec<TokenStream> = poll_method
                 .arguments
@@ -2896,7 +2914,10 @@ pub fn generate_rust_code(
                         #[doc = r"The client a blocking poll must drive, as nothing else runs its agent-invoker conductor."]
                         #[inline]
                         fn agent_invoker_client(&self) -> Option<Aeron> {
-                            self.inner.get_dependency::<Aeron>().filter(Aeron::uses_agent_invoker)
+                            self.inner
+                                .get_dependency::<Aeron>()
+                                #owner_client_fallback
+                                .filter(Aeron::uses_agent_invoker)
                         }
                     }
                                 }

@@ -1902,6 +1902,41 @@ mod tests {
         test_result
     }
 
+    /// The context's blocking connects drive an agent-invoker client given only through
+    /// `set_aeron`, as nothing else runs its conductor.
+    #[test]
+    #[serial]
+    pub fn context_connect_drives_an_agent_invoker_client() -> Result<(), Box<dyn error::Error>> {
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().expect("failed to kill all java processes");
+        let (aeron, archive_context, media_driver, pub_error_frame_handler, error_handler) = start_aeron_archive()?;
+
+        let test_result: Result<(), Box<dyn error::Error>> = (|| {
+            let client_context = AeronContext::new()?;
+            client_context.set_dir(&aeron.context().get_dir().into_c_string())?;
+            client_context.set_use_conductor_agent_invoker(true)?;
+            let client = Aeron::new(&client_context)?;
+            client.start()?;
+            let context = AeronArchiveContext::new()?;
+            context.set_aeron(&client)?;
+            context.set_control_request_channel(&archive_context.get_control_request_channel().into_c_string())?;
+            context.set_control_response_channel(&archive_context.get_control_response_channel().into_c_string())?;
+
+            let connected = context.aeron_archive_connect(Duration::from_secs(10))?;
+            let polled = AeronArchiveAsyncConnect::new(&context)?.poll_blocking(Duration::from_secs(10))?;
+            drop(polled);
+            drop(connected);
+            Ok(())
+        })();
+
+        drop(aeron);
+        drop(archive_context);
+        drop(media_driver);
+        drop(pub_error_frame_handler);
+        drop(error_handler);
+        test_result
+    }
+
     /// The non-blocking start-replay returns a session whose replay delivers the recording,
     /// holds off blocking calls while in flight, and reports the archive's refusal.
     #[test]

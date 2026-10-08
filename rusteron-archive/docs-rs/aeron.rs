@@ -1878,7 +1878,15 @@ impl AeronArchiveAsyncConnect {
     #[doc = r"The client a blocking poll must drive, as nothing else runs its agent-invoker conductor."]
     #[inline]
     fn agent_invoker_client(&self) -> Option<Aeron> {
-        self.inner.get_dependency::<Aeron>().filter(Aeron::uses_agent_invoker)
+        self.inner
+            .get_dependency::<Aeron>()
+            .or_else(|| {
+                self.inner
+                    .get_dependency::<AeronArchiveContext>()
+                    .map(|owner| owner.get_aeron())
+                    .filter(|aeron| !aeron.get_inner().is_null())
+            })
+            .filter(Aeron::uses_agent_invoker)
     }
 }
 #[derive(Clone)]
