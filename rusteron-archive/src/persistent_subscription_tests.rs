@@ -1235,6 +1235,102 @@ mod tests {
         Ok(())
     }
 
+    /// The follower replays a recording, and when its publisher restarts it continues with
+    /// the new session's recording from its start.
+    #[test]
+    #[serial]
+    fn follower_continues_with_a_restarted_publishers_recording() -> Result<(), Box<dyn Error>> {
+        crate::skip_unless_java!();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().ok();
+
+        let (aeron, archive_context, _media_driver_archive, _archive_error_handler) =
+            start_aeron_archive_with_config("ps_follow", 9950)?;
+        let archive = AeronArchiveAsyncConnect::new_with_aeron(&archive_context, &aeron)?
+            .poll_blocking(Duration::from_secs(20))
+            .expect("failed to connect to archive");
+        let channel = "aeron:ipc";
+        let stream_id = 3201;
+        // Not auto-stopped, so the archive records the restarted publisher's session too.
+        retry_archive_op(Instant::now() + Duration::from_secs(15), || {
+            archive.start_recording(&channel.into_c_string(), stream_id, SOURCE_LOCATION_LOCAL, false)
+        })?;
+
+        let publish = |prefix: &str| -> Result<AeronExclusivePublication, Box<dyn Error>> {
+            let publication = aeron
+                .async_add_exclusive_publication(&channel.into_c_string(), stream_id)?
+                .poll_blocking(Duration::from_secs(5))?;
+            for i in 0..5 {
+                let message = format!("{prefix}-{i}");
+                let deadline = Instant::now() + Duration::from_secs(10);
+                while publication.offer_raw(message.as_bytes(), Handlers::NONE) <= 0 {
+                    assert!(Instant::now() < deadline, "timed out offering {message}");
+                    sleep(Duration::from_millis(1));
+                }
+            }
+            Ok(publication)
+        };
+        fn poll_until(follower: &mut FollowingPersistentSubscription, received: &mut Vec<(i64, String)>, count: usize) {
+            let deadline = Instant::now() + Duration::from_secs(30);
+            while received.len() < count {
+                assert!(Instant::now() < deadline, "received only {received:?}");
+                let recording_id = follower.recording_id().unwrap_or(-1);
+                follower.poll_fn(
+                    |message, _| received.push((recording_id, String::from_utf8_lossy(message).into_owned())),
+                    10,
+                );
+                sleep(Duration::from_millis(1));
+            }
+        }
+
+        let first = publish("A")?;
+        let request = archive_context.get_control_request_channel().to_owned();
+        let response = archive_context.get_control_response_channel().to_owned();
+        let client = aeron.clone();
+        let mut follower = FollowingPersistentSubscription::new(
+            &aeron,
+            move || {
+                let context = AeronArchiveContext::new()?;
+                context.set_aeron(&client)?;
+                context.set_control_request_channel(&request.as_str().into_c_string())?;
+                context.set_control_response_channel(&response.as_str().into_c_string())?;
+                context.set_message_timeout_ns(Duration::from_secs(2).as_nanos() as u64)?;
+                Ok(context)
+            },
+            (channel, stream_id),
+            ("aeron:udp?endpoint=localhost:0", stream_id + 1),
+        )
+        .from_start()
+        .retry_after(Duration::from_millis(50))
+        .idle_timeout(Duration::from_millis(500));
+
+        let mut received = Vec::new();
+        poll_until(&mut follower, &mut received, 5);
+        drop(first);
+        let second = publish("B")?;
+        poll_until(&mut follower, &mut received, 10);
+
+        let messages: Vec<&str> = received.iter().map(|(_, message)| message.as_str()).collect();
+        assert_eq!(
+            messages,
+            ["A-0", "A-1", "A-2", "A-3", "A-4", "B-0", "B-1", "B-2", "B-3", "B-4"]
+        );
+        let (first_recording, second_recording) = (received[0].0, received[5].0);
+        assert!(received[..5].iter().all(|(recording, _)| *recording == first_recording));
+        assert!(
+            received[5..]
+                .iter()
+                .all(|(recording, _)| *recording == second_recording)
+        );
+        assert_ne!(
+            first_recording, second_recording,
+            "the second session is a new recording"
+        );
+        drop(second);
+        Ok(())
+    }
+
     /// `build_async` registers the counters the caller did not set without waiting on the
     /// driver, then creates a subscription that replays and joins live; closing it
     /// releases all four counters, the caller's included.
