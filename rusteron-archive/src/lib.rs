@@ -229,6 +229,191 @@ impl AeronArchiveAsyncConnect {
     }
 }
 
+/// Marks a request in flight on `archive`, so its blocking calls fail fast instead of
+/// consuming the request's responses: Aeron rejects them as made within a callback.
+fn set_request_in_flight(archive: &AeronArchive, in_flight: bool) {
+    // SAFETY: the archive is live, and not `Sync`, so nothing writes the flag concurrently.
+    unsafe { (*archive.get_inner()).is_in_callback = in_flight };
+}
+
+impl AeronArchive {
+    /// Lists up to `record_count` recordings from `from_recording_id` without blocking:
+    /// `consumer` gets each descriptor during [`AeronArchiveAsyncListRecordings::poll`].
+    ///
+    /// # Errors
+    ///
+    /// Another request is in flight on this archive, or the request was not sent.
+    pub fn async_list_recordings<F>(
+        &self,
+        from_recording_id: i64,
+        record_count: i32,
+        consumer: F,
+    ) -> Result<AeronArchiveAsyncListRecordings<F>, AeronCError>
+    where
+        F: FnMut(AeronArchiveRecordingDescriptor) + 'static,
+    {
+        AeronArchiveAsyncListRecordings::send(self, record_count, consumer, |proxy, correlation_id| {
+            proxy.list_recordings(correlation_id, from_recording_id, record_count)
+        })
+    }
+
+    /// [`Self::async_list_recordings`] of the recordings on `stream_id` whose channel
+    /// contains `channel_fragment`.
+    ///
+    /// # Errors
+    ///
+    /// Another request is in flight on this archive, or the request was not sent.
+    pub fn async_list_recordings_for_uri<F>(
+        &self,
+        from_recording_id: i64,
+        record_count: i32,
+        channel_fragment: &std::ffi::CStr,
+        stream_id: i32,
+        consumer: F,
+    ) -> Result<AeronArchiveAsyncListRecordings<F>, AeronCError>
+    where
+        F: FnMut(AeronArchiveRecordingDescriptor) + 'static,
+    {
+        AeronArchiveAsyncListRecordings::send(self, record_count, consumer, |proxy, correlation_id| {
+            proxy.list_recordings_for_uri(
+                correlation_id,
+                from_recording_id,
+                record_count,
+                channel_fragment,
+                stream_id,
+            )
+        })
+    }
+}
+
+/// A list-recordings request in flight. Each [`Self::poll`] takes what the archive has
+/// answered so far, so nothing waits on an archive that may be remote.
+///
+/// The archive has one response stream, so until the request completes, fails or is
+/// dropped, the archive's blocking calls fail. Dropped mid-way, the archive still sends
+/// the rest, and refuses another listing on this session until it has. In
+/// conductor-invoker mode, keep calling [`Aeron::main_do_work`] meanwhile.
+pub struct AeronArchiveAsyncListRecordings<F> {
+    archive: AeronArchive,
+    poller: AeronArchiveRecordingDescriptorPoller,
+    // The poller holds this consumer's address until `finish`.
+    _consumer: Handler<F>,
+    record_count: i32,
+    remaining: i32,
+    timeout: Duration,
+    deadline: Instant,
+    in_flight: bool,
+    count: Option<i32>,
+}
+
+impl<F: FnMut(AeronArchiveRecordingDescriptor) + 'static> AeronArchiveAsyncListRecordings<F> {
+    fn send(
+        archive: &AeronArchive,
+        record_count: i32,
+        consumer: F,
+        request: impl FnOnce(&AeronArchiveProxy, i64) -> bool,
+    ) -> Result<Self, AeronCError> {
+        let inner = archive.get_inner_ref();
+        if inner.is_in_callback {
+            return Err(AeronCError::with_message(-1, "another archive request is in flight"));
+        }
+        let proxy = AeronArchiveProxy::from(inner.archive_proxy);
+        let poller = AeronArchiveRecordingDescriptorPoller::from(inner.recording_descriptor_poller);
+        let consumer = Handler::new(consumer);
+        let correlation_id = archive.next_correlation_id();
+        poller.reset(correlation_id, record_count, Some(&consumer));
+        if !request(&proxy, correlation_id) {
+            poller.reset(i64::from(AERON_NULL_VALUE), 0, Handlers::NONE);
+            return Err(AeronCError::with_message(
+                -1,
+                "the list-recordings request was not sent",
+            ));
+        }
+        set_request_in_flight(archive, true);
+        let timeout = Duration::from_nanos(archive.get_archive_context().get_message_timeout_ns());
+        Ok(Self {
+            archive: archive.clone(),
+            poller,
+            _consumer: consumer,
+            record_count,
+            remaining: record_count,
+            timeout,
+            deadline: Instant::now() + timeout,
+            in_flight: true,
+            count: None,
+        })
+    }
+}
+
+impl<F> AeronArchiveAsyncListRecordings<F> {
+    /// Takes what the archive has answered so far: `Some(count)` once every descriptor
+    /// has reached the consumer, `None` while more are due.
+    ///
+    /// # Errors
+    ///
+    /// The archive answered with an error, its response stream disconnected, or no
+    /// descriptor arrived within the archive context's message timeout. The request is
+    /// over either way.
+    pub fn poll(&mut self) -> Result<Option<i32>, AeronCError> {
+        if !self.in_flight {
+            return self
+                .count
+                .map(Some)
+                .ok_or_else(|| AeronCError::with_message(-1, "the list-recordings request failed"));
+        }
+        let fragments = match self.poller.poll() {
+            Ok(fragments) => fragments,
+            Err(e) => {
+                self.finish();
+                return Err(e);
+            }
+        };
+        let remaining = self.poller.remaining_record_count();
+        if self.poller.is_dispatch_complete() {
+            self.finish();
+            self.count = Some(self.record_count - remaining);
+            return Ok(self.count);
+        }
+        let now = Instant::now();
+        if remaining != self.remaining {
+            self.remaining = remaining;
+            self.deadline = now + self.timeout;
+        }
+        if fragments == 0 {
+            // SAFETY: the archive, and so its response subscription, is live.
+            if !unsafe { aeron_subscription_is_connected(self.archive.get_inner_ref().subscription) } {
+                self.finish();
+                return Err(AeronCError::with_message(
+                    -1,
+                    "the archive's response stream is not connected",
+                ));
+            }
+            if now > self.deadline {
+                self.finish();
+                return Err(AeronCError::with_message(
+                    AeronErrorType::TimedOut.code(),
+                    "timed out awaiting recording descriptors",
+                ));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Detaches the consumer from the poller and frees the archive for other calls.
+    fn finish(&mut self) {
+        if std::mem::take(&mut self.in_flight) {
+            self.poller.reset(i64::from(AERON_NULL_VALUE), 0, Handlers::NONE);
+            set_request_in_flight(&self.archive, false);
+        }
+    }
+}
+
+impl<F> Drop for AeronArchiveAsyncListRecordings<F> {
+    fn drop(&mut self) {
+        self.finish();
+    }
+}
+
 macro_rules! impl_archive_position_methods {
     ($pub_type:ty) => {
         impl $pub_type {
@@ -1142,6 +1327,109 @@ mod tests {
             archive.stop_recording_subscription(subscription_id)?;
 
             assert!(archive.close().is_ok());
+            Ok(())
+        })();
+
+        drop(aeron);
+        drop(archive_context);
+        drop(media_driver);
+        drop(pub_error_frame_handler);
+        drop(error_handler);
+        test_result
+    }
+
+    /// The non-blocking list returns what the blocking one does, one poll at a time, and
+    /// holds off the archive's blocking calls until it completes or is dropped.
+    #[test]
+    #[serial]
+    pub fn async_list_recordings_matches_the_blocking_list() -> Result<(), Box<dyn error::Error>> {
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        fn poll_until_done(mut poll: impl FnMut() -> Result<Option<i32>, AeronCError>) -> Result<i32, AeronCError> {
+            let start = Instant::now();
+            loop {
+                if let Some(count) = poll()? {
+                    return Ok(count);
+                }
+                assert!(start.elapsed() < Duration::from_secs(10), "the request never completed");
+                thread::yield_now();
+            }
+        }
+
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().expect("failed to kill all java processes");
+        let (aeron, archive_context, media_driver, pub_error_frame_handler, error_handler) = start_aeron_archive()?;
+
+        let test_result: Result<(), Box<dyn error::Error>> = (|| {
+            let archive = AeronArchiveAsyncConnect::new_with_aeron(&archive_context.clone(), &aeron)?
+                .poll_blocking(Duration::from_secs(30))
+                .expect("failed to connect to aeron archive media driver");
+            let mut publications = Vec::new();
+            for stream_id in [7101, 7102] {
+                archive.start_recording(AERON_IPC_STREAM, stream_id, SOURCE_LOCATION_LOCAL, true)?;
+                publications.push(aeron.add_publication(AERON_IPC_STREAM, stream_id, Duration::from_secs(5))?);
+            }
+            let blocking = || -> Result<Vec<(i64, i32)>, AeronArchiveError> {
+                let (mut count, mut listed) = (0, Vec::new());
+                archive.list_recordings_fn(&mut count, 0, 100, |d| listed.push((d.recording_id(), d.stream_id())))?;
+                Ok(listed)
+            };
+            let start = Instant::now();
+            let expected = loop {
+                let listed = blocking()?;
+                if listed.len() == 2 {
+                    break listed;
+                }
+                assert!(
+                    start.elapsed() < Duration::from_secs(10),
+                    "the recordings never started"
+                );
+                thread::sleep(Duration::from_millis(50));
+            };
+
+            let listed = Rc::new(RefCell::new(Vec::new()));
+            let sink = Rc::clone(&listed);
+            let mut request = archive.async_list_recordings(0, 100, move |d: AeronArchiveRecordingDescriptor| {
+                sink.borrow_mut().push((d.recording_id(), d.stream_id()))
+            })?;
+            assert!(blocking().is_err(), "blocking calls wait for the request in flight");
+            assert!(
+                archive.async_list_recordings(0, 100, |_| {}).is_err(),
+                "one request at a time"
+            );
+            assert_eq!(poll_until_done(|| request.poll())?, 2);
+            assert_eq!(*listed.borrow(), expected);
+            assert_eq!(request.poll()?, Some(2), "a completed request keeps its count");
+            assert_eq!(blocking()?, expected, "blocking calls work once it completes");
+
+            listed.borrow_mut().clear();
+            let sink = Rc::clone(&listed);
+            let mut request = archive.async_list_recordings_for_uri(
+                0,
+                100,
+                c"aeron:ipc",
+                7102,
+                move |d: AeronArchiveRecordingDescriptor| sink.borrow_mut().push((d.recording_id(), d.stream_id())),
+            )?;
+            assert_eq!(poll_until_done(|| request.poll())?, 1);
+            assert_eq!(
+                listed.borrow().iter().map(|(_, stream)| *stream).collect::<Vec<_>>(),
+                [7102]
+            );
+            drop(request);
+
+            drop(archive.async_list_recordings(0, 100, |_| {})?);
+            archive.get_max_recorded_position(expected[0].0)?;
+            let start = Instant::now();
+            while blocking().is_err() {
+                assert!(
+                    start.elapsed() < Duration::from_secs(10),
+                    "the archive never finished the dropped listing"
+                );
+                thread::sleep(Duration::from_millis(10));
+            }
+            drop(publications);
             Ok(())
         })();
 
