@@ -33465,25 +33465,20 @@ impl AeronFlowControlStrategy {
         &self,
         dst_truncate_to_capacity: &mut String,
     ) -> Result<i32, AeronCError> {
-        unsafe {
-            let capacity = dst_truncate_to_capacity.capacity();
-            let vec = dst_truncate_to_capacity.as_mut_vec();
-            vec.set_len(capacity);
-            let result = self.aeron_tagged_flow_control_strategy_to_string(&mut vec[..])?;
-            let mut len = 0;
-            loop {
-                if len == capacity {
-                    break;
-                }
-                let val = vec[len];
-                if val == 0 {
-                    break;
-                }
-                len += 1;
+        let capacity = dst_truncate_to_capacity.capacity();
+        let vec = unsafe { dst_truncate_to_capacity.as_mut_vec() };
+        vec.clear();
+        vec.resize(capacity, 0);
+        let result = self.aeron_tagged_flow_control_strategy_to_string(&mut vec[..]);
+        let len = match result {
+            Ok(_) => {
+                let len = vec.iter().position(|&b| b == 0).unwrap_or(capacity);
+                std::str::from_utf8(&vec[..len]).map_or_else(|e| e.valid_up_to(), |s| s.len())
             }
-            vec.set_len(len);
-            Ok(result)
-        }
+            Err(_) => 0,
+        };
+        vec.truncate(len);
+        result
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_flow_control_strategy_t {
@@ -60280,25 +60275,20 @@ impl AeronSubscription {
         &self,
         dst_truncate_to_capacity: &mut String,
     ) -> Result<i32, AeronCError> {
-        unsafe {
-            let capacity = dst_truncate_to_capacity.capacity();
-            let vec = dst_truncate_to_capacity.as_mut_vec();
-            vec.set_len(capacity);
-            let result = self.try_resolve_channel_endpoint_port(&mut vec[..])?;
-            let mut len = 0;
-            loop {
-                if len == capacity {
-                    break;
-                }
-                let val = vec[len];
-                if val == 0 {
-                    break;
-                }
-                len += 1;
+        let capacity = dst_truncate_to_capacity.capacity();
+        let vec = unsafe { dst_truncate_to_capacity.as_mut_vec() };
+        vec.clear();
+        vec.resize(capacity, 0);
+        let result = self.try_resolve_channel_endpoint_port(&mut vec[..]);
+        let len = match result {
+            Ok(_) => {
+                let len = vec.iter().position(|&b| b == 0).unwrap_or(capacity);
+                std::str::from_utf8(&vec[..len]).map_or_else(|e| e.valid_up_to(), |s| s.len())
             }
-            vec.set_len(len);
-            Ok(result)
-        }
+            Err(_) => 0,
+        };
+        vec.truncate(len);
+        result
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_subscription_t {
@@ -67903,25 +67893,20 @@ impl AeronUriStringBuilder {
     #[inline]
     #[doc = "NOTE: allocation friendly method, the string capacity must be set as it will truncate string to capacity it will never grow the string. So if you pass String::new() it will write 0 chars"]
     pub fn sprint_into(&self, dst_truncate_to_capacity: &mut String) -> Result<i32, AeronCError> {
-        unsafe {
-            let capacity = dst_truncate_to_capacity.capacity();
-            let vec = dst_truncate_to_capacity.as_mut_vec();
-            vec.set_len(capacity);
-            let result = self.sprint(&mut vec[..])?;
-            let mut len = 0;
-            loop {
-                if len == capacity {
-                    break;
-                }
-                let val = vec[len];
-                if val == 0 {
-                    break;
-                }
-                len += 1;
+        let capacity = dst_truncate_to_capacity.capacity();
+        let vec = unsafe { dst_truncate_to_capacity.as_mut_vec() };
+        vec.clear();
+        vec.resize(capacity, 0);
+        let result = self.sprint(&mut vec[..]);
+        let len = match result {
+            Ok(_) => {
+                let len = vec.iter().position(|&b| b == 0).unwrap_or(capacity);
+                std::str::from_utf8(&vec[..len]).map_or_else(|e| e.valid_up_to(), |s| s.len())
             }
-            vec.set_len(len);
-            Ok(result)
-        }
+            Err(_) => 0,
+        };
+        vec.truncate(len);
+        result
     }
     #[inline]
     pub fn set_initial_position(
@@ -68275,25 +68260,20 @@ impl AeronUri {
     #[inline]
     #[doc = "NOTE: allocation friendly method, the string capacity must be set as it will truncate string to capacity it will never grow the string. So if you pass String::new() it will write 0 chars"]
     pub fn sprint_into(&self, dst_truncate_to_capacity: &mut String) -> Result<i32, AeronCError> {
-        unsafe {
-            let capacity = dst_truncate_to_capacity.capacity();
-            let vec = dst_truncate_to_capacity.as_mut_vec();
-            vec.set_len(capacity);
-            let result = self.sprint(&mut vec[..])?;
-            let mut len = 0;
-            loop {
-                if len == capacity {
-                    break;
-                }
-                let val = vec[len];
-                if val == 0 {
-                    break;
-                }
-                len += 1;
+        let capacity = dst_truncate_to_capacity.capacity();
+        let vec = unsafe { dst_truncate_to_capacity.as_mut_vec() };
+        vec.clear();
+        vec.resize(capacity, 0);
+        let result = self.sprint(&mut vec[..]);
+        let len = match result {
+            Ok(_) => {
+                let len = vec.iter().position(|&b| b == 0).unwrap_or(capacity);
+                std::str::from_utf8(&vec[..len]).map_or_else(|e| e.valid_up_to(), |s| s.len())
             }
-            vec.set_len(len);
-            Ok(result)
-        }
+            Err(_) => 0,
+        };
+        vec.truncate(len);
+        result
     }
     #[inline]
     pub fn parse_tag(tag_str: &std::ffi::CStr) -> i64 {

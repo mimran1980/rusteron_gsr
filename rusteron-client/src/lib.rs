@@ -396,6 +396,23 @@ mod tests {
     }
 
     #[test]
+    fn string_into_keeps_only_valid_written_bytes() -> Result<(), Box<dyn error::Error>> {
+        let builder = AeronUriStringBuilder::new_zeroed_on_heap();
+        builder.init_new()?;
+        let mut dst = String::with_capacity(64);
+        // No media set, so sprint fails before writing anything.
+        assert!(builder.sprint_into(&mut dst).is_err());
+        assert_eq!(dst, "");
+
+        builder.media(Media::Ipc)?.put(c"alias", c"\u{e9}")?;
+        // "aeron:ipc?alias=" is 16 bytes, so 17 bytes of output split the 2-byte char.
+        let mut dst = String::with_capacity(18);
+        builder.sprint_into(&mut dst)?;
+        assert_eq!(dst, "aeron:ipc?alias=");
+        Ok(())
+    }
+
+    #[test]
     #[serial]
     fn version_check() -> Result<(), Box<dyn error::Error>> {
         unsafe {

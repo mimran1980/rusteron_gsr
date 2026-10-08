@@ -1022,25 +1022,23 @@ impl CWrapper {
         &self,
         dst_truncate_to_capacity: &mut String,
     ) -> Result<i32, AeronCError> {
-        unsafe {
-            let capacity = dst_truncate_to_capacity.capacity();
-            let vec = dst_truncate_to_capacity.as_mut_vec();
-            vec.set_len(capacity);
-            let result = self.#fn_name(&mut vec[..])?;
-            let mut len = 0;
-            loop {
-                if len == capacity {
-                    break;
-                }
-                let val = vec[len];
-                if val == 0 {
-                    break;
-                }
-                len += 1;
+        let capacity = dst_truncate_to_capacity.capacity();
+        // SAFETY: the bytes are zeros (valid UTF-8) until truncated to a checked UTF-8 prefix.
+        let vec = unsafe { dst_truncate_to_capacity.as_mut_vec() };
+        // Zeroed so C never leaves uninitialised bytes behind, including when it fails without writing.
+        vec.clear();
+        vec.resize(capacity, 0);
+        let result = self.#fn_name(&mut vec[..]);
+        let len = match result {
+            Ok(_) => {
+                let len = vec.iter().position(|&b| b == 0).unwrap_or(capacity);
+                // C truncation can split a multi-byte character.
+                std::str::from_utf8(&vec[..len]).map_or_else(|e| e.valid_up_to(), |s| s.len())
             }
-            vec.set_len(len);
-            Ok(result)
-        }
+            Err(_) => 0,
+        };
+        vec.truncate(len);
+        result
     }
                         });
             }
