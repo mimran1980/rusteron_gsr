@@ -125,7 +125,7 @@ For detailed guides and code snippets on Aeron features in Rust, see:
 ## Safety Considerations
 
 1. **Aeron Lifetime** – The `AeronArchive` depends on an external `Aeron` instance. Ensure `Aeron` outlives all references to the archive.
-2. **Persistent Subscription Lifetime** – A persistent subscription holds no reference to its `Aeron` client or archive context, yet uses both until it closes. Keep them open until the subscription is closed or dropped, as in the [example below](#persistent-subscriptions).
+2. **Persistent Subscription Lifetime** – A persistent subscription holds no reference to its `Aeron` client or archive context, yet uses both until it closes. Keep them open until the subscription is closed or dropped, as in the [example below](#persistent-subscriptions). Building it also points the archive context at the subscription's client, so set the same client on both (`archive_context.set_aeron(&aeron)` and `.aeron(&aeron)`). Without `.aeron(..)` the subscription makes its own client and closes it, and the archive context must not be used again afterwards.
 3. **Unsafe Bindings** – The module interfaces directly with Aeron’s C API. Improper resource handling can cause undefined behavior.
 4. **Automatic Handler Cleanup** – Handlers are reference-counted; registered callbacks live as long as the resource that registered them and are freed automatically.
 5. **Thread Safety** – Use care when accessing Aeron objects across threads. Synchronize access appropriately.

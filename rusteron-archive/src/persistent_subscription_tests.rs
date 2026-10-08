@@ -1337,6 +1337,38 @@ mod tests {
         Ok(())
     }
 
+    /// Building a persistent subscription points its archive context at the subscription's
+    /// client, which is why the two should share one.
+    #[test]
+    #[serial]
+    fn building_points_the_archive_context_at_the_subscriptions_client() -> Result<(), Box<dyn Error>> {
+        crate::skip_unless_java!();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().ok();
+
+        let (aeron, archive_context, _media_driver_archive, _archive_error_handler) =
+            start_aeron_archive_with_config("ps_context_client", 9795)?;
+        let other_context = AeronContext::new()?;
+        other_context.set_dir(&aeron.context().get_dir().into_c_string())?;
+        let other = Aeron::new(&other_context)?;
+        other.start()?;
+        assert_eq!(archive_context.get_aeron().get_inner(), aeron.get_inner());
+
+        let ps = persistent_subscription_builder()?
+            .aeron(&other)?
+            .archive_context(&archive_context)?
+            .recording_id(0)?
+            .live_channel("aeron:ipc")?
+            .live_stream_id(3601)?
+            .replay_channel("aeron:udp?endpoint=localhost:0")?
+            .replay_stream_id(3602)?
+            .build()?;
+        assert_eq!(archive_context.get_aeron().get_inner(), other.get_inner());
+        ps.close()?;
+        Ok(())
+    }
+
     /// The follower closes its subscription before the client and archive contexts it uses,
     /// so it drops cleanly when it holds the client's last handles.
     #[test]

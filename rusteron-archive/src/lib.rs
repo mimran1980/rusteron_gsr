@@ -690,7 +690,9 @@ impl AeronArchivePersistentSubscription {
     /// The context is consumed and owned by the subscription from this point on —
     /// it will be closed when the subscription is closed, so it must not be used
     /// afterwards. Keep the context's Aeron client and archive context open until the
-    /// subscription is closed or dropped.
+    /// subscription is closed or dropped. Creating it points the archive context at that
+    /// client; without one, it makes its own and closes it when it closes, after which the
+    /// archive context must not be used again.
     pub fn create(
         ctx: AeronArchivePersistentSubscriptionContext,
         listener: Option<Box<dyn PersistentSubscriptionListener>>,
@@ -835,10 +837,11 @@ pub trait PersistentSubscriptionListener: 'static {
 /// with proper CString handling.
 ///
 /// The subscription holds no reference to the Aeron client or archive context given
-/// here, yet uses both from the moment they are set. Keep them open until the
-/// subscription is closed or dropped, or until the builder or its
-/// [`Self::build_async`] request is dropped unbuilt: dropping either earlier is a
-/// use-after-free.
+/// here, so keep both open until it is closed or dropped: dropping either earlier is a
+/// use-after-free. Building also points the archive context at the subscription's
+/// client, so give [`Self::aeron`] the client already set on the context, as below.
+/// Without one, the subscription makes its own client and closes it when it closes,
+/// after which the context must not be used to connect again.
 ///
 /// # Examples
 ///
@@ -958,6 +961,7 @@ impl PersistentSubscriptionBuilder {
     /// Pre-allocate the state counter so an external observer can read the PS state-machine
     /// state. If unset the PS allocates one itself. Maps to Aeron's `Context.stateCounter`.
     /// The subscription takes the counter over: it closes it, as does setting the slot again.
+    /// Keep the counter's client open until then.
     pub fn state_counter(self, counter: &AeronCounter) -> Result<Self, AeronCError> {
         let previous = self.ctx.get_state_counter().get_inner();
         self.ctx.set_state_counter(counter)?;
