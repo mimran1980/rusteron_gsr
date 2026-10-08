@@ -144,10 +144,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if Instant::now() > deadline {
             return Err("timed out waiting for replay merge".into());
         }
+        // Archive errors arrive as Err from poll_fn; polling the archive here would take
+        // the merge's own responses and stall it.
         if replay_merge.poll_fn(|_buf, _hdr| received += 1, 256)? == 0 {
-            if let Some(err) = archive.poll_for_error()? {
-                return Err(format!("archive error during merge: {err}").into());
-            }
             sleep(Duration::from_millis(1));
         }
     }

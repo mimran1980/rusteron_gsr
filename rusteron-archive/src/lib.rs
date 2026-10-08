@@ -150,7 +150,9 @@ impl AeronArchive {
     /// conductor when it uses the agent invoker, then hands one recording signal to the
     /// context's consumer, or one archive error to its error handler. Call it once a cycle,
     /// and poll each persistent subscription and async request on its own; while a request
-    /// is in flight its poll reads the archive's responses, and this reads none.
+    /// is in flight its poll reads the archive's responses, and this reads none. Do not call
+    /// it while polling an [`AeronArchiveReplayMerge`] on this archive: the merge reads the
+    /// same responses, and one taken here stalls it until its progress timeout.
     ///
     /// Every persistent subscription poll also runs an agent-invoker client's conductor,
     /// so with many persistent subscriptions on one client, give it its conductor thread.
@@ -1536,6 +1538,11 @@ mod tests {
             Duration::from_secs(5),
         )?;
 
+        info!(
+            "about to start_replay [maxRecordPosition={:?}]",
+            archive.get_max_recorded_position(recording_id)
+        );
+
         let replay_merge = AeronArchiveReplayMerge::new(
             &subscription,
             &archive,
@@ -1563,11 +1570,6 @@ mod tests {
         // }
         // info!("Subscription connected");
 
-        info!(
-            "about to start_replay [maxRecordPosition={:?}]",
-            archive.get_max_recorded_position(recording_id)
-        );
-
         let mut reply_count = 0;
         while !replay_merge.is_merged() {
             assert!(!replay_merge.has_failed());
@@ -1586,10 +1588,6 @@ mod tests {
                 100,
             )? == 0
             {
-                let err = archive.poll_for_error_response_as_string(4096)?;
-                if !err.is_empty() {
-                    panic!("{}", err);
-                }
                 if Aeron::errmsg().len() > 0 && "no error" != Aeron::errmsg() {
                     panic!("{}", Aeron::errmsg());
                 }
