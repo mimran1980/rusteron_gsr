@@ -9,8 +9,7 @@
 //!    and waits for live again;
 //! 3. the live stream comes back, resumed where it stopped → it **rejoins live**
 //!    (`on_live_joined` again). Aeron refuses a live stream that restarts behind what the
-//!    subscription has seen; for a publisher that restarts from scratch, see
-//!    `FollowingPersistentSubscription`.
+//!    subscription has seen.
 //!
 //! Requires `java` on PATH (an embedded Java Archive is started for you).
 //!

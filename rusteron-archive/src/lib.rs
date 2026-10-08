@@ -48,10 +48,7 @@ pub const PUBLICATION_CLOSED: i64 = bindings::AERON_PUBLICATION_CLOSED as i64;
 pub const PUBLICATION_MAX_POSITION_EXCEEDED: i64 = bindings::AERON_PUBLICATION_MAX_POSITION_EXCEEDED as i64;
 pub const PUBLICATION_ERROR: i64 = bindings::AERON_PUBLICATION_ERROR as i64;
 
-mod follow;
 pub mod testing;
-
-pub use follow::FollowingPersistentSubscription;
 
 #[cfg(test)]
 pub mod persistent_subscription_integration;
