@@ -4,7 +4,8 @@
 # tree and the harness, runs harness/vm.sh's phases on both at once, copies the results to
 # target/x86lab/results/<stamp>/<node>/after-<phase> after each phase, and deletes the group
 # on any exit. Runs on macOS (bsdtar, caffeinate) with the az CLI logged in and
-# ~/.ssh/id_rsa.pub as the VMs' key; summarise a bench.csv with analyse.py.
+# ~/.ssh/id_rsa.pub as the VMs' key; summarise a bench.csv with analyse.py. It refuses to
+# start unless the subscription is a free trial with its spending limit on.
 #
 #   scripts/x86-lab/lab.sh                            every phase
 #   LAB_PHASES="bootstrap build bench" scripts/x86-lab/lab.sh
@@ -199,6 +200,14 @@ run_node() {
 
 main() {
     mkdir -p "$out"
+    # only on free credit: a free trial's spending limit stops it instead of billing a card
+    local policy
+    policy=$(az rest --method get --url "https://management.azure.com/subscriptions/$(az account show --query id -o tsv)?api-version=2022-12-01" \
+        --query "join(' ', [subscriptionPolicies.quotaId, subscriptionPolicies.spendingLimit])" -o tsv)
+    if [[ $policy != FreeTrial*" On" ]]; then
+        echo "the subscription is not a free trial with its spending limit on ($policy): not creating anything" >&2
+        exit 1
+    fi
     if [[ $(az group exists -n "$group") != false ]]; then
         echo "$group already exists: not created by this run, so not touched" >&2
         exit 1
