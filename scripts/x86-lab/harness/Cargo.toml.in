@@ -18,6 +18,10 @@ static = ["rusteron-client/static", "rusteron-archive?/static"]
 archive = ["dep:rusteron-archive"]
 
 [[bin]]
+name = "arcload"
+required-features = ["archive"]
+
+[[bin]]
 name = "pspoll"
 required-features = ["archive"]
 
