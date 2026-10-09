@@ -319,7 +319,7 @@ These were used in every run, and earlier runs on smaller VMs showed each to hel
 | A tuned kernel on top of isolation: `nosmt idle=poll rcu_nocb_poll nowatchdog nmi_watchdog=0 nosoftlockup skew_tick=1 transparent_hugepage=never audit=0`, all IRQs and workqueues on the housekeeping CPU, background services stopped | UDP p50 38.6 → 34.9 µs. IPC unchanged. | SMT off halves the CPUs; `idle=poll` keeps every idle CPU busy. |
 | `mitigations=off` | UDP p50 34.9 → 33.9 µs and p99.99 156 → 121 µs. IPC unchanged. | Turns off the kernel's protection against CPU side-channel attacks. |
 | Driver threading | Dedicated (pinned `noop` sender and receiver), SHARED_NETWORK and SHARED were within about 2 µs of each other at UDP p50. A SHARED driver costs IPC: p50 0.31 → 0.36–0.42 µs and half the throughput. | Dedicated spins two cores. |
-| In Kubernetes: kubelet's static CPU manager and Guaranteed pods requesting whole CPUs | Each container gets its CPUs to itself, with no CFS quota. Under the default policy a 1-CPU driver container was throttled in 23–55% of 100 ms periods, stalling round trips for up to 1.8 ms; one CPU of headroom or no CPU limit avoided it. | See [BENCHMARKS.md](./BENCHMARKS.md#configuring-a-pod) for the kubelet and pod settings. |
+| In Kubernetes: kubelet's static CPU manager and Guaranteed pods requesting whole CPUs | Each container gets its CPUs to itself, with no CFS quota. Under the default policy, containers limited to exactly their spinning threads' CPUs were throttled (23–55% of 100 ms periods for a 1-CPU driver); one CPU of headroom or no CPU limit avoided it. | See [BENCHMARKS.md](./BENCHMARKS.md#configuring-a-pod) for the kubelet and pod settings. |
 
 ```bash
 # C media driver (a Java driver reads -D system properties instead)
@@ -332,6 +332,10 @@ export AERON_FILE_PAGE_SIZE=2097152 AERON_DIR=/mnt/huge/aeron
 export AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true
 # the host
 sudo sysctl -w net.core.rmem_max=16777216 net.core.wmem_max=16777216 net.core.busy_read=50
+# the NIC's VF (its netdev has eth0 as master), as measured with busy_read
+for i in /sys/class/net/*; do [ -e "$i/master" ] && vf=$(basename "$i"); done
+echo 2 | sudo tee /sys/class/net/$vf/napi_defer_hard_irqs
+echo 200000 | sudo tee /sys/class/net/$vf/gro_flush_timeout
 sudo sysctl -w vm.nr_hugepages=1536
 sudo mkdir -p /mnt/huge && sudo mount -t hugetlbfs -o pagesize=2M,size=2G,uid="$(id -u)" none /mnt/huge
 ```

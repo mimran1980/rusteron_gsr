@@ -6,7 +6,7 @@
 
 - **UDP between the hosts:** a 32-byte round trip took 38 µs at p50 with a pinned, dedicated driver on the stock kernel. With CPU isolation and `net.core.busy_read`, it took 31 µs at p50 and 46 µs at p99.99, against 157 µs without busy polling.
   - Putting the NIC's interrupts on the receiver's core did nearly as well (p99.99 49–57 µs). With the kernel tuned it gave the lowest max: 74 µs (62–84).
-  - Without one of these two, p99.99 stayed at 120–160 µs in every kernel state. The tail is interrupt handling, not CPU placement.
+  - Without one of these two, p99.99 stayed at 120–160 µs in every kernel state. On the stock kernel neither helped; only on isolated CPUs did they cut the tail.
 - **UDP throughput** (32-byte messages):
   - 2 MiB socket buffers and receiver window: 13 M msgs/s. Aeron's default 128 KiB gives 1.9 M.
   - MTU 9000, with Aeron's MTU at 8192: 28.5 M msgs/s.
@@ -48,6 +48,7 @@
   - Round trip: 32-byte messages, one in flight. IPC does 2,000,000 round trips after 200,000 of warm-up; UDP does 300,000 after 50,000. Each run stops after 20 s.
   - Throughput: 32-byte messages offered flat out. The figure is the median of five one-second samples after a one-second warm-up.
   - Each state runs 5 reps, with the variants in a different order each rep.
+- **Provenance.** The run recorded commit `62ec7a0`. Before any benchmark phase, its `vm.sh` was replaced with one that also puts `/usr/sbin` on the `PATH` (`2a39f78`), so the per-run NIC counters could call `ethtool`.
 - **Reading the tables.**
   - Each cell is the median across reps, with the range across reps in brackets.
   - A difference counts only when the ranges do not overlap.
@@ -158,10 +159,10 @@ An `ArchivingMediaDriver` (Java 21) runs with `-Xms1g -Xmx1g -XX:+AlwaysPreTouch
 |---|---|---|---|---|---|
 | unpinned | 5 | 6.72 (6.50–6.90) | 6.13 (5.88–6.24) | 1569 | stalled in 5 of 5 |
 | on CPU 0 | 5 | 5.11 (4.83–5.21) | 4.62 (4.46–4.73) | 1182 | 0.317 / 1.90 / 8.78 / 38.1 |
-| on CPU 0, archive-recorder thread on CPU 4 | 5 | 6.83 (6.59–6.93) | 6.23 (6.00–6.27) | 1595 | 0.322 / 1.93 / 9.10 / 43.4 (1 of 5 stalled) |
+| on CPU 0, archive-recorder thread on CPU 6 | 5 | 6.83 (6.59–6.93) | 6.23 (6.00–6.27) | 1595 | 0.322 / 1.93 / 9.10 / 43.4 (1 of 5 stalled) |
 | as above, recorder `noop` idle | 5 | 6.86 (6.75–6.90) | 6.23 (6.16–6.27) | 1594 | 0.322 / 1.93 / 11.0 / 22.9 (2 of 5 stalled) |
 
-- **Recording costs IPC latency:** IPC p99 rose from 0.37 µs to about 1.9 µs, because the archive is a second subscriber on the ping stream.
+- **The recorded ping-pong ran on the archive's embedded Java driver**, not the C driver. Its p99 of about 1.9 µs, against 0.37 µs on the C driver without recording, combines the driver change with the recording, so neither cause is isolated.
 - **Placement:** confining the whole JVM to the housekeeping CPU cut recording throughput by 25%; pinning its recorder to a core of its own got it back. A busy-spinning recorder added nothing.
 
 ## Kubernetes pods (single VM, earlier run, 2026-10-09)
@@ -182,9 +183,16 @@ These pods ran in an earlier run on one `Standard_D8s_v6`, on Linux 6.12 with k3
 | st-d3-a3 | 3 / 3 | no quota | 4, 5 (one core's twins) | 0.115 | 0.405 | 52.4 (16–84) | 62.5 |
 | st-s1-a2.5 | 1 / 2.5 (shared pool) | no quota | 2, 4 | 0.354 | 8.95 | 57.4 (30–68) | 36.3 |
 
-- **The default policy's quota:** under it, a CPU limit is a quota per 100 ms. A driver container with a 1-CPU limit and one spinning thread was throttled in 23–55% of periods: a SHARED driver is more than one thread. Its round trips stalled for up to 1.8 ms. One CPU of headroom (`def-s2-a3`), or no CPU limit (Burstable), removed the throttling.
+- **The default policy's quota:** under it, a CPU limit is a quota per 100 ms.
+  - A driver container limited to 1 CPU was throttled in 23–55% of periods: its spinning thread uses the whole quota, and the driver's other threads push it over. IPC doesn't go through the driver, so that throttling barely shows here: `def-s1-a2.5`, the most throttled driver, had a max of 48 µs.
+  - The one pod that stalled for up to 1.8 ms, `def-s1-a2`, was also the one whose app container (ping, pong and the client's other threads in 2 CPUs) was throttled, in 28 of 512 periods. Its max ranged from 30 to 1812 µs, overlapping the other pods', so this isn't a firm difference.
+  - One CPU of headroom (`def-s2-a3`), or no CPU limit (Burstable), removed all throttling.
 - **The static policy** gave each Guaranteed container whole CPUs to itself, with no quota at all (`cpu.max` read `max`). Kubernetes 1.36 drops the quota for exclusive CPUs.
-- **Medians follow ping and pong's placement:** kubelet put them on one core's two SMT twins in `st-s1-a2` and `st-d3-a3`, the fastest IPC layout. The pods weren't isolated, so p99.99 stayed near 9 µs.
+- **Placement:** kubelet chose where ping and pong landed.
+  - Ping and pong on one core's two SMT twins, with the client's other threads on a third CPU (`st-d3-a3`): 0.115 µs at p50 and 0.405 µs at p99.99.
+  - On twins too, but sharing them with those threads (`st-s1-a2`): 0.287 µs.
+  - On separate cores: 0.35–0.38 µs.
+  - The pods weren't isolated, and in all but `st-d3-a3` p99.99 stayed near 9 µs.
 
 ### Configuring a pod
 
