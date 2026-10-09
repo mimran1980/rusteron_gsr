@@ -1,4 +1,4 @@
-**Note:** These benchmarks are environment-sensitive; rerun them on your own hardware. Everything below was measured on 2026-10-09 on two Azure `Standard_D8s_v6` VMs (Intel Xeon Platinum 8573C, 4 cores × 2 SMT threads, 32 GiB) in one proximity placement group in North Central US, with accelerated networking (the MANA NIC). They ran Debian 13 with Linux 7.2.6 (the `trixie-backports` cloud kernel), Aeron 1.52.2 and rustc 1.95.0. UDP is measured between the two VMs, never over loopback.
+**Note:** These benchmarks are environment-sensitive; rerun them on your own hardware. Everything below was measured on 2026-10-09 on two Azure `Standard_D8s_v6` VMs (Intel Xeon Platinum 8573C, 4 cores × 2 SMT threads, 32 GiB) in one proximity placement group in North Central US, with accelerated networking (the MANA NIC). They ran Debian 13 with Linux 7.2.6 (the `trixie-backports` cloud kernel), Aeron 1.52.2 and rustc 1.95.0. UDP is measured between the two VMs, never over loopback. The archive-on-disk section comes from a later run (2026-10-10) on two `Standard_D8ds_v6` in West US 3.
 
 # Intel D8s_v6 pair on Azure (2026-10-09)
 
@@ -18,6 +18,10 @@
   - SMT off, `idle=poll`, no watchdogs and the rest of the tuned state took 3.7 µs off the cross-host p50 (38.6 → 34.9 µs). IPC didn't change.
   - `mitigations=off` took off another 1 µs and lowered p99.99 from 156 to 121 µs, at a security cost.
 - **Java archive:** recording to tmpfs ran at 6.2 M msgs/s (1.6 GB/s, 256-byte messages). Confining the whole JVM to the housekeeping CPU cost 25%.
+- **Java archive on disk** (two D8ds_v6, 2026-10-10):
+  - At file sync level 0 the page cache absorbed bursts, and the disk set the sustained rate: 545 MB/s on local NVMe, and about the provisioned rate on Premium SSD v2 once the disks had been in use for a while. New ones were slower.
+  - A Premium SSD v2 at its included 125 MB/s took 30 s bursts of 400 MB/s at full rate once `vm.dirty_bytes` allowed 16 GiB of unwritten data. With Linux's defaults it throttled after 15 s.
+  - Replays slowed to 59–246 MB/s while recording ran flat out at the disk's limit.
 
 ## Method
 
@@ -166,6 +170,99 @@ An `ArchivingMediaDriver` (Java 21) runs with `-Xms1g -Xmx1g -XX:+AlwaysPreTouch
 - **Placement:** confining the whole JVM to the housekeeping CPU cut recording throughput by 25%; pinning its recorder to a core of its own got it back. A busy-spinning recorder added nothing.
 - **Missing reps** were lost to a race in the benchmark itself, not the archive. The ping started once its publication was connected, but the archive's recording subscription also connects it. So ping sometimes sent before pong had subscribed, pong missed that first message, and both waited forever. Aeron's counters confirmed it: the ping stream at 64 bytes, recorded by the archive, and pong's subscription joined at 64. The benchmark now waits for pong's own subscription; locally that took the recorded ping-pong from 0 of 5 to 5 of 5.
 
+## Java archive on disk, under load (two D8ds_v6, 2026-10-10)
+
+A separate run on two `Standard_D8ds_v6` VMs: the same CPU as above, plus a 440 GiB local NVMe disk, in zone 1 of West US 3, on the stock kernel (Linux 7.2.6) with the pinned layout. Each VM recorded to three disks in turn, each formatted xfs and mounted `noatime`:
+
+| Disk | What it is | Price |
+|---|---|---|
+| local NVMe | the VM's own disk; its data is lost when the VM stops or its host fails | included in the VM |
+| Premium SSD v2, 125 MB/s | 256 GiB at 3,000 IOPS and 125 MB/s, the performance every v2 disk includes | capacity only |
+| Premium SSD v2, 400 MB/s | 512 GiB at 3,000 IOPS and 400 MB/s | capacity plus 275 MB/s |
+
+The VM caps its network disks together at 12,800 IOPS and 424 MB/s.
+
+- **The archive** is the C media driver with a standalone Java `Archive` (Java 21, `-Xms2g -Xmx2g -XX:+AlwaysPreTouch -XX:+UseParallelGC`) attached to it, with DEDICATED archive threading. Its recorder and replayer are pinned to the two threads of one core. File sync level 0 unless stated.
+- **The load** is `arcload`: 1 KiB messages, one exclusive publication per stream, each on its own thread, the threads spread over four CPUs.
+- **Each figure is a single run.** Both hosts ran every test, so cells read intel-a / intel-b where the two differ.
+- **Provenance.** The run recorded commit `c6a21be` with `vm.sh` and `lab.sh` modified. Mid-run, both hosts got the fixes now in `e2f315a`, and the whole archive phase re-ran:
+  - Sixteen publishers spinning on the housekeeping CPU had starved the driver's conductor, so `arcload` now pins each thread before it adds its publication.
+  - A bare `wait` had also waited for the archive.
+  - The second fio pass was added at the same time.
+
+### What each disk can do (fio, one job at a time, MB/s unless stated)
+
+| Disk, when | sequential write, 1 MiB, 32 deep | sequential read | 1 MiB write + `fdatasync` | `fdatasync` after a 64 KiB write, p50 | 4 KiB random writes (IOPS) |
+|---|---|---|---|---|---|
+| local NVMe, new | 562 / 560 | 1124 / 1089 | 559 / 558 | 0.11 / 0.08 ms | 19,590 / 21,490 |
+| local NVMe, 1.5 h later | 562 / 560 | 1125 / 1094 | 559 / 558 | 0.03 / 0.03 ms | 60,191 / 59,569 |
+| Premium SSD v2 125, new | 41 / 140 | 77 / 123 | 45 / 91 | 0.9 / 1.5 ms | 1,316 / 1,916 |
+| Premium SSD v2 125, 1.5 h later | 130 / 129 | 130 / 126 | 140 / 141 | 0.7 / 0.8 ms | 1,344 / 3,063 |
+| Premium SSD v2 400, new | 58 / 229 | 76 / 244 | 59 / 198 | 0.8 / 1.4 ms | 1,340 / 1,523 |
+| Premium SSD v2 400, 1.5 h later | 451 / 424 | 375 / 403 | 445 / 419 | 0.7 / 0.8 ms | 1,068 / 2,860 |
+
+- **New Premium SSD v2 disks were mostly slow.**
+  - 10–25 minutes after creation, three of the four managed only 15–60% of their provisioned throughput. intel-b's 125 MB/s disk was the exception.
+  - On intel-a, Azure's own per-minute metrics showed at most 50% of the disks' bandwidth and 26% of their IOPS in use, so they were not being throttled at their limits.
+  - About 1.5 hours later every disk delivered what was provisioned. A new 8 GiB file then wrote at 485–501 MB/s on the 400 MB/s disks (for the 17 s it took) and at 125–138 MB/s on the 125 MB/s ones.
+  - By then the archive tests had written tens of GB to each disk, and xfs reuses freed blocks. So this run can't tell apart a cost of writing each block the first time, a warm-up after creation, or a backend that just varies.
+- **Random 4 KiB writes** stayed below the provisioned 3,000 IOPS on intel-a's disks in both passes. The archive writes sequentially, so this did not affect it.
+- **A forced write** waits about 0.03 ms on local NVMe and about 0.8 ms on Premium SSD v2.
+
+### Recording on the archive's host (IPC, 4 streams flat out for 60 s, MB/s)
+
+| Disk | level 0, first 10 s | level 0, last 30 s | level 1, median |
+|---|---|---|---|
+| local NVMe | 998 / 998 | 545 / 543 | 541 / 541 |
+| Premium SSD v2 125 | 592 / 666 | 125 / 127 | 56 / 112 |
+| Premium SSD v2 400 | 693 / 1010 | 346 / 394 | 57 / 220 |
+
+- **At file sync level 0 the page cache takes the first seconds** at 0.6–1 GB/s. Once it reaches the kernel's limit on unwritten data, the disk sets the pace. Disk writes then waited about 240 ms each, a deep write-back queue, against 1–2 ms at level 1.
+- **The disk set the rate, not the stream count.** On local NVMe, 1, 4 and 16 streams all recorded at 542–552 MB/s (median). On the 400 MB/s disks, 16 streams reached 415 / 412 MB/s over the last 30 s.
+- **Level 1 cost nothing sustained on local NVMe**, but left no burst headroom. On Premium SSD v2 it cut recording to 56–220 MB/s, as each write waits for the network disk. These level 1 runs came early, while those disks were still slow.
+- **SHARED archive threading recorded at 545 / 543 MB/s** (4 streams, NVMe), the same as DEDICATED, since the disk was the limit.
+
+### Bursts (file sync level 0, two 30 s bursts of 400 MB/s, 60 s apart)
+
+400 MB/s is 4 streams of 1 KiB at 97,656 msgs/s each. The kernel's write-back limits were either Linux's default (`vm.dirty_ratio=20`, `vm.dirty_background_ratio=10`, as shares of available memory on a 32 GiB VM) or large (`vm.dirty_bytes` at 16 GiB, `vm.dirty_background_bytes` at 512 MiB). Both hosts gave the same results.
+
+| Disk | write-back limits | seconds held at 400 MB/s, of 30 | most data waiting to be written | written out after the second burst |
+|---|---|---|---|---|
+| local NVMe | default | 30 | 2.8 GiB | 36 s |
+| local NVMe | large | 30 | 0.5 GiB | 7 s |
+| Premium SSD v2 125 | default | 15, then about 155 MB/s | 4.8–5.0 GiB | 43 s |
+| Premium SSD v2 125 | large | 30 | 8.4 GiB | 74–76 s |
+| Premium SSD v2 400 | default | 30 | 4.6–5.3 GiB | 16–19 s |
+| Premium SSD v2 400 | large | 30 | 1.8–4.4 GiB | 5–11 s |
+
+- **With Linux's defaults, the 125 MB/s disk throttled each burst after 15 s.** In the burst's 30 s the publishers sent 8.1 of their 11.7 million messages, 2.0–2.2 million of them late. 99.6% of offer attempts met back-pressure.
+- **With the large limits it took both bursts at full rate.** That pattern averages 133 MB/s, though, just above the disk's 125, so about 0.75 GB more would be left over each cycle until the limit is reached again.
+- **More unwritten data in memory is more data a host failure loses**, which file sync level 0 already accepts.
+
+### Replays (page cache dropped first, aggregate MB/s)
+
+| Disk | 4 replays | 16 replays | 4 replays while 4 streams record flat out |
+|---|---|---|---|
+| local NVMe | 1039 / 1027 | 1077 / 1070 | 67 / 246 |
+| Premium SSD v2 125 | 119 / 131 | 124 / 126 | 66 / 59 |
+| Premium SSD v2 400 | 365 / 128 | 365 / 141 | 178 / 155 |
+
+- **Each replay read back a whole recording of 1.1–1.3 GB.** The 16 replays on intel-b's 400 MB/s disk completed only 5 within 120 s.
+- **Replays starved while recording ran flat out at the disk's limit.** On local NVMe they fell from about 1 GB/s to 67–246 MB/s; on intel-a none of the 4 finished within 50 s. The deep write-back queue of level 0 holds the reads up.
+- **The first replayed fragment** arrived 230–290 ms after the request in nearly every run, whatever the disk. That was not investigated.
+
+### Recording across hosts (publishers on intel-a, the archive on intel-b, UDP, MB/s)
+
+| intel-b's disk | 4 streams | 16 streams |
+|---|---|---|
+| local NVMe | 449 | 480 |
+| Premium SSD v2 125 | 128 | 127 |
+| Premium SSD v2 400 | 459 | 461 |
+
+- **The NVMe and 400 MB/s disks both stopped at 450–480 MB/s**, below the 545 MB/s recorded locally, so the UDP path (2 MiB windows, MTU 1500) probably set that limit. That was not explored further.
+- **Replays from intel-b's NVMe to intel-a over UDP** ran at 345, 502 and 485 MB/s for 1, 4 and 16 replays.
+- **A round trip across the hosts while 4 streams recorded at 25% of their maximum** (117 MB/s) took 65.7 µs at p50, 84.7 at p99, 230 at p99.99, and 1.36 ms at most. Pong ran on the archive host's driver. The runs at 50% and 75% were lost to a harness bug: each reused the last pong's ports, and that pong's image lingered in the archive's driver. It is fixed in `e2f315a`.
+
 ## Kubernetes pods (single VM, earlier run, 2026-10-09)
 
 These pods ran in an earlier run on one `Standard_D8s_v6`, on Linux 6.12 with k3s v1.36.5, measuring IPC only.
@@ -256,7 +353,7 @@ spec:
 
 ## Not measured
 
-AMD; more than one message in flight; publications created after start-up; a Java driver across hosts; recording to a real disk, replays and loads from several streams (the next run).
+AMD; more than one message in flight; publications created after start-up; a Java driver across hosts; AWS disks; whether new Premium SSD v2 disks are slow for a fixed time after creation; across regions and with packet loss (the next run).
 
 ## How to run
 
@@ -265,6 +362,17 @@ LAB_PAIR=1 LAB_LOCKSTEP=1 \
 LAB_NODES="intel-a:northcentralus:Standard_D8s_v6 intel-b:northcentralus:Standard_D8s_v6" \
 LAB_ARMS="impr impr-ps" LAB_EXTRAS=samples \
 LAB_PHASES="bootstrap kernel build bench8 xhost8-pinned archive8 isolate8 bench8-isolated xhost8-isolated tune8 bench8-tuned xhost8-tuned tune8-nomit bench8-tuned-nomit xhost8-tuned-nomit" \
+scripts/x86-lab/lab.sh
+```
+
+The archive under load, with three disks on each VM:
+
+```bash
+LAB_PAIR=1 LAB_LOCKSTEP=1 LAB_ZONE=1 \
+LAB_DATA_DISK="PremiumV2_LRS:256:3000:125 PremiumV2_LRS:512:3000:400" \
+LAB_NODES="intel-a:westus3:Standard_D8ds_v6 intel-b:westus3:Standard_D8ds_v6" \
+LAB_ARMS="impr impr-ps" LAB_EXTRAS=samples \
+LAB_PHASES="bootstrap kernel build disks8 diskbench8 archload8 archburst8 diskbench8-overwrite xarchload8" \
 scripts/x86-lab/lab.sh
 ```
 

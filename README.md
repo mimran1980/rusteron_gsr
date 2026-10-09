@@ -340,6 +340,22 @@ sudo sysctl -w vm.nr_hugepages=1536
 sudo mkdir -p /mnt/huge && sudo mount -t hugetlbfs -o pagesize=2M,size=2G,uid="$(id -u)" none /mnt/huge
 ```
 
+### Archive disks
+
+Measured on 2026-10-10 with a Java Archive on two Azure `Standard_D8ds_v6`, recording 1 KiB messages from up to 16 streams ([details](./BENCHMARKS.md#java-archive-on-disk-under-load-two-d8ds_v6-2026-10-10)).
+
+- **Size the disk for sustained throughput, not IOPS.**
+  - At file sync level 0 (the default) the archive writes into the page cache. RAM takes the bursts, so the disk only needs the average write rate plus replay reads.
+  - Cloud disks share one budget between reads and writes.
+  - Recordings are sequential, so the 3,000 IOPS a disk includes is plenty.
+- **A durable network disk is enough.** On Azure that is Premium SSD v2: 125 MB/s included, more bought separately. AWS gp3 is priced the same way but wasn't measured here.
+  - The VM caps its disks as well: 424 MB/s in total on a D8ds_v6.
+  - New Premium SSD v2 disks ran well below their provisioned rate for their first 25 minutes or more, so test a fresh disk before relying on it.
+- **Let the page cache hold larger bursts:** `sudo sysctl -w vm.dirty_bytes=17179869184 vm.dirty_background_bytes=536870912`. With these, a 125 MB/s disk took 30 s bursts of 400 MB/s at full rate; with Linux's defaults it throttled after 15 s. Data still in memory is lost if the host fails, which level 0 already accepts.
+- **Leave headroom for replays.** While recording ran flat out at the disk's limit, replays from that disk slowed from about 1 GB/s to 67–246 MB/s on local NVMe.
+- **Local NVMe was the fastest and costs nothing extra:** 545 MB/s sustained, 1 GB/s of replays, and `fdatasync` in 0.03 ms against 0.8 ms on Premium SSD v2. Its data is gone when the VM stops or its host fails, though, so use it only for an archive that is replicated elsewhere.
+- **File sync level 1 or 2** makes every write wait for the disk. That cost nothing sustained on local NVMe but cut Premium SSD v2 to 56–220 MB/s.
+
 ---
 
 ## Benchmarks
