@@ -15,7 +15,9 @@
 #   LAB_PAIR=1 puts each region's nodes in a placement group and, after the phases, runs
 #   the cross-host UDP bench from each region's first node to its second; with LAB_LOCKSTEP=1
 #   too, every phase finishes on all nodes before the next starts, and xhost8-<state> phases
-#   run that bench between each pair in the state the phases before brought both hosts to
+#   run that bench between each pair in the state the phases before brought both hosts to.
+#   LAB_ZONE puts every VM and placement group in that availability zone, and LAB_DATA_DISK
+#   (<sku>:<GiB>:<IOPS>:<MB/s>) attaches a data disk of that kind to each VM
 set -uo pipefail
 export PYTHONWARNINGS=ignore::SyntaxWarning COPYFILE_DISABLE=1
 
@@ -47,6 +49,8 @@ main_tree=$repo/target/x86lab/rusteron-main
 known=$out/known_hosts
 read -ra nodes <<<"${LAB_NODES:-intel:northcentralus:Standard_D4s_v6 amd:koreacentral:Standard_F4as_v6}"
 read -ra phases <<<"${LAB_PHASES:-bootstrap build bench test}"
+# the regions the nodes are in, whose network watchers teardown removes
+lab_regions=$(for n in "${nodes[@]}"; do IFS=: read -r _ r _ <<<"$n"; echo "$r"; done | sort -u | tr '\n' ' ')
 ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known"
     -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=10)
 created=0
@@ -71,7 +75,8 @@ limit() {
         bench) echo 3600 ;;
         abudp) echo 2400 ;;
         bench-pinned | bench-isolated | bench-huge | bench-1g | k8s | k8s-cpu | bench8 | archive8 | bench8-isolated) echo 3600 ;;
-        bench8-tuned | bench8-tuned-nomit | xhost8-*) echo 3600 ;;
+        bench8-tuned | bench8-tuned-nomit | xhost8-* | disks8 | diskbench8) echo 3600 ;;
+        archload8 | xarchload8) echo 7200 ;;
         k8s8) echo 5400 ;;
         isolate | isolate8 | tune8 | tune8-nomit | k3s-down) echo 600 ;;
         kernel) echo 1200 ;;
@@ -92,8 +97,8 @@ teardown() {
         # the network watchers Azure added for our networks, and their group if that empties it;
         # a watcher can show up in listings late, so look three times
         for attempt in 1 2 3; do
-            id=$(az resource list -g NetworkWatcherRG --query "[?type=='Microsoft.Network/networkWatchers' && \
-                (location=='northcentralus' || location=='koreacentral')].id" -o tsv 2>/dev/null)
+            id=$(az resource list -g NetworkWatcherRG --query "[?type=='Microsoft.Network/networkWatchers'].{id:id, l:location}" \
+                -o tsv 2>/dev/null | awk -v r=" $lab_regions " 'index(r, " " $2 " ") { print $1 }')
             if [[ -n $id ]]; then az resource delete --ids $id -o none; fi
             if ((attempt < 3)); then sleep 20; fi
         done
@@ -118,18 +123,26 @@ create_network() {
         az network vnet create -g "$group" -n "$region-vnet" -l "$region" --address-prefixes 10.60.0.0/16 \
             --subnet-name s --subnet-prefixes 10.60.0.0/24 --network-security-group "$region-nsg" -o none || return 1
     if [[ -n ${LAB_PAIR:-} ]]; then
-        az ppg create -g "$group" -n "$region-ppg" -l "$region" -t Standard -o none || return 1
+        az ppg create -g "$group" -n "$region-ppg" -l "$region" -t Standard ${LAB_ZONE:+--zone "$LAB_ZONE"} -o none || return 1
     fi
 }
 
 create_node() {
-    local name=$1 region=$2 size=$3 ppg=()
+    local name=$1 region=$2 size=$3 ppg=() zone=() dsku dsize diops dmbps
     if [[ -n ${LAB_PAIR:-} ]]; then ppg=(--ppg "$region-ppg"); fi
+    if [[ -n ${LAB_ZONE:-} ]]; then zone=(--zone "$LAB_ZONE"); fi
     az vm create -g "$group" -n "lab-$name" -l "$region" --size "$size" \
         --image Debian:debian-13:13-gen2:latest --admin-username "$user" --ssh-key-values "$key" \
         --vnet-name "$region-vnet" --subnet s --nsg "" --public-ip-address "$name-ip" --public-ip-sku Standard \
         --accelerated-networking true --os-disk-size-gb 64 --storage-sku Premium_LRS ${ppg[@]+"${ppg[@]}"} \
-        --disk-controller-type NVMe --os-disk-delete-option Delete --nic-delete-option Delete -o none
+        ${zone[@]+"${zone[@]}"} --disk-controller-type NVMe --os-disk-delete-option Delete --nic-delete-option Delete -o none || return 1
+    # LAB_DATA_DISK=<sku>:<GiB>:<IOPS>:<MB/s>, e.g. PremiumV2_LRS:256:12800:424 (Premium SSD v2 needs LAB_ZONE)
+    if [[ -n ${LAB_DATA_DISK:-} ]]; then
+        IFS=: read -r dsku dsize diops dmbps <<<"$LAB_DATA_DISK"
+        az disk create -g "$group" -n "lab-$name-data" -l "$region" ${zone[@]+"${zone[@]}"} --sku "$dsku" --size-gb "$dsize" \
+            --disk-iops-read-write "$diops" --disk-mbps-read-write "$dmbps" -o none &&
+            az vm disk attach -g "$group" --vm-name "lab-$name" --name "lab-$name-data" -o none
+    fi
 }
 
 # pair_bench <ping node> <pong node>: cross-host UDP, driven from the ping node over ssh
@@ -253,7 +266,7 @@ lockstep() {
     done
     for phase in "${phases[@]}"; do
         pids=()
-        if [[ $phase == xhost8* ]]; then
+        if [[ $phase == xhost8* || $phase == xarchload8 ]]; then
             for p in ${pairs[@]+"${pairs[@]}"}; do
                 i=${p%:*} j=${p#*:}
                 run_phase "${names[i]}" "${ips[i]}" "$phase" "LAB_PEER_IP=$(az vm show -d -g "$group" -n "lab-${names[j]}" --query privateIps -o tsv)" &

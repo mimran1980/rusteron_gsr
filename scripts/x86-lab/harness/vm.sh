@@ -18,7 +18,8 @@ log() { echo "[$(date +%T)] $*"; }
 bootstrap() {
     sudo apt-get update -qq
     sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential cmake clang libclang-dev \
-        pkg-config libbsd-dev uuid-dev zlib1g-dev libssl-dev default-jdk-headless curl util-linux ethtool >/dev/null
+        pkg-config libbsd-dev uuid-dev zlib1g-dev libssl-dev default-jdk-headless curl util-linux ethtool \
+        fio sysstat xfsprogs >/dev/null
     # rustfmt: the build scripts format the generated bindings and fail without it
     curl -sSf https://sh.rustup.rs | sh -s -- -y -q --profile minimal --default-toolchain 1.95.0 --component rustfmt
     # Linux silently caps SO_RCVBUF/SO_SNDBUF at these
@@ -54,7 +55,7 @@ arm() {
     log "build $name"
     (cd "$dir" && env "$@" RUSTFLAGS="$rustflags" CARGO_TARGET_DIR="$target" \
         cargo build --release --features "$features" --bins) >"$res/build-$name.log" 2>&1
-    for b in rtt tput pspoll rec; do
+    for b in rtt tput pspoll rec arcload; do
         if [[ -e $target/release/$b && $target/release/$b -nt $dir/Cargo.toml ]]; then cp "$target/release/$b" "$bin/$name/"; fi
     done
     cp "$dir/Cargo.lock" "$res/Cargo.lock-$name"
@@ -807,15 +808,15 @@ xhost_env() {
                 AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND=16) ;;
     esac
     case ${1%-defaults} in
-        ded-threads | ded-threads-busyread | ded-threads-irqrcv | xtput | xtput-jumbo | xtput-iov16)
+        ded-threads | ded-threads-busyread | ded-threads-irqrcv | ded-threads-busyread-irqrcv | xtput | xtput-jumbo | xtput-iov16)
             xenv=("${base[@]}" AERON_SENDER_IDLE_STRATEGY=noop AERON_RECEIVER_IDLE_STRATEGY=noop
                 AERON_CONDUCTOR_CPU_AFFINITY="$first_hk8" AERON_SENDER_CPU_AFFINITY="$xsnd8" AERON_RECEIVER_CPU_AFFINITY="$xrcv8")
             xmask=$hk8 ;;
-        sharednet-threads)
+        sharednet-threads | xtput-sharednet)
             xenv=("${base[@]}" AERON_THREADING_MODE=SHARED_NETWORK AERON_SHAREDNETWORK_IDLE_STRATEGY=noop
                 AERON_CONDUCTOR_CPU_AFFINITY="$first_hk8" AERON_SENDER_CPU_AFFINITY="$xsnd8")
             xmask=$hk8 ;;
-        shared-1cpu)
+        shared-1cpu | xtput-shared)
             xenv=("${base[@]}" AERON_THREADING_MODE=SHARED AERON_SHARED_IDLE_STRATEGY=noop)
             xmask=$xsnd8 ;;
     esac
@@ -880,21 +881,19 @@ xsub_result() {
 # IRQs re-pinned in the isolated and tuned states, the variant's network settings, and the
 # VF, busy-poll and datapath counters, whose change over the run goes to xhost8-runs.csv
 xhost_prepare() {
-    local v=$1 when=$2 setting=
-    case $v in
-        *busyread) setting=busy-net ;;
-        *irqrcv) setting=irq-rcv ;;
-        *jumbo) setting=jumbo ;;
-    esac
+    local v=$1 when=$2 settings=() setting
+    if [[ $v == *busyread* ]]; then settings+=(busy-net); fi
+    if [[ $v == *irqrcv* ]]; then settings+=(irq-rcv); fi
+    if [[ $v == *jumbo* ]]; then settings+=(jumbo); fi
     if [[ $when == on ]]; then
         if [[ $state != pinned ]]; then
             pin_irqs "$hk8"
             "${peer_ssh[@]}" "/srv/x86lab/harness/vm.sh pin-irqs"
         fi
-        if [[ -n $setting ]]; then
+        for setting in ${settings[@]+"${settings[@]}"}; do
             "$lab/harness/vm.sh" "$setting" on
             "${peer_ssh[@]}" "/srv/x86lab/harness/vm.sh $setting on"
-        fi
+        done
         stats_before="$(path_stats) $("${peer_ssh[@]}" /srv/x86lab/harness/vm.sh path-stats)"
     else
         local after
@@ -902,10 +901,10 @@ xhost_prepare() {
         awk -v h="$host,$state,$v,$rep" -v a="$after" -v b="$stats_before" \
             'BEGIN { n = split(a, x, " "); split(b, y, " "); printf "%s", h; for (i = 1; i <= n; i++) printf ",%d", x[i] - y[i]; print "" }' \
             >>"$res/xhost8-runs.csv"
-        if [[ -n $setting ]]; then
+        for setting in ${settings[@]+"${settings[@]}"}; do
             "$lab/harness/vm.sh" "$setting" off
             "${peer_ssh[@]}" "/srv/x86lab/harness/vm.sh $setting off"
-        fi
+        done
     fi
 }
 
@@ -935,12 +934,13 @@ xhost8() {
         done
         sysctl net.core.busy_read net.core.busy_poll
     } >"$res/xhost8-nic-$state.txt" 2>&1
-    local variants=(ded-threads ded-threads-defaults sharednet-threads shared-1cpu ded-threads-busyread ded-threads-irqrcv)
+    local variants=(ded-threads ded-threads-defaults sharednet-threads shared-1cpu ded-threads-busyread ded-threads-irqrcv
+        ded-threads-busyread-irqrcv)
     huge8
     echo "host,state,variant,rep,vf_rx,vf_tx,busy_poll_rx,path_switches,peer_vf_rx,peer_vf_tx,peer_busy_poll_rx,peer_path_switches" \
         >>"$res/xhost8-runs.csv"
     for rep in $(seq "${BENCH8_REPS:-5}"); do
-        for v in $(rotate "$rep" xtput xtput-defaults xtput-jumbo xtput-iov16); do
+        for v in $(rotate "$rep" xtput xtput-defaults xtput-jumbo xtput-iov16 xtput-sharednet xtput-shared); do
             xhost_prepare "$v" on
             "${peer_ssh[@]}" "/srv/x86lab/harness/vm.sh xsub-up8 $v $ping_ep"
             xhost_env "$v"
@@ -1293,6 +1293,258 @@ tune8_runtime() {
     sudo swapoff -a || true
 }
 
+# --- archive under load -------------------------------------------------------------------
+
+# The local NVMe disk and the Premium SSD v2 data disk, each formatted xfs and mounted at
+# /mnt/nvme and /mnt/pv2. A device is used only if it has no partitions and no mount, and it is
+# picked by model: Azure's local NVMe reports "Microsoft NVMe Direct Disk", managed disks
+# (the OS disk too) "MSFT NVMe Accelerator", so the data disk is the unpartitioned one of those.
+disks8() {
+    local name model dev kind
+    lsblk -o NAME,MODEL,SIZE,TYPE,MOUNTPOINTS >"$res/lsblk.txt" 2>&1
+    while read -r name; do
+        dev=/dev/$name
+        model=$(cat "/sys/block/$name/device/model" 2>/dev/null | sed 's/ *$//')
+        if [[ $(lsblk -n "$dev" | wc -l) -ne 1 || -n $(lsblk -n -o MOUNTPOINTS "$dev" | tr -d ' \n') ]]; then
+            echo "$dev ($model): partitioned or mounted, skipped" >>"$res/disks.txt"
+            continue
+        fi
+        case $model in
+            *Direct*) kind=nvme ;;
+            *Accelerator*) kind=pv2 ;;
+            *) echo "$dev ($model): unknown model, skipped" >>"$res/disks.txt"; continue ;;
+        esac
+        if mountpoint -q "/mnt/$kind"; then continue; fi
+        sudo mkfs.xfs -q -f "$dev" && sudo mkdir -p "/mnt/$kind" && sudo mount -o noatime "$dev" "/mnt/$kind" &&
+            sudo chown "$(id -u):$(id -g)" "/mnt/$kind" && echo "$dev ($model): /mnt/$kind" >>"$res/disks.txt"
+    done < <(lsblk -dn -o NAME,TYPE | awk '$2 == "disk" { print $1 }')
+    cat "$res/disks.txt"
+    df -h /mnt/nvme /mnt/pv2 >>"$res/disks.txt" 2>&1 || true
+}
+
+# what each disk does on its own: sequential 1 MiB writes and reads, 4 KiB random writes, and
+# writes followed by fdatasync as the archive does at file sync level 1, one fio line each
+diskbench8() {
+    local kind job args out
+    for kind in nvme pv2; do
+        mountpoint -q "/mnt/$kind" || { log "diskbench8: /mnt/$kind missing"; continue; }
+        for job in seqwrite-qd1 seqwrite-qd32 seqread-qd32 randwrite4k-qd32 syncwrite64k-qd1 syncwrite1m-qd1; do
+            case $job in
+                seqwrite-qd1) args=(--rw=write --bs=1M --iodepth=1 --direct=1) ;;
+                seqwrite-qd32) args=(--rw=write --bs=1M --iodepth=32 --direct=1) ;;
+                seqread-qd32) args=(--rw=read --bs=1M --iodepth=32 --direct=1) ;;
+                randwrite4k-qd32) args=(--rw=randwrite --bs=4k --iodepth=32 --direct=1) ;;
+                syncwrite64k-qd1) args=(--rw=write --bs=64k --iodepth=1 --fdatasync=1) ;;
+                syncwrite1m-qd1) args=(--rw=write --bs=1M --iodepth=1 --fdatasync=1) ;;
+            esac
+            out=$res/fio-$kind-$job.json
+            fio --name="$job" --filename="/mnt/$kind/fio.dat" --size=8G --ioengine=libaio --time_based --runtime=30 \
+                --group_reporting --output-format=json "${args[@]}" >"$out" 2>>"$res/fio-errors.log" || true
+            python3 - "$out" "$host" "$kind" "$job" <<'PY' | tee -a "$res/bench.csv"
+import json, sys
+out, host, kind, job = sys.argv[1:]
+try:
+    j = json.load(open(out))["jobs"][0]
+except Exception as e:
+    print(f"{host},fio,{kind},{job},error"); sys.exit()
+side = "read" if j["read"]["io_bytes"] > j["write"]["io_bytes"] else "write"
+d = j[side]
+p = d.get("clat_ns", {}).get("percentile", {})
+sync = j.get("sync", {}).get("lat_ns", {}).get("percentile", {})
+q = lambda m, k: round(m.get(k, 0) / 1000, 1)
+print(f"{host},fio,{kind},{job},{d['bw_bytes'] / 1e6:.0f},{d['iops']:.0f},{q(p, '50.000000')},{q(p, '99.000000')},{q(p, '99.900000')},{q(sync, '50.000000')},{q(sync, '99.000000')}")
+PY
+            rm -f "/mnt/$kind/fio.dat"
+        done
+    done
+    log "diskbench8 done"
+}
+
+# The archive host's C driver and a Java Archive attached to it, with its directory on
+# /mnt/<disk>. For UDP (a control host given) the driver's sender and receiver spin, pinned to
+# cores of their own; for IPC they keep their default idle, leaving those cores to publishers.
+# The archive's recorder and replayer get a core's two threads; the rest of its JVM shares CPU
+# 0's core. The driver's dir and both pids go to $res/arcd.state for later commands.
+# arcd_start <nvme|pv2> <file sync level> [archive threading mode] [control host]
+arcd_start() {
+    local kind=$1 sync=$2 mode=${3:-DEDICATED} ctl=${4:-} jar net=()
+    jar=$lab/rusteron/rusteron-archive/aeron/aeron-all/build/libs/aeron-all-1.52.2.jar
+    topo8
+    runs=$((runs + 1))
+    arc_dir=$shm/x86lab-arcd-$runs archive_dir=/mnt/$kind/archive-$runs
+    mkdir -p "$archive_dir"
+    if [[ -n $ctl ]]; then
+        net=(AERON_SENDER_IDLE_STRATEGY=noop AERON_RECEIVER_IDLE_STRATEGY=noop
+            AERON_SENDER_CPU_AFFINITY="$xsnd8" AERON_RECEIVER_CPU_AFFINITY="$xrcv8")
+    fi
+    env AERON_DIR="$arc_dir" AERON_DIR_DELETE_ON_START=true AERON_DIR_DELETE_ON_SHUTDOWN=true \
+        AERON_TERM_BUFFER_SPARSE_FILE=false AERON_CONDUCTOR_CPU_AFFINITY="$first_hk8" \
+        AERON_SOCKET_SO_SNDBUF=2097152 AERON_SOCKET_SO_RCVBUF=2097152 AERON_RCV_INITIAL_WINDOW_LENGTH=2097152 \
+        ${net[@]+"${net[@]}"} taskset -c "$hk8" "$bin/media_driver" >"$res/arcd-driver.log" 2>&1 &
+    arcd_driver=$!
+    for _ in $(seq 100); do
+        if [[ -e $arc_dir/cnc.dat ]]; then break; fi
+        sleep 0.1
+    done
+    sleep 0.5
+    taskset -c "$hk8,$((first_hk8 + 1))" java -Xms2g -Xmx2g -XX:+AlwaysPreTouch -XX:+UseParallelGC -XX:-UsePerfData \
+        -XX:+UnlockDiagnosticVMOptions -XX:GuaranteedSafepointInterval=300000 --add-opens java.base/jdk.internal.misc=ALL-UNNAMED \
+        -Dagrona.disable.bounds.checks=true -Daeron.dir="$arc_dir" -Daeron.archive.dir="$archive_dir" \
+        -Daeron.archive.threading.mode="$mode" -Daeron.archive.file.sync.level="$sync" -Daeron.archive.catalog.file.sync.level="$sync" \
+        -Daeron.archive.control.channel="aeron:udp?endpoint=${ctl:-localhost}:8010" "-Daeron.archive.replication.channel=aeron:udp?endpoint=localhost:0" \
+        -Daeron.archive.recording.events.enabled=false -Daeron.archive.max.concurrent.recordings=64 \
+        -Daeron.archive.max.concurrent.replays=64 -cp "$jar" io.aeron.archive.Archive >"$res/arcd-archive.log" 2>&1 &
+    arcd_archive=$!
+    sleep 3
+    pin_java "$arcd_archive" archive-recorder="$xapp8" archive-replayer="$((xapp8 + 1))" 2>/dev/null ||
+        log "arcd: archive threads not pinned (threading $mode)"
+    echo "$arc_dir $archive_dir $arcd_driver $arcd_archive" >"$res/arcd.state"
+}
+
+# stops what arcd_start started, here or in an earlier command, and removes its archive
+arcd_stop() {
+    local driver archive
+    read -r arc_dir archive_dir driver archive <"$res/arcd.state"
+    kill -TERM "$archive" 2>/dev/null || true
+    for _ in $(seq 100); do kill -0 "$archive" 2>/dev/null || break; sleep 0.1; done
+    kill -INT "$driver" 2>/dev/null || true
+    for _ in $(seq 100); do kill -0 "$driver" 2>/dev/null || break; sleep 0.1; done
+    rm -rf "$archive_dir"
+}
+
+# arcload_run <group> <iostat tag> <arcload args...>: arcload through the archive host's driver,
+# with iostat sampling every second alongside; its summary line to bench.csv, all output kept
+arcload_run() {
+    local group=$1 tag=$2 out line
+    shift 2
+    out=$res/arcload-$tag.out
+    iostat -x -m 1 >"$res/iostat-$tag.txt" 2>&1 &
+    local io=$!
+    env AERON_DIR="$arc_dir" ARCHIVE_CONTROL="aeron:udp?endpoint=localhost:8010" LABEL="$tag" \
+        taskset -c "$hk8" timeout 400 "$bin/impr-ps/arcload" "$@" >"$out" 2>>"$res/arcload-errors.log" || log "arcload $tag failed"
+    kill "$io" 2>/dev/null || true
+    for line in $(grep -E '^arcload,(record|replay),' "$out"); do echo "$host,$group,local,0,$line" | tee -a "$res/bench.csv"; done
+}
+
+# The archive on this host, recording streams published here over IPC: each disk at file sync
+# level 0 and 1, with 1, 4 and 16 streams of 1 KiB messages flat out for 60 s; then 1, 4 and 16
+# concurrent replays from disk with the page cache dropped; replays while 4 streams record; and
+# the archive's SHARED threading against DEDICATED
+archload8() {
+    topo8
+    local pubs=$xsnd8,$((xsnd8 + 1)),$xrcv8,$((xrcv8 + 1)) kind sync n c
+    for kind in nvme pv2; do
+        mountpoint -q "/mnt/$kind" || { log "archload8: /mnt/$kind missing"; continue; }
+        for sync in 0 1; do
+            for n in 1 4 16; do
+                arcd_start "$kind" "$sync"
+                arcload_run "arc-ipc-$kind-sync$sync" "ipc-$kind-s$sync-n$n" record "$n" 1024 60 0 ipc "$pubs"
+                arcd_stop
+            done
+        done
+        # replays read back what 16 streams wrote, from the disk rather than the page cache
+        arcd_start "$kind" 0
+        arcload_run "arc-ipc-$kind-fill" "fill-$kind" record 16 1024 30 0 ipc "$pubs"
+        for c in 1 4 16; do
+            sync && echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null
+            arcload_run "arc-replay-$kind" "replay-$kind-c$c" replay "$c" 120 ipc "$pubs"
+        done
+        # replays of those recordings while 4 new streams record
+        sync && echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null
+        arcload_run "arc-rw-$kind-write" "rw-$kind-write" record 4 1024 60 0 ipc "$xsnd8,$((xsnd8 + 1))" &
+        sleep 5
+        arcload_run "arc-rw-$kind-replay" "rw-$kind-replay" replay 4 50 ipc "$xrcv8,$((xrcv8 + 1))"
+        wait
+        arcd_stop
+    done
+    arcd_start nvme 0 SHARED
+    arcload_run "arc-ipc-nvme-shared" "ipc-nvme-shared-n4" record 4 1024 60 0 ipc "$pubs"
+    arcd_stop
+    log "archload8 done"
+}
+
+# the peer's archive host commands, with iostat on the peer for the length of one load
+peer() { "${peer_ssh[@]}" "/srv/x86lab/harness/vm.sh $*"; }
+
+# On the publisher host, with the archive on LAB_PEER_IP: streams published here and recorded
+# there over UDP (each disk, sync level 0 and 1, 4 and 16 streams of 1 KiB flat out for 60 s);
+# replays from the peer's disk to here; and the cross-host round trip while 4 streams record at
+# 25, 50 and 75% of their measured maximum
+xarchload8() {
+    local peer_ip=${LAB_PEER_IP:?LAB_PEER_IP: the archive host} self kind sync n c f max line
+    topo8
+    self=$(hostname -I | awk '{print $1}')
+    peer_ssh=(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$peer_ip")
+    local pubs=$((xapp8 + 1)),$((xsnd8 + 1)),$((xrcv8 + 1))
+    local env=(AERON_TERM_BUFFER_SPARSE_FILE=false AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true
+        AERON_SOCKET_SO_SNDBUF=2097152 AERON_SOCKET_SO_RCVBUF=2097152 AERON_RCV_INITIAL_WINDOW_LENGTH=2097152
+        AERON_SENDER_IDLE_STRATEGY=noop AERON_RECEIVER_IDLE_STRATEGY=noop AERON_CONDUCTOR_CPU_AFFINITY="$first_hk8"
+        AERON_SENDER_CPU_AFFINITY="$xsnd8" AERON_RECEIVER_CPU_AFFINITY="$xrcv8")
+    local control="aeron:udp?endpoint=$peer_ip:8010" response="aeron:udp?endpoint=$self:0"
+    # xarc <group> <tag> <arcload args...>: arcload here against the peer's archive, iostat there
+    xarc() {
+        local group=$1 tag=$2 out
+        shift 2
+        out=$res/arcload-$tag.out
+        peer iostat-up "$tag"
+        env "${env[@]}" AERON_DIR="$run_dir" ARCHIVE_CONTROL="$control" ARCHIVE_RESPONSE="$response" LABEL="$tag" \
+            taskset -c "$hk8" timeout 400 "$bin/impr-ps/arcload" "$@" >"$out" 2>>"$res/arcload-errors.log" || log "arcload $tag failed"
+        peer iostat-down
+        grep -E '^arcload,(record|replay),' "$out" | sed "s/^/$host,$group,xhost,0,/" | tee -a "$res/bench.csv" || true
+    }
+    hk=$hk8 driver_start "${env[@]}"
+    for kind in nvme pv2; do
+        for sync in 0 1; do
+            for n in 4 16; do
+                peer arcd-up "$kind" "$sync" DEDICATED "$peer_ip"
+                xarc "xarc-$kind-sync$sync" "x-$kind-s$sync-n$n" record "$n" 1024 60 0 "udp:$peer_ip:30100" "$pubs"
+                peer arcd-down
+            done
+        done
+    done
+    # replays from the peer's NVMe to here, page cache dropped first
+    peer arcd-up nvme 0 DEDICATED "$peer_ip"
+    xarc "xarc-fill" "x-fill" record 16 1024 30 0 "udp:$peer_ip:30100" "$pubs"
+    for c in 1 4 16; do
+        peer drop-caches
+        xarc "xarc-replay" "x-replay-c$c" replay "$c" 120 "udp:$self:31000" "$pubs"
+    done
+    peer arcd-down
+    # the round trip under a fixed share of the measured maximum load
+    peer arcd-up nvme 0 DEDICATED "$peer_ip"
+    xarc "xarc-max" "x-max-n4" record 4 1024 30 0 "udp:$peer_ip:30100" "$pubs"
+    max=$(awk -F, '/^arcload,record,/ { print $7; exit }' "$res/arcload-x-max-n4.out")
+    if ! [[ $max =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+        log "xarchload8: no maximum rate measured, so no round trips under load"
+        max=
+    fi
+    for f in ${max:+25 50 75}; do
+        peer pong-arcd "$peer_ip:20123" "$self:20124"
+        xarc "xarc-load$f" "x-load$f" record 4 1024 40 "$(( ${max%.*} * f / 400 ))" "udp:$peer_ip:30100" "$pubs" &
+        sleep 5
+        line=$(env "${env[@]}" AERON_DIR="$run_dir" LABEL="load$f" taskset -c "$hk8" timeout 120 \
+            "$bin/impr/rtt" xping "$peer_ip:20123" "$self:20124" "$UDP_N" "$UDP_W" "$xapp8" 2>>"$res/client-errors.log") ||
+            line="error,load$f,xping"
+        echo "$host,xarc-rtt-load$f,xhost,0,$line" | tee -a "$res/bench.csv"
+        wait
+        peer pong-down
+    done
+    peer arcd-down
+    driver_stop
+    log "xarchload8 done"
+}
+
+# On the archive host: pong through the archive host's driver, for the round trip under load
+pong_arcd() {
+    local dir
+    read -r dir _ <"$res/arcd.state"
+    topo8
+    setsid env AERON_DIR="$dir" taskset -c "$hk8" "$bin/impr/rtt" xpong "$1" "$2" "$((xsnd8 + 1))" \
+        </dev/null >"$res/pong.log" 2>&1 &
+    echo $! >"$res/pong.pid"
+    : >"$res/pong-driver.pid"
+}
+
 test_phase() {
     cd "$lab/rusteron"
     # release C (-O3 -march=native) as users ship, without a fat-LTO link per test binary
@@ -1350,6 +1602,16 @@ case ${1:-} in
     k8s) k8s ;;
     k8s-cpu) k8s_cpu ;;
     bench8) bench8 pinned ;;
+    disks8) disks8 ;;
+    diskbench8) diskbench8 ;;
+    archload8) archload8 ;;
+    xarchload8) xarchload8 ;;
+    arcd-up) shift; arcd_start "$@" ;;
+    arcd-down) arcd_stop ;;
+    pong-arcd) shift; pong_arcd "$@" ;;
+    drop-caches) sync && echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null ;;
+    iostat-up) setsid iostat -x -m 1 </dev/null >"$res/iostat-$2.txt" 2>&1 & echo $! >"$res/iostat.pid" ;;
+    iostat-down) kill "$(cat "$res/iostat.pid")" 2>/dev/null || true ;;
     xhost8-*) xhost8 "${1#xhost8-}" ;;
     pong-up8) shift; pong_up8 "$@" ;;
     xsub-up8) shift; xsub_up8 "$@" ;;
