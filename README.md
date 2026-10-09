@@ -301,18 +301,20 @@ live stream), see [`rusteron-archive`](./rusteron-archive/README.md#persistent-s
 ## Tuning on x86-64 Linux
 
 Measured on 2026-10-09 on two Azure 4-vCPU VMs running Debian 13: an AMD EPYC 9V74
-(F4as_v6, 4 cores) and an Intel Xeon Platinum 8573C (D4s_v6, 2 cores with SMT). IPC and
-loopback UDP round trips of 32-byte messages, one in flight, and IPC throughput; each figure
-is a median of 5 to 12 runs. Nothing here covers NICs or networks between hosts. Tables,
-method and caveats: [BENCHMARKS.md](./BENCHMARKS.md#x86-64-linux-on-azure-2026-10-09).
+(F4as_v6, 4 cores) and an Intel Xeon Platinum 8573C (D4s_v6, 2 cores with SMT). IPC and UDP
+round trips of 32-byte messages, one in flight, over loopback and between two 2-vCPU VMs in one
+placement group, and IPC throughput; each figure is a median of 3 to 12 runs. The cross-host
+figures are Azure's network; other NICs will differ. Tables, method and caveats:
+[BENCHMARKS.md](./BENCHMARKS.md#x86-64-linux-on-azure-2026-10-09), and for huge pages, CPU
+isolation, Kubernetes, cross-host UDP and Java [here](./BENCHMARKS.md#java-huge-pages-cpu-isolation-kubernetes-and-cross-host-udp-2026-10-09).
 
 | Setting | Measured effect | Cost |
 |---|---|---|
 | `AERON_TERM_BUFFER_SPARSE_FILE=false` (driver) and `AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true` (clients) | IPC p99 3.0 µs → 240 ns (AMD), 2.3 → 1.3 µs (Intel). UDP p99 −5% (AMD), 13.1 → 8.8 µs (Intel). Without them a new publication takes a page fault for each new 4 KiB of its log until it has written through the log once (3 × term length). | The driver allocates and touches the whole log when it creates a publication (192 MiB of `/dev/shm` for IPC at the default term length, 48 MiB for UDP), and each client touches it when it maps it, so create publications at start-up. A UDP receiver's driver and clients do the same for each image (48 MiB) when a publisher connects. |
-| Huge pages for Aeron's files (`huge=always` on the tmpfs) | With the settings above, Intel IPC p99 1.3 µs → 371 ns and p99.9 3.3 → 1.8 µs; on AMD p99 and above did not change. Without pre-touch it adds rare stalls (max 0.2 ms on AMD, 0.5 ms on Intel). | Applies to every user of the mount; a dedicated tmpfs for `AERON_DIR` would keep it to Aeron (not measured). |
-| `noop` idle for the driver's sender and receiver (UDP) | The default `backoff` made UDP p50 103 µs instead of 9.5 µs on AMD (4 of 5 runs) and added 31–36 µs from p90 to p99.9 on Intel. | Each spins a whole core. |
+| Huge pages for Aeron's files: `huge=always` on the tmpfs, or `AERON_DIR` on `hugetlbfs` with `AERON_FILE_PAGE_SIZE=2097152` (driver) | With the settings above, Intel IPC p99 1.3 µs → 371 ns and p99.9 3.3 → 1.8 µs; with ping and pong on one core's SMT threads, p99 720 → 143 ns, and `hugetlbfs` cut p99.99 most (1.05 µs → 378 ns). On AMD IPC did not change. 1 GiB pages gave nothing more than 2 MiB. In Kubernetes a `HugePages-2Mi` emptyDir did the same (Intel p99 627 → 126 ns). Without pre-touch the tmpfs kind adds rare stalls (max 0.2 ms on AMD, 0.5 ms on Intel). | `huge=always` applies to every user of the mount. `hugetlbfs` needs pages reserved (`vm.nr_hugepages`) and a mount with `size=`, or Aeron's storage check sees no usable space; kubelet mounts without `size=`, so pods need `AERON_PERFORM_STORAGE_CHECKS=false`. |
+| `noop` idle for the driver's sender and receiver (UDP) | The default `backoff` made UDP p50 103 µs instead of 9.5 µs on AMD (4 of 5 runs) and added 31–36 µs from p90 to p99.9 on Intel. Between two Intel hosts it doubled the round trip (48 → 98 µs). | Each spins a whole core. |
 | `AERON_THREADING_MODE=SHARED` with `AERON_SHARED_IDLE_STRATEGY=noop` (UDP) | Intel, against dedicated `noop`: p50 −11%, p99.9 −27%, p99.99 −57%. AMD: p99.9 −19%, but p50 +17% and p99 +24%. | One driver thread does everything. May be specific to loopback, where that thread both sends and receives each message. |
-| Thread placement | Intel IPC with ping and pong on the two SMT threads of one core (driver on the other): p50 294 → 106 ns, throughput −11%. Spinning driver threads on the SMT siblings of the hot threads: IPC throughput −38%, though p99.9 fell from 9.9 to 3.1 µs (two groups run one after the other). Unpinned: AMD IPC throughput −4%. | |
+| Thread placement | Intel IPC with ping and pong on the two SMT threads of one core (driver on the other): p50 294 → 106 ns, throughput −11%. Spinning driver threads on the SMT siblings of the hot threads: IPC throughput −38%, though p99.9 fell from 9.9 to 3.1 µs (two groups run one after the other). Unpinned: AMD IPC throughput −4%. Kernel isolation of the hot CPUs (`isolcpus`, `nohz_full`) gave no gain on 4 vCPUs and slowed UDP by 5–15%, as the driver then shares the other CPUs with every interrupt. | |
 
 These client build settings gave no consistent gain on IPC, with the driver binary unchanged,
 so they can stay at their defaults: `-march=native` for the Aeron C code against
@@ -330,6 +332,9 @@ export AERON_RECEIVER_IDLE_STRATEGY=noop   # UDP
 export AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true
 # huge pages for every /dev/shm user until the next boot, as measured
 sudo mount -o remount,huge=always /dev/shm
+# or explicit 2 MiB pages for AERON_DIR only (driver: AERON_FILE_PAGE_SIZE=2097152)
+sudo sysctl -w vm.nr_hugepages=1536
+sudo mkdir -p /mnt/huge && sudo mount -t hugetlbfs -o pagesize=2M,size=2G,uid="$(id -u)" none /mnt/huge
 ```
 
 ---

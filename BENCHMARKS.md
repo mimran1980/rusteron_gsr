@@ -1,128 +1,262 @@
-**Note:** These benchmarks are environment-sensitive. Rust IPC throughput was re-measured 2026-06-27 on an Apple M1 Pro (10-core) — see [Apple M1 Pro (re-measured)](#apple-m1-pro-10-core--re-measured-2026-06-27) below. The original M1/EPYC and Java figures are retained for comparison; rerun locally for your own hardware. Latency and settings on x86-64 Linux, and a branch comparison, are in [x86-64 Linux on Azure](#x86-64-linux-on-azure-2026-10-09).
+**Note:** These benchmarks are environment-sensitive; rerun them on your own hardware. Everything below was measured on 2026-10-09 on two 4-vCPU Azure VMs (Debian 13, Aeron 1.52.2, JDK 21, rustc 1.95.0), over IPC and loopback UDP only.
 
-# Aeron IPC Throughput Benchmarks: Java vs. rusteron (Rust)
+# Java, huge pages, CPU isolation, Kubernetes and cross-host UDP (2026-10-09)
 
-**Note**: These benchmarks are early-stage and environment-sensitive. Interpret results with caution until verified across varied systems.
+The same two machines as in [x86-64 Linux on Azure](#x86-64-linux-on-azure-2026-10-09), with Aeron's Java samples, huge pages, kernel CPU isolation, Kubernetes pods and a pair of 2-vCPU VMs per CPU type for UDP between hosts. The noise rules are the same: medians across reps, with the range across reps in brackets.
 
-## Systems Tested
+## Method
 
-1. Apple M1 MacBook Pro  
-2. AMD EPYC 7R32 (48-core)
+- **Programs.** Aeron's Java samples `EmbeddedExclusiveIpcThroughput` and `EmbeddedPingPong`, which embed the Java media driver. rusteron's ports `embedded_exclusive_ipc_throughput` and `embedded_ping_pong`, which use the standalone C `media_driver`. Also the rusteron harness from the section below.
+  - 32-byte messages over exclusive publications.
+  - Ping-pong: 1,000,000 round trips.
+  - Throughput: the median of one-second intervals after warm-up.
+  - Java runs with `-Dagrona.disable.bounds.checks=true` and a `NoOpIdleStrategy`.
+- **Settings.** Both sides use non-sparse, pre-touched log files and `noop` sender and receiver threads:
+  - Java: `-Daeron.term.buffer.sparse.file=false -Daeron.pre.touch.mapped.memory=true`.
+  - rusteron: `AERON_TERM_BUFFER_SPARSE_FILE=false`, `AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true`.
+- **Pinning.** The two hot threads (ping and pong, or publisher and subscriber) are pinned one each to CPUs 2 and 3. Everything else, the drivers and the JVM's own threads included, stays on CPUs 0 and 1. On Intel, CPUs 2 and 3 are the two SMT threads of one core.
+- **Isolation.** After the pinned runs, the VMs rebooted with `isolcpus=nohz,domain,managed_irq,2,3 nohz_full=2,3 rcu_nocbs=2,3 irqaffinity=0,1` and repeated the same runs. The two states ran one after the other, not interleaved.
+- **Huge pages**, compared in a separate run with 5 interleaved reps:
+  - `shm`: `/dev/shm` remounted with `huge=always`, which gives Aeron's files transparent huge pages.
+  - `hugetlbfs`: `vm.nr_hugepages=1536`; `AERON_DIR` on a `hugetlbfs` mount with `pagesize=2M,size=2G`; `AERON_FILE_PAGE_SIZE=2097152` for the driver. Without `size=`, Aeron's storage check sees no usable space and refuses every log.
+- **1 GiB pages**, a separate run (IPC only, 5 interleaved reps): `hugetlbfs` mounts with `pagesize=2M` and `pagesize=1G`, and `AERON_FILE_PAGE_SIZE` to match. Reserved after boot, only 5 (AMD) and 6 (Intel) of the 8 requested 1 GiB pages could be had.
+- **Kubernetes**: k3s on each VM, and one pod per volume type with `AERON_DIR` on an `emptyDir` of medium `Memory`, `HugePages-2Mi` or `HugePages-1Gi` (configuration below). Each pod ran the harness and the C driver in one container, pinned with `taskset`, 3 reps.
+- **Cross-host UDP**: two 2-vCPU VMs per CPU type, in one proximity placement group with accelerated networking:
+  - AMD: `Standard_F2as_v6` (2 cores) in Korea Central.
+  - Intel: `Standard_D2s_v6` (1 core, 2 SMT threads) in North Central US.
 
-## What Was Measured
-
-We compared Aeron’s `EmbeddedExclusiveIpcThroughput` benchmark in Java with the Rust port at `rusteron-client/examples/embedded_exclusive_ipc_throughput.rs`.
-
-## How to Run
-
-### Java
-```bash
-just benchmark-ipc-throughput-java
-```
-
-### Rust
-
-Run the driver in one terminal and the benchmark in another; the recipe sets `AERON_DIR`, so the example uses that driver instead of embedding its own.
-
-```bash
-just run-aeron-media-driver-rust        # terminal 1
-just benchmark-ipc-throughput-rust      # terminal 2
-```
+  Each host runs a `SHARED` C driver on CPU 0 and ping or pong pinned to CPU 1. 300,000 round trips of 32 bytes over the private network, 5 interleaved reps. For busy polling, `net.core.busy_read` and `net.core.busy_poll` were set to 50 µs on both hosts.
 
 ## Results
 
-### Apple M1 MacBook Pro
+- **IPC throughput:** Java was 4% ahead on AMD (29.0M against 28.0M msgs/s). On Intel, rusteron was 60% faster (74.2M against 46.3M).
+- **UDP ping-pong:**
+  - **Median:** Java's median round trip was 4–7% lower (AMD 8.85 against 9.54 µs, Intel 5.62 against 5.86 µs).
+  - **Tail:** rusteron's was far lower from p99 up; p99.99 was 70 against 211 µs on AMD and 59 against 544 µs on Intel.
+  - Each side runs its own driver (Java against C), so this compares the whole stack.
+- **Huge pages:**
+  - **Intel:** either kind took IPC p99 from 720 to about 143 ns and p99.9 from 886 to about 165 ns. `hugetlbfs` was best at p99.99: 378 ns, against 588 ns with `shm` and 1045 ns without huge pages. UDP p99 fell 11% and throughput rose 3–4%.
+  - **AMD:** IPC did not change, and UDP p99.99 fell from 66 to about 56 µs.
+- **CPU isolation:** no gain on these 4-vCPU machines.
+  - UDP got slower: AMD p50 9.55 → 10.95 µs, Intel 5.84 → 6.11 µs. The driver's spinning sender and receiver share the two housekeeping CPUs with every interrupt.
+  - IPC tails moved by at most 9%, in both directions.
+  - Isolation needs enough cores to keep the driver off the housekeeping CPUs too.
+- **1 GiB pages:** no gain over 2 MiB.
+  - Intel IPC p99 was 144 ns with either and p99.9 203 ns; p99.99 was 493 against 515 ns. AMD did not change.
+  - 1 GiB pages are also hard to reserve after boot (5 and 6 of 8 here), and Aeron rounds its files up to whole pages.
+- **Kubernetes:** the same as on the host.
+  - Against a `Memory` volume, a `HugePages-2Mi` volume took Intel IPC p99 from 627 to 126 ns and p99.9 from 791 to 187 ns. AMD did not change.
+  - kubelet mounts the huge page volume without `size=`, so Aeron needs `AERON_PERFORM_STORAGE_CHECKS=false`.
+  - Intel's `HugePages-1Gi` pod was never scheduled: the node had 4 of the 6 GiB it asked for.
+- **Cross-host UDP:**
+  - **Floor:** about 42 µs (AMD) and 48 µs (Intel) round trip at p50. That is the Azure network's floor in a placement group.
+  - **Idle strategy:** on Intel the default `backoff` doubled it (98 µs, p99 158 µs). On AMD, with two real cores, `backoff` and `noop` were level at p50 and p99.
+  - **Busy polling:** it trimmed Intel p50 by 3% and p99 by 8%, and did nothing on AMD.
+- **Java sample stalls:** 2 of 20 Java ping-pong runs on Intel stalled in warm-up and were cut off after 180 s. The Intel tables show 4 reps where that happened.
 
-**Java**: \~27–29 million msgs/sec
-**Rust**: \~35–38 million msgs/sec
+## How to Run
 
-**Example (Rust)**:
+The runs above came from `scripts/x86-lab/lab.sh`, which creates the Azure VMs, runs the phases in `scripts/x86-lab/harness/vm.sh` and deletes the VMs on exit:
+- `bench-pinned`, `isolate` and `bench-isolated` for the Java comparison and isolation;
+- `bench-huge` and `bench-1g` for huge pages;
+- `k8s` for the pods;
+- `LAB_PAIR=1` with `LAB_NODES` for cross-host UDP.
 
-```
-Throughput: 36,859,281 msgs/sec, 1,179,496,981 bytes/sec
-...
-```
-
-### Apple M1 Pro (10-core) — re-measured 2026-06-27
-
-Rust, 32-byte IPC, SHARED client threading + DEDICATED media driver, steady-state per-second samples.
-
-**Rust**: \~32–51 million msgs/sec (typically \~36–40M, peak \~51M)
-
-**Example (Rust)**:
-
-```
-Throughput: 39,248,311 msgs/sec, 1,255,945,944 bytes/sec
-Throughput: 50,859,457 msgs/sec, 1,627,502,615 bytes/sec
-Throughput: 36,694,513 msgs/sec, 1,174,224,425 bytes/sec
-...
-```
-
-(Java was not re-measured in this run; the M1 Java figure above is a reasonable reference.)
-
-### AMD EPYC 7R32 (48-core)
-
-**Java**: \~10.8–11.2 million msgs/sec
-**Rust**: \~38–39 million msgs/sec
-
-**Example (Rust)**:
-
-```
-Throughput: 39,360,449 msgs/sec, 1,259,534,357 bytes/sec
-...
-```
-
-Rust consistently outperformed Java by \~3.5x in this benchmark.
-
----
-
-## Ping Pong Benchmark (UDP, EPYC)
-
-* Warm-up: 100,000 messages
-* Main run: 10,000,000 messages (32-byte payload)
-* Channels: `aeron:udp?endpoint=localhost:20123` and `:20124`
-* Regular (not exclusive) publications used.
-
-### How to Run
+Its header lists the options. These recipes run the same programs without pinning:
 
 ```bash
-# Rust (the recipe sets AERON_DIR, so it needs a running driver)
+just benchmark-ipc-throughput-java
 just run-aeron-media-driver-rust          # terminal 1
-just benchmark-embedded-ping-pong-rust    # terminal 2 (examples/embedded_ping_pong.rs)
-
-# Java (embeds its own driver; needs the Aeron jars, see the IPC section)
+just benchmark-ipc-throughput-rust        # terminal 2
 just benchmark-embedded-ping-pong-java
+just benchmark-embedded-ping-pong-rust    # with the driver from terminal 1
 ```
 
-### Rust
+## Huge pages in Kubernetes
 
+What the k3s run used, reduced to the parts that matter:
+
+- Reserve the pages on the node before kubelet starts, or kubelet does not report them.
+  - 2 MiB pages: `vm.nr_hugepages` in `/etc/sysctl.d`.
+  - 1 GiB pages: kernel arguments such as `hugepagesz=1G hugepages=8`, since they are rarely free once the node has run.
+- Huge page requests must equal limits.
+- The driver and its clients must share the volume. Here one container ran both; a driver in its own pod was not tested.
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: aeron-app
+spec:
+  containers:
+    - name: app
+      image: debian:trixie-slim
+      env:
+        - {name: AERON_DIR, value: /aeron/driver}
+        - {name: AERON_FILE_PAGE_SIZE, value: "2097152"}         # read by the media driver
+        - {name: AERON_PERFORM_STORAGE_CHECKS, value: "false"}  # kubelet mounts hugetlbfs without size=
+        - {name: AERON_TERM_BUFFER_SPARSE_FILE, value: "false"}
+        - {name: AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY, value: "true"}
+      resources:
+        requests: {cpu: "3", memory: 3Gi, hugepages-2Mi: 1Gi}
+        limits: {cpu: "4", memory: 3Gi, hugepages-2Mi: 1Gi}
+      volumeMounts:
+        - {name: aeron, mountPath: /aeron}
+  volumes:
+    - name: aeron
+      emptyDir: {medium: HugePages-2Mi}
 ```
-avg: 9.918µs
-p99: 12.799µs
-max: 138.936ms
-```
 
-### Java
+For 1 GiB pages, use `hugepages-1Gi`, `medium: HugePages-1Gi` and `AERON_FILE_PAGE_SIZE=1073741824`, and leave room for Aeron rounding each file up to whole pages.
 
-```
-avg: 9.290µs
-p99: ~12–16µs
-max: 650.641ms
-```
+Pinning inside the pod used `taskset` under kubelet's default CPU manager. Exclusive cores need the static CPU manager policy and Guaranteed pods, which this run did not test.
 
----
+## Tables
 
-## Summary
+### AMD EPYC 9V74 (4 cores, no SMT)
 
-| Platform             | Java (msgs/sec) | Rust (msgs/sec) | Speedup |
-| -------------------- | --------------- | --------------- | ------- |
-| M1 MacBook           | \~28M           | \~36–38M        | \~1.3x  |
-| M1 Pro (2026-06-27)  | \~28M (ref)     | \~37M (32–51M)  | \~1.3x  |
-| EPYC 7R32            | \~11M           | \~38–39M        | \~3.5x  |
+Java against rusteron, loopback UDP ping-pong RTT (µs):
 
-* Rust's `rusteron-client` shows strong throughput advantages, especially on high-core servers.
-* Ping Pong (UDP) latencies are comparable between Rust and Java.
-* Using `/dev/shm` for the Aeron directory improves performance (used on EPYC).
+| run | reps | p50 | p99 | p99.9 | p99.99 |
+|---|---|---|---|---|---|
+| Java, pinned | 5 | 8.85 (8.74–9.69) | 18.38 (18.24–18.46) | 34.49 (32.45–37.22) | 211.33 (158.85–694.78) |
+| rusteron, pinned | 5 | 9.54 (9.53–10.40) | 17.76 (17.73–17.81) | 30.18 (29.04–31.10) | 70.46 (62.69–80.89) |
+| Java, isolated | 5 | 9.53 (9.35–9.54) | 19.44 (19.21–19.86) | 33.53 (32.22–15998.98) | 200.06 (124.48–16007.17) |
+| rusteron, isolated | 5 | 10.95 (10.92–10.97) | 18.70 (18.30–18.75) | 29.50 (29.36–30.91) | 70.66 (69.38–73.79) |
+
+Java against rusteron, IPC throughput (32-byte messages):
+
+| run | reps | M msgs/s |
+|---|---|---|
+| Java, pinned | 5 | 29.0 (28.3–30.0) |
+| rusteron, pinned | 5 | 28.0 (27.7–28.2) |
+| Java, isolated | 5 | 28.3 (27.9–29.7) |
+| rusteron, isolated | 5 | 27.6 (27.6–27.6) |
+
+Huge pages, rusteron harness, pinned (µs; separate run):
+
+| run | reps | p50 | p99 | p99.9 | p99.99 |
+|---|---|---|---|---|---|
+| IPC, off | 5 | 0.180 (0.180–0.180) | 0.231 (0.230–0.231) | 0.992 (0.981–0.992) | 1.48 (1.45–1.53) |
+| IPC, shm | 5 | 0.180 (0.180–0.180) | 0.221 (0.221–0.221) | 0.992 (0.981–1.00) | 1.51 (1.47–1.57) |
+| IPC, hugetlbfs | 5 | 0.180 (0.180–0.180) | 0.220 (0.220–0.221) | 0.981 (0.971–0.981) | 1.47 (1.46–1.48) |
+| UDP, off | 5 | 9.54 (9.51–9.55) | 17.60 (16.59–17.77) | 27.74 (26.54–28.46) | 65.86 (55.94–76.93) |
+| UDP, shm | 5 | 9.53 (9.49–9.97) | 17.36 (16.16–17.60) | 26.06 (24.83–27.98) | 55.68 (55.01–68.80) |
+| UDP, hugetlbfs | 5 | 9.54 (9.51–10.32) | 17.30 (16.41–18.02) | 26.57 (25.36–80.25) | 56.64 (54.43–94.14) |
+
+| run | reps | M msgs/s |
+|---|---|---|
+| IPC throughput, off | 5 | 28.4 (27.8–28.4) |
+| IPC throughput, shm | 5 | 28.4 (25.3–28.8) |
+| IPC throughput, hugetlbfs | 5 | 28.4 (28.4–28.4) |
+
+CPU isolation, rusteron harness, no huge pages (µs):
+
+| run | reps | p50 | p99 | p99.9 | p99.99 |
+|---|---|---|---|---|---|
+| IPC, pinned | 5 | 0.180 (0.180–0.180) | 0.241 (0.240–0.250) | 1.01 (1.01–1.02) | 1.53 (1.51–1.55) |
+| IPC, isolated | 5 | 0.180 (0.180–0.180) | 0.241 (0.240–0.250) | 1.10 (1.10–1.11) | 1.42 (1.38–1.52) |
+| UDP, pinned | 5 | 9.55 (9.53–9.60) | 17.76 (17.73–17.76) | 28.77 (26.73–29.26) | 62.17 (58.21–74.88) |
+| UDP, isolated | 5 | 10.95 (10.91–11.85) | 18.67 (18.51–19.49) | 28.27 (27.42–32.32) | 72.64 (64.64–77.44) |
+
+### Intel Xeon Platinum 8573C (2 cores × 2 SMT threads)
+
+Java against rusteron, loopback UDP ping-pong RTT (µs):
+
+| run | reps | p50 | p99 | p99.9 | p99.99 |
+|---|---|---|---|---|---|
+| Java, pinned | 4 | 5.62 (5.56–5.72) | 10.03 (8.99–10.97) | 39.62 (37.50–42.59) | 543.74 (384.00–1079.30) |
+| rusteron, pinned | 5 | 5.86 (5.80–6.28) | 8.21 (8.15–8.46) | 36.99 (35.62–43.30) | 58.81 (58.17–62.62) |
+| Java, isolated | 5 | 5.83 (5.80–5.91) | 9.21 (9.04–9.70) | 39.49 (39.01–40.06) | 1074.17 (438.78–1081.34) |
+| rusteron, isolated | 5 | 6.15 (5.93–6.48) | 8.70 (8.52–8.78) | 38.69 (37.34–41.57) | 60.16 (58.24–61.47) |
+
+Java against rusteron, IPC throughput (32-byte messages):
+
+| run | reps | M msgs/s |
+|---|---|---|
+| Java, pinned | 5 | 46.3 (45.1–53.1) |
+| rusteron, pinned | 5 | 74.2 (72.7–75.2) |
+| Java, isolated | 5 | 45.2 (43.7–51.6) |
+| rusteron, isolated | 5 | 72.6 (71.9–74.4) |
+
+Huge pages, rusteron harness, pinned (µs; separate run):
+
+| run | reps | p50 | p99 | p99.9 | p99.99 |
+|---|---|---|---|---|---|
+| IPC, off | 5 | 0.112 (0.108–0.114) | 0.720 (0.686–0.746) | 0.886 (0.866–0.903) | 1.04 (1.04–1.06) |
+| IPC, shm | 5 | 0.108 (0.105–0.110) | 0.142 (0.141–0.144) | 0.164 (0.159–0.166) | 0.588 (0.446–0.609) |
+| IPC, hugetlbfs | 5 | 0.109 (0.105–0.110) | 0.144 (0.139–0.144) | 0.166 (0.157–0.166) | 0.378 (0.359–0.390) |
+| UDP, off | 5 | 6.28 (5.84–6.32) | 8.81 (8.25–8.86) | 21.39 (20.03–22.91) | 50.94 (46.02–51.97) |
+| UDP, shm | 5 | 6.28 (5.80–6.29) | 7.86 (7.52–8.15) | 21.58 (19.38–65.53) | 49.53 (39.55–76.73) |
+| UDP, hugetlbfs | 5 | 6.28 (6.27–6.32) | 7.78 (7.60–7.82) | 20.43 (18.89–21.21) | 41.63 (38.98–43.81) |
+
+| run | reps | M msgs/s |
+|---|---|---|
+| IPC throughput, off | 5 | 66.1 (65.1–67.1) |
+| IPC throughput, shm | 5 | 68.6 (67.9–69.3) |
+| IPC throughput, hugetlbfs | 5 | 68.3 (67.2–68.5) |
+
+CPU isolation, rusteron harness, no huge pages (µs):
+
+| run | reps | p50 | p99 | p99.9 | p99.99 |
+|---|---|---|---|---|---|
+| IPC, pinned | 5 | 0.107 (0.106–0.108) | 0.666 (0.663–0.672) | 0.858 (0.851–0.860) | 1.01 (1.00–1.01) |
+| IPC, isolated | 5 | 0.109 (0.109–0.111) | 0.674 (0.661–0.677) | 0.794 (0.789–0.815) | 0.953 (0.929–0.963) |
+| UDP, pinned | 5 | 5.84 (5.79–6.36) | 8.20 (8.04–8.29) | 20.18 (19.87–21.36) | 55.90 (50.05–58.21) |
+| UDP, isolated | 5 | 6.11 (6.01–6.12) | 8.63 (8.56–8.65) | 21.07 (20.54–21.97) | 57.05 (49.05–62.37) |
+
+## More tables
+
+### AMD EPYC 9V74
+
+2 MiB against 1 GiB huge pages, IPC round trip (µs) and throughput, host:
+
+| run | reps | p50 | p99 | p99.9 | p99.99 | M msgs/s |
+|---|---|---|---|---|---|---|
+| no huge pages | 5 | 0.180 (0.180–0.180) | 0.250 (0.241–0.250) | 1.04 (1.04–1.04) | 1.53 (1.52–1.57) | 26.9 (26.8–26.9) |
+| 2 MiB | 5 | 0.180 (0.180–0.180) | 0.230 (0.230–0.230) | 1.04 (1.03–1.04) | 1.54 (1.52–1.56) | 26.8 (24.7–26.9) |
+| 1 GiB | 5 | 0.180 (0.180–0.180) | 0.230 (0.230–0.231) | 1.03 (1.03–1.04) | 1.51 (1.49–1.54) | 26.9 (26.8–26.9) |
+
+In a Kubernetes pod (k3s), AERON_DIR on an emptyDir, IPC round trip (µs) and throughput:
+
+| run | reps | p50 | p99 | p99.9 | p99.99 | M msgs/s |
+|---|---|---|---|---|---|---|
+| Memory (tmpfs) | 3 | 0.180 (0.180–0.180) | 0.260 (0.251–0.260) | 1.02 (1.01–1.03) | 1.65 (1.64–9.69) | 28.1 (27.6–28.1) |
+| HugePages-2Mi | 3 | 0.180 (0.180–0.180) | 0.251 (0.251–0.251) | 0.991 (0.981–1.00) | 1.59 (1.57–1.61) | 28.2 (28.2–28.2) |
+| HugePages-1Gi | 3 | 0.180 (0.180–0.180) | 0.250 (0.250–0.250) | 0.991 (0.982–1.00) | 1.64 (1.63–1.65) | 28.1 (28.1–28.2) |
+
+UDP between two VMs in one placement group, round trip (µs):
+
+| run | reps | p50 | p99 | p99.9 | p99.99 |
+|---|---|---|---|---|---|
+| SHARED, noop | 5 | 41.70 (37.66–46.46) | 52.06 (47.84–55.94) | 81.86 (62.69–111.36) | 219.13 (158.85–276.74) |
+| SHARED, backoff | 5 | 42.14 (38.05–43.81) | 52.13 (48.29–53.41) | 91.65 (88.19–108.09) | 273.15 (202.50–287.23) |
+| SHARED, noop, busy polling | 5 | 41.53 (37.92–46.30) | 51.04 (47.17–55.97) | 86.02 (72.89–91.84) | 307.97 (290.56–360.96) |
+
+### Intel Xeon Platinum 8573C
+
+2 MiB against 1 GiB huge pages, IPC round trip (µs) and throughput, host:
+
+| run | reps | p50 | p99 | p99.9 | p99.99 | M msgs/s |
+|---|---|---|---|---|---|---|
+| no huge pages | 5 | 0.110 (0.104–0.112) | 0.675 (0.671–0.705) | 0.882 (0.879–0.897) | 1.05 (1.04–1.06) | 62.4 (61.7–62.6) |
+| 2 MiB | 5 | 0.109 (0.108–0.109) | 0.144 (0.144–0.145) | 0.203 (0.201–0.217) | 0.493 (0.480–0.524) | 64.1 (64.0–64.6) |
+| 1 GiB | 5 | 0.110 (0.106–0.110) | 0.144 (0.143–0.145) | 0.203 (0.198–0.213) | 0.515 (0.501–0.533) | 64.1 (55.5–64.2) |
+
+In a Kubernetes pod (k3s), AERON_DIR on an emptyDir, IPC round trip (µs) and throughput:
+
+| run | reps | p50 | p99 | p99.9 | p99.99 | M msgs/s |
+|---|---|---|---|---|---|---|
+| Memory (tmpfs) | 3 | 0.104 (0.104–0.104) | 0.627 (0.623–0.630) | 0.791 (0.784–0.791) | 0.963 (0.946–0.974) | 66.7 (66.6–66.8) |
+| HugePages-2Mi | 3 | 0.103 (0.102–0.103) | 0.126 (0.126–0.127) | 0.187 (0.183–0.191) | 0.383 (0.373–0.386) | 68.8 (67.4–69.0) |
+
+UDP between two VMs in one placement group, round trip (µs):
+
+| run | reps | p50 | p99 | p99.9 | p99.99 |
+|---|---|---|---|---|---|
+| SHARED, noop | 5 | 47.81 (47.62–49.02) | 68.16 (57.47–74.30) | 93.69 (89.60–98.43) | 339.20 (290.05–404.22) |
+| SHARED, backoff | 5 | 98.11 (95.74–100.03) | 158.46 (155.90–162.81) | 164.48 (159.62–167.17) | 559.10 (445.44–568.32) |
+| SHARED, noop, busy polling | 5 | 46.14 (44.93–47.97) | 62.46 (57.53–64.09) | 90.81 (88.19–93.63) | 356.35 (319.74–382.98) |
 
 # x86-64 Linux on Azure (2026-10-09)
 
@@ -139,7 +273,7 @@ Both Azure VMs run Debian 13 (kernel 6.12), rustc 1.95.0, GCC 14 and JDK 21, wit
 
 ## Method
 
-- **Builds.** `main` (the 0.2.10 line) and `impr` (the `improvements` branch), each built into the same out-of-tree harness with the `static` feature, fat LTO, `codegen-units=1`, Rust `target-cpu=native` and Aeron C 1.52.2 with `-O3 -DNDEBUG -funroll-loops -march=native`, unless a label says otherwise. Every group except `ps` uses one standalone C media driver binary (`media_driver`, a static `-march=native` build from `impr`, the same for every arm, so `ab` and `build` vary only the client), started fresh for every run with its own `AERON_DIR` under `/dev/shm`. Settings come from `AERON_*` environment variables.
+- **Builds.** `main` (the 0.2.10 line) and `impr` (the `improvements` branch), each built into the same out-of-tree harness with the `static` feature, fat LTO, `codegen-units=1`, Rust `target-cpu=native` and Aeron C 1.52.2 with `-O3 -DNDEBUG -funroll-loops -march=native`, unless a label says otherwise. Every group except `ps` uses one standalone C media driver binary (`media_driver`, a static `-march=native` build from `impr`, the same for every arm, so `ab` and `build` vary only the client), started fresh for every run with its own `AERON_DIR` under `/dev/shm`. Settings come from `AERON_*` environment variables. The harness and the scripts that ran it are in `scripts/x86-lab`.
 - **rtt.** Ping offers a 32-byte message, pong echoes it with `try_claim`, and ping busy-polls for the echo and records the round trip in an HDR histogram. Exclusive publications, one message in flight. IPC: 2,000,000 round trips after a 200k warm-up. UDP: loopback unicast, 300,000 after 50k. Each run is capped at 20 s.
 - **tput.** A port of Aeron's `EmbeddedExclusiveIpcThroughput`: one thread offers 32-byte messages flat out on `aeron:ipc`, the other polls them. The figure is the median of five one-second samples after a one-second warm-up.
 - **ps.** A Java archive, one recording on `aeron:ipc`, and n persistent subscriptions (all LIVE) plus n plain subscriptions on the same idle stream. The figure is ns per idle poll. `thread`: the client has its conductor thread. `invoker`: the client uses the agent invoker, so every persistent subscription poll also runs a conductor duty cycle, and the plain loop calls `main_do_work()` once per round. All archive clients share one fixed control-response port.
