@@ -22,8 +22,10 @@ bootstrap() {
         fio sysstat xfsprogs nftables >/dev/null
     # rustfmt: the build scripts format the generated bindings and fail without it
     curl -sSf https://sh.rustup.rs | sh -s -- -y -q --profile minimal --default-toolchain 1.95.0 --component rustfmt
-    # Linux silently caps SO_RCVBUF/SO_SNDBUF at these
-    sudo sysctl -q -w net.core.rmem_max=16777216 net.core.wmem_max=16777216
+    # Linux silently caps SO_RCVBUF/SO_SNDBUF at these; in sysctl.d so the reboots of the
+    # isolate and tune phases keep them
+    printf 'net.core.rmem_max=16777216\nnet.core.wmem_max=16777216\n' | sudo tee /etc/sysctl.d/90-x86lab.conf >/dev/null
+    sudo sysctl -q -p /etc/sysctl.d/90-x86lab.conf
     {
         uname -a
         lscpu
@@ -796,7 +798,8 @@ bench8() {
 # buffer and window, the OS's send buffer). ded-threads-irqrcv: the NIC's IRQs on the receiver's
 # core. xtput-jumbo: MTU 9000 and Aeron MTU 8192; xtput-iov16: 16-message io vectors and sends.
 # ded-threads-wide: 16 MiB socket buffers and initial receiver window over 64 MiB terms, which a
-# long round trip needs to keep the link full. AERON_DIR is on 2 MiB hugetlbfs throughout.
+# long round trip needs to keep the link full. ded-threads-sm1ms: the receiver's periodic status
+# message every 1 ms instead of 200. AERON_DIR is on 2 MiB hugetlbfs throughout.
 xhost_env() {
     local base=(AERON_TERM_BUFFER_SPARSE_FILE=false AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true AERON_FILE_PAGE_SIZE=2097152)
     if [[ $1 != *-defaults ]]; then
@@ -806,6 +809,8 @@ xhost_env() {
         base+=(AERON_SOCKET_SO_SNDBUF=16777216 AERON_SOCKET_SO_RCVBUF=16777216 AERON_RCV_INITIAL_WINDOW_LENGTH=16777216
             AERON_TERM_BUFFER_LENGTH=67108864)
     fi
+    # a lost status message otherwise stalls a window-blocked publisher until the next, 200 ms later
+    if [[ $1 == *-sm1ms ]]; then base+=(AERON_RCV_STATUS_MESSAGE_TIMEOUT=1000000); fi
     case $1 in
         xtput-jumbo) base+=(AERON_MTU_LENGTH=8192) ;;
         xtput-iov16)
@@ -813,7 +818,7 @@ xhost_env() {
                 AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND=16) ;;
     esac
     case ${1%-defaults} in
-        ded-threads | ded-threads-wide | ded-threads-busyread | ded-threads-irqrcv | ded-threads-busyread-irqrcv | xtput | xtput-jumbo | xtput-iov16)
+        ded-threads | ded-threads-wide | ded-threads-sm1ms | ded-threads-busyread | ded-threads-irqrcv | ded-threads-busyread-irqrcv | xtput | xtput-jumbo | xtput-iov16)
             xenv=("${base[@]}" AERON_SENDER_IDLE_STRATEGY=noop AERON_RECEIVER_IDLE_STRATEGY=noop
                 AERON_CONDUCTOR_CPU_AFFINITY="$first_hk8" AERON_SENDER_CPU_AFFINITY="$xsnd8" AERON_RECEIVER_CPU_AFFINITY="$xrcv8")
             xmask=$hk8 ;;
@@ -1004,19 +1009,21 @@ aeron_stat() {
 }
 
 # Loss and distance: UDP between this host and LAB_PEER_IP, in the same zone (xnet8-zone) or in
-# another region (xnet8-region), with ded-threads, and across regions also ded-threads-wide. For
-# each share of UDP packets dropped on arrival at both hosts (none, 0.1%, 1%): throughput
-# (publisher here) and round trips, with this host's NAK and retransmit counters and both
-# hosts' drop counts in xnet8-counters.csv. Across regions a round trip takes tens of ms, so
-# round trips run 60 s instead of 20 and only for ded-threads. xnet8 <zone|region>
+# another region (xnet8-region), with ded-threads and ded-threads-sm1ms, and across regions also
+# ded-threads-wide (XNET_VARIANTS replaces the list). For each share of UDP packets dropped on
+# arrival at both hosts (none, 0.1%, 1%): throughput (publisher here) and round trips, with this
+# host's NAK and retransmit counters and both hosts' drop counts in xnet8-counters.csv. Round
+# trips run only for ded-threads, and across regions, where each takes tens of ms, for 60 s
+# instead of 20. xnet8 <zone|region>
 xnet8() {
     local link=$1 peer=${LAB_PEER_IP:?LAB_PEER_IP: the peer host} self v bp t line counters
     state=$link layout=$link
     topo8
     self=$(hostname -I | awk '{print $1}')
     peer_ssh=(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$peer")
-    local ping_ep=$peer:20123 pong_ep=$self:20124 variants=(ded-threads) seconds=20 reps=${XNET_REPS:-3}
+    local ping_ep=$peer:20123 pong_ep=$self:20124 variants=(ded-threads ded-threads-sm1ms) seconds=20 reps=${XNET_REPS:-3}
     if [[ $link == region ]]; then variants+=(ded-threads-wide) seconds=60 reps=${XNET_REPS:-2}; fi
+    if [[ -n ${XNET_VARIANTS:-} ]]; then read -ra variants <<<"$XNET_VARIANTS"; fi
     ping -c 20 -q "$peer" >"$res/xnet8-$link-ping.txt" 2>&1 || true
     huge8
     echo "host,link,variant,loss_bp,test,rep,naks_sent,naks_received,retransmits_sent,loss_gap_fills,dropped_here,dropped_there" \
@@ -1420,7 +1427,7 @@ disks8() {
             sudo chown "$(id -u):$(id -g)" "/mnt/$kind" && echo "$dev ($model): /mnt/$kind" >>"$res/disks.txt"
     done < <(lsblk -dn -o NAME,TYPE | awk '$2 == "disk" { print $1 }')
     cat "$res/disks.txt"
-    df -h $(disk_kinds | sed 's|^|/mnt/|') >>"$res/disks.txt" 2>&1 || true
+    for kind in $(disk_kinds); do df -h "/mnt/$kind" | tail -1; done >>"$res/disks.txt"
 }
 
 # the disks disks8 mounted, by name: nvme, pv2-<MB/s>...
