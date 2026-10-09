@@ -22,15 +22,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("aeron dir: {:?}", aeron_context.get_dir());
     aeron_context.print_configuration();
 
-    // Create Aeron driver
-    let aeron_driver = AeronDriver::new(&aeron_context)?;
-    aeron_driver.start(true)?;
+    // Create Aeron driver; each error captures Aeron's message where it happens, as dropping the
+    // context on the way out of main overwrites it
+    let aeron_driver = AeronDriver::new(&aeron_context).map_err(AeronCError::capture_errmsg)?;
+    aeron_driver.start(true).map_err(AeronCError::capture_errmsg)?;
     // Start the Aeron driver
     info!("Aeron media driver started successfully. Press Ctrl+C to stop.");
 
     // Poll for work until Ctrl+C is pressed
     while running.load(Ordering::Acquire) {
-        aeron_driver.main_idle_strategy(aeron_driver.main_do_work()?);
+        aeron_driver.main_idle_strategy(aeron_driver.main_do_work().map_err(AeronCError::capture_errmsg)?);
     }
     info!("Received signal to stop the media driver.");
     info!("Aeron media driver stopped successfully.");
