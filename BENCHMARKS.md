@@ -53,9 +53,9 @@ The same two machines as in [x86-64 Linux on Azure](#x86-64-linux-on-azure-2026-
   - **Static policy:** each container got CPUs to itself (driver CPU 1, harness CPUs 2 and 3) and no quota (`cpu.max` was `max`), so it was never throttled.
   - **Default policy:** the containers could run on all four CPUs under a quota, and were throttled in 13–17% of the 100 ms periods. The driver lost 172 ms in about 40 s. That shows in the max: IPC 1.8–2.3 ms, against 55–87 µs on the host.
   - **Latency to p99.9 and throughput** were the same in all four setups: host, host with k3s running, and the pod under either policy.
-  - **UDP p99.99** in the pod was 0.2–0.6 ms under either policy, against 35–51 µs on the host. Not investigated; in the pod the driver's one CPU also does its loopback traffic's kernel work.
-  - **Static policy and max:** it removed the millisecond IPC stalls on AMD (max 93 µs), but not on Intel (2.9 ms). There the harness's own Aeron client conductor thread has nowhere to run but the two hot CPUs.
-  - **k3s on the host:** with k3s running, host UDP p50 rose by 3 µs (AMD 11.2 → 14.4 µs, Intel 6.3 → 9.0 µs), likely from the netfilter rules it installs, which pod traffic does not cross. IPC p50 did not move.
+  - **UDP p99.99** in the pod was 0.2–0.6 ms under either policy, against 35–51 µs on the host. The cause was not tested. One possibility is that the driver's single CPU also does the kernel's loopback work for its traffic, which on the host could run on the driver's second CPU.
+  - **Static policy and max:** its IPC max ranges (AMD 52 µs–1.3 ms, Intel 0.25–4.1 ms) overlap both the host's and the default policy's, so this run shows no measurable difference there.
+  - **k3s on the host:** with k3s running, host UDP p50 rose by 3 µs (AMD 11.2 → 14.4 µs, Intel 6.3 → 9.0 µs) while IPC p50 did not move. The cause was not tested; one possibility is the netfilter rules k3s installs, which loopback traffic on the host crosses and traffic inside a pod does not.
 - **Cross-host UDP:**
   - **Floor:** about 42 µs (AMD) and 48 µs (Intel) round trip at p50. That is the Azure network's floor in a placement group.
   - **Idle strategy:** on Intel the default `backoff` doubled it (98 µs, p99 158 µs). On AMD, with two real cores, `backoff` and `noop` were level at p50 and p99.
@@ -123,7 +123,7 @@ Under kubelet's default CPU manager a CPU limit is a quota per 100 ms period: bu
 
 - **kubelet:** `cpu-manager-policy=static` and `reserved-cpus=0`, with CPU 0 left for the system. On k3s that goes in `/etc/rancher/k3s/config.yaml` as `kubelet-arg`. kubelet refuses to start with a state file from another policy, so stop k3s, delete `/var/lib/kubelet/cpu_manager_state`, then start it.
 - **Room for the pod:** the reserved CPUs leave 3 allocatable, and other pods' CPU requests count against them. CoreDNS and local-path-provisioner were scaled to zero so a 3-CPU pod fitted.
-- **The pod:** every container Guaranteed (requests equal limits, whole CPUs), with one spinning thread per CPU, each pinned inside the container. Every other thread in a container, such as an Aeron client's conductor, also runs on those CPUs, so give it one more CPU, or use the conductor agent invoker.
+- **The pod:** every container Guaranteed (requests equal limits, whole CPUs), with one spinning thread per CPU, each pinned inside the container. Every other thread in a container, such as an Aeron client's conductor, also runs on those CPUs. Whether that costs latency was not measured; an extra CPU or the conductor agent invoker would avoid it.
 
 ```yaml
 apiVersion: v1
