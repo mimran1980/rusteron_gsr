@@ -22,6 +22,10 @@
   - At file sync level 0 the page cache absorbed bursts, and the disk set the sustained rate: 545 MB/s on local NVMe, and about the provisioned rate on Premium SSD v2 once the disks had been in use for a while. New ones were slower.
   - A Premium SSD v2 at its included 125 MB/s took 30 s bursts of 400 MB/s at full rate once `vm.dirty_bytes` allowed 16 GiB of unwritten data. With Linux's defaults it throttled after 15 s.
   - Replays slowed to 59–246 MB/s while recording ran flat out at the disk's limit.
+- **Packet loss and distance** (2026-10-10):
+  - 0.1% UDP loss cut throughput by a third and 1% by 91%, though every lost packet was retransmitted.
+  - A ping-pong that lost a packet waited about 100 ms for the driver's heartbeat.
+  - Across regions (53 ms round trip), 2 MiB windows carried 18 MB/s and 16 MiB windows 119 MB/s. At 0.1% loss both fell to 10–13 MB/s.
 
 ## Method
 
@@ -110,6 +114,28 @@ Variants:
 - **Socket buffer size:** no effect on round-trip latency.
 - **The lowest p50** was about 31 µs per round trip, with this NIC and the kernel network stack.
 
+### A second pair, with busy polling and IRQs combined (West US 3, 2026-10-10)
+
+Two `Standard_D8ds_v6` in one placement group in West US 3, isolated, with the same settings, plus one more variant: busy_read and the NIC IRQs on the receiver core together.
+
+| isolated, variant | reps | p50 | p99 | p99.9 | p99.99 | max |
+|---|---|---|---|---|---|---|
+| dedicated | 5 | 45.6 (44.9–45.7) | 61.0 (60.3–62.0) | 82.3 (73.3–89.7) | 181.0 (170.2–198.5) | 1291.3 (618.0–2758.7) |
+| defaults | 5 | 45.5 (45.1–45.8) | 60.3 (59.8–60.8) | 78.7 (69.4–82.7) | 178.4 (164.9–190.6) | 1549.3 (312.6–14237.7) |
+| SHARED_NETWORK | 5 | 46.7 (46.3–47.0) | 61.2 (61.1–61.9) | 80.9 (74.0–83.0) | 181.8 (178.3–189.2) | 1738.8 (916.0–6602.8) |
+| SHARED | 5 | 46.7 (46.3–47.1) | 55.4 (54.8–57.7) | 81.6 (79.3–88.0) | 182.3 (178.7–184.7) | 1721.3 (798.7–2168.8) |
+| busy_read | 5 | 37.5 (37.4–37.6) | 43.8 (43.2–44.1) | 59.4 (48.9–63.1) | 75.8 (66.9–78.9) | 700.9 (181.0–740.9) |
+| IRQs on receiver core | 5 | 39.0 (38.7–39.2) | 45.9 (45.2–48.8) | 62.3 (56.7–69.5) | 78.7 (73.5–82.4) | 177.0 (100.2–184.1) |
+| busy_read and IRQs on receiver core | 5 | 39.0 (38.7–40.1) | 46.3 (45.4–46.5) | 57.4 (50.3–63.3) | 75.0 (61.1–78.5) | 176.0 (164.7–182.7) |
+
+- **Compare within this pair only.** Every figure was 5–30 µs above the North Central US pair's, so where the VMs land matters as much as any setting.
+- **The two together gained nothing over either alone.**
+  - p50 matched the IRQs variant, and busy_read alone stayed the lowest.
+  - p99.99 matched both.
+  - The max matched the IRQs variant's 0.18 ms, against busy_read's 0.70 ms.
+- **The ranking held:** busy_read and IRQs on the receiver core cut p50 by 8.1 and 6.6 µs, and p99.99 by more than half.
+- **Throughput** (2 MiB windows): SHARED_NETWORK gave 11.15 (10.82–11.43) M msgs/s, the same as dedicated at 11.22 (10.94–11.35). SHARED gave 9.86 (9.48–10.38), 12% less.
+
 ## UDP throughput between the two hosts (M msgs/s, 32-byte messages)
 
 Publisher on intel-a, subscriber on intel-b, both drivers dedicated with pinned `noop` sender and receiver.
@@ -126,6 +152,50 @@ Publisher on intel-a, subscriber on intel-b, both drivers dedicated with pinned 
   - Azure allows MTU 9000 only inside a VNet and directly peered VNets.
   - The run kept the default route at 1500, so traffic leaving the VNet still fit: `ip route replace <default route> mtu 1500`, then `ip link set eth0 mtu 9000`.
 - **Batching:** 16-message io vectors and sends (`AERON_SENDER_IO_VECTOR_CAPACITY`, `AERON_RECEIVER_IO_VECTOR_CAPACITY`, `AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND`, default 4) added 5–7% in the isolated and tuned states. On the stock kernel the ranges overlap.
+
+## Packet loss and distance (West US 3 and North Central US, 2026-10-10)
+
+The West US 3 pair above, isolated, plus a third VM, a `Standard_D8s_v6` in North Central US, reached over global VNet peering.
+
+- **Loss:** a share of the UDP packets arriving from the peer was dropped on both hosts, in nftables' input hook (`numgen random`), so neither end was told, as with loss on the wire.
+- **Settings:** both drivers dedicated, with pinned `noop` sender and receiver and 2 MiB windows.
+- **Throughput:** 32-byte messages for 8 s. Each run read the publisher's driver counters (AeronStat) and both hosts' drop counts.
+- **Round trips:** one 32-byte message in flight. Across regions they ran for 60 s, about 1,100 round trips, so p99.9 and above are not given there.
+- **Reps:** 3 in the same zone and 2 across regions, with ranges where they differed. Cells without a range are medians.
+- **Provenance:** the run recorded commit `e2f315a`. The 1 ms status message pass was added to both hosts mid-run; it is in `83b9e2e`.
+
+| link, loss | throughput (M msgs/s) | round trip p50 | p99 | p99.9 | max | per throughput run: data packets lost, NAKs received, retransmits sent |
+|---|---|---|---|---|---|---|
+| same zone, none | 11.18 (11.03–11.40) | 45.7 µs | 60.6 µs | 75.7 µs | 1.09 ms | 0, 0, 0 |
+| same zone, 0.1% | 7.51 (7.40–7.57) | 46.6 µs | 61.5 µs | 102 ms | 201 ms | 1,982, 2,006, 1,979 |
+| same zone, 1% | 0.99 (0.99–1.01) | 47.1 µs | 102 ms | 103 ms | 204 ms | 2,779, 2,949, 2,754 |
+| across regions, none | 0.56 (0.55–0.56), 18 MB/s | 53.0 ms | 53.0 ms | | 53.2 ms | 0, 0, 0 |
+| across regions, 0.1% | 0.29 (0.26–0.32), 9 MB/s | 53.3 ms | 53.4 ms | | 131 ms | 86, 4,334, 507 |
+| across regions, 1% | 0.04 (0.04–0.04), 1 MB/s | 53.0 ms | 208 ms | | 285 ms | 130, 6,107, 714 |
+
+- **Every lost data packet was NAKed and retransmitted**, so loss cost time, not data.
+- **In the same zone, each loss drew about one NAK and one retransmit. Across regions, each drew about 50 NAKs and 6 retransmits.**
+  - The receiver repeats its NAK until the repair arrives.
+  - The sender ignores a repeat for only 10 ms after it retransmits (`AERON_RETRANSMIT_UNICAST_LINGER`), a fifth of the 53 ms round trip. That would give the 6 retransmits.
+- **A lost ping or echo costs about 100 ms.** In a ping-pong nothing follows the lost packet, so the receiver notices the gap only at the sender's next heartbeat. The C driver sends one after 100 ms without data (`AERON_NETWORK_PUBLICATION_HEARTBEAT_TIMEOUT_NS`, a compile-time constant).
+  - At 0.1% loss that put p99.9 at 102 ms, and at 1% p99.
+  - A continuous stream doesn't wait like this, as the next packet shows the gap.
+- **Throughput fell a third at 0.1% loss and 91% at 1%.**
+  - The receiver's periodic status message every 1 ms instead of 200 (`AERON_RCV_STATUS_MESSAGE_TIMEOUT=1000000`) changed nothing: 7.58 and 0.99 M msgs/s. So lost status messages are not the cause.
+  - What is, this run didn't find.
+- **Across regions, on a clean link, the window sets throughput.** 2 MiB over a 53 ms round trip gave 18 MB/s, under half the 40 MB/s that window allows per round trip.
+
+A later run measured wider windows across the same regions: 16 MiB socket buffers and initial window over 64 MiB terms, with `net.core.rmem_max`/`wmem_max` at 16 MiB. Two reps each. Its 2 MiB rows matched the run above at 18, 10 and 1 MB/s.
+
+| across regions, variant | no loss | 0.1% loss | 1% loss |
+|---|---|---|---|
+| 2 MiB windows | 0.57 M msgs/s, 18 MB/s | 0.31, 10 MB/s | 0.03, 1 MB/s |
+| 16 MiB windows | 3.73 M msgs/s, 119 MB/s | 0.40, 13 MB/s | 0.04, 1 MB/s |
+| 2 MiB, status message every 1 ms | 0.56 M msgs/s, 18 MB/s | 0.29, 9 MB/s | 0.04, 1 MB/s |
+
+- **16 MiB windows carried 6.6 times as much on a clean link**, still about 38% of what that window allows per round trip.
+- **0.1% loss took almost all of that back**, and at 1% every variant carried 1 MB/s.
+- **A lost ping or echo across regions cost about 208 ms:** the 100 ms heartbeat plus about four one-way trips, for the gap, the NAK, the retransmit and the echo.
 
 ## IPC on one host (µs, M msgs/s)
 
@@ -261,7 +331,20 @@ The VM caps its network disks together at 12,800 IOPS and 424 MB/s.
 
 - **The NVMe and 400 MB/s disks both stopped at 450–480 MB/s**, below the 545 MB/s recorded locally, so the UDP path (2 MiB windows, MTU 1500) probably set that limit. That was not explored further.
 - **Replays from intel-b's NVMe to intel-a over UDP** ran at 345, 502 and 485 MB/s for 1, 4 and 16 replays.
-- **A round trip across the hosts while 4 streams recorded at 25% of their maximum** (117 MB/s) took 65.7 µs at p50, 84.7 at p99, 230 at p99.99, and 1.36 ms at most. Pong ran on the archive host's driver. The runs at 50% and 75% were lost to a harness bug: each reused the last pong's ports, and that pong's image lingered in the archive's driver. It is fixed in `e2f315a`.
+### Round trip across the hosts under recording load (West US 3 pair, isolated, µs)
+
+A later run, on the West US 3 pair isolated, with the archive on intel-b's NVMe. Four streams recorded across the hosts at a fixed share of their measured maximum (486 MB/s) while the round trip ran; pong used the archive host's driver. One run each.
+
+| recording load | p50 | p99 | p99.9 | p99.99 | max |
+|---|---|---|---|---|---|
+| none (dedicated, same pair) | 45.6 | 61.0 | 82.3 | 181.0 | 1291 |
+| 25% (122 MB/s) | 46.8 | 64.1 | 90.4 | 191.2 | 2503 |
+| 50% (243 MB/s) | 50.2 | 73.1 | 92.9 | 219.8 | 6226 |
+| 75% (364 MB/s) | 49.7 | 76.9 | 182.8 | 688.1 | 2552 |
+
+- **Recording on the same drivers and NICs** added little at 25% load. At 50% it added about 4 µs at p50.
+- **At 75% it doubled p99.9 and nearly quadrupled p99.99.** The ping shared its driver's sender thread with the recorded streams, and pong shared the archive host's receiver.
+- **The pinned run** before it measured 65.7 µs at p50 at 25% load. It lost its 50% and 75% runs to a harness bug, now fixed: each reused the last pong's ports, and that pong's image lingered in the archive's driver.
 
 ## Kubernetes pods (single VM, earlier run, 2026-10-09)
 
@@ -353,7 +436,7 @@ spec:
 
 ## Not measured
 
-AMD; more than one message in flight; publications created after start-up; a Java driver across hosts; AWS disks; whether new Premium SSD v2 disks are slow for a fixed time after creation; across regions and with packet loss (the next run).
+AMD; more than one message in flight; publications created after start-up; a Java driver across hosts; AWS disks; whether new Premium SSD v2 disks are slow for a fixed time after creation; why packet loss cuts throughput so far; Aeron's congestion control (`cc=cubic`) and multicast or multi-destination channels.
 
 ## How to run
 
@@ -373,6 +456,16 @@ LAB_DATA_DISK="PremiumV2_LRS:256:3000:125 PremiumV2_LRS:512:3000:400" \
 LAB_NODES="intel-a:westus3:Standard_D8ds_v6 intel-b:westus3:Standard_D8ds_v6" \
 LAB_ARMS="impr impr-ps" LAB_EXTRAS=samples \
 LAB_PHASES="bootstrap kernel build disks8 diskbench8 archload8 archburst8 diskbench8-overwrite xarchload8" \
+scripts/x86-lab/lab.sh
+```
+
+Loss and distance, with a third VM in another region, the round trip under recording load, and the isolated pair:
+
+```bash
+LAB_PAIR=1 LAB_LOCKSTEP=1 \
+LAB_NODES="intel-a:westus3:Standard_D8ds_v6 intel-b:westus3:Standard_D8ds_v6 intel-c:northcentralus:Standard_D8s_v6" \
+LAB_ARMS="impr impr-ps" LAB_EXTRAS=samples \
+LAB_PHASES="bootstrap kernel build isolate8 disks8 xhost8-isolated xnet8-zone xnet8-region xarcrtt8" \
 scripts/x86-lab/lab.sh
 ```
 
