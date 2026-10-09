@@ -745,12 +745,20 @@ bench8() {
     local shared=("${base[@]}" AERON_THREADING_MODE=SHARED AERON_SHARED_IDLE_STRATEGY=noop)
     local threads=(AERON_CONDUCTOR_CPU_AFFINITY="$first_hk8" AERON_SENDER_CPU_AFFINITY="$snd8" AERON_RECEIVER_CPU_AFFINITY="$rcv8")
     local variants=(none client driver-process driver-threads conductor-hot shared-1cpu shared-2cpu)
-    if [[ $state == isolated ]]; then
+    if [[ $state != pinned ]]; then
         # only variants that pin every busy thread: isolated CPUs take no unpinned work, which
         # would all crowd onto CPU 0, and the kernel does not spread one process across two
         variants=(driver-threads conductor-hot shared-1cpu)
-        cat /sys/devices/system/cpu/isolated >"$res/isolated8.txt"
+        if [[ $state == tuned* ]]; then tune8_runtime; fi
     fi
+    {
+        echo "state=$state"
+        cat /proc/cmdline
+        echo "isolated=$(cat /sys/devices/system/cpu/isolated) nohz_full=$(cat /sys/devices/system/cpu/nohz_full 2>/dev/null)"
+        grep -H . /sys/devices/system/cpu/vulnerabilities/* 2>/dev/null
+        echo "thp=$(cat /sys/kernel/mm/transparent_hugepage/enabled) watchdog=$(sysctl -n kernel.watchdog) workqueue=$(cat /sys/devices/virtual/workqueue/cpumask 2>/dev/null)"
+    } >"$res/state8-$state.txt" 2>&1
+    cat /proc/interrupts >"$res/interrupts8-$state-before.txt"
     for rep in $(seq "${BENCH8_REPS:-5}"); do
         for v in $(rotate "$rep" "${variants[@]}"); do
             for t in ipc udp tput; do
@@ -766,6 +774,7 @@ bench8() {
             done
         done
     done
+    cat /proc/interrupts >"$res/interrupts8-$state-after.txt"
     run_base=
     sudo umount /mnt/huge2m
     log "bench8 $state done"
@@ -966,16 +975,32 @@ k3s_down() {
     log "k3s down"
 }
 
-# isolate every CPU but CPU 0 from the scheduler, timer ticks, RCU callbacks and IRQs, then reboot
-isolate8() {
+# boot8 <kernel arguments...>: reboots into the 8-vCPU isolation (every CPU but CPU 0 kept from
+# the scheduler, timer ticks, RCU callbacks and IRQs) plus the arguments given
+boot8() {
     topo8
     sudo mkdir -p /etc/default/grub.d
-    printf '%s\n' "GRUB_CMDLINE_LINUX_DEFAULT=\"\$GRUB_CMDLINE_LINUX_DEFAULT isolcpus=nohz,domain,managed_irq,$iso8 nohz_full=$iso8 rcu_nocbs=$iso8 irqaffinity=$hk8\"" |
+    printf '%s\n' "GRUB_CMDLINE_LINUX_DEFAULT=\"\$GRUB_CMDLINE_LINUX_DEFAULT isolcpus=nohz,domain,managed_irq,$iso8 nohz_full=$iso8 rcu_nocbs=$iso8 irqaffinity=$hk8 $*\"" |
         sudo tee /etc/default/grub.d/99-rusteron-isolation.cfg >/dev/null
     sudo update-grub >"$res/update-grub.log" 2>&1
     grep -c 'isolcpus=' /boot/grub/grub.cfg >>"$res/update-grub.log" 2>&1 || true
     sudo systemd-run --on-active=3 /bin/systemctl reboot >/dev/null
-    log "rebooting into isolation of $iso8"
+    log "rebooting into isolation of $iso8 $*"
+}
+
+# what low-latency boxes add on top of isolation: no lockup watchdogs or audit, staggered
+# ticks, no transparent huge pages, and polling instead of halting when idle
+TUNE8_ARGS="nowatchdog nmi_watchdog=0 nosoftlockup skew_tick=1 transparent_hugepage=never audit=0 idle=poll"
+
+# the runtime half of the tuning, after each boot: every IRQ, kernel workqueue and periodic job
+# on CPU 0 or off, and nothing in the background that does not need to run
+tune8_runtime() {
+    sudo systemctl stop irqbalance unattended-upgrades apt-daily.timer apt-daily-upgrade.timer man-db.timer \
+        fstrim.timer e2scrub_all.timer 2>/dev/null || true
+    for irq in /proc/irq/[0-9]*; do echo "$hk8" | sudo tee "$irq/smp_affinity_list" >/dev/null 2>&1 || true; done
+    echo 1 | sudo tee /sys/devices/virtual/workqueue/cpumask >/dev/null 2>&1 || true
+    sudo sysctl -q -w kernel.watchdog=0 vm.stat_interval=120 2>/dev/null || true
+    sudo swapoff -a || true
 }
 
 test_phase() {
@@ -1037,8 +1062,12 @@ case ${1:-} in
     archive8) archive8 ;;
     k8s8) k8s8 ;;
     k3s-down) k3s_down ;;
-    isolate8) isolate8 ;;
+    isolate8) boot8 ;;
     bench8-isolated) bench8 isolated ;;
+    tune8) boot8 "$TUNE8_ARGS" ;;
+    bench8-tuned) bench8 tuned ;;
+    tune8-nomit) boot8 "$TUNE8_ARGS mitigations=off" ;;
+    bench8-tuned-nomit) bench8 tuned-nomit ;;
     pong-up) shift; pong_up "$@" ;;
     pong-down) pong_down ;;
     bench-xhost) bench_xhost ;;
