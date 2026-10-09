@@ -8,7 +8,8 @@ shm=${SHM:-/dev/shm}
 res=$lab/results
 bin=$lab/bin
 mkdir -p "$res" "$bin"
-export RUSTUP_TOOLCHAIN=1.95.0 CARGO_TERM_COLOR=never PATH=$HOME/.cargo/bin:$PATH
+# /usr/sbin: Debian keeps ethtool and sysctl there, off a normal user's PATH
+export RUSTUP_TOOLCHAIN=1.95.0 CARGO_TERM_COLOR=never PATH=$HOME/.cargo/bin:$PATH:/usr/sbin:/sbin
 host=$(hostname)
 native="-C target-cpu=native"
 
