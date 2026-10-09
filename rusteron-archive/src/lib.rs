@@ -338,12 +338,11 @@ macro_rules! impl_archive_position_methods {
             /// of the archive position.
             ///
             /// Scans every counter on each call, as [`Self::get_archive_position`] does, and reads
-            /// any error as `false`, so a wait on it spins forever once the recording stops.
-            #[deprecated(
-                since = "0.2.11",
-                note = "find the counter once with `RecordingPos::find_counter_id_by_session`, then wait while \
-                        `AeronCountersReader::get_counter_value` is below `position()`, checking `RecordingPos::is_active`"
-            )]
+            /// any error as `false`, so a wait on it spins forever once the recording stops. To wait
+            /// in a loop, find the counter once with [`RecordingPos::find_counter_id_by_session`],
+            /// then wait while [`AeronCountersReader::get_counter_value`] is below
+            /// [`Self::position`], checking [`RecordingPos::is_active`] each time, as
+            /// `examples/replay_merge.rs` does.
             pub fn is_archive_position_with(&self, length_inclusive: usize) -> bool {
                 let archive_position = self.get_archive_position().unwrap_or(-1);
                 if archive_position < 0 {
