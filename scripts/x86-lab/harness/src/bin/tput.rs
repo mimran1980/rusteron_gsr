@@ -5,8 +5,14 @@
 //! tput <seconds> <publisher cpu|-> <subscriber cpu|->
 //! prints: tput,<label>,ipc,<median msgs/s>,<min>,<max> over one-second samples after a
 //! one-second warmup
+//!
+//! Across two hosts, the subscriber binds <endpoint> (host:port) on its host and prints the
+//! same line with mode udp; the publisher sends to it for <seconds>:
+//! tput xsub <endpoint> <seconds> <cpu|->
+//! tput xpub <endpoint> <seconds> <cpu|->
 
 use rusteron_client::*;
+use std::ffi::{CStr, CString};
 use std::hint::spin_loop;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -27,7 +33,32 @@ fn client() -> Aeron {
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let seconds: usize = args.next().expect("seconds").parse().unwrap();
+    let first = args.next().expect("seconds, xsub or xpub");
+    if first == "xsub" || first == "xpub" {
+        let channel = CString::new(format!("aeron:udp?endpoint={}", args.next().expect("host:port"))).unwrap();
+        let seconds: usize = args.next().expect("seconds").parse().unwrap();
+        let cpu = cpu_arg(args.next());
+        if first == "xpub" {
+            let running = AtomicBool::new(true);
+            std::thread::scope(|scope| {
+                scope.spawn(|| publish(&running, &channel, cpu));
+                std::thread::sleep(Duration::from_secs(seconds as u64));
+                running.store(false, Ordering::Release);
+            });
+        } else {
+            let aeron = client();
+            let subscription = aeron
+                .async_add_subscription(&channel, STREAM_ID, Handlers::NONE, Handlers::NONE)
+                .unwrap()
+                .poll_blocking(Duration::from_secs(5))
+                .unwrap();
+            wait_until("publisher", 30, || subscription.image_at_index(0).is_some());
+            pin(cpu);
+            report("udp", &measure(&subscription, seconds));
+        }
+        return;
+    }
+    let seconds: usize = first.parse().unwrap();
     let (publisher_cpu, subscriber_cpu) = (cpu_arg(args.next()), cpu_arg(args.next()));
 
     let aeron = client();
@@ -40,11 +71,18 @@ fn main() {
     let running = Arc::new(AtomicBool::new(true));
     let publisher = {
         let running = Arc::clone(&running);
-        std::thread::spawn(move || publish(&running, publisher_cpu))
+        std::thread::spawn(move || publish(&running, c"aeron:ipc", publisher_cpu))
     };
     wait_until("publisher", 10, || subscription.image_at_index(0).is_some());
     pin(subscriber_cpu);
+    let samples = measure(&subscription, seconds);
+    running.store(false, Ordering::Release);
+    publisher.join().unwrap();
+    report("ipc", &samples);
+}
 
+/// Messages per second over `seconds` one-second samples after a one-second warmup, sorted.
+fn measure(subscription: &AeronSubscription, seconds: usize) -> Vec<f64> {
     let mut count = 0u64;
     let mut samples = Vec::with_capacity(seconds);
     let mut window_start = Instant::now();
@@ -70,12 +108,13 @@ fn main() {
             window_start = now;
         }
     }
-    running.store(false, Ordering::Release);
-    publisher.join().unwrap();
-
     samples.sort_by(f64::total_cmp);
+    samples
+}
+
+fn report(mode: &str, samples: &[f64]) {
     println!(
-        "tput,{},ipc,{:.0},{:.0},{:.0}",
+        "tput,{},{mode},{:.0},{:.0},{:.0}",
         label(),
         samples[samples.len() / 2],
         samples[0],
@@ -83,14 +122,14 @@ fn main() {
     );
 }
 
-fn publish(running: &AtomicBool, cpu: Option<usize>) {
+fn publish(running: &AtomicBool, channel: &CStr, cpu: Option<usize>) {
     let aeron = client();
     let publication = aeron
-        .async_add_exclusive_publication(c"aeron:ipc", STREAM_ID)
+        .async_add_exclusive_publication(channel, STREAM_ID)
         .unwrap()
         .poll_blocking(Duration::from_secs(5))
         .unwrap();
-    wait_until("subscriber", 10, || publication.is_connected());
+    wait_until("subscriber", 30, || publication.is_connected());
     pin(cpu);
     let message = [0u8; MESSAGE_LENGTH];
     while running.load(Ordering::Relaxed) {

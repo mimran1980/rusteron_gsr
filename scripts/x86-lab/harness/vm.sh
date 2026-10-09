@@ -786,10 +786,16 @@ bench8() {
 # ded-threads: noop sender and receiver each pinned to a core, the conductor on CPU 0.
 # sharednet-threads: one noop network thread pinned, the conductor on CPU 0. shared-1cpu: a
 # SHARED noop driver on one CPU. ded-threads-busyread: ded-threads with socket busy polling.
+# Each uses the socket profile of Adaptive's low-latency driver (2 MiB socket buffers and
+# initial receiver window) unless it ends in -defaults, which keeps Aeron's (128 KiB receive
+# buffer and window, the OS's send buffer).
 xhost_env() {
     local base=(AERON_TERM_BUFFER_SPARSE_FILE=false AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true)
-    case $1 in
-        ded-threads | ded-threads-busyread)
+    if [[ $1 != *-defaults ]]; then
+        base+=(AERON_SOCKET_SO_SNDBUF=2097152 AERON_SOCKET_SO_RCVBUF=2097152 AERON_RCV_INITIAL_WINDOW_LENGTH=2097152)
+    fi
+    case ${1%-defaults} in
+        ded-threads | ded-threads-busyread | xtput)
             xenv=("${base[@]}" AERON_SENDER_IDLE_STRATEGY=noop AERON_RECEIVER_IDLE_STRATEGY=noop
                 AERON_CONDUCTOR_CPU_AFFINITY="$first_hk8" AERON_SENDER_CPU_AFFINITY="$xsnd8" AERON_RECEIVER_CPU_AFFINITY="$xrcv8")
             xmask=$hk8 ;;
@@ -823,8 +829,43 @@ pong_up8() {
     echo $! >"$res/pong.pid"
 }
 
-# UDP round trips between the two hosts of a pair, each laid out by topo8: ping here, pong on
-# LAB_PEER_IP. Both hosts are in the state named, which lab.sh brought them to. xhost8 <state>
+# On the subscriber host of a cross-host pair: the driver for <variant> and a throughput
+# subscriber bound to <endpoint> for 5 one-second samples, its line in xsub.out.
+# xsub_up8 <variant> <endpoint>
+xsub_up8() {
+    local v=$1 ep=$2 dir
+    topo8
+    xhost_env "$v"
+    dir=$shm/x86lab-xsub-$(date +%s%N)
+    setsid env AERON_DIR="$dir" AERON_DIR_DELETE_ON_START=true AERON_DIR_DELETE_ON_SHUTDOWN=true "${xenv[@]}" \
+        taskset -c "$xmask" "$bin/media_driver" </dev/null >"$res/pong-driver.log" 2>&1 &
+    echo $! >"$res/pong-driver.pid"
+    for _ in $(seq 100); do
+        if [[ -e $dir/cnc.dat ]]; then break; fi
+        sleep 0.1
+    done
+    sleep 0.5
+    rm -f "$res/xsub.out"
+    setsid env "${xenv[@]}" AERON_DIR="$dir" LABEL="$v" taskset -c "$hk8" timeout 60 "$bin/impr/tput" xsub "$ep" 5 "$xapp8" \
+        </dev/null >"$res/xsub.out" 2>>"$res/client-errors.log" &
+    echo $! >"$res/pong.pid"
+}
+
+# the subscriber's line once it has finished, waiting up to 30 s
+xsub_result() {
+    local pid
+    pid=$(cat "$res/pong.pid")
+    for _ in $(seq 60); do
+        if ! kill -0 "$pid" 2>/dev/null; then break; fi
+        sleep 0.5
+    done
+    cat "$res/xsub.out"
+}
+
+# UDP between the two hosts of a pair, each laid out by topo8: round trips (ping here, pong on
+# LAB_PEER_IP) for each driver variant, then throughput (publisher here, subscriber there) with
+# Adaptive's socket profile and with Aeron's defaults. Both hosts are in the state named, which
+# lab.sh brought them to. xhost8 <state>
 xhost8() {
     state=$1 layout=$1
     local peer=${LAB_PEER_IP:?LAB_PEER_IP: the pong host} self line v
@@ -845,8 +886,20 @@ xhost8() {
         done
         sysctl net.core.busy_read net.core.busy_poll
     } >"$res/xhost8-nic-$state.txt" 2>&1
-    local variants=(ded-threads sharednet-threads shared-1cpu ded-threads-busyread)
+    local variants=(ded-threads ded-threads-defaults sharednet-threads shared-1cpu ded-threads-busyread)
     for rep in $(seq "${BENCH8_REPS:-5}"); do
+        for v in $(rotate "$rep" xtput xtput-defaults); do
+            "${peer_ssh[@]}" "/srv/x86lab/harness/vm.sh xsub-up8 $v $ping_ep"
+            xhost_env "$v"
+            hk=$xmask driver_start "${xenv[@]}"
+            env "${xenv[@]}" AERON_DIR="$run_dir" taskset -c "$hk8" timeout 60 "$bin/impr/tput" xpub "$ping_ep" 8 "$xapp8" \
+                2>>"$res/client-errors.log" || log "xpub $v failed"
+            driver_stop
+            line=$("${peer_ssh[@]}" "/srv/x86lab/harness/vm.sh xsub-result") || true
+            [[ -n $line ]] || line="error,$v,udp"
+            "${peer_ssh[@]}" "/srv/x86lab/harness/vm.sh pong-down"
+            echo "$host,xhost-$state-$v,$layout,$rep,$line" | tee -a "$res/bench.csv"
+        done
         for v in $(rotate "$rep" "${variants[@]}"); do
             if [[ $v == *busyread ]]; then busy_poll 50; fi
             "${peer_ssh[@]}" "/srv/x86lab/harness/vm.sh pong-up8 $v $ping_ep $pong_ep"
@@ -1086,6 +1139,12 @@ tune8_runtime() {
     echo 1 | sudo tee /sys/devices/virtual/workqueue/cpumask >/dev/null 2>&1 || true
     sudo sysctl -q -w kernel.watchdog=0 vm.stat_interval=120 kernel.numa_balancing=0 2>/dev/null || true
     sudo swapoff -a || true
+    # no receive offloads merging packets, and no interrupt coalescing where the NIC allows it
+    local i
+    for i in $(ls /sys/class/net | grep -v '^lo$'); do
+        sudo ethtool -K "$i" gro off lro off >>"$res/tune8-nic.log" 2>&1 || true
+        sudo ethtool -C "$i" adaptive-rx off rx-usecs 0 >>"$res/tune8-nic.log" 2>&1 || true
+    done
 }
 
 test_phase() {
@@ -1146,6 +1205,8 @@ case ${1:-} in
     bench8) bench8 pinned ;;
     xhost8-*) xhost8 "${1#xhost8-}" ;;
     pong-up8) shift; pong_up8 "$@" ;;
+    xsub-up8) shift; xsub_up8 "$@" ;;
+    xsub-result) xsub_result ;;
     archive8) archive8 ;;
     k8s8) k8s8 ;;
     k3s-down) k3s_down ;;

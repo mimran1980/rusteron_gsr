@@ -27,7 +27,8 @@ fn connect() -> Result<(Aeron, AeronArchive), Box<dyn Error>> {
     archive_context.set_aeron(&aeron)?;
     archive_context.set_control_request_channel(&CString::new(control)?)?;
     archive_context.set_control_response_channel(c"aeron:udp?endpoint=localhost:0")?;
-    let archive = AeronArchiveAsyncConnect::new_with_aeron(&archive_context, &aeron)?.poll_blocking(Duration::from_secs(20))?;
+    let archive =
+        AeronArchiveAsyncConnect::new_with_aeron(&archive_context, &aeron)?.poll_blocking(Duration::from_secs(20))?;
     Ok((aeron, archive))
 }
 
@@ -72,8 +73,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let published = start.elapsed();
     let target = publication.position();
     while counters.get_counter_value(counter_id) < target {
-        assert!(RecordingPos::is_active(&counters, counter_id, recording_id)?, "the recording stopped");
-        assert!(start.elapsed() < Duration::from_secs(120), "the recording did not catch up");
+        assert!(
+            RecordingPos::is_active(&counters, counter_id, recording_id)?,
+            "the recording stopped"
+        );
+        assert!(
+            start.elapsed() < Duration::from_secs(120),
+            "the recording did not catch up"
+        );
         std::hint::spin_loop();
     }
     let recorded = start.elapsed();
