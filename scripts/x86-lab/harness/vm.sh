@@ -676,10 +676,10 @@ host_shared() {
 
 # --- 8 vCPUs ------------------------------------------------------------------------------
 
-# Core layout from sysfs. hk8: CPU 0 alone, for housekeeping; every other CPU can be isolated.
-# Ping, pong and the driver's sender each get a core of their own; the receiver too where
-# there are enough cores, else CPU 0's SMT sibling (Intel's 4 cores), which shares its core
-# with the housekeeping CPU rather than with a spinning sender.
+# Core layout of the online CPUs. hk8: CPU 0 alone, for housekeeping; every other CPU can be
+# isolated. Ping, pong and the driver's sender each get a core of their own; the receiver too
+# where there are enough cores, else CPU 0's SMT sibling (Intel's 4 cores), which shares its
+# core with the housekeeping CPU rather than with a spinning sender, else none (SMT off).
 topo8() {
     eval "$(python3 - <<'PY'
 import glob
@@ -689,14 +689,16 @@ def expand(s):
         a, _, b = part.partition('-')
         out += range(int(a), int(b or a) + 1)
     return out
-cores = sorted({tuple(expand(open(p).read())) for p in glob.glob('/sys/devices/system/cpu/cpu[0-9]*/topology/thread_siblings_list')})
+online = set(expand(open('/sys/devices/system/cpu/online').read()))
+cores = sorted({tuple(c for c in expand(open(f'/sys/devices/system/cpu/cpu{n}/topology/thread_siblings_list').read()) if c in online) for n in online})
 core0 = next(c for c in cores if 0 in c)
 hot = [c[0] for c in cores if 0 not in c]
-rcv = hot[3] if len(hot) > 3 else core0[1]
-cpus = sorted(x for c in cores for x in c)
+# with SMT off on 4 cores there is no CPU left for a receiver of its own
+rcv = hot[3] if len(hot) > 3 else (core0[1] if len(core0) > 1 else '')
+cpus = sorted(online)
 j = lambda l: ','.join(map(str, l))
 print(f"hk8=0 first_hk8=0 ping8={hot[0]} pong8={hot[1]} snd8={hot[2]} rcv8={rcv} "
-      f"all8={j(cpus)} iso8={j([c for c in cpus if c != 0])} smt8={int(len(core0) > 1)}")
+      f"all8={j(cpus)} iso8={j([c for c in cpus if c != 0])} smt8={int(any(len(c) > 1 for c in cores))}")
 PY
 )"
     echo "hk=$hk8 ping=$ping8 pong=$pong8 sender=$snd8 receiver=$rcv8 isolatable=$iso8 smt=$smt8" >"$res/layouts8.txt"
@@ -735,7 +737,8 @@ run8() {
 # driver-process: also the whole driver on hk. driver-threads: also its sender and receiver
 # on cores of their own. conductor-hot: as driver-threads, but the client's other threads
 # (its conductor) on the ping and pong CPUs. shared-1cpu and shared-2cpu: a SHARED noop
-# driver on one CPU, or two. bench8 <pinned|isolated>
+# driver on one CPU, or two. sharednet-threads: a SHARED_NETWORK driver, its conductor on CPU 0
+# and one noop thread sending and receiving on a core of its own. bench8 <state>
 bench8() {
     state=$1 layout=$1
     topo8
@@ -744,12 +747,19 @@ bench8() {
     local ded=("${base[@]}" AERON_SENDER_IDLE_STRATEGY=noop AERON_RECEIVER_IDLE_STRATEGY=noop)
     local shared=("${base[@]}" AERON_THREADING_MODE=SHARED AERON_SHARED_IDLE_STRATEGY=noop)
     local threads=(AERON_CONDUCTOR_CPU_AFFINITY="$first_hk8" AERON_SENDER_CPU_AFFINITY="$snd8" AERON_RECEIVER_CPU_AFFINITY="$rcv8")
-    local variants=(none client driver-process driver-threads conductor-hot shared-1cpu shared-2cpu)
+    local sharednet=("${base[@]}" AERON_THREADING_MODE=SHARED_NETWORK AERON_SHAREDNETWORK_IDLE_STRATEGY=noop
+        AERON_CONDUCTOR_CPU_AFFINITY="$first_hk8" AERON_SENDER_CPU_AFFINITY="$snd8")
+    local variants=(none client driver-process driver-threads conductor-hot shared-1cpu shared-2cpu sharednet-threads)
     if [[ $state != pinned ]]; then
         # only variants that pin every busy thread: isolated CPUs take no unpinned work, which
         # would all crowd onto CPU 0, and the kernel does not spread one process across two
-        variants=(driver-threads conductor-hot shared-1cpu)
+        variants=(driver-threads conductor-hot shared-1cpu sharednet-threads)
         if [[ $state == tuned* ]]; then tune8_runtime; fi
+    fi
+    if [[ -z $rcv8 ]]; then
+        variants=(${variants[@]/driver-threads/})
+        variants=(${variants[@]/conductor-hot/})
+        variants=(${variants[@]/shared-2cpu/})
     fi
     {
         echo "state=$state"
@@ -757,6 +767,8 @@ bench8() {
         echo "isolated=$(cat /sys/devices/system/cpu/isolated) nohz_full=$(cat /sys/devices/system/cpu/nohz_full 2>/dev/null)"
         grep -H . /sys/devices/system/cpu/vulnerabilities/* 2>/dev/null
         echo "thp=$(cat /sys/kernel/mm/transparent_hugepage/enabled) watchdog=$(sysctl -n kernel.watchdog) workqueue=$(cat /sys/devices/virtual/workqueue/cpumask 2>/dev/null)"
+        echo "online=$(cat /sys/devices/system/cpu/online) smt=$(cat /sys/devices/system/cpu/smt/control 2>/dev/null) idle=$(cat /sys/devices/system/cpu/cpuidle/current_driver 2>/dev/null)"
+        cat "$res/layouts8.txt"
     } >"$res/state8-$state.txt" 2>&1
     cat /proc/interrupts >"$res/interrupts8-$state-before.txt"
     for rep in $(seq "${BENCH8_REPS:-5}"); do
@@ -770,6 +782,7 @@ bench8() {
                     conductor-hot) run8 "$state-$v" "h-$t" "$t" "$hk8" "$ping8,$pong8" "$ping8" "$pong8" "${ded[@]}" "${threads[@]}" ;;
                     shared-1cpu) run8 "$state-$v" "h-$t" "$t" "$snd8" "$hk8" "$ping8" "$pong8" "${shared[@]}" ;;
                     shared-2cpu) run8 "$state-$v" "h-$t" "$t" "$snd8,$rcv8" "$hk8" "$ping8" "$pong8" "${shared[@]}" ;;
+                    sharednet-threads) run8 "$state-$v" "h-$t" "$t" "$hk8" "$hk8" "$ping8" "$pong8" "${sharednet[@]}" ;;
                 esac
             done
         done
@@ -988,10 +1001,10 @@ boot8() {
     log "rebooting into isolation of $iso8 $*"
 }
 
-# what low-latency boxes add on top of isolation: no lockup watchdogs or audit, staggered
-# ticks and no transparent huge pages. Not idle=poll: on an SMT VM an idle sibling that polls
-# competes with the busy-spinning thread on its twin, and spinning threads never go idle anyway
-TUNE8_ARGS="nowatchdog nmi_watchdog=0 nosoftlockup skew_tick=1 transparent_hugepage=never audit=0"
+# what low-latency boxes add on top of isolation: SMT off, no lockup watchdogs or audit,
+# staggered ticks, no transparent huge pages, and idle CPUs polling instead of halting, which
+# with SMT off cannot steal from a busy twin
+TUNE8_ARGS="nosmt idle=poll nowatchdog nmi_watchdog=0 nosoftlockup skew_tick=1 transparent_hugepage=never audit=0"
 
 # the runtime half of the tuning, after each boot: every IRQ, kernel workqueue and periodic job
 # on CPU 0 or off, and nothing in the background that does not need to run
