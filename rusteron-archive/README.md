@@ -153,10 +153,9 @@ Each object is driven by its own call, once a cycle:
 | Object | Call | Notes |
 |---|---|---|
 | `Aeron` client | Nothing with its conductor thread (the default). With the agent invoker, `aeron.main_do_work()`. | `archive.do_work()` makes this call for you. |
-| `AeronArchive` | `archive.do_work()` | Runs an agent-invoker client's conductor, then hands one recording signal to the context's consumer, or one archive error to its error handler. |
+| `AeronArchive` | `archive.do_work()` | Runs an agent-invoker client's conductor, then hands one recording signal to the context's consumer, or one archive error to its error handler. With a conductor thread only the second part is left, and it can be skipped if you use neither a signal consumer nor errors for requests no longer awaited: blocking calls dispatch the signals they meet. |
 | Persistent subscription | `ps.poll_fn(..)` | Drives its own archive client. With the agent invoker every poll also runs the client's conductor, so many persistent subscriptions on one client should use its conductor thread. |
-| Async list or replay request | `request.poll()` | While one is pending, `archive.do_work()` reads nothing from the archive and its signal and error polls fail. `poll` has no timeout of its own: give up after your own deadline. |
-| `AeronArchiveReplayMerge` | `merge.poll_fn(..)` | Until it has merged or failed, poll only the merge and leave its archive client alone: `archive.do_work()`, `poll_for_error`, blocking calls and async requests read the same responses, skip the merge's, and stall it until its progress timeout. Archive errors come back as `Err` from the merge's poll. |
+| `AeronArchiveReplayMerge` | `merge.poll_fn(..)` | Until it has merged or failed, poll only the merge and leave its archive client alone: `archive.do_work()`, `poll_for_error` and blocking calls read the same responses, skip the merge's, and stall it until its progress timeout. Archive errors come back as `Err` from the merge's poll. |
 
 ```rust,ignore
 loop {
@@ -165,7 +164,7 @@ loop {
 }
 ```
 
-[`examples/duty_cycle.rs`](./examples/duty_cycle.rs) runs this loop on one thread with an agent-invoker client: it connects without blocking through `aeron.main_do_work()`, then adds its publication and builds a persistent subscription through `archive.do_work()`.
+[`examples/duty_cycle.rs`](./examples/duty_cycle.rs) runs this loop on one thread with an agent-invoker client, after a blocking setup whose calls run the conductor themselves.
 
 Persistent subscriptions share none of their per-poll work: each has its own archive client, and every poll checks its control session before it reads the live image. Idle on two 4-vCPU x86-64 VMs ([BENCHMARKS.md](../BENCHMARKS.md#x86-64-linux-on-azure-2026-10-09)), a poll cost 22–24 ns on both with the client's conductor thread, against 8–12 ns for a plain subscription, and 35 ns (AMD) or 43 ns (Intel) with 100 of them. With the agent invoker every poll also runs the conductor: 54–62 ns, and 69 ns (AMD) or 107 ns (Intel) with 100. The conductor thread was slower to bring 100 of them to LIVE, though (3.6–3.8 s against about 0.8 s), possibly because it sleeps 16 ms when idle (`AERON_CLIENT_IDLE_SLEEP_DURATION`).
 
@@ -183,7 +182,7 @@ A **persistent subscription** replays a recording from a start position, then se
 - **How it works**: [Aeron Wiki — Persistent Subscriptions](https://github.com/aeron-io/aeron/wiki/Persistent-Subscriptions)
 - **Background on publications/subscriptions**: [Aeron docs](https://aeron.io/docs/aeron/publications-subscriptions/)
 
-Rusteron exposes it via `PersistentSubscriptionBuilder::new_with_aeron(&archive_context, &aeron)` (one client for the subscription and its archive context), `build()` or the non-blocking `build_async()`, and the `PersistentSubscriptionListener` trait — a 1:1 wrapper over the Aeron C API (`aeron_archive_persistent_subscription_*`), mirroring Aeron's `PersistentSubscription.Context` field-for-field.
+Rusteron exposes it via `PersistentSubscriptionBuilder::new_with_aeron(&archive_context, &aeron)` (one client for the subscription and its archive context), `build()`, and the `PersistentSubscriptionListener` trait — a 1:1 wrapper over the Aeron C API (`aeron_archive_persistent_subscription_*`), mirroring Aeron's `PersistentSubscription.Context` field-for-field.
 
 ```rust,ignore
 use rusteron_archive::*;
@@ -255,11 +254,10 @@ For a fully runnable version, see the example and integration tests:
 - [`examples/persistent_subscription.rs`](./examples/persistent_subscription.rs) — standalone demo (run with `cargo run --release --features "static precompile" --example persistent_subscription`)
 - [`examples/archive_error_handling.rs`](./examples/archive_error_handling.rs) — error handlers on both contexts, recording signals, typed control-session errors (blocking calls return `AeronArchiveError` with `e.code`; `archive.poll_for_error()` drains unsolicited ones, always with `Generic` code), and detecting/reconnecting after the archive goes down
 - [`examples/persistent_subscription_failover.rs`](./examples/persistent_subscription_failover.rs) — failure modes: the live stream dies (`on_live_left`), and the subscription rejoins it (`on_live_joined`) once the publisher resumes the same session where it stopped
-- [`examples/async_requests.rs`](./examples/async_requests.rs) — times blocking archive calls (list recordings, start a replay, build a persistent subscription) against their non-blocking forms, which never hold the calling thread for more than one short poll
 - [`examples/replay_merge.rs`](./examples/replay_merge.rs) — late-joiner catch-up: replay recorded history, then merge seamlessly onto the live MDC stream (`AeronArchiveReplayMerge`)
 - [`examples/recording_throughput.rs`](./examples/recording_throughput.rs) — recording throughput measurement (publish rate vs archiver catch-up) and `list_recordings` descriptor enumeration
 - [`examples/recording_replication.rs`](./examples/recording_replication.rs) — archive-to-archive replication (`archive.replicate`): a destination archive pulls a finished recording from a source archive and the copy is verified (port of `RecordingReplicator`)
-- [`examples/duty_cycle.rs`](./examples/duty_cycle.rs) — one non-blocking duty cycle on an agent-invoker client: `archive.do_work()`, recording signals, an async connect, publication add and persistent subscription build, and the subscription's replay-then-live handover
+- [`examples/duty_cycle.rs`](./examples/duty_cycle.rs) — one duty cycle on an agent-invoker client: `archive.do_work()` (the client's conductor and recording signals), a persistent subscription poll and an offer
 - `persistent_subscription_tests::test_persistent_subscription_listener_live_joined` (callback wiring)
 - `persistent_subscription_integration::test_end_to_end_persistent_subscription` (record → replay → live)
 
