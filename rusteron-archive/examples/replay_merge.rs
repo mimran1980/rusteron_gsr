@@ -76,9 +76,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         true,
     )?;
 
-    // Resolve the recording counter once: `is_archive_position_with` rescans every counter per call.
+    // Find the recording's counter once, rather than scanning every counter on each check.
     let counters = aeron.counters_reader();
     let counter_id = find_counter_id_by_session_blocking(&counters, session_id, Duration::from_secs(10))?;
+    let recording_id = RecordingPos::get_recording_id_block(&counters, counter_id, Duration::from_secs(5))?;
 
     // Publish the history as fast as flow control allows, then pace the live phase so the
     // archiver stays caught up.
@@ -107,6 +108,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if n > HISTORY_MESSAGES {
                     // live phase: pace it and let the archiver stay caught up
                     while counters.get_counter_value(counter_id) < publication.position() {
+                        // a stopped recording never catches up, and its counter id may be reused
+                        if !RecordingPos::is_active(&counters, counter_id, recording_id).unwrap_or(false) {
+                            eprintln!("publisher stopping: recording {recording_id} stopped");
+                            return;
+                        }
                         sleep(Duration::from_micros(300));
                     }
                 }
@@ -119,7 +125,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("{HISTORY_MESSAGES} historical messages recorded; late joiner starting");
 
     // ── The late joiner: replay history, then merge onto the live stream ──
-    let recording_id = RecordingPos::get_recording_id_block(&counters, counter_id, Duration::from_secs(5))?;
 
     let subscription = aeron.add_subscription(
         &cformat!("aeron:udp?control-mode=manual|session-id={session_id}"),

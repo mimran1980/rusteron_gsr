@@ -5,14 +5,19 @@
 //! 1. **Error handlers on both contexts** — without one, the client's default handler
 //!    prints and exits the process, and the archive context drops errors that arrive
 //!    during other calls.
-//! 2. **Recording signal consumer** — the archive's own lifecycle events (START/STOP/EXTEND),
-//!    delivered from `archive.do_work()`.
+//! 2. **Recording signal consumer** — the archive's signals about each recording (START,
+//!    STOP, EXTEND, REPLICATE, MERGE, SYNC, DELETE, REPLICATE_END), delivered from
+//!    `archive.do_work()`.
 //! 3. **Typed control-session errors** — a blocking call returns the archive's refusal
 //!    as an `AeronArchiveError` (match on `e.code`); errors for requests no longer
 //!    awaited arrive later on the control channel, so drain them each cycle with
 //!    `archive.do_work()` (to the context's error handler) or `archive.poll_for_error()`.
-//! 4. **Archive down** — control requests fail with a timeout-class error; detect it,
-//!    then reconnect with bounded retries.
+//! 4. **Archive down** — a request fails with a `Generic` code: `offer failed` once the
+//!    control request publication sees the archive gone, or a response timeout
+//!    (`AERON_ARCHIVE_MESSAGE_TIMEOUT`, 10 s by default) before that. A lost archive shows
+//!    as `archive.get_control_response_subscription().is_connected()` turning false; then
+//!    reconnect with bounded retries. Here the media driver stops with the archive, so the
+//!    example reconnects with a new client too.
 //!
 //! Requires `java` on PATH (an embedded Java Archive is started for you).
 //!
@@ -125,7 +130,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     assert!(archive.poll_for_error()?.is_none(), "unexpected archive error");
     archive.do_work()?;
 
-    // ── 4. Archive down: detect, then reconnect with bounded retries ──
+    // ── 4. Archive down: a request fails, then reconnect with bounded retries ──
     println!("stopping the archive process to simulate an outage...");
     drop(process); // kills the Java archive + media driver
 

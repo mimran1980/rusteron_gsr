@@ -66,6 +66,21 @@ impl RecordingPos {
         unsafe { aeron_archive_recording_pos_find_counter_id_by_recording_id(counter_reader.get_inner(), recording_id) }
     }
 
+    /// Whether `counter_id` is still the position counter of `recording_id`. It turns false
+    /// once the recording stops: its counter is freed, and the id may later be reused. Check
+    /// it while waiting for a recording to reach a position, which a stopped one never does.
+    ///
+    /// # Errors
+    ///
+    /// Aeron could not read the counter.
+    pub fn is_active(
+        counters_reader: &AeronCountersReader,
+        counter_id: i32,
+        recording_id: i64,
+    ) -> Result<bool, AeronCError> {
+        counters_reader.aeron_archive_recording_pos_is_active(counter_id, recording_id)
+    }
+
     /// The recording id in the key of `counter_id`, a recording position counter, retried
     /// until `wait` elapses.
     ///
@@ -322,8 +337,13 @@ macro_rules! impl_archive_position_methods {
             /// Checks if the publication's current position is within a specified inclusive length
             /// of the archive position.
             ///
-            /// Scans every counter on each call, as [`Self::get_archive_position`] does; cache the
-            /// counter id when spinning on it.
+            /// Scans every counter on each call, as [`Self::get_archive_position`] does, and reads
+            /// any error as `false`, so a wait on it spins forever once the recording stops.
+            #[deprecated(
+                since = "0.2.11",
+                note = "find the counter once with `RecordingPos::find_counter_id_by_session`, then wait while \
+                        `AeronCountersReader::get_counter_value` is below `position()`, checking `RecordingPos::is_active`"
+            )]
             pub fn is_archive_position_with(&self, length_inclusive: usize) -> bool {
                 let archive_position = self.get_archive_position().unwrap_or(-1);
                 if archive_position < 0 {
@@ -1027,6 +1047,9 @@ mod tests {
         }
         info!("publisher to be connected");
         let counters_reader = aeron.counters_reader();
+        let counter_id =
+            crate::testing::find_counter_id_by_session_blocking(&counters_reader, session_id, Duration::from_secs(10))?;
+        let recording_id = RecordingPos::get_recording_id_block(&counters_reader, counter_id, Duration::from_secs(5))?;
         let mut caught_up_count = 0;
         let publisher_thread = thread::spawn(move || {
             let mut message_count = 0;
@@ -1047,7 +1070,11 @@ mod tests {
                 // slow down publishing so can catch up
                 if message_count > 10_000 {
                     // ensure archiver is caught up
-                    while !publication.is_archive_position_with(0) {
+                    while counters_reader.get_counter_value(counter_id) < publication.position() {
+                        assert!(
+                            RecordingPos::is_active(&counters_reader, counter_id, recording_id).unwrap_or(false),
+                            "the recording stopped"
+                        );
                         thread::sleep(Duration::from_micros(300));
                     }
                     caught_up_count += 1;

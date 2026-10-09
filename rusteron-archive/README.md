@@ -252,7 +252,7 @@ loop {
 For a fully runnable version, see the example and integration tests:
 - [`examples/record_and_replay.rs`](./examples/record_and_replay.rs) — the Typical Workflow end to end: record a stream, find the recording and replay it
 - [`examples/persistent_subscription.rs`](./examples/persistent_subscription.rs) — standalone demo (run with `cargo run --release --features "static precompile" --example persistent_subscription`)
-- [`examples/archive_error_handling.rs`](./examples/archive_error_handling.rs) — error handlers on both contexts, recording signals, typed control-session errors (blocking calls return `AeronArchiveError` with `e.code`; `archive.poll_for_error()` drains unsolicited ones, always with `Generic` code), and detecting/reconnecting after the archive goes down
+- [`examples/archive_error_handling.rs`](./examples/archive_error_handling.rs) — error handlers on both contexts, recording signals, typed control-session errors (blocking calls return `AeronArchiveError` with `e.code`; `archive.poll_for_error()` drains unsolicited ones, always with `Generic` code), and reconnecting after the archive goes down
 - [`examples/persistent_subscription_failover.rs`](./examples/persistent_subscription_failover.rs) — failure modes: the live stream dies (`on_live_left`), and the subscription rejoins it (`on_live_joined`) once the publisher resumes the same session where it stopped
 - [`examples/replay_merge.rs`](./examples/replay_merge.rs) — late-joiner catch-up: replay recorded history, then merge seamlessly onto the live MDC stream (`AeronArchiveReplayMerge`)
 - [`examples/recording_throughput.rs`](./examples/recording_throughput.rs) — recording throughput measurement (publish rate vs archiver catch-up) and `list_recordings` descriptor enumeration
