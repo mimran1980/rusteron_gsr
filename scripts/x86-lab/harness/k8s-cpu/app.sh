@@ -1,5 +1,5 @@
 #!/bin/bash
-# the pod's app container: ping and pong pinned one each to a CPU, REPS times ipc, udp and tput
+# the pod's app container: ping and pong pinned one each to a CPU, REPS times ipc and tput
 set -u
 . /lab/k8s-cpu/common.sh
 mapfile -t cpus < <(my_cpus)
@@ -28,14 +28,13 @@ run() { if [[ -n $mask ]]; then taskset -c "$mask" "$@"; else "$@"; fi; }
 throttling app
 n=0
 for rep in $(seq "$REPS"); do
-    for t in ipc udp tput; do
+    for t in ipc tput; do
         n=$((n + 1))
         dir=/aeron/run-$n
         while [ ! -e "$dir/cnc.dat" ]; do sleep 0.1; done
         sleep 0.5
         case $t in
             ipc) AERON_DIR=$dir LABEL=h-ipc run timeout 120 /lab/rtt ipc 2000000 200000 "$ping" "$pong" ;;
-            udp) AERON_DIR=$dir LABEL=h-udp run timeout 120 /lab/rtt udp 300000 50000 "$ping" "$pong" ;;
             tput) AERON_DIR=$dir LABEL=h-tput run timeout 60 /lab/tput 5 "$ping" "$pong" ;;
         esac || echo "run failed: $t"
         touch "/aeron/done-$n"

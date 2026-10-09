@@ -1,7 +1,7 @@
 # shared by the two containers of the CPU manager pod
 export LD_LIBRARY_PATH=/lab/lib
 REPS=${REPS:-3}
-RUNS=$((REPS * 3))    # REPS reps of ipc, udp, tput
+RUNS=$((REPS * 2))    # REPS reps of ipc and tput
 
 # this container's CPUs, one per line ("2-3" and "1,3" both expand)
 my_cpus() {

@@ -13,7 +13,9 @@
 #   workspace tests) and LAB_EXTRAS=samples (also build the Java and Rust samples) pass
 #   through to the VMs. LAB_NODES="name:region:size ..." replaces the two default nodes;
 #   LAB_PAIR=1 puts each region's nodes in a placement group and, after the phases, runs
-#   the cross-host UDP bench from each region's first node to its second
+#   the cross-host UDP bench from each region's first node to its second; with LAB_LOCKSTEP=1
+#   too, every phase finishes on all nodes before the next starts, and xhost8-<state> phases
+#   run that bench between each pair in the state the phases before brought both hosts to
 set -uo pipefail
 export PYTHONWARNINGS=ignore::SyntaxWarning COPYFILE_DISABLE=1
 
@@ -69,7 +71,7 @@ limit() {
         bench) echo 3600 ;;
         abudp) echo 2400 ;;
         bench-pinned | bench-isolated | bench-huge | bench-1g | k8s | k8s-cpu | bench8 | archive8 | bench8-isolated) echo 3600 ;;
-        bench8-tuned | bench8-tuned-nomit) echo 3600 ;;
+        bench8-tuned | bench8-tuned-nomit | xhost8-*) echo 3600 ;;
         k8s8) echo 5400 ;;
         isolate | isolate8 | tune8 | tune8-nomit | k3s-down) echo 600 ;;
         test) echo 5400 ;;
@@ -131,13 +133,11 @@ create_node() {
 
 # pair_bench <ping node> <pong node>: cross-host UDP, driven from the ping node over ssh
 pair_bench() {
-    local a=$1 b=$2 a_ip b_ip b_private pub rc=0
+    local a=$1 b=$2 a_ip b_ip b_private rc=0
     a_ip=$(az vm show -d -g "$group" -n "lab-$a" --query publicIps -o tsv)
     b_ip=$(az vm show -d -g "$group" -n "lab-$b" --query publicIps -o tsv)
     b_private=$(az vm show -d -g "$group" -n "lab-$b" --query privateIps -o tsv)
-    ssh "${ssh_opts[@]}" "$user@$a_ip" 'test -f ~/.ssh/id_ed25519 || ssh-keygen -q -t ed25519 -N "" -f ~/.ssh/id_ed25519'
-    pub=$(ssh "${ssh_opts[@]}" "$user@$a_ip" cat .ssh/id_ed25519.pub)
-    ssh "${ssh_opts[@]}" "$user@$b_ip" "echo '$pub' >>~/.ssh/authorized_keys"
+    pair_keys "$a_ip" "$b_ip"
     log "$a -> $b: bench-xhost"
     ssh "${ssh_opts[@]}" "$user@$a_ip" \
         "LAB_PEER_IP=$b_private BENCH3_REPS='${BENCH3_REPS:-}' timeout 3600 /srv/x86lab/harness/vm.sh bench-xhost" \
@@ -177,8 +177,9 @@ fetch() {
     ssh "${ssh_opts[@]}" "$user@$ip" 'tar -C /srv/x86lab -czf - results' | tar -xzf - -C "$dest"
 }
 
-run_node() {
-    local name=$1 ip=$2 dest=$out/$1 rc phase
+# the node reachable, /srv/x86lab made and the trees synced to it
+prepare_node() {
+    local name=$1 ip=$2 dest=$out/$1
     mkdir -p "$dest"
     for _ in $(seq 60); do
         if ssh "${ssh_opts[@]}" "$user@$ip" true 2>/dev/null; then break; fi
@@ -189,24 +190,96 @@ run_node() {
         log "$name: sync failed"
         return 1
     fi
+}
+
+# run_phase <name> <ip> <phase> [env assignment...]: one vm.sh phase on one node, waiting out
+# the reboot the isolate* and tune8* phases end with, then the results copied back
+run_phase() {
+    local name=$1 ip=$2 phase=$3 dest=$out/$1 rc=0
+    shift 3
+    log "$name: $phase"
+    ssh "${ssh_opts[@]}" "$user@$ip" \
+        "$* LAB_ARMS='${LAB_ARMS:-}' LAB_TESTS='${LAB_TESTS:-}' LAB_EXTRAS='${LAB_EXTRAS:-}' timeout $(limit "$phase") /srv/x86lab/harness/vm.sh $phase" \
+        >"$dest/$phase.log" 2>&1 || rc=$?
+    if [[ $phase == isolate* || $phase == tune8* ]]; then
+        # the VM reboots a few seconds after the phase returns
+        sleep 45
+        for _ in $(seq 60); do
+            if ssh "${ssh_opts[@]}" "$user@$ip" true 2>/dev/null; then break; fi
+            sleep 5
+        done
+    fi
+    fetch "$ip" "$dest/after-$phase"
+    log "$name: $phase exit $rc"
+    return "$rc"
+}
+
+run_node() {
+    local name=$1 ip=$2 phase rc
+    prepare_node "$name" "$ip" || return 1
     for phase in "${phases[@]}"; do
-        log "$name: $phase"
         rc=0
-        ssh "${ssh_opts[@]}" "$user@$ip" \
-            "LAB_ARMS='${LAB_ARMS:-}' LAB_TESTS='${LAB_TESTS:-}' LAB_EXTRAS='${LAB_EXTRAS:-}' timeout $(limit "$phase") /srv/x86lab/harness/vm.sh $phase" \
-            >"$dest/$phase.log" 2>&1 || rc=$?
-        if [[ $phase == isolate* || $phase == tune8* ]]; then
-            # the VM reboots a few seconds after the phase returns
-            sleep 45
-            for _ in $(seq 60); do
-                if ssh "${ssh_opts[@]}" "$user@$ip" true 2>/dev/null; then break; fi
-                sleep 5
-            done
-        fi
-        fetch "$ip" "$dest/after-$phase"
-        log "$name: $phase exit $rc"
+        run_phase "$name" "$ip" "$phase" || rc=$?
         if ((rc != 0)) && [[ $phase == bootstrap || $phase == build ]]; then return "$rc"; fi
     done
+}
+
+# LAB_LOCKSTEP=1, with LAB_PAIR=1: each phase runs on every node at once and finishes on all of
+# them before the next starts, so both hosts of a pair are in the same state; an xhost8-* phase
+# runs from each region's first node, pinging its second
+lockstep() {
+    local spec name region size ip i j p pids=() failed=0 phase rc
+    local names=() ips=() regs=() pairs=()
+    for spec in "${nodes[@]}"; do
+        IFS=: read -r name region size <<<"$spec"
+        ip=$(az vm show -d -g "$group" -n "lab-$name" --query publicIps -o tsv)
+        log "$name ($size, $region): $ip"
+        names+=("$name") ips+=("$ip") regs+=("$region")
+        prepare_node "$name" "$ip" &
+        pids+=($!)
+    done
+    for p in "${pids[@]}"; do wait "$p" || failed=1; done
+    ((failed == 0)) || return 1
+    # each region's first two nodes, as "first second": the first pings, the second pongs
+    for ((i = 0; i < ${#names[@]}; i++)); do
+        for ((j = i + 1; j < ${#names[@]}; j++)); do
+            if [[ ${regs[i]} == "${regs[j]}" && " ${pairs[*]-} " != *" $i:"* && " ${pairs[*]-} " != *":$j "* ]]; then
+                pairs+=("$i:$j")
+                pair_keys "${ips[i]}" "${ips[j]}" || return 1
+                break
+            fi
+        done
+    done
+    for phase in "${phases[@]}"; do
+        pids=()
+        if [[ $phase == xhost8* ]]; then
+            for p in ${pairs[@]+"${pairs[@]}"}; do
+                i=${p%:*} j=${p#*:}
+                run_phase "${names[i]}" "${ips[i]}" "$phase" "LAB_PEER_IP=$(az vm show -d -g "$group" -n "lab-${names[j]}" --query privateIps -o tsv)" &
+                pids+=($!)
+            done
+        else
+            for ((i = 0; i < ${#names[@]}; i++)); do
+                run_phase "${names[i]}" "${ips[i]}" "$phase" &
+                pids+=($!)
+            done
+        fi
+        rc=0
+        for p in "${pids[@]}"; do wait "$p" || rc=1; done
+        if ((rc != 0)); then
+            failed=1
+            if [[ $phase == bootstrap || $phase == build ]]; then return 1; fi
+        fi
+    done
+    return "$failed"
+}
+
+# pair_keys <ping ip> <pong ip>: the ping host may ssh to the pong host
+pair_keys() {
+    local pub
+    ssh "${ssh_opts[@]}" "$user@$1" 'test -f ~/.ssh/id_ed25519 || ssh-keygen -q -t ed25519 -N "" -f ~/.ssh/id_ed25519' || return 1
+    pub=$(ssh "${ssh_opts[@]}" "$user@$1" cat .ssh/id_ed25519.pub) || return 1
+    ssh "${ssh_opts[@]}" "$user@$2" "echo '$pub' >>~/.ssh/authorized_keys"
 }
 
 main() {
@@ -254,6 +327,11 @@ main() {
         exit 1
     fi
 
+    if [[ -n ${LAB_LOCKSTEP:-} ]]; then
+        lockstep || failed=1
+        log "lab run finished (failed=$failed); results in $out"
+        exit "$failed"
+    fi
     pids=()
     for spec in "${nodes[@]}"; do
         IFS=: read -r name region size <<<"$spec"

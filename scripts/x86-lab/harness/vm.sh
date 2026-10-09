@@ -697,11 +697,15 @@ hot = [c[0] for c in cores if 0 not in c]
 rcv = hot[3] if len(hot) > 3 else (core0[1] if len(core0) > 1 else '')
 cpus = sorted(online)
 j = lambda l: ','.join(map(str, l))
+# across hosts each host has one app thread, so app, sender and receiver take the first 3 cores
+xrcv = hot[2] if len(hot) > 2 else (core0[1] if len(core0) > 1 else '')
 print(f"hk8=0 first_hk8=0 ping8={hot[0]} pong8={hot[1]} snd8={hot[2]} rcv8={rcv} "
+      f"xapp8={hot[0]} xsnd8={hot[1]} xrcv8={xrcv} "
       f"all8={j(cpus)} iso8={j([c for c in cpus if c != 0])} smt8={int(any(len(c) > 1 for c in cores))}")
 PY
 )"
     echo "hk=$hk8 ping=$ping8 pong=$pong8 sender=$snd8 receiver=$rcv8 isolatable=$iso8 smt=$smt8" >"$res/layouts8.txt"
+    echo "across hosts: app=$xapp8 sender=$xsnd8 receiver=$xrcv8" >>"$res/layouts8.txt"
     sort -u /sys/devices/system/cpu/cpu*/topology/thread_siblings_list >>"$res/layouts8.txt"
 }
 
@@ -732,34 +736,23 @@ run8() {
     echo "$host,$group,$layout,$rep,$line" | tee -a "$res/bench.csv"
 }
 
-# What pinning the C driver and the client buys on 8 vCPUs, one change per variant:
-# none: nothing pinned. client: ping and pong pinned, the client's other threads on hk.
-# driver-process: also the whole driver on hk. driver-threads: also its sender and receiver
-# on cores of their own. conductor-hot: as driver-threads, but the client's other threads
-# (its conductor) on the ping and pong CPUs. shared-1cpu and shared-2cpu: a SHARED noop
-# driver on one CPU, or two. sharednet-threads: a SHARED_NETWORK driver, its conductor on CPU 0
-# and one noop thread sending and receiving on a core of its own. bench8 <state>
+# What pinning buys IPC on 8 vCPUs (UDP is measured between two hosts, in xhost8), one change
+# per variant: none: nothing pinned. client: ping and pong pinned, the client's other threads
+# on CPU 0. conductor-hot: those other threads (its conductor) on the ping and pong CPUs
+# instead. shared-1cpu: a SHARED noop driver on a CPU of its own. The driver otherwise keeps
+# its default idle strategies, so no unpinned thread spins. bench8 <state>
 bench8() {
     state=$1 layout=$1
     topo8
     huge8
     local base=(AERON_TERM_BUFFER_SPARSE_FILE=false AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true AERON_FILE_PAGE_SIZE=2097152)
-    local ded=("${base[@]}" AERON_SENDER_IDLE_STRATEGY=noop AERON_RECEIVER_IDLE_STRATEGY=noop)
     local shared=("${base[@]}" AERON_THREADING_MODE=SHARED AERON_SHARED_IDLE_STRATEGY=noop)
-    local threads=(AERON_CONDUCTOR_CPU_AFFINITY="$first_hk8" AERON_SENDER_CPU_AFFINITY="$snd8" AERON_RECEIVER_CPU_AFFINITY="$rcv8")
-    local sharednet=("${base[@]}" AERON_THREADING_MODE=SHARED_NETWORK AERON_SHAREDNETWORK_IDLE_STRATEGY=noop
-        AERON_CONDUCTOR_CPU_AFFINITY="$first_hk8" AERON_SENDER_CPU_AFFINITY="$snd8")
-    local variants=(none client driver-process driver-threads conductor-hot shared-1cpu shared-2cpu sharednet-threads)
+    local variants=(none client conductor-hot shared-1cpu)
     if [[ $state != pinned ]]; then
         # only variants that pin every busy thread: isolated CPUs take no unpinned work, which
-        # would all crowd onto CPU 0, and the kernel does not spread one process across two
-        variants=(driver-threads conductor-hot shared-1cpu sharednet-threads)
+        # would all crowd onto CPU 0
+        variants=(client conductor-hot shared-1cpu)
         if [[ $state == tuned* ]]; then tune8_runtime; fi
-    fi
-    if [[ -z $rcv8 ]]; then
-        variants=(${variants[@]/driver-threads/})
-        variants=(${variants[@]/conductor-hot/})
-        variants=(${variants[@]/shared-2cpu/})
     fi
     {
         echo "state=$state"
@@ -773,16 +766,12 @@ bench8() {
     cat /proc/interrupts >"$res/interrupts8-$state-before.txt"
     for rep in $(seq "${BENCH8_REPS:-5}"); do
         for v in $(rotate "$rep" "${variants[@]}"); do
-            for t in ipc udp tput; do
+            for t in ipc tput; do
                 case $v in
-                    none) run8 "$state-$v" "h-$t" "$t" - - - - "${ded[@]}" ;;
-                    client) run8 "$state-$v" "h-$t" "$t" - "$hk8" "$ping8" "$pong8" "${ded[@]}" ;;
-                    driver-process) run8 "$state-$v" "h-$t" "$t" "$hk8" "$hk8" "$ping8" "$pong8" "${ded[@]}" ;;
-                    driver-threads) run8 "$state-$v" "h-$t" "$t" "$hk8" "$hk8" "$ping8" "$pong8" "${ded[@]}" "${threads[@]}" ;;
-                    conductor-hot) run8 "$state-$v" "h-$t" "$t" "$hk8" "$ping8,$pong8" "$ping8" "$pong8" "${ded[@]}" "${threads[@]}" ;;
+                    none) run8 "$state-$v" "h-$t" "$t" - - - - "${base[@]}" ;;
+                    client) run8 "$state-$v" "h-$t" "$t" "$hk8" "$hk8" "$ping8" "$pong8" "${base[@]}" ;;
+                    conductor-hot) run8 "$state-$v" "h-$t" "$t" "$hk8" "$ping8,$pong8" "$ping8" "$pong8" "${base[@]}" ;;
                     shared-1cpu) run8 "$state-$v" "h-$t" "$t" "$snd8" "$hk8" "$ping8" "$pong8" "${shared[@]}" ;;
-                    shared-2cpu) run8 "$state-$v" "h-$t" "$t" "$snd8,$rcv8" "$hk8" "$ping8" "$pong8" "${shared[@]}" ;;
-                    sharednet-threads) run8 "$state-$v" "h-$t" "$t" "$hk8" "$hk8" "$ping8" "$pong8" "${sharednet[@]}" ;;
                 esac
             done
         done
@@ -791,6 +780,88 @@ bench8() {
     run_base=
     sudo umount /mnt/huge2m
     log "bench8 $state done"
+}
+
+# xhost_env <variant>: the driver's environment (xenv) and CPUs (xmask) for a cross-host variant.
+# ded-threads: noop sender and receiver each pinned to a core, the conductor on CPU 0.
+# sharednet-threads: one noop network thread pinned, the conductor on CPU 0. shared-1cpu: a
+# SHARED noop driver on one CPU. ded-threads-busyread: ded-threads with socket busy polling.
+xhost_env() {
+    local base=(AERON_TERM_BUFFER_SPARSE_FILE=false AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true)
+    case $1 in
+        ded-threads | ded-threads-busyread)
+            xenv=("${base[@]}" AERON_SENDER_IDLE_STRATEGY=noop AERON_RECEIVER_IDLE_STRATEGY=noop
+                AERON_CONDUCTOR_CPU_AFFINITY="$first_hk8" AERON_SENDER_CPU_AFFINITY="$xsnd8" AERON_RECEIVER_CPU_AFFINITY="$xrcv8")
+            xmask=$hk8 ;;
+        sharednet-threads)
+            xenv=("${base[@]}" AERON_THREADING_MODE=SHARED_NETWORK AERON_SHAREDNETWORK_IDLE_STRATEGY=noop
+                AERON_CONDUCTOR_CPU_AFFINITY="$first_hk8" AERON_SENDER_CPU_AFFINITY="$xsnd8")
+            xmask=$hk8 ;;
+        shared-1cpu)
+            xenv=("${base[@]}" AERON_THREADING_MODE=SHARED AERON_SHARED_IDLE_STRATEGY=noop)
+            xmask=$xsnd8 ;;
+    esac
+}
+
+# On the pong host of a cross-host pair: the driver laid out as on the ping host and pong pinned
+# to the app CPU, left running after this returns. pong_up8 <variant> <ping endpoint> <pong endpoint>
+pong_up8() {
+    local v=$1 ping_ep=$2 pong_ep=$3 dir
+    topo8
+    xhost_env "$v"
+    dir=$shm/x86lab-pong-$(date +%s%N)
+    setsid env AERON_DIR="$dir" AERON_DIR_DELETE_ON_START=true AERON_DIR_DELETE_ON_SHUTDOWN=true "${xenv[@]}" \
+        taskset -c "$xmask" "$bin/media_driver" </dev/null >"$res/pong-driver.log" 2>&1 &
+    echo $! >"$res/pong-driver.pid"
+    for _ in $(seq 100); do
+        if [[ -e $dir/cnc.dat ]]; then break; fi
+        sleep 0.1
+    done
+    sleep 0.5
+    setsid env "${xenv[@]}" AERON_DIR="$dir" taskset -c "$hk8" "$bin/impr/rtt" xpong "$ping_ep" "$pong_ep" "$xapp8" \
+        </dev/null >"$res/pong.log" 2>&1 &
+    echo $! >"$res/pong.pid"
+}
+
+# UDP round trips between the two hosts of a pair, each laid out by topo8: ping here, pong on
+# LAB_PEER_IP. Both hosts are in the state named, which lab.sh brought them to. xhost8 <state>
+xhost8() {
+    state=$1 layout=$1
+    local peer=${LAB_PEER_IP:?LAB_PEER_IP: the pong host} self line v
+    topo8
+    self=$(hostname -I | awk '{print $1}')
+    peer_ssh=(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$peer")
+    local ping_ep=$peer:20123 pong_ep=$self:20124
+    {
+        echo "self=$self peer=$peer"
+        cat "$res/layouts8.txt"
+        ip -br link
+        for i in $(ls /sys/class/net | grep -v '^lo$'); do
+            echo "== $i"
+            ethtool -i "$i" 2>&1 | head -3
+            ethtool -c "$i" 2>&1 | grep -E 'Adaptive|rx-usecs|tx-usecs' || true
+            ethtool -l "$i" 2>&1 | tail -5 || true
+            ethtool -k "$i" 2>&1 | grep -E '^(generic-receive-offload|large-receive-offload|tcp-segmentation-offload):' || true
+        done
+        sysctl net.core.busy_read net.core.busy_poll
+    } >"$res/xhost8-nic-$state.txt" 2>&1
+    local variants=(ded-threads sharednet-threads shared-1cpu ded-threads-busyread)
+    for rep in $(seq "${BENCH8_REPS:-5}"); do
+        for v in $(rotate "$rep" "${variants[@]}"); do
+            if [[ $v == *busyread ]]; then busy_poll 50; fi
+            "${peer_ssh[@]}" "/srv/x86lab/harness/vm.sh pong-up8 $v $ping_ep $pong_ep"
+            xhost_env "$v"
+            hk=$xmask driver_start "${xenv[@]}"
+            line=$(env "${xenv[@]}" AERON_DIR="$run_dir" LABEL="$v" taskset -c "$hk8" timeout 120 \
+                "$bin/impr/rtt" xping "$ping_ep" "$pong_ep" "$UDP_N" "$UDP_W" "$xapp8" 2>>"$res/client-errors.log") ||
+                line="error,$v,xping"
+            driver_stop
+            "${peer_ssh[@]}" "/srv/x86lab/harness/vm.sh pong-down"
+            if [[ $v == *busyread ]]; then busy_poll 0; fi
+            echo "$host,xhost-$state-$v,$layout,$rep,$line" | tee -a "$res/bench.csv"
+        done
+    done
+    log "xhost8 $state done"
 }
 
 # A Java ArchivingMediaDriver, with AERON_DIR and the archive on tmpfs so that disk speed
@@ -1073,6 +1144,8 @@ case ${1:-} in
     k8s) k8s ;;
     k8s-cpu) k8s_cpu ;;
     bench8) bench8 pinned ;;
+    xhost8-*) xhost8 "${1#xhost8-}" ;;
+    pong-up8) shift; pong_up8 "$@" ;;
     archive8) archive8 ;;
     k8s8) k8s8 ;;
     k3s-down) k3s_down ;;
