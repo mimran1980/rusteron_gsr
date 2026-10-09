@@ -92,6 +92,8 @@ build() {
         cargo build --release -p rusteron-media-driver --features static --bin media_driver) >"$res/build-driver.log" 2>&1
     cp "$lab/target-driver/release/media_driver" "$bin/"
     if [[ ${LAB_EXTRAS:-} == *samples* ]]; then build_samples; fi
+    # the builds leave a Gradle daemon behind, a JVM that would sit beside every benchmark
+    pkill -f org.gradle.launcher.daemon || true
     ls -la "$bin"/* >"$res/binaries.txt"
     log "build done"
 }
