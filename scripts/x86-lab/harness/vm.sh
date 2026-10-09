@@ -989,8 +989,9 @@ boot8() {
 }
 
 # what low-latency boxes add on top of isolation: no lockup watchdogs or audit, staggered
-# ticks, no transparent huge pages, and polling instead of halting when idle
-TUNE8_ARGS="nowatchdog nmi_watchdog=0 nosoftlockup skew_tick=1 transparent_hugepage=never audit=0 idle=poll"
+# ticks and no transparent huge pages. Not idle=poll: on an SMT VM an idle sibling that polls
+# competes with the busy-spinning thread on its twin, and spinning threads never go idle anyway
+TUNE8_ARGS="nowatchdog nmi_watchdog=0 nosoftlockup skew_tick=1 transparent_hugepage=never audit=0"
 
 # the runtime half of the tuning, after each boot: every IRQ, kernel workqueue and periodic job
 # on CPU 0 or off, and nothing in the background that does not need to run
@@ -999,7 +1000,7 @@ tune8_runtime() {
         fstrim.timer e2scrub_all.timer 2>/dev/null || true
     for irq in /proc/irq/[0-9]*; do echo "$hk8" | sudo tee "$irq/smp_affinity_list" >/dev/null 2>&1 || true; done
     echo 1 | sudo tee /sys/devices/virtual/workqueue/cpumask >/dev/null 2>&1 || true
-    sudo sysctl -q -w kernel.watchdog=0 vm.stat_interval=120 2>/dev/null || true
+    sudo sysctl -q -w kernel.watchdog=0 vm.stat_interval=120 kernel.numa_balancing=0 2>/dev/null || true
     sudo swapoff -a || true
 }
 
