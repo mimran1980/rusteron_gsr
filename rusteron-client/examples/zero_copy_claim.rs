@@ -2,7 +2,7 @@
 //!
 //! Publishes by writing straight into the publication's term buffer with
 //! `try_claim_owned`, stamps each frame's reserved value with a send timestamp, and reads
-//! the frame header fields in place on the subscriber side. One claim is dropped without a
+//! the frame header fields on the subscriber side. One claim is dropped without a
 //! commit: it is aborted, and the subscriber never sees it.
 //!
 //! ```bash
@@ -75,7 +75,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         let fragments = subscription.poll_fn(
             |buf, header| {
-                // these read the frame header in place; get_values() would copy it through FFI
                 let latency = Aeron::nano_clock() - header.reserved_value().unwrap_or(0);
                 println!(
                     "session {:?} stream {:?} term {:?} offset {:?} position {} sent {latency} ns ago",

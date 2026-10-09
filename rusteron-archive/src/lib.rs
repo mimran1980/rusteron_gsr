@@ -22,12 +22,6 @@ pub mod bindings {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
-/// The fields of `aeron_header_t`, which `aeronc.h` leaves opaque, bound from `aeron_image.h`.
-pub mod header_layout {
-    use super::bindings::aeron_data_header_t;
-    include!(concat!(env!("OUT_DIR"), "/aeron_header_layout.rs"));
-}
-
 use bindings::*;
 use std::cell::Cell;
 use std::os::raw::c_int;

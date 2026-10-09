@@ -117,15 +117,6 @@ mod tests {
     use proc_macro2::TokenStream;
     use std::fs;
 
-    /// The `header_layout` module each crate's lib.rs declares, from its committed
-    /// `docs-rs` copy, for trybuild files that compile `aeron_custom.rs`.
-    fn header_layout_module(crate_name: &str) -> String {
-        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join(format!("../rusteron-{crate_name}/docs-rs/aeron_header_layout.rs"));
-        let layout = fs::read_to_string(&path).unwrap_or_else(|_| panic!("missing {}", path.display()));
-        format!("mod header_layout {{ use super::bindings::aeron_data_header_t; {layout} }}")
-    }
-
     // valgrind can give false positives, so we don't want to run on tests which are 100% rust
     // and do not have any chance of any undefined behaviour i.e. parsing rs and generating code
     fn running_under_valgrind() -> bool {
@@ -178,7 +169,6 @@ mod tests {
         append_to_file(&file, "use bindings::*; mod bindings { ").unwrap();
         append_to_file(&file, CLIENT_BINDINGS).unwrap();
         append_to_file(&file, "}").unwrap();
-        append_to_file(&file, &header_layout_module("client")).unwrap();
         append_to_file(&file, CUSTOM_AERON_CODE).unwrap();
         append_to_file(&file, "\npub fn main() {}\n").unwrap();
         t.pass(file)
@@ -229,7 +219,6 @@ mod tests {
         append_to_file(&file, "use bindings::*; mod bindings { ").unwrap();
         append_to_file(&file, MEDIA_DRIVER_BINDINGS).unwrap();
         append_to_file(&file, "}").unwrap();
-        append_to_file(&file, &header_layout_module("media-driver")).unwrap();
         append_to_file(&file, CUSTOM_AERON_CODE).unwrap();
         append_to_file(&file, "\npub fn main() {}\n").unwrap();
         t.pass(&file)
@@ -274,7 +263,6 @@ mod tests {
         append_to_file(&file, "use bindings::*; mod bindings { ").unwrap();
         append_to_file(&file, ARCHIVE_BINDINGS).unwrap();
         append_to_file(&file, "}").unwrap();
-        append_to_file(&file, &header_layout_module("archive")).unwrap();
         append_to_file(&file, CUSTOM_AERON_CODE).unwrap();
         // The generated aeron_archive_t methods reference AeronArchiveError, which in the
         // real crate is supplied by CUSTOM_ARCHIVE_CODE. That file also references

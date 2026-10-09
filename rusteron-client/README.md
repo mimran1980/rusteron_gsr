@@ -299,7 +299,7 @@ in the [root README's migration guide](../README.md#migrating-from-01168-to-02).
 - [`examples/embedded_exclusive_ipc_throughput.rs`](./examples/embedded_exclusive_ipc_throughput.rs) — exclusive-publication IPC throughput; starts its own driver unless `AERON_DIR` is set
 - [`examples/request_response.rs`](./examples/request_response.rs) — response channels (aeron 1.44+): request/response wiring via `control-mode=response` + `response-correlation-id` (port of `response_server.c`/`response_client.c`)
 - [`examples/file_transfer.rs`](./examples/file_transfer.rs) — chunked file transfer with fragment reassembly and verification (port of `FileSender`/`FileReceiver`)
-- [`examples/zero_copy_claim.rs`](./examples/zero_copy_claim.rs) — zero-copy publish with `try_claim_owned` (commit, abort on drop), a send timestamp in `set_reserved_value`, and in-place header reads on the subscriber
+- [`examples/zero_copy_claim.rs`](./examples/zero_copy_claim.rs) — zero-copy publish with `try_claim_owned` (commit, abort on drop), a send timestamp in `set_reserved_value`, and header reads on the subscriber
 - [`examples/retained_images.rs`](./examples/retained_images.rs) — retained image lifecycle: `for_each_image`, `image_by_session_id`, polling the image directly, `is_closed()` once the publisher goes, and dropping the handle before `subscription.close()`
 
 ---

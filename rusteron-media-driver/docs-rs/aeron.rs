@@ -34514,6 +34514,24 @@ impl AeronHeader {
         Ok(result)
     }
     #[inline]
+    #[doc = "Get the current position to which the Image has advanced on reading this message."]
+    #[doc = ""]
+    #[doc = " \n# Return\n the current position to which the Image has advanced on reading this message."]
+    pub fn position(&self) -> i64 {
+        unsafe {
+            #[cfg(feature = "log-c-bindings")]
+            log::info!(
+                "{}({})",
+                stringify!(aeron_header_position),
+                [concat!("header", ": ", stringify!(*mut aeron_header_t)).to_string()].join(", ")
+            );
+            let result = aeron_header_position(self.get_inner());
+            #[cfg(feature = "log-c-bindings")]
+            log::info!("  -> {:?}", result);
+            result.into()
+        }
+    }
+    #[inline]
     #[doc = "Get the number of times to left shift the term count to multiply by term length."]
     #[doc = ""]
     #[doc = " \n# Return\n number of times to left shift the term count to multiply by term length."]
