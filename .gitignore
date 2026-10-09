@@ -7,3 +7,5 @@ rusteron-*/artifacts/
 .aid*
 /id_ed25519
 /id_ed25519.pub
+/.DS_Store
+/package-lock.json

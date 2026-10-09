@@ -109,7 +109,7 @@ spec:
 
 For 1 GiB pages, use `hugepages-1Gi`, `medium: HugePages-1Gi` and `AERON_FILE_PAGE_SIZE=1073741824`, and leave room for Aeron rounding each file up to whole pages.
 
-Pinning inside the pod used `taskset` under kubelet's default CPU manager. Exclusive cores need the static CPU manager policy and Guaranteed pods, which this run did not test.
+Pinning inside the pod used `taskset` under kubelet's default CPU manager. The CPU limit is a quota per 100 ms period: busy-spinning threads that add up to it use the quota early and freeze the pod for the rest of each period. These pods ran 2–3 spinners against a limit of 4. For exclusive cores, use the static CPU manager policy (`cpu-manager-policy=static` with `reserved-cpus` for housekeeping) and Guaranteed pods that request whole CPUs, with at most one spinning thread per CPU, each pinned. This run did not test that setup.
 
 ## Tables
 
