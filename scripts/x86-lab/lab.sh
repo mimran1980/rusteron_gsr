@@ -15,9 +15,11 @@
 #   LAB_PAIR=1 puts each region's nodes in a placement group and, after the phases, runs
 #   the cross-host UDP bench from each region's first node to its second; with LAB_LOCKSTEP=1
 #   too, every phase finishes on all nodes before the next starts, and xhost8-<state> phases
-#   run that bench between each pair in the state the phases before brought both hosts to.
-#   LAB_ZONE puts every VM and placement group in that availability zone, and LAB_DATA_DISK
-#   (<sku>:<GiB>:<IOPS>:<MB/s>) attaches a data disk of that kind to each VM
+#   run that bench between each pair in the state the phases before brought both hosts to;
+#   xnet8-region runs from the first node to the first node of another region, the regions'
+#   networks peered.
+#   LAB_ZONE puts every VM in that availability zone, and LAB_DATA_DISK ("<sku>:<GiB>:<IOPS>:<MB/s> ...")
+#   attaches data disks of those kinds to each VM
 set -uo pipefail
 export PYTHONWARNINGS=ignore::SyntaxWarning COPYFILE_DISABLE=1
 
@@ -75,8 +77,9 @@ limit() {
         bench) echo 3600 ;;
         abudp) echo 2400 ;;
         bench-pinned | bench-isolated | bench-huge | bench-1g | k8s | k8s-cpu | bench8 | archive8 | bench8-isolated) echo 3600 ;;
-        bench8-tuned | bench8-tuned-nomit | xhost8-* | disks8 | diskbench8) echo 3600 ;;
-        archload8 | xarchload8) echo 7200 ;;
+        bench8-tuned | bench8-tuned-nomit | xhost8-* | xnet8-* | disks8 | diskbench8*) echo 3600 ;;
+        archload8 | archburst8 | xarchload8) echo 7200 ;;
+        xarcrtt8) echo 1800 ;;
         k8s8) echo 5400 ;;
         isolate | isolate8 | tune8 | tune8-nomit | k3s-down) echo 600 ;;
         kernel) echo 1200 ;;
@@ -114,16 +117,18 @@ teardown() {
 }
 
 # one network per region, so the nodes of a region share a subnet; with LAB_PAIR also a
-# proximity placement group, so a pair sits as close together as Azure allows
+# proximity placement group, so a pair sits as close together as Azure allows.
+# create_network <region> <index>: each region's address space is its own, so they can peer
 create_network() {
-    local region=$1
+    local region=$1 net=10.$((60 + $2))
     az network nsg create -g "$group" -n "$region-nsg" -l "$region" -o none &&
         az network nsg rule create -g "$group" --nsg-name "$region-nsg" -n ssh-from-operator --priority 100 \
             --source-address-prefixes "$mine" --destination-port-ranges 22 --protocol Tcp --access Allow -o none &&
-        az network vnet create -g "$group" -n "$region-vnet" -l "$region" --address-prefixes 10.60.0.0/16 \
-            --subnet-name s --subnet-prefixes 10.60.0.0/24 --network-security-group "$region-nsg" -o none || return 1
+        az network vnet create -g "$group" -n "$region-vnet" -l "$region" --address-prefixes "$net.0.0/16" \
+            --subnet-name s --subnet-prefixes "$net.0.0/24" --network-security-group "$region-nsg" -o none || return 1
     if [[ -n ${LAB_PAIR:-} ]]; then
-        az ppg create -g "$group" -n "$region-ppg" -l "$region" -t Standard ${LAB_ZONE:+--zone "$LAB_ZONE"} -o none || return 1
+        # no --zone here: az then demands --intent-vm-sizes, and the first zonal VM anchors the group anyway
+        az ppg create -g "$group" -n "$region-ppg" -l "$region" -t Standard -o none || return 1
     fi
 }
 
@@ -136,13 +141,16 @@ create_node() {
         --vnet-name "$region-vnet" --subnet s --nsg "" --public-ip-address "$name-ip" --public-ip-sku Standard \
         --accelerated-networking true --os-disk-size-gb 64 --storage-sku Premium_LRS ${ppg[@]+"${ppg[@]}"} \
         ${zone[@]+"${zone[@]}"} --disk-controller-type NVMe --os-disk-delete-option Delete --nic-delete-option Delete -o none || return 1
-    # LAB_DATA_DISK=<sku>:<GiB>:<IOPS>:<MB/s>, e.g. PremiumV2_LRS:256:12800:424 (Premium SSD v2 needs LAB_ZONE)
-    if [[ -n ${LAB_DATA_DISK:-} ]]; then
-        IFS=: read -r dsku dsize diops dmbps <<<"$LAB_DATA_DISK"
-        az disk create -g "$group" -n "lab-$name-data" -l "$region" ${zone[@]+"${zone[@]}"} --sku "$dsku" --size-gb "$dsize" \
+    # LAB_DATA_DISK="<sku>:<GiB>:<IOPS>:<MB/s> ...", e.g. PremiumV2_LRS:256:3000:125 (Premium SSD v2
+    # needs LAB_ZONE); vm.sh tells the disks apart by size, so each needs a size of its own
+    local spec i=0
+    for spec in ${LAB_DATA_DISK:-}; do
+        IFS=: read -r dsku dsize diops dmbps <<<"$spec"
+        i=$((i + 1))
+        az disk create -g "$group" -n "lab-$name-data$i" -l "$region" ${zone[@]+"${zone[@]}"} --sku "$dsku" --size-gb "$dsize" \
             --disk-iops-read-write "$diops" --disk-mbps-read-write "$dmbps" -o none &&
-            az vm disk attach -g "$group" --vm-name "lab-$name" --name "lab-$name-data" -o none
-    fi
+            az vm disk attach -g "$group" --vm-name "lab-$name" --name "lab-$name-data$i" -o none || return 1
+    done
 }
 
 # pair_bench <ping node> <pong node>: cross-host UDP, driven from the ping node over ssh
@@ -213,7 +221,7 @@ run_phase() {
     shift 3
     log "$name: $phase"
     ssh "${ssh_opts[@]}" "$user@$ip" \
-        "$* LAB_ARMS='${LAB_ARMS:-}' LAB_TESTS='${LAB_TESTS:-}' LAB_EXTRAS='${LAB_EXTRAS:-}' timeout $(limit "$phase") /srv/x86lab/harness/vm.sh $phase" \
+        "$* LAB_ARMS='${LAB_ARMS:-}' LAB_TESTS='${LAB_TESTS:-}' LAB_EXTRAS='${LAB_EXTRAS:-}' LAB_DATA_DISK='${LAB_DATA_DISK:-}' timeout $(limit "$phase") /srv/x86lab/harness/vm.sh $phase" \
         >"$dest/$phase.log" 2>&1 || rc=$?
     if [[ $phase == isolate* || $phase == tune8* || $phase == kernel ]]; then
         # the VM reboots a few seconds after the phase returns
@@ -243,7 +251,7 @@ run_node() {
 # runs from each region's first node, pinging its second
 lockstep() {
     local spec name region size ip i j p pids=() failed=0 phase rc
-    local names=() ips=() regs=() pairs=()
+    local names=() ips=() regs=() pairs=() xpairs=() use=()
     for spec in "${nodes[@]}"; do
         IFS=: read -r name region size <<<"$spec"
         ip=$(az vm show -d -g "$group" -n "lab-$name" --query publicIps -o tsv)
@@ -264,10 +272,20 @@ lockstep() {
             fi
         done
     done
+    # the first node and the first node in another region, for xnet8-region
+    for ((j = 1; j < ${#names[@]}; j++)); do
+        if [[ ${regs[j]} != "${regs[0]}" ]]; then
+            xpairs+=("0:$j")
+            pair_keys "${ips[0]}" "${ips[j]}" || return 1
+            break
+        fi
+    done
     for phase in "${phases[@]}"; do
         pids=()
-        if [[ $phase == xhost8* || $phase == xarchload8 ]]; then
-            for p in ${pairs[@]+"${pairs[@]}"}; do
+        if [[ $phase == xhost8* || $phase == xarc* || $phase == xnet8* ]]; then
+            use=(${pairs[@]+"${pairs[@]}"})
+            if [[ $phase == xnet8-region ]]; then use=(${xpairs[@]+"${xpairs[@]}"}); fi
+            for p in ${use[@]+"${use[@]}"}; do
                 i=${p%:*} j=${p#*:}
                 run_phase "${names[i]}" "${ips[i]}" "$phase" "LAB_PEER_IP=$(az vm show -d -g "$group" -n "lab-${names[j]}" --query privateIps -o tsv)" &
                 pids+=($!)
@@ -322,13 +340,23 @@ main() {
     created=1
     log "up: $group"
     az group create -n "$group" -l northcentralus -o none || exit 1
-    local spec name region size pids=() failed=0 p regions=" "
+    local spec name region size pids=() failed=0 p regions=" " k=0 a b
     for spec in "${nodes[@]}"; do
         IFS=: read -r name region size <<<"$spec"
         if [[ $regions != *" $region "* ]]; then
             regions+="$region "
-            create_network "$region" >"$out/network-$region.log" 2>&1 || { log "network $region failed"; exit 1; }
+            create_network "$region" "$k" >"$out/network-$region.log" 2>&1 || { log "network $region failed"; exit 1; }
+            k=$((k + 1))
         fi
+    done
+    # nodes in more than one region reach each other over global peering of their networks
+    for a in $regions; do
+        for b in $regions; do
+            if [[ $a != "$b" ]]; then
+                az network vnet peering create -g "$group" -n "$a-to-$b" --vnet-name "$a-vnet" --remote-vnet "$b-vnet" \
+                    --allow-vnet-access -o none >>"$out/network-$a.log" 2>&1 || { log "peering $a to $b failed"; exit 1; }
+            fi
+        done
     done
     for spec in "${nodes[@]}"; do
         IFS=: read -r name region size <<<"$spec"

@@ -19,7 +19,7 @@ bootstrap() {
     sudo apt-get update -qq
     sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential cmake clang libclang-dev \
         pkg-config libbsd-dev uuid-dev zlib1g-dev libssl-dev default-jdk-headless curl util-linux ethtool \
-        fio sysstat xfsprogs >/dev/null
+        fio sysstat xfsprogs nftables >/dev/null
     # rustfmt: the build scripts format the generated bindings and fail without it
     curl -sSf https://sh.rustup.rs | sh -s -- -y -q --profile minimal --default-toolchain 1.95.0 --component rustfmt
     # Linux silently caps SO_RCVBUF/SO_SNDBUF at these
@@ -795,11 +795,16 @@ bench8() {
 # initial receiver window) unless it ends in -defaults, which keeps Aeron's (128 KiB receive
 # buffer and window, the OS's send buffer). ded-threads-irqrcv: the NIC's IRQs on the receiver's
 # core. xtput-jumbo: MTU 9000 and Aeron MTU 8192; xtput-iov16: 16-message io vectors and sends.
-# AERON_DIR is on 2 MiB hugetlbfs throughout.
+# ded-threads-wide: 16 MiB socket buffers and initial receiver window over 64 MiB terms, which a
+# long round trip needs to keep the link full. AERON_DIR is on 2 MiB hugetlbfs throughout.
 xhost_env() {
     local base=(AERON_TERM_BUFFER_SPARSE_FILE=false AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true AERON_FILE_PAGE_SIZE=2097152)
     if [[ $1 != *-defaults ]]; then
         base+=(AERON_SOCKET_SO_SNDBUF=2097152 AERON_SOCKET_SO_RCVBUF=2097152 AERON_RCV_INITIAL_WINDOW_LENGTH=2097152)
+    fi
+    if [[ $1 == *-wide ]]; then
+        base+=(AERON_SOCKET_SO_SNDBUF=16777216 AERON_SOCKET_SO_RCVBUF=16777216 AERON_RCV_INITIAL_WINDOW_LENGTH=16777216
+            AERON_TERM_BUFFER_LENGTH=67108864)
     fi
     case $1 in
         xtput-jumbo) base+=(AERON_MTU_LENGTH=8192) ;;
@@ -808,7 +813,7 @@ xhost_env() {
                 AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND=16) ;;
     esac
     case ${1%-defaults} in
-        ded-threads | ded-threads-busyread | ded-threads-irqrcv | ded-threads-busyread-irqrcv | xtput | xtput-jumbo | xtput-iov16)
+        ded-threads | ded-threads-wide | ded-threads-busyread | ded-threads-irqrcv | ded-threads-busyread-irqrcv | xtput | xtput-jumbo | xtput-iov16)
             xenv=("${base[@]}" AERON_SENDER_IDLE_STRATEGY=noop AERON_RECEIVER_IDLE_STRATEGY=noop
                 AERON_CONDUCTOR_CPU_AFFINITY="$first_hk8" AERON_SENDER_CPU_AFFINITY="$xsnd8" AERON_RECEIVER_CPU_AFFINITY="$xrcv8")
             xmask=$hk8 ;;
@@ -970,6 +975,94 @@ xhost8() {
     done
     run_base=
     log "xhost8 $state done"
+}
+
+# loss <basis points|off> [peer ip]: drops that share of the UDP packets arriving from the peer,
+# in nftables' input hook, so neither end is told, as with loss on the wire; off removes it
+loss() {
+    sudo nft delete table inet lab 2>/dev/null || true
+    if [[ $1 == off ]]; then return; fi
+    sudo nft add table inet lab &&
+        sudo nft add chain inet lab in '{ type filter hook input priority 0; }' &&
+        sudo nft add rule inet lab in ip saddr "$2" meta l4proto udp numgen random mod 10000 lt "$1" counter drop
+}
+
+# the packets the loss rule has dropped since it was added
+loss_count() {
+    sudo nft list table inet lab 2>/dev/null | awk '/counter/ { for (i = 1; i < NF; i++) if ($i == "packets") print $(i + 1) }'
+}
+
+# aeron_stat <aeron dir>: the driver's NAKs sent and received, retransmits sent and loss gap fills
+aeron_stat() {
+    local jars=$lab/rusteron/rusteron-archive/aeron
+    timeout 4 java --add-opens java.base/jdk.internal.misc=ALL-UNNAMED -Daeron.dir="$1" \
+        -cp "$jars/aeron-samples/build/libs/aeron-samples-1.52.2.jar:$jars/aeron-all/build/libs/aeron-all-1.52.2.jar" \
+        io.aeron.samples.AeronStat 2>/dev/null |
+        awk -F' - ' '{ split($1, a, ":"); v = a[2]; gsub(/[ ,]/, "", v); c[$2] = v }
+            END { printf "%d,%d,%d,%d", c["NAKs sent"], c["NAKs received"], c["Retransmits sent"], c["Loss gap fills"] }' ||
+        true # timeout always ends AeronStat, which never exits by itself
+}
+
+# Loss and distance: UDP between this host and LAB_PEER_IP, in the same zone (xnet8-zone) or in
+# another region (xnet8-region), with ded-threads, and across regions also ded-threads-wide. For
+# each share of UDP packets dropped on arrival at both hosts (none, 0.1%, 1%): throughput
+# (publisher here) and round trips, with this host's NAK and retransmit counters and both
+# hosts' drop counts in xnet8-counters.csv. Across regions a round trip takes tens of ms, so
+# round trips run 60 s instead of 20 and only for ded-threads. xnet8 <zone|region>
+xnet8() {
+    local link=$1 peer=${LAB_PEER_IP:?LAB_PEER_IP: the peer host} self v bp t line counters
+    state=$link layout=$link
+    topo8
+    self=$(hostname -I | awk '{print $1}')
+    peer_ssh=(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$peer")
+    local ping_ep=$peer:20123 pong_ep=$self:20124 variants=(ded-threads) seconds=20 reps=${XNET_REPS:-3}
+    if [[ $link == region ]]; then variants+=(ded-threads-wide) seconds=60 reps=${XNET_REPS:-2}; fi
+    ping -c 20 -q "$peer" >"$res/xnet8-$link-ping.txt" 2>&1 || true
+    huge8
+    echo "host,link,variant,loss_bp,test,rep,naks_sent,naks_received,retransmits_sent,loss_gap_fills,dropped_here,dropped_there" \
+        >>"$res/xnet8-counters.csv"
+    # xnet_loss <bp>: the loss rule on both hosts, afresh so its counters start at 0
+    xnet_loss() {
+        if (($1 == 0)); then loss off; peer loss off; else loss "$1" "$peer"; peer loss "$1" "$self"; fi
+    }
+    xnet_record() {
+        echo "$host,xnet-$link-$v-loss$bp,$layout,$rep,$line" | tee -a "$res/bench.csv"
+        echo "$host,$link,$v,$bp,$t,$rep,$counters,$(loss_count),$(peer loss-count)" >>"$res/xnet8-counters.csv"
+    }
+    for rep in $(seq "$reps"); do
+        for bp in 0 10 100; do
+            for v in "${variants[@]}"; do
+                t=tput
+                xnet_loss "$bp"
+                peer xsub-up8 "$v" "$ping_ep"
+                xhost_env "$v"
+                hk=$xmask driver_start "${xenv[@]}"
+                env "${xenv[@]}" AERON_DIR="$run_dir" taskset -c "$hk8" timeout 60 "$bin/impr/tput" xpub "$ping_ep" 8 "$xapp8" \
+                    2>>"$res/client-errors.log" || log "xpub $v loss $bp failed"
+                counters=$(aeron_stat "$run_dir")
+                driver_stop
+                line=$(peer xsub-result) || true
+                [[ -n $line ]] || line="error,$v,udp"
+                peer pong-down
+                xnet_record
+                if [[ $v != ded-threads ]]; then continue; fi
+                t=rtt
+                xnet_loss "$bp"
+                peer pong-up8 "$v" "$ping_ep" "$pong_ep"
+                hk=$xmask driver_start "${xenv[@]}"
+                line=$(env "${xenv[@]}" RTT_SECONDS="$seconds" AERON_DIR="$run_dir" LABEL="$v" taskset -c "$hk8" \
+                    timeout $((seconds * 2 + 60)) "$bin/impr/rtt" xping "$ping_ep" "$pong_ep" "$UDP_N" "$UDP_W" "$xapp8" \
+                    2>>"$res/client-errors.log") || line="error,$v,xping"
+                counters=$(aeron_stat "$run_dir")
+                driver_stop
+                peer pong-down
+                xnet_record
+            done
+        done
+    done
+    xnet_loss 0
+    run_base=
+    log "xnet8 $link done"
 }
 
 # A Java ArchivingMediaDriver, with AERON_DIR and the archive on tmpfs so that disk speed
@@ -1295,13 +1388,15 @@ tune8_runtime() {
 
 # --- archive under load -------------------------------------------------------------------
 
-# The local NVMe disk and the Premium SSD v2 data disk, each formatted xfs and mounted at
-# /mnt/nvme and /mnt/pv2. A device is used only if it has no partitions and no mount, and it is
-# picked by model: Azure's local NVMe reports "Microsoft NVMe Direct Disk", managed disks
-# (the OS disk too) "MSFT NVMe Accelerator", so the data disk is the unpartitioned one of those.
+# The local NVMe disk and the Premium SSD v2 data disks, each formatted xfs and mounted at
+# /mnt/nvme and /mnt/pv2-<MB/s>. A device is used only if it has no partitions and no mount, and
+# it is picked by model: Azure's local NVMe reports "Microsoft NVMe Direct Disk", managed disks
+# (the OS disk too) "MSFT NVMe Accelerator", so the data disks are the unpartitioned ones of
+# those, each matched by its size to its LAB_DATA_DISK spec for the MB/s it was given.
 disks8() {
-    local name model dev kind
+    local name model dev kind gib spec
     lsblk -o NAME,MODEL,SIZE,TYPE,MOUNTPOINTS >"$res/lsblk.txt" 2>&1
+    echo "data disks: ${LAB_DATA_DISK:-none}" >"$res/disks.txt"
     while read -r name; do
         dev=/dev/$name
         model=$(cat "/sys/block/$name/device/model" 2>/dev/null | sed 's/ *$//')
@@ -1311,7 +1406,13 @@ disks8() {
         fi
         case $model in
             *Direct*) kind=nvme ;;
-            *Accelerator*) kind=pv2 ;;
+            *Accelerator*)
+                gib=$(($(lsblk -bdn -o SIZE "$dev") >> 30)) kind=
+                for spec in ${LAB_DATA_DISK:-}; do
+                    IFS=: read -r _ s _ m <<<"$spec"
+                    if [[ $s == "$gib" ]]; then kind=pv2-$m; fi
+                done
+                if [[ -z $kind ]]; then echo "$dev ($model, $gib GiB): no LAB_DATA_DISK spec of that size, skipped" >>"$res/disks.txt"; continue; fi ;;
             *) echo "$dev ($model): unknown model, skipped" >>"$res/disks.txt"; continue ;;
         esac
         if mountpoint -q "/mnt/$kind"; then continue; fi
@@ -1319,15 +1420,38 @@ disks8() {
             sudo chown "$(id -u):$(id -g)" "/mnt/$kind" && echo "$dev ($model): /mnt/$kind" >>"$res/disks.txt"
     done < <(lsblk -dn -o NAME,TYPE | awk '$2 == "disk" { print $1 }')
     cat "$res/disks.txt"
-    df -h /mnt/nvme /mnt/pv2 >>"$res/disks.txt" 2>&1 || true
+    df -h $(disk_kinds | sed 's|^|/mnt/|') >>"$res/disks.txt" 2>&1 || true
+}
+
+# the disks disks8 mounted, by name: nvme, pv2-<MB/s>...
+disk_kinds() {
+    local d
+    for d in /mnt/nvme /mnt/pv2-*; do
+        if mountpoint -q "$d"; then echo "${d#/mnt/}"; fi
+    done
+}
+
+# dirty <default|large>: the kernel's page-cache write-back limits. large lets 16 GiB of
+# unwritten data build up before writers are throttled, and starts write-back at 512 MiB
+dirty() {
+    case $1 in
+        default) sudo sysctl -q -w vm.dirty_ratio=20 vm.dirty_background_ratio=10 ;;
+        large) sudo sysctl -q -w vm.dirty_bytes=17179869184 vm.dirty_background_bytes=536870912 ;;
+    esac
 }
 
 # what each disk does on its own: sequential 1 MiB writes and reads, 4 KiB random writes, and
-# writes followed by fdatasync as the archive does at file sync level 1, one fio line each
+# writes followed by fdatasync as the archive does at file sync level 1, one fio line each.
+# Each job writes a new file, so blocks the disk has never held, unless the label ends in
+# -overwrite: then one 8 GiB file is written once untimed and every job runs over it.
+# diskbench8 [label, fio by default]
 diskbench8() {
-    local kind job args out
-    for kind in nvme pv2; do
-        mountpoint -q "/mnt/$kind" || { log "diskbench8: /mnt/$kind missing"; continue; }
+    local kind job args out group=${1:-fio}
+    for kind in $(disk_kinds); do
+        if [[ $group == *-overwrite ]]; then
+            fio --name=fill --filename="/mnt/$kind/fio.dat" --size=8G --ioengine=libaio --rw=write --bs=1M --iodepth=32 \
+                --direct=1 --output-format=json >"$res/$group-$kind-fill.json" 2>>"$res/fio-errors.log" || true
+        fi
         for job in seqwrite-qd1 seqwrite-qd32 seqread-qd32 randwrite4k-qd32 syncwrite64k-qd1 syncwrite1m-qd1; do
             case $job in
                 seqwrite-qd1) args=(--rw=write --bs=1M --iodepth=1 --direct=1) ;;
@@ -1337,27 +1461,28 @@ diskbench8() {
                 syncwrite64k-qd1) args=(--rw=write --bs=64k --iodepth=1 --fdatasync=1) ;;
                 syncwrite1m-qd1) args=(--rw=write --bs=1M --iodepth=1 --fdatasync=1) ;;
             esac
-            out=$res/fio-$kind-$job.json
+            out=$res/$group-$kind-$job.json
             fio --name="$job" --filename="/mnt/$kind/fio.dat" --size=8G --ioengine=libaio --time_based --runtime=30 \
                 --group_reporting --output-format=json "${args[@]}" >"$out" 2>>"$res/fio-errors.log" || true
-            python3 - "$out" "$host" "$kind" "$job" <<'PY' | tee -a "$res/bench.csv"
+            python3 - "$out" "$host" "$kind" "$job" "$group" <<'PY' | tee -a "$res/bench.csv"
 import json, sys
-out, host, kind, job = sys.argv[1:]
+out, host, kind, job, group = sys.argv[1:]
 try:
     j = json.load(open(out))["jobs"][0]
 except Exception as e:
-    print(f"{host},fio,{kind},{job},error"); sys.exit()
+    print(f"{host},{group},{kind},{job},error"); sys.exit()
 side = "read" if j["read"]["io_bytes"] > j["write"]["io_bytes"] else "write"
 d = j[side]
 p = d.get("clat_ns", {}).get("percentile", {})
 sync = j.get("sync", {}).get("lat_ns", {}).get("percentile", {})
 q = lambda m, k: round(m.get(k, 0) / 1000, 1)
-print(f"{host},fio,{kind},{job},{d['bw_bytes'] / 1e6:.0f},{d['iops']:.0f},{q(p, '50.000000')},{q(p, '99.000000')},{q(p, '99.900000')},{q(sync, '50.000000')},{q(sync, '99.000000')}")
+print(f"{host},{group},{kind},{job},{d['bw_bytes'] / 1e6:.0f},{d['iops']:.0f},{q(p, '50.000000')},{q(p, '99.000000')},{q(p, '99.900000')},{q(sync, '50.000000')},{q(sync, '99.000000')}")
 PY
-            rm -f "/mnt/$kind/fio.dat"
+            if [[ $group != *-overwrite ]]; then rm -f "/mnt/$kind/fio.dat"; fi
         done
+        rm -f "/mnt/$kind/fio.dat"
     done
-    log "diskbench8 done"
+    log "diskbench8 $group done"
 }
 
 # The archive host's C driver and a Java Archive attached to it, with its directory on
@@ -1427,20 +1552,18 @@ arcload_run() {
 }
 
 # The archive on this host, recording streams published here over IPC: each disk at file sync
-# level 0 and 1, with 1, 4 and 16 streams of 1 KiB messages flat out for 60 s; then 1, 4 and 16
-# concurrent replays from disk with the page cache dropped; replays while 4 streams record; and
-# the archive's SHARED threading against DEDICATED
+# level 0 with 1, 4 and 16 streams of 1 KiB messages flat out for 60 s, and at level 1 with 4;
+# then 1, 4 and 16 concurrent replays from disk with the page cache dropped; replays while 4
+# streams record; and the archive's SHARED threading against DEDICATED
 archload8() {
     topo8
-    local pubs=$xsnd8,$((xsnd8 + 1)),$xrcv8,$((xrcv8 + 1)) kind sync n c
-    for kind in nvme pv2; do
-        mountpoint -q "/mnt/$kind" || { log "archload8: /mnt/$kind missing"; continue; }
-        for sync in 0 1; do
-            for n in 1 4 16; do
-                arcd_start "$kind" "$sync"
-                arcload_run "arc-ipc-$kind-sync$sync" "ipc-$kind-s$sync-n$n" record "$n" 1024 60 0 ipc "$pubs"
-                arcd_stop
-            done
+    local pubs=$xsnd8,$((xsnd8 + 1)),$xrcv8,$((xrcv8 + 1)) kind sync n c sync_n writer
+    for kind in $(disk_kinds); do
+        for sync_n in 0:1 0:4 0:16 1:4; do
+            sync=${sync_n%:*} n=${sync_n#*:}
+            arcd_start "$kind" "$sync"
+            arcload_run "arc-ipc-$kind-sync$sync" "ipc-$kind-s$sync-n$n" record "$n" 1024 60 0 ipc "$pubs"
+            arcd_stop
         done
         # replays read back what 16 streams wrote, from the disk rather than the page cache
         arcd_start "$kind" 0
@@ -1452,9 +1575,11 @@ archload8() {
         # replays of those recordings while 4 new streams record
         sync && echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null
         arcload_run "arc-rw-$kind-write" "rw-$kind-write" record 4 1024 60 0 ipc "$xsnd8,$((xsnd8 + 1))" &
+        writer=$!
         sleep 5
         arcload_run "arc-rw-$kind-replay" "rw-$kind-replay" replay 4 50 ipc "$xrcv8,$((xrcv8 + 1))"
-        wait
+        # that writer only: a bare wait would also wait for the archive's driver and JVM
+        wait "$writer" || true
         arcd_stop
     done
     arcd_start nvme 0 SHARED
@@ -1463,15 +1588,49 @@ archload8() {
     log "archload8 done"
 }
 
+# Bursts at file sync level 0: on each disk, with the kernel's default write-back limits and with
+# large ones, two 30 s bursts of 400 MB/s (4 streams of 1 KiB at 97,656 msgs/s) 60 s apart, then
+# the time until the page cache has written everything out. Dirty and Writeback from
+# /proc/meminfo are sampled every second throughout.
+archburst8() {
+    topo8
+    local pubs=$xsnd8,$((xsnd8 + 1)),$xrcv8,$((xrcv8 + 1)) kind d tag sampler t
+    for kind in $(disk_kinds); do
+        for d in default large; do
+            tag=burst-$kind-$d
+            dirty "$d"
+            sync && echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null
+            arcd_start "$kind" 0
+            while :; do
+                awk -v t="$(date +%s)" '/^Dirty:/ { d = $2 } /^Writeback:/ { w = $2 } END { printf "%s,%d,%d\n", t, d / 1024, w / 1024 }' /proc/meminfo
+                sleep 1
+            done >"$res/meminfo-$tag.csv" &
+            sampler=$!
+            arcload_run "arc-burst-$kind-$d" "$tag-1" record 4 1024 30 97656 ipc "$pubs"
+            sleep 60
+            arcload_run "arc-burst-$kind-$d" "$tag-2" record 4 1024 30 97656 ipc "$pubs"
+            for t in $(seq 600); do
+                if awk '/^(Dirty|Writeback):/ { s += $2 } END { exit !(s < 65536) }' /proc/meminfo; then break; fi
+                sleep 1
+            done
+            echo "$host,arc-burst-drain,$kind-$d,0,$t" | tee -a "$res/bench.csv"
+            kill "$sampler" 2>/dev/null || true
+            arcd_stop
+        done
+    done
+    dirty default
+    log "archburst8 done"
+}
+
 # the peer's archive host commands, with iostat on the peer for the length of one load
 peer() { "${peer_ssh[@]}" "/srv/x86lab/harness/vm.sh $*"; }
 
 # On the publisher host, with the archive on LAB_PEER_IP: streams published here and recorded
-# there over UDP (each disk, sync level 0 and 1, 4 and 16 streams of 1 KiB flat out for 60 s);
+# there over UDP (each disk, sync level 0, 4 and 16 streams of 1 KiB flat out for 60 s);
 # replays from the peer's disk to here; and the cross-host round trip while 4 streams record at
-# 25, 50 and 75% of their measured maximum
+# 25, 50 and 75% of their measured maximum, which is all that rtt runs. xarchload8 [all|rtt]
 xarchload8() {
-    local peer_ip=${LAB_PEER_IP:?LAB_PEER_IP: the archive host} self kind sync n c f max line
+    local peer_ip=${LAB_PEER_IP:?LAB_PEER_IP: the archive host} self kind sync n c f max line writer what=${1:-all}
     topo8
     self=$(hostname -I | awk '{print $1}')
     peer_ssh=(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$peer_ip")
@@ -1493,23 +1652,23 @@ xarchload8() {
         grep -E '^arcload,(record|replay),' "$out" | sed "s/^/$host,$group,xhost,0,/" | tee -a "$res/bench.csv" || true
     }
     hk=$hk8 driver_start "${env[@]}"
-    for kind in nvme pv2; do
-        for sync in 0 1; do
-            for n in 4 16; do
-                peer arcd-up "$kind" "$sync" DEDICATED "$peer_ip"
-                xarc "xarc-$kind-sync$sync" "x-$kind-s$sync-n$n" record "$n" 1024 60 0 "udp:$peer_ip:30100" "$pubs"
-                peer arcd-down
-            done
+    for kind in $([[ $what == all ]] && peer disk-kinds); do
+        for n in 4 16; do
+            peer arcd-up "$kind" 0 DEDICATED "$peer_ip"
+            xarc "xarc-$kind-sync0" "x-$kind-s0-n$n" record "$n" 1024 60 0 "udp:$peer_ip:30100" "$pubs"
+            peer arcd-down
         done
     done
     # replays from the peer's NVMe to here, page cache dropped first
-    peer arcd-up nvme 0 DEDICATED "$peer_ip"
-    xarc "xarc-fill" "x-fill" record 16 1024 30 0 "udp:$peer_ip:30100" "$pubs"
-    for c in 1 4 16; do
-        peer drop-caches
-        xarc "xarc-replay" "x-replay-c$c" replay "$c" 120 "udp:$self:31000" "$pubs"
-    done
-    peer arcd-down
+    if [[ $what == all ]]; then
+        peer arcd-up nvme 0 DEDICATED "$peer_ip"
+        xarc "xarc-fill" "x-fill" record 16 1024 30 0 "udp:$peer_ip:30100" "$pubs"
+        for c in 1 4 16; do
+            peer drop-caches
+            xarc "xarc-replay" "x-replay-c$c" replay "$c" 120 "udp:$self:31000" "$pubs"
+        done
+        peer arcd-down
+    fi
     # the round trip under a fixed share of the measured maximum load
     peer arcd-up nvme 0 DEDICATED "$peer_ip"
     xarc "xarc-max" "x-max-n4" record 4 1024 30 0 "udp:$peer_ip:30100" "$pubs"
@@ -1519,14 +1678,19 @@ xarchload8() {
         max=
     fi
     for f in ${max:+25 50 75}; do
-        peer pong-arcd "$peer_ip:20123" "$self:20124"
+        # ports of its own for each share: the last pong, killed, lingers in the archive's driver
+        # until its client times out, and its image would otherwise reach this ping
+        local ping_ep=$peer_ip:$((20100 + f)) pong_ep=$self:$((20200 + f))
+        peer pong-arcd "$ping_ep" "$pong_ep"
         xarc "xarc-load$f" "x-load$f" record 4 1024 40 "$(( ${max%.*} * f / 400 ))" "udp:$peer_ip:30100" "$pubs" &
+        writer=$!
         sleep 5
         line=$(env "${env[@]}" AERON_DIR="$run_dir" LABEL="load$f" taskset -c "$hk8" timeout 120 \
-            "$bin/impr/rtt" xping "$peer_ip:20123" "$self:20124" "$UDP_N" "$UDP_W" "$xapp8" 2>>"$res/client-errors.log") ||
+            "$bin/impr/rtt" xping "$ping_ep" "$pong_ep" "$UDP_N" "$UDP_W" "$xapp8" 2>>"$res/client-errors.log") ||
             line="error,load$f,xping"
         echo "$host,xarc-rtt-load$f,xhost,0,$line" | tee -a "$res/bench.csv"
-        wait
+        # that loader only: a bare wait would also wait for this host's driver
+        wait "$writer" || true
         peer pong-down
     done
     peer arcd-down
@@ -1604,8 +1768,12 @@ case ${1:-} in
     bench8) bench8 pinned ;;
     disks8) disks8 ;;
     diskbench8) diskbench8 ;;
+    diskbench8-*) diskbench8 "fio-${1#diskbench8-}" ;;
     archload8) archload8 ;;
+    archburst8) archburst8 ;;
+    disk-kinds) disk_kinds ;;
     xarchload8) xarchload8 ;;
+    xarcrtt8) xarchload8 rtt ;;
     arcd-up) shift; arcd_start "$@" ;;
     arcd-down) arcd_stop ;;
     pong-arcd) shift; pong_arcd "$@" ;;
@@ -1613,6 +1781,9 @@ case ${1:-} in
     iostat-up) setsid iostat -x -m 1 </dev/null >"$res/iostat-$2.txt" 2>&1 & echo $! >"$res/iostat.pid" ;;
     iostat-down) kill "$(cat "$res/iostat.pid")" 2>/dev/null || true ;;
     xhost8-*) xhost8 "${1#xhost8-}" ;;
+    xnet8-*) xnet8 "${1#xnet8-}" ;;
+    loss) shift; loss "$@" ;;
+    loss-count) loss_count ;;
     pong-up8) shift; pong_up8 "$@" ;;
     xsub-up8) shift; xsub_up8 "$@" ;;
     xsub-result) xsub_result ;;

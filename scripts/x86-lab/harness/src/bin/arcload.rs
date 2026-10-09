@@ -202,7 +202,7 @@ fn start_recordings(
     let mut ids = vec![0; channels.len()];
     for _ in channels {
         let (i, session) = sessions
-            .recv_timeout(Duration::from_secs(20))
+            .recv_timeout(Duration::from_secs(60))
             .map_err(|_| "timed out waiting for publications")?;
         ids[i] = session;
     }
@@ -241,9 +241,12 @@ fn publish(
 ) {
     let stream = RECORD_STREAM + i as i32;
     let aeron = client().expect("aeron client");
+    // pinned once the client's conductor has started on the process's CPUs, but before the
+    // spinning blocking poll: many threads spinning on those CPUs starve the driver's conductor
+    pin(cpu);
     let publication = aeron
         .async_add_exclusive_publication(channel, stream)
-        .and_then(|p| p.poll_blocking(Duration::from_secs(10)))
+        .and_then(|p| p.poll_blocking(Duration::from_secs(30)))
         .unwrap_or_else(|e| panic!("stream {stream}: add publication: {e}"));
     let _ = sessions.send((i, publication.get_constants().expect("constants").session_id));
     wait_until(&format!("the archive to connect to stream {stream}"), 30, || {
@@ -253,7 +256,6 @@ fn publish(
         shared.go.load(Acquire) || !shared.running.load(Acquire)
     });
 
-    pin(cpu);
     let stats = &shared.stats[i];
     let message = vec![7u8; length];
     let interval = Duration::from_nanos(1_000_000_000 / rate.max(1));
@@ -448,9 +450,11 @@ fn consume(
 ) {
     let stream = REPLAY_STREAM + i as i32;
     let aeron = client().expect("aeron client");
+    // as in publish: pinned before the spinning blocking poll
+    pin(cpu);
     let subscription = aeron
         .async_add_subscription(channel, stream, Handlers::NONE, Handlers::NONE)
-        .and_then(|s| s.poll_blocking(Duration::from_secs(10)))
+        .and_then(|s| s.poll_blocking(Duration::from_secs(30)))
         .unwrap_or_else(|e| panic!("stream {stream}: add subscription: {e}"));
     let _ = ready.send(i);
     let stats = &shared.stats[i];
@@ -458,7 +462,6 @@ fn consume(
         stats.start_ns.load(Acquire) != 0 || !shared.running.load(Acquire)
     });
     let session = stats.session.load(Relaxed) as i32;
-    pin(cpu);
     let (mut bytes, mut image) = (0u64, None);
     while shared.running.load(Relaxed) {
         let Some(image) = image.as_ref() else {
@@ -492,7 +495,7 @@ fn measure_replay(
 ) -> Res<()> {
     for _ in recordings {
         ready
-            .recv_timeout(Duration::from_secs(20))
+            .recv_timeout(Duration::from_secs(60))
             .map_err(|_| "timed out waiting for subscribers")?;
     }
     let start = Instant::now();
