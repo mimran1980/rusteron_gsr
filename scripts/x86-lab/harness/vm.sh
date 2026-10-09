@@ -799,6 +799,31 @@ archive_stop() {
     rm -rf "$archive_dir"
 }
 
+# archive_rtt <tag>: the IPC ping-pong against the archive's driver, with Aeron's counters and a
+# thread dump of the archive saved if it is still going after 45 s; it stops at 90 s
+archive_rtt() {
+    local out=$res/archive-rtt.out pid watcher samples
+    samples=$lab/rusteron/rusteron-archive/aeron/aeron-samples/build/libs/aeron-samples-1.52.2.jar
+    env AERON_DIR="$run_dir" LABEL="a-ipc" taskset -c "$hk8" timeout 90 "$bin/impr/rtt" ipc "$IPC_N" "$IPC_W" "$ping8" "$pong8" \
+        >"$out" 2>>"$res/client-errors.log" &
+    pid=$!
+    (
+        sleep 45
+        if kill -0 "$pid" 2>/dev/null; then
+            {
+                echo "stalled: $1"
+                timeout 5 java -cp "$samples:$lab/rusteron/rusteron-archive/aeron/aeron-all/build/libs/aeron-all-1.52.2.jar" \
+                    -Daeron.dir="$run_dir" io.aeron.samples.AeronStat
+                jcmd "$archive_pid" Thread.print
+            } >"$res/archive-stall-$1.txt" 2>&1
+        fi
+    ) >/dev/null 2>&1 &    # else it holds the caller's $(...) open for the whole 45 s
+    watcher=$!
+    wait "$pid" || return 1
+    kill "$watcher" 2>/dev/null || true
+    cat "$out"
+}
+
 # What pinning the Java archive buys: recording throughput (rec) and an IPC ping-pong whose
 # ping stream is recorded. jvm-unpinned: nothing pinned. jvm-hk: the JVM on hk.
 # jvm-threads: also its archive-recorder on a core of its own. jvm-threads-noop: also a
@@ -825,8 +850,7 @@ archive8() {
                 else
                     env AERON_DIR="$run_dir" taskset -c "$hk8" timeout 60 "$bin/impr-ps/rec" start 1002 2>>"$res/client-errors.log" ||
                         log "archive8 $v: rec start failed"
-                    line=$(env AERON_DIR="$run_dir" LABEL="a-ipc" taskset -c "$hk8" timeout 300 "$bin/impr/rtt" ipc "$IPC_N" "$IPC_W" "$ping8" "$pong8" \
-                        2>>"$res/client-errors.log") || line="error,a-ipc,ipc"
+                    line=$(archive_rtt "$v-$rep") || line="error,a-ipc,ipc"
                 fi
                 archive_stop
                 echo "$host,archive-$v,$layout,$rep,$line" | tee -a "$res/bench.csv"
