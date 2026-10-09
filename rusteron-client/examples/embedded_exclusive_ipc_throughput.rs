@@ -56,8 +56,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         .async_add_subscription(CHANNEL, STREAM_ID, Handlers::NONE, Handlers::NONE)?
         .poll_blocking(Duration::from_secs(5))?;
 
-    let subscriber_thread =
-        thread::spawn(move || ImageRateSubscriber::new(running_subscriber, subscription, MESSAGE_LENGTH).run());
+    // named like the Java sample's thread, so it can be found and pinned
+    let subscriber_thread = thread::Builder::new()
+        .name("subscriber".to_string())
+        .spawn(move || ImageRateSubscriber::new(running_subscriber, subscription, MESSAGE_LENGTH).run())?;
 
     let published = Publisher::new(running_publisher, publication).run();
     subscriber_thread.join().expect("subscriber thread panicked")?;
