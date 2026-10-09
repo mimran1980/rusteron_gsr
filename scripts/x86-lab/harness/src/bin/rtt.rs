@@ -44,7 +44,13 @@ fn main() {
     let number = |a: Option<String>| -> usize { a.expect("messages and warmup").parse().unwrap() };
     if mode == "xpong" {
         let (ping_channel, pong_channel) = (udp(args.next()), udp(args.next()));
-        run_pong(&AtomicBool::new(true), &ping_channel, &pong_channel, cpu_arg(args.next()));
+        run_pong(
+            &AtomicBool::new(true),
+            None,
+            &ping_channel,
+            &pong_channel,
+            cpu_arg(args.next()),
+        );
         return;
     }
     let (ping_channel, pong_channel) = match mode.as_str() {
@@ -60,11 +66,15 @@ fn main() {
     let ping_cpu = cpu_arg(args.next());
 
     let running = Arc::new(AtomicBool::new(true));
+    // set once pong's subscription has the ping image: ping's publication alone is no proof, as
+    // another subscriber (an archive recording it) also connects it, and a ping sent before pong
+    // joins is never echoed
+    let pong_ready = Arc::new(AtomicBool::new(mode == "xping"));
     let pong = (mode != "xping").then(|| {
         let pong_cpu = cpu_arg(args.next());
-        let running = Arc::clone(&running);
+        let (running, ready) = (Arc::clone(&running), Arc::clone(&pong_ready));
         let (ping_channel, pong_channel) = (ping_channel.clone(), pong_channel.clone());
-        std::thread::spawn(move || run_pong(&running, &ping_channel, &pong_channel, pong_cpu))
+        std::thread::spawn(move || run_pong(&running, Some(&ready), &ping_channel, &pong_channel, pong_cpu))
     });
 
     let aeron = client();
@@ -79,7 +89,7 @@ fn main() {
         .poll_blocking(Duration::from_secs(5))
         .unwrap();
     wait_until("pong", 30, || {
-        publication.is_connected() && subscription.image_at_index(0).is_some()
+        publication.is_connected() && subscription.image_at_index(0).is_some() && pong_ready.load(Ordering::Acquire)
     });
     let image = subscription.image_at_index(0).unwrap();
     pin(ping_cpu);
@@ -96,7 +106,9 @@ fn main() {
     }
     let start = Instant::now();
     for i in 0..messages {
-        round_trip(&publication, &image, &mut buffer, |rtt| histogram.saturating_record(rtt));
+        round_trip(&publication, &image, &mut buffer, |rtt| {
+            histogram.saturating_record(rtt)
+        });
         if i % 64 == 0 && start.elapsed() > budget {
             break;
         }
@@ -157,7 +169,13 @@ fn round_trip(
     }
 }
 
-fn run_pong(running: &AtomicBool, ping_channel: &CStr, pong_channel: &CStr, cpu: Option<usize>) {
+fn run_pong(
+    running: &AtomicBool,
+    ready: Option<&AtomicBool>,
+    ping_channel: &CStr,
+    pong_channel: &CStr,
+    cpu: Option<usize>,
+) {
     let aeron = client();
     let publication = aeron
         .async_add_exclusive_publication(pong_channel, PONG_STREAM_ID)
@@ -169,6 +187,10 @@ fn run_pong(running: &AtomicBool, ping_channel: &CStr, pong_channel: &CStr, cpu:
         .unwrap()
         .poll_blocking(Duration::from_secs(5))
         .unwrap();
+    if let Some(ready) = ready {
+        wait_until("ping", 30, || subscription.image_at_index(0).is_some());
+        ready.store(true, Ordering::Release);
+    }
     pin(cpu);
     while running.load(Ordering::Acquire) {
         let fragments = subscription
