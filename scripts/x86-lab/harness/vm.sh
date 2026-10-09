@@ -1016,8 +1016,11 @@ archive_rtt() {
         if kill -0 "$pid" 2>/dev/null; then
             {
                 echo "stalled: $1"
-                timeout 5 java -cp "$samples:$lab/rusteron/rusteron-archive/aeron/aeron-all/build/libs/aeron-all-1.52.2.jar" \
-                    -Daeron.dir="$run_dir" io.aeron.samples.AeronStat
+                local cp="$samples:$lab/rusteron/rusteron-archive/aeron/aeron-all/build/libs/aeron-all-1.52.2.jar"
+                timeout 5 java --add-opens java.base/jdk.internal.misc=ALL-UNNAMED -cp "$cp" -Daeron.dir="$run_dir" \
+                    io.aeron.samples.AeronStat
+                timeout 10 java --add-opens java.base/jdk.internal.misc=ALL-UNNAMED -cp "$cp" -Daeron.dir="$run_dir" \
+                    io.aeron.samples.ErrorStat
                 jcmd "$archive_pid" Thread.print
             } >"$res/archive-stall-$1.txt" 2>&1
         fi
