@@ -5,7 +5,7 @@
 # target/x86lab/results/<stamp>/<node>/after-<phase> after each phase, and deletes the group
 # on any exit. Runs on macOS (bsdtar, caffeinate) with the az CLI logged in and
 # ~/.ssh/id_rsa.pub as the VMs' key; summarise a bench.csv with analyse.py. It refuses to
-# start unless the subscription is a free trial with its spending limit on.
+# start unless more than 10 USD of free credit is left.
 #
 #   scripts/x86-lab/lab.sh                            every phase
 #   LAB_PHASES="bootstrap build bench" scripts/x86-lab/lab.sh
@@ -51,6 +51,15 @@ created=0
 before=?
 
 log() { echo "[$(date +%T)] $*"; }
+
+# the estimated free credit left on the first billing account's first billing profile, in USD
+credit_left() {
+    local api=https://management.azure.com/providers/Microsoft.Billing/billingAccounts acc profile
+    acc=$(az rest --method get --url "$api?api-version=2024-04-01" --query "value[0].name" -o tsv) || return
+    profile=$(az rest --method get --url "$api/$acc/billingProfiles?api-version=2024-04-01" --query "value[0].name" -o tsv) || return
+    az rest --method get -o tsv --query properties.balanceSummary.estimatedBalance.value \
+        --url "$api/$acc/billingProfiles/$profile/providers/Microsoft.Consumption/credits/balanceSummary?api-version=2023-05-01"
+}
 
 # seconds a phase may run on a VM
 limit() {
@@ -200,14 +209,14 @@ run_node() {
 
 main() {
     mkdir -p "$out"
-    # only on free credit: a free trial's spending limit stops it instead of billing a card
-    local policy
-    policy=$(az rest --method get --url "https://management.azure.com/subscriptions/$(az account show --query id -o tsv)?api-version=2022-12-01" \
-        --query "join(' ', [subscriptionPolicies.quotaId, subscriptionPolicies.spendingLimit])" -o tsv)
-    if [[ $policy != FreeTrial*" On" ]]; then
-        echo "the subscription is not a free trial with its spending limit on ($policy): not creating anything" >&2
+    # only on free credit: the subscription has no spending limit, so past the credit a card pays
+    local credit
+    credit=$(credit_left)
+    if ! [[ $credit =~ ^[0-9]+(\.[0-9]+)?$ ]] || ! awk -v c="$credit" 'BEGIN { exit !(c > 10) }'; then
+        echo "free credit left: '${credit}' USD, at or below the 10 USD margin or unreadable: not creating anything" >&2
         exit 1
     fi
+    log "free credit left: $credit USD"
     if [[ $(az group exists -n "$group") != false ]]; then
         echo "$group already exists: not created by this run, so not touched" >&2
         exit 1
