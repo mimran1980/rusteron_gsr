@@ -17,7 +17,7 @@ log() { echo "[$(date +%T)] $*"; }
 bootstrap() {
     sudo apt-get update -qq
     sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential cmake clang libclang-dev \
-        pkg-config libbsd-dev uuid-dev zlib1g-dev libssl-dev default-jdk-headless curl util-linux >/dev/null
+        pkg-config libbsd-dev uuid-dev zlib1g-dev libssl-dev default-jdk-headless curl util-linux ethtool >/dev/null
     # rustfmt: the build scripts format the generated bindings and fail without it
     curl -sSf https://sh.rustup.rs | sh -s -- -y -q --profile minimal --default-toolchain 1.95.0 --component rustfmt
     # Linux silently caps SO_RCVBUF/SO_SNDBUF at these
@@ -755,7 +755,7 @@ bench8() {
         if [[ $state == tuned* ]]; then tune8_runtime; fi
     fi
     {
-        echo "state=$state"
+        echo "state=$state kernel=$(uname -r)"
         cat /proc/cmdline
         echo "isolated=$(cat /sys/devices/system/cpu/isolated) nohz_full=$(cat /sys/devices/system/cpu/nohz_full 2>/dev/null)"
         grep -H . /sys/devices/system/cpu/vulnerabilities/* 2>/dev/null
@@ -874,8 +874,10 @@ xhost8() {
     peer_ssh=(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$peer")
     local ping_ep=$peer:20123 pong_ep=$self:20124
     {
-        echo "self=$self peer=$peer"
+        echo "self=$self peer=$peer kernel=$(uname -r)"
+        cat /proc/cmdline
         cat "$res/layouts8.txt"
+        echo "clocksource=$(cat /sys/devices/system/clocksource/clocksource0/current_clocksource) of $(cat /sys/devices/system/clocksource/clocksource0/available_clocksource)"
         ip -br link
         for i in $(ls /sys/class/net | grep -v '^lo$'); do
             echo "== $i"
@@ -1112,6 +1114,18 @@ k3s_down() {
     log "k3s down"
 }
 
+# the newest Debian kernel, Linux from trixie-backports in its cloud flavour (built for Hyper-V
+# and the MANA NIC), then a reboot into it
+kernel_latest() {
+    echo 'deb http://deb.debian.org/debian trixie-backports main' | sudo tee /etc/apt/sources.list.d/backports.list >/dev/null
+    sudo apt-get update -qq
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq -t trixie-backports linux-image-cloud-amd64 \
+        >"$res/kernel-install.log" 2>&1
+    { echo "running: $(uname -r)"; dpkg -l 'linux-image-*' | grep '^ii'; } >>"$res/kernel-install.log"
+    sudo systemd-run --on-active=3 /bin/systemctl reboot >/dev/null
+    log "rebooting into the backports kernel"
+}
+
 # boot8 <kernel arguments...>: reboots into the 8-vCPU isolation (every CPU but CPU 0 kept from
 # the scheduler, timer ticks, RCU callbacks and IRQs) plus the arguments given
 boot8() {
@@ -1192,6 +1206,7 @@ test_phase() {
 
 case ${1:-} in
     bootstrap) bootstrap ;;
+    kernel) kernel_latest ;;
     build) build ;;
     bench) bench ;;
     abudp) abudp ;;

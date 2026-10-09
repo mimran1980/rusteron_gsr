@@ -74,6 +74,7 @@ limit() {
         bench8-tuned | bench8-tuned-nomit | xhost8-*) echo 3600 ;;
         k8s8) echo 5400 ;;
         isolate | isolate8 | tune8 | tune8-nomit | k3s-down) echo 600 ;;
+        kernel) echo 1200 ;;
         test) echo 5400 ;;
     esac
 }
@@ -201,7 +202,7 @@ run_phase() {
     ssh "${ssh_opts[@]}" "$user@$ip" \
         "$* LAB_ARMS='${LAB_ARMS:-}' LAB_TESTS='${LAB_TESTS:-}' LAB_EXTRAS='${LAB_EXTRAS:-}' timeout $(limit "$phase") /srv/x86lab/harness/vm.sh $phase" \
         >"$dest/$phase.log" 2>&1 || rc=$?
-    if [[ $phase == isolate* || $phase == tune8* ]]; then
+    if [[ $phase == isolate* || $phase == tune8* || $phase == kernel ]]; then
         # the VM reboots a few seconds after the phase returns
         sleep 45
         for _ in $(seq 60); do
