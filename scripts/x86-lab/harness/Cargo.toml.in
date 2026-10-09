@@ -1,0 +1,27 @@
+[package]
+name = "x86lab"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# outside rusteron's workspace: one copy per checkout under test
+[workspace]
+
+[dependencies]
+rusteron-client = { path = "@RUSTERON@/rusteron-client" }
+rusteron-archive = { path = "@RUSTERON@/rusteron-archive", optional = true }
+hdrhistogram = "7.5"
+libc = "0.2"
+
+[features]
+static = ["rusteron-client/static", "rusteron-archive?/static"]
+archive = ["dep:rusteron-archive"]
+
+[[bin]]
+name = "pspoll"
+required-features = ["archive"]
+
+# as rusteron's own release profile
+[profile.release]
+lto = "fat"
+codegen-units = 1
