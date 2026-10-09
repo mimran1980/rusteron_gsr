@@ -356,11 +356,14 @@ Measured on 2026-10-10 with a Java Archive on two Azure `Standard_D8ds_v6`, reco
   - Recordings are sequential, so the 3,000 IOPS a disk includes is plenty.
 - **A durable network disk is enough.** On Azure that is Premium SSD v2: 125 MB/s included, more bought separately. AWS gp3 is priced the same way but wasn't measured here.
   - The VM caps its disks as well: 424 MB/s in total on a D8ds_v6.
-  - New Premium SSD v2 disks ran well below their provisioned rate for their first 25 minutes or more, so test a fresh disk before relying on it.
-- **Let the page cache hold larger bursts:** `sudo sysctl -w vm.dirty_bytes=17179869184 vm.dirty_background_bytes=536870912`. With these, a 125 MB/s disk took 30 s bursts of 400 MB/s at full rate; with Linux's defaults it throttled after 15 s. Data still in memory is lost if the host fails, which level 0 already accepts.
+  - New Premium SSD v2 disks, freshly formatted with a full-device discard (plain `mkfs.xfs`), ran well below their provisioned rate for their first 25 minutes or more. Test a fresh disk before relying on it.
+- **Let the page cache hold larger bursts:** `sudo sysctl -w vm.dirty_bytes=17179869184 vm.dirty_background_bytes=536870912`. That allows 16 GiB of unwritten data, half of the 32 GiB VM, so scale it to your RAM.
+  - With these, a 125 MB/s disk took 30 s bursts of 400 MB/s at full rate; with Linux's defaults it throttled after 15 s.
+  - Data still in memory is lost if the host fails, which level 0 already accepts.
+  - A full 16 GiB takes over 2 minutes to write out at 125 MB/s, at shutdown too.
 - **Leave headroom for replays.** While recording ran flat out at the disk's limit, replays from that disk slowed from about 1 GB/s to 67–246 MB/s on local NVMe.
 - **Local NVMe was the fastest and costs nothing extra:** 545 MB/s sustained, 1 GB/s of replays, and `fdatasync` in 0.03 ms against 0.8 ms on Premium SSD v2. Its data is gone when the VM stops or its host fails, though, so use it only for an archive that is replicated elsewhere.
-- **File sync level 1 or 2** makes every write wait for the disk. That cost nothing sustained on local NVMe but cut Premium SSD v2 to 56–220 MB/s.
+- **File sync level 1 or 2** makes every write wait for the disk. That cost nothing sustained on local NVMe. On Premium SSD v2 it was measured only while the new disks were still slow, at 56–220 MB/s, so its cost at full speed is unknown.
 
 ---
 

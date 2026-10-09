@@ -128,7 +128,7 @@ Two `Standard_D8ds_v6` in one placement group in West US 3, isolated, with the s
 | IRQs on receiver core | 5 | 39.0 (38.7–39.2) | 45.9 (45.2–48.8) | 62.3 (56.7–69.5) | 78.7 (73.5–82.4) | 177.0 (100.2–184.1) |
 | busy_read and IRQs on receiver core | 5 | 39.0 (38.7–40.1) | 46.3 (45.4–46.5) | 57.4 (50.3–63.3) | 75.0 (61.1–78.5) | 176.0 (164.7–182.7) |
 
-- **Compare within this pair only.** Every figure was 5–30 µs above the North Central US pair's, so where the VMs land matters as much as any setting.
+- **Compare within this pair only.** From p50 to p99.99 its figures were 5–30 µs above the North Central US pair's, and its max was hundreds of µs higher. The pairs differed in region, VM size and day.
 - **The two together gained nothing over either alone.**
   - p50 matched the IRQs variant, and busy_read alone stayed the lowest.
   - p99.99 matched both.
@@ -161,7 +161,7 @@ The West US 3 pair above, isolated, plus a third VM, a `Standard_D8s_v6` in Nort
 - **Settings:** both drivers dedicated, with pinned `noop` sender and receiver and 2 MiB windows.
 - **Throughput:** 32-byte messages for 8 s. Each run read the publisher's driver counters (AeronStat) and both hosts' drop counts.
 - **Round trips:** one 32-byte message in flight. Across regions they ran for 60 s, about 1,100 round trips, so p99.9 and above are not given there.
-- **Reps:** 3 in the same zone and 2 across regions, with ranges where they differed. Cells without a range are medians.
+- **Reps:** 3 in the same zone and 2 across regions. Ranges are given where reps differed. Cells without a range are medians, or the mean of two; across regions the max lists both reps.
 - **Provenance:** the run recorded commit `e2f315a`. The 1 ms status message pass was added to both hosts mid-run; it is in `83b9e2e`.
 
 | link, loss | throughput (M msgs/s) | round trip p50 | p99 | p99.9 | max | per throughput run: data packets lost, NAKs received, retransmits sent |
@@ -169,9 +169,9 @@ The West US 3 pair above, isolated, plus a third VM, a `Standard_D8s_v6` in Nort
 | same zone, none | 11.18 (11.03–11.40) | 45.7 µs | 60.6 µs | 75.7 µs | 1.09 ms | 0, 0, 0 |
 | same zone, 0.1% | 7.51 (7.40–7.57) | 46.6 µs | 61.5 µs | 102 ms | 201 ms | 1,982, 2,006, 1,979 |
 | same zone, 1% | 0.99 (0.99–1.01) | 47.1 µs | 102 ms | 103 ms | 204 ms | 2,779, 2,949, 2,754 |
-| across regions, none | 0.56 (0.55–0.56), 18 MB/s | 53.0 ms | 53.0 ms | | 53.2 ms | 0, 0, 0 |
-| across regions, 0.1% | 0.29 (0.26–0.32), 9 MB/s | 53.3 ms | 53.4 ms | | 131 ms | 86, 4,334, 507 |
-| across regions, 1% | 0.04 (0.04–0.04), 1 MB/s | 53.0 ms | 208 ms | | 285 ms | 130, 6,107, 714 |
+| across regions, none | 0.56 (0.55–0.56), 18 MB/s | 53.0 ms | 53.0 ms | | 53.1, 53.2 ms | 0, 0, 0 |
+| across regions, 0.1% | 0.29 (0.26–0.32), 9 MB/s | 53.3 ms | 53.4 ms | | 53.0, 208 ms | 86, 4,334, 507 |
+| across regions, 1% | 0.04 (0.04–0.04), 1 MB/s | 53.0 ms | 208 ms | | 208, 362 ms | 130, 6,107, 714 |
 
 - **Every lost data packet was NAKed and retransmitted**, so loss cost time, not data.
 - **In the same zone, each loss drew about one NAK and one retransmit. Across regions, each drew about 50 NAKs and 6 retransmits.**
@@ -185,7 +185,7 @@ The West US 3 pair above, isolated, plus a third VM, a `Standard_D8s_v6` in Nort
   - What is, this run didn't find.
 - **Across regions, on a clean link, the window sets throughput.** 2 MiB over a 53 ms round trip gave 18 MB/s, under half the 40 MB/s that window allows per round trip.
 
-A later run measured wider windows across the same regions: 16 MiB socket buffers and initial window over 64 MiB terms, with `net.core.rmem_max`/`wmem_max` at 16 MiB. Two reps each. Its 2 MiB rows matched the run above at 18, 10 and 1 MB/s.
+A later run measured wider windows across the same regions: 16 MiB socket buffers and initial window over 64 MiB terms, with `net.core.rmem_max`/`wmem_max` at 16 MiB. Each cell is the mean of two reps, which were within 0.06 M msgs/s of each other. Its 2 MiB rows matched the run above at 18, 10 and 1 MB/s.
 
 | across regions, variant | no loss | 0.1% loss | 1% loss |
 |---|---|---|---|
@@ -275,7 +275,8 @@ The VM caps its network disks together at 12,800 IOPS and 424 MB/s.
   - 10–25 minutes after creation, three of the four managed only 15–60% of their provisioned throughput. intel-b's 125 MB/s disk was the exception.
   - On intel-a, Azure's own per-minute metrics showed at most 50% of the disks' bandwidth and 26% of their IOPS in use, so they were not being throttled at their limits.
   - About 1.5 hours later every disk delivered what was provisioned. A new 8 GiB file then wrote at 485–501 MB/s on the 400 MB/s disks (for the 17 s it took) and at 125–138 MB/s on the 125 MB/s ones.
-  - By then the archive tests had written tens of GB to each disk, and xfs reuses freed blocks. So this run can't tell apart a cost of writing each block the first time, a warm-up after creation, or a backend that just varies.
+  - By then the archive tests had written tens of GB to each disk, and xfs reuses freed blocks. The lab also formats each disk with plain `mkfs.xfs`, which discards the whole device (256 or 512 GiB) just before the first fio pass.
+  - So this run can't tell apart a cost of writing each block the first time, that discard, a warm-up after creation, or a backend that just varies.
 - **Random 4 KiB writes** stayed below the provisioned 3,000 IOPS on intel-a's disks in both passes. The archive writes sequentially, so this did not affect it.
 - **A forced write** waits about 0.03 ms on local NVMe and about 0.8 ms on Premium SSD v2.
 
@@ -318,7 +319,7 @@ The VM caps its network disks together at 12,800 IOPS and 424 MB/s.
 | Premium SSD v2 400 | 365 / 128 | 365 / 141 | 178 / 155 |
 
 - **Each replay read back a whole recording of 1.1–1.3 GB.** The 16 replays on intel-b's 400 MB/s disk completed only 5 within 120 s.
-- **Replays starved while recording ran flat out at the disk's limit.** On local NVMe they fell from about 1 GB/s to 67–246 MB/s; on intel-a none of the 4 finished within 50 s. The deep write-back queue of level 0 holds the reads up.
+- **Replays starved while recording ran flat out at the disk's limit.** On local NVMe they fell from about 1 GB/s to 67–246 MB/s; on intel-a none of the 4 finished within 50 s. Why was not tested: level 0's deep write-back queue could hold the reads up, and the recorder and replayer also share one core's two threads.
 - **The first replayed fragment** arrived 230–290 ms after the request in nearly every run, whatever the disk. That was not investigated.
 
 ### Recording across hosts (publishers on intel-a, the archive on intel-b, UDP, MB/s)
@@ -333,18 +334,22 @@ The VM caps its network disks together at 12,800 IOPS and 424 MB/s.
 - **Replays from intel-b's NVMe to intel-a over UDP** ran at 345, 502 and 485 MB/s for 1, 4 and 16 replays.
 ### Round trip across the hosts under recording load (West US 3 pair, isolated, µs)
 
-A later run, on the West US 3 pair isolated, with the archive on intel-b's NVMe. Four streams recorded across the hosts at a fixed share of their measured maximum (486 MB/s) while the round trip ran; pong used the archive host's driver. One run each.
+A later run, on the West US 3 pair isolated, with the archive on intel-b's NVMe. Four streams recorded across the hosts at a fixed share of their measured maximum (486 MB/s) while the round trip ran. One run each.
+
+The layout differs from the round-trip tables above, so compare only the rows here with each other:
+- The ping and pong share the recording's drivers. Their `AERON_DIR` is on `/dev/shm`, not hugetlbfs.
+- The four publishers spin (between their send slots too) on CPUs 3, 5 and 7, the SMT twins of ping (2), the sender (4) and the receiver (6).
+- On the archive host, pong runs on CPU 5, the twin of its spinning sender.
 
 | recording load | p50 | p99 | p99.9 | p99.99 | max |
 |---|---|---|---|---|---|
-| none (dedicated, same pair) | 45.6 | 61.0 | 82.3 | 181.0 | 1291 |
 | 25% (122 MB/s) | 46.8 | 64.1 | 90.4 | 191.2 | 2503 |
 | 50% (243 MB/s) | 50.2 | 73.1 | 92.9 | 219.8 | 6226 |
 | 75% (364 MB/s) | 49.7 | 76.9 | 182.8 | 688.1 | 2552 |
 
-- **Recording on the same drivers and NICs** added little at 25% load. At 50% it added about 4 µs at p50.
-- **At 75% it doubled p99.9 and nearly quadrupled p99.99.** The ping shared its driver's sender thread with the recorded streams, and pong shared the archive host's receiver.
-- **The pinned run** before it measured 65.7 µs at p50 at 25% load. It lost its 50% and 75% runs to a harness bug, now fixed: each reused the last pong's ports, and that pong's image lingered in the archive's driver.
+- **From 25% to 50% load**, p50 rose about 3 µs and p99 about 9 µs.
+- **At 75%**, p99.9 doubled and p99.99 more than tripled.
+- **The pinned run** before it measured 65.7 µs at p50 at 25% load, in the same layout. It lost its 50% and 75% runs to a harness bug, now fixed: each reused the last pong's ports, and that pong's image lingered in the archive's driver.
 
 ## Kubernetes pods (single VM, earlier run, 2026-10-09)
 
