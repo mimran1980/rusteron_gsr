@@ -53,7 +53,7 @@ arm() {
     log "build $name"
     (cd "$dir" && env "$@" RUSTFLAGS="$rustflags" CARGO_TARGET_DIR="$target" \
         cargo build --release --features "$features" --bins) >"$res/build-$name.log" 2>&1
-    for b in rtt tput pspoll; do
+    for b in rtt tput pspoll rec; do
         if [[ -e $target/release/$b && $target/release/$b -nt $dir/Cargo.toml ]]; then cp "$target/release/$b" "$bin/$name/"; fi
     done
     cp "$dir/Cargo.lock" "$res/Cargo.lock-$name"
@@ -599,9 +599,14 @@ k3s_up() {
 # cpu_pod <name>: the two-container pod of k8s-cpu/ until it ends; rows to bench.csv and each
 # container's CPU throttling counters to throttle.csv
 cpu_pod() {
+    sed "s/^  name: NAME$/  name: $1/" "$lab/harness/k8s-cpu/pod.yaml" >"$res/k8s-$1.yaml"
+    run_pod "$1"
+}
+
+# run_pod <name>: applies $res/k8s-<name>.yaml and collects as cpu_pod describes
+run_pod() {
     local name=$1 phase
     log "pod $name"
-    sed "s/^  name: NAME$/  name: $name/" "$lab/harness/k8s-cpu/pod.yaml" >"$res/k8s-$name.yaml"
     if ! kubectl apply -f "$res/k8s-$name.yaml" >"$res/k8s-$name.apply" 2>&1; then
         log "pod $name not created: $(cat "$res/k8s-$name.apply")"
         return
@@ -667,6 +672,286 @@ host_shared() {
     sudo umount /mnt/huge2m
 }
 
+# --- 8 vCPUs ------------------------------------------------------------------------------
+
+# Core layout from sysfs. hk8: CPU 0 alone, for housekeeping; every other CPU can be isolated.
+# Ping, pong and the driver's sender each get a core of their own; the receiver too where
+# there are enough cores, else CPU 0's SMT sibling (Intel's 4 cores), which shares its core
+# with the housekeeping CPU rather than with a spinning sender.
+topo8() {
+    eval "$(python3 - <<'PY'
+import glob
+def expand(s):
+    out = []
+    for part in s.strip().split(','):
+        a, _, b = part.partition('-')
+        out += range(int(a), int(b or a) + 1)
+    return out
+cores = sorted({tuple(expand(open(p).read())) for p in glob.glob('/sys/devices/system/cpu/cpu[0-9]*/topology/thread_siblings_list')})
+core0 = next(c for c in cores if 0 in c)
+hot = [c[0] for c in cores if 0 not in c]
+rcv = hot[3] if len(hot) > 3 else core0[1]
+cpus = sorted(x for c in cores for x in c)
+j = lambda l: ','.join(map(str, l))
+print(f"hk8=0 first_hk8=0 ping8={hot[0]} pong8={hot[1]} snd8={hot[2]} rcv8={rcv} "
+      f"all8={j(cpus)} iso8={j([c for c in cpus if c != 0])} smt8={int(len(core0) > 1)}")
+PY
+)"
+    echo "hk=$hk8 ping=$ping8 pong=$pong8 sender=$snd8 receiver=$rcv8 isolatable=$iso8 smt=$smt8" >"$res/layouts8.txt"
+    sort -u /sys/devices/system/cpu/cpu*/topology/thread_siblings_list >>"$res/layouts8.txt"
+}
+
+# AERON_DIR on 2 MiB hugetlbfs for the 8-vCPU host runs
+huge8() {
+    sudo sysctl -q -w vm.nr_hugepages=1024
+    sudo mkdir -p /mnt/huge2m
+    mountpoint -q /mnt/huge2m || sudo mount -t hugetlbfs -o "pagesize=2M,size=2G,uid=$(id -u),gid=$(id -g)" none /mnt/huge2m
+    run_base=/mnt/huge2m
+}
+
+# run8 <group> <label> <ipc|udp|tput> <driver cpus> <client cpus> <ping> <pong> [env...]: as
+# run, with the driver and client processes on their own CPU lists; "-" leaves one unpinned
+run8() {
+    local group=$1 label=$2 test=$3 dmask=$4 cmask=$5 p=$6 q=$7 cmd line
+    shift 7
+    case $test in
+        ipc) cmd=(rtt ipc "$IPC_N" "$IPC_W" "$p" "$q") ;;
+        udp) cmd=(rtt udp "$UDP_N" "$UDP_W" "$p" "$q") ;;
+        tput) cmd=(tput 5 "$p" "$q") ;;
+    esac
+    [[ $dmask == - ]] && dmask=$all8
+    [[ $cmask == - ]] && cmask=$all8
+    hk=$dmask driver_start "$@"
+    line=$(env "$@" AERON_DIR="$run_dir" LABEL="$label" taskset -c "$cmask" timeout 300 "$bin/impr/${cmd[0]}" \
+        "${cmd[@]:1}" 2>>"$res/client-errors.log") || line="error,$label,$test"
+    driver_stop
+    echo "$host,$group,$layout,$rep,$line" | tee -a "$res/bench.csv"
+}
+
+# What pinning the C driver and the client buys on 8 vCPUs, one change per variant:
+# none: nothing pinned. client: ping and pong pinned, the client's other threads on hk.
+# driver-process: also the whole driver on hk. driver-threads: also its sender and receiver
+# on cores of their own. conductor-hot: as driver-threads, but the client's other threads
+# (its conductor) on the ping and pong CPUs. shared-1cpu and shared-2cpu: a SHARED noop
+# driver on one CPU, or two. bench8 <pinned|isolated>
+bench8() {
+    state=$1 layout=$1
+    topo8
+    huge8
+    local base=(AERON_TERM_BUFFER_SPARSE_FILE=false AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true AERON_FILE_PAGE_SIZE=2097152)
+    local ded=("${base[@]}" AERON_SENDER_IDLE_STRATEGY=noop AERON_RECEIVER_IDLE_STRATEGY=noop)
+    local shared=("${base[@]}" AERON_THREADING_MODE=SHARED AERON_SHARED_IDLE_STRATEGY=noop)
+    local threads=(AERON_CONDUCTOR_CPU_AFFINITY="$first_hk8" AERON_SENDER_CPU_AFFINITY="$snd8" AERON_RECEIVER_CPU_AFFINITY="$rcv8")
+    local variants=(none client driver-process driver-threads conductor-hot shared-1cpu shared-2cpu)
+    if [[ $state == isolated ]]; then
+        # only variants that pin every busy thread: isolated CPUs take no unpinned work, which
+        # would all crowd onto CPU 0, and the kernel does not spread one process across two
+        variants=(driver-threads conductor-hot shared-1cpu)
+        cat /sys/devices/system/cpu/isolated >"$res/isolated8.txt"
+    fi
+    for rep in $(seq "${BENCH8_REPS:-5}"); do
+        for v in $(rotate "$rep" "${variants[@]}"); do
+            for t in ipc udp tput; do
+                case $v in
+                    none) run8 "$state-$v" "h-$t" "$t" - - - - "${ded[@]}" ;;
+                    client) run8 "$state-$v" "h-$t" "$t" - "$hk8" "$ping8" "$pong8" "${ded[@]}" ;;
+                    driver-process) run8 "$state-$v" "h-$t" "$t" "$hk8" "$hk8" "$ping8" "$pong8" "${ded[@]}" ;;
+                    driver-threads) run8 "$state-$v" "h-$t" "$t" "$hk8" "$hk8" "$ping8" "$pong8" "${ded[@]}" "${threads[@]}" ;;
+                    conductor-hot) run8 "$state-$v" "h-$t" "$t" "$hk8" "$ping8,$pong8" "$ping8" "$pong8" "${ded[@]}" "${threads[@]}" ;;
+                    shared-1cpu) run8 "$state-$v" "h-$t" "$t" "$snd8" "$hk8" "$ping8" "$pong8" "${shared[@]}" ;;
+                    shared-2cpu) run8 "$state-$v" "h-$t" "$t" "$snd8,$rcv8" "$hk8" "$ping8" "$pong8" "${shared[@]}" ;;
+                esac
+            done
+        done
+    done
+    run_base=
+    sudo umount /mnt/huge2m
+    log "bench8 $state done"
+}
+
+# A Java ArchivingMediaDriver, with AERON_DIR and the archive on tmpfs so that disk speed
+# does not hide the CPUs. archive_start <jvm cpus|-> [java option...]
+archive_start() {
+    local mask=$1 jar=$lab/rusteron/rusteron-archive/aeron/aeron-all/build/libs/aeron-all-1.52.2.jar
+    shift
+    [[ $mask == - ]] && mask=$all8
+    runs=$((runs + 1))
+    run_dir=$shm/x86lab-$runs archive_dir=$shm/x86lab-archive-$runs
+    taskset -c "$mask" java -Xms1g -Xmx1g --add-opens java.base/jdk.internal.misc=ALL-UNNAMED \
+        -Dagrona.disable.bounds.checks=true -Daeron.dir="$run_dir" \
+        -Daeron.dir.delete.on.start=true -Daeron.dir.delete.on.shutdown=true -Daeron.term.buffer.sparse.file=false \
+        -Daeron.pre.touch.mapped.memory=true -Daeron.archive.dir="$archive_dir" -Daeron.archive.threading.mode=DEDICATED \
+        -Daeron.archive.control.channel="$ARCHIVE_CONTROL" "-Daeron.archive.replication.channel=aeron:udp?endpoint=localhost:0" \
+        -Daeron.archive.recording.events.enabled=false "$@" -cp "$jar" io.aeron.archive.ArchivingMediaDriver \
+        >"$res/archive-last.log" 2>&1 &
+    archive_pid=$!
+    for _ in $(seq 100); do
+        if [[ -e $run_dir/cnc.dat ]]; then break; fi
+        sleep 0.1
+    done
+    sleep 2
+}
+
+archive_stop() {
+    # SIGTERM: a background job of a non-interactive shell starts with SIGINT ignored, and the JVM keeps that
+    kill -TERM "$archive_pid" 2>/dev/null || true
+    wait "$archive_pid" 2>/dev/null || true
+    rm -rf "$archive_dir"
+}
+
+# What pinning the Java archive buys: recording throughput (rec) and an IPC ping-pong whose
+# ping stream is recorded. jvm-unpinned: nothing pinned. jvm-hk: the JVM on hk.
+# jvm-threads: also its archive-recorder on a core of its own. jvm-threads-noop: also a
+# noop idle strategy for that recorder, which then spins.
+archive8() {
+    topo8
+    layout=pinned
+    export ARCHIVE_CONTROL='aeron:udp?endpoint=localhost:8010'
+    for rep in $(seq "${BENCH8_REPS:-5}"); do
+        for v in $(rotate "$rep" jvm-unpinned jvm-hk jvm-threads jvm-threads-noop); do
+            local mask=$hk8 opts=() pins=()
+            case $v in
+                jvm-unpinned) mask=- ;;
+                jvm-threads) pins=(archive-recorder="$snd8") ;;
+                jvm-threads-noop) pins=(archive-recorder="$snd8") opts=(-Daeron.archive.recorder.idle.strategy=noop) ;;
+            esac
+            for t in rec ipc; do
+                archive_start "$mask" ${opts[@]+"${opts[@]}"}
+                if ((${#pins[@]})) && ! pin_java "$archive_pid" "${pins[@]}"; then log "archive8 $v: pinning failed"; fi
+                local line
+                if [[ $t == rec ]]; then
+                    line=$(env AERON_DIR="$run_dir" LABEL="a-rec" taskset -c "$hk8" timeout 300 "$bin/impr-ps/rec" tput 1000000 256 "$ping8" \
+                        2>>"$res/client-errors.log") || line="error,a-rec,rec"
+                else
+                    env AERON_DIR="$run_dir" taskset -c "$hk8" timeout 60 "$bin/impr-ps/rec" start 1002 2>>"$res/client-errors.log" ||
+                        log "archive8 $v: rec start failed"
+                    line=$(env AERON_DIR="$run_dir" LABEL="a-ipc" taskset -c "$hk8" timeout 300 "$bin/impr/rtt" ipc "$IPC_N" "$IPC_W" "$ping8" "$pong8" \
+                        2>>"$res/client-errors.log") || line="error,a-ipc,ipc"
+                fi
+                archive_stop
+                echo "$host,archive-$v,$layout,$rep,$line" | tee -a "$res/bench.csv"
+            done
+        done
+    done
+    log "archive8 done"
+}
+
+# pod8 <name> <shared|dedicated> <driver cpus> <app cpus> <guaranteed|burstable> <exclusive 0|1>:
+# writes and runs a pod of k8s-cpu/'s two containers with these CPU requests
+pod8() {
+    local name=$1 mode=$2 dcpu=$3 acpu=$4 qos=$5 excl=$6 dlim alim
+    dlim="cpu: \"$dcpu\", " alim="cpu: \"$acpu\", "
+    [[ $qos == burstable ]] && dlim= alim=
+    cat >"$res/k8s-$name.yaml" <<YAML
+apiVersion: v1
+kind: Pod
+metadata:
+  name: $name
+spec:
+  restartPolicy: Never
+  containers:
+    - name: driver
+      image: debian:trixie-slim
+      command: ["/lab/k8s-cpu/driver.sh"]
+      env:
+        - {name: DRIVER_MODE, value: $mode}
+        - {name: REPS, value: "5"}
+        - {name: AERON_TERM_BUFFER_SPARSE_FILE, value: "false"}
+        - {name: AERON_FILE_PAGE_SIZE, value: "2097152"}
+        - {name: AERON_PERFORM_STORAGE_CHECKS, value: "false"}
+      resources:
+        requests: {cpu: "$dcpu", memory: 1Gi, hugepages-2Mi: 1Gi}
+        limits: {${dlim}memory: 1Gi, hugepages-2Mi: 1Gi}
+      volumeMounts:
+        - {name: aeron, mountPath: /aeron}
+        - {name: lab, mountPath: /lab}
+    - name: app
+      image: debian:trixie-slim
+      command: ["/lab/k8s-cpu/app.sh"]
+      env:
+        - {name: REPS, value: "5"}
+        - {name: EXCLUSIVE, value: "$excl"}
+        - {name: APP_PING, value: "$ping8"}
+        - {name: APP_PONG, value: "$pong8"}
+        - {name: APP_MASK, value: "$hk8"}
+        - {name: AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY, value: "true"}
+      resources:
+        requests: {cpu: "$acpu", memory: 1Gi, hugepages-2Mi: 1Gi}
+        limits: {${alim}memory: 1Gi, hugepages-2Mi: 1Gi}
+      volumeMounts:
+        - {name: aeron, mountPath: /aeron}
+        - {name: lab, mountPath: /lab}
+  volumes:
+    - name: aeron
+      emptyDir: {medium: HugePages-2Mi}
+    - name: lab
+      hostPath: {path: /srv/x86lab/k8s, type: Directory}
+YAML
+    run_pod "$name"
+}
+
+# Pods with different CPU requests, under kubelet's default CPU manager and then the static
+# one with CPU 0 reserved for the system. Names: <policy>-<driver: s shared, d dedicated, and
+# CPUs>-a<app CPUs>[-burst]; burstable pods have requests but no CPU limits.
+k8s8() {
+    topo8
+    # kubelet reports only the huge pages reserved before it starts
+    sudo sysctl -q -w vm.nr_hugepages=2048
+    k3s_up
+    pod8 def-s1-a2 shared 1 2 guaranteed 0
+    pod8 def-s2-a3 shared 2 3 guaranteed 0
+    pod8 def-s1-a2.5 shared 1 2500m guaranteed 0
+    pod8 def-s1-a2-burst shared 1 2 burstable 0
+    log "switch kubelet to the static CPU manager"
+    # no full-pcpus-only: on SMT it refuses any request that is not a whole number of cores
+    printf '%s\n' 'kubelet-arg:' '  - cpu-manager-policy=static' "  - reserved-cpus=$hk8" |
+        sudo tee /etc/rancher/k3s/config.yaml >/dev/null
+    k3s_restart
+    sudo cat /etc/rancher/k3s/config.yaml /var/lib/kubelet/cpu_manager_state >"$res/k8s8-static.txt" 2>&1 || true
+    # their CPU requests would leave too little room; the pods need neither
+    kubectl -n kube-system scale deployment coredns local-path-provisioner --replicas=0 >>"$res/k8s-scale.log" 2>&1 || true
+    kubectl -n kube-system wait --for=delete pod --all --timeout=120s >>"$res/k8s-scale.log" 2>&1 || true
+    kubectl describe node >"$res/k8s8-node-static.txt" 2>&1
+    pod8 st-s1-a2 shared 1 2 guaranteed 1
+    pod8 st-s2-a3 shared 2 3 guaranteed 1
+    pod8 st-d3-a3 dedicated 3 3 guaranteed 1
+    pod8 st-s1-a2.5 shared 1 2500m guaranteed 0
+    log "k8s8 done"
+}
+
+# stop k3s, clear kubelet's CPU manager state and start it again, waiting up to 2 minutes
+# for kubelet to write the new policy
+k3s_restart() {
+    sudo systemctl stop k3s
+    # kubelet will not start with a CPU manager state left by another policy
+    sudo rm -f /var/lib/kubelet/cpu_manager_state
+    sudo systemctl start k3s || true
+    for _ in $(seq 60); do
+        if sudo test -s /var/lib/kubelet/cpu_manager_state; then break; fi
+        sleep 2
+    done
+    k3s_ready
+}
+
+# k3s and its netfilter rules gone, so later host runs see none of them
+k3s_down() {
+    sudo /usr/local/bin/k3s-uninstall.sh >"$res/k3s-uninstall.log" 2>&1 || true
+    { echo "rules left:"; sudo iptables-save 2>/dev/null | grep -c -i 'kube\|flannel\|cni' || true; } >>"$res/k3s-uninstall.log"
+    log "k3s down"
+}
+
+# isolate every CPU but CPU 0 from the scheduler, timer ticks, RCU callbacks and IRQs, then reboot
+isolate8() {
+    topo8
+    sudo mkdir -p /etc/default/grub.d
+    printf '%s\n' "GRUB_CMDLINE_LINUX_DEFAULT=\"\$GRUB_CMDLINE_LINUX_DEFAULT isolcpus=nohz,domain,managed_irq,$iso8 nohz_full=$iso8 rcu_nocbs=$iso8 irqaffinity=$hk8\"" |
+        sudo tee /etc/default/grub.d/99-rusteron-isolation.cfg >/dev/null
+    sudo update-grub >"$res/update-grub.log" 2>&1
+    grep -c 'isolcpus=' /boot/grub/grub.cfg >>"$res/update-grub.log" 2>&1 || true
+    sudo systemd-run --on-active=3 /bin/systemctl reboot >/dev/null
+    log "rebooting into isolation of $iso8"
+}
+
 test_phase() {
     cd "$lab/rusteron"
     # release C (-O3 -march=native) as users ship, without a fat-LTO link per test binary
@@ -722,6 +1007,12 @@ case ${1:-} in
     bench-1g) bench_1g ;;
     k8s) k8s ;;
     k8s-cpu) k8s_cpu ;;
+    bench8) bench8 pinned ;;
+    archive8) archive8 ;;
+    k8s8) k8s8 ;;
+    k3s-down) k3s_down ;;
+    isolate8) isolate8 ;;
+    bench8-isolated) bench8 isolated ;;
     pong-up) shift; pong_up "$@" ;;
     pong-down) pong_down ;;
     bench-xhost) bench_xhost ;;

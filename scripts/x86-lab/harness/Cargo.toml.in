@@ -21,6 +21,10 @@ archive = ["dep:rusteron-archive"]
 name = "pspoll"
 required-features = ["archive"]
 
+[[bin]]
+name = "rec"
+required-features = ["archive"]
+
 # as rusteron's own release profile
 [profile.release]
 lto = "fat"
