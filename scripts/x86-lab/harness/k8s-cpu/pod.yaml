@@ -1,0 +1,41 @@
+# A Guaranteed pod (requests equal limits for every container): the media driver on one
+# whole CPU, the app on two. Under the static CPU manager each container gets its CPUs to
+# itself; under the default policy the same limits are only a quota per 100 ms period.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: NAME
+spec:
+  restartPolicy: Never
+  containers:
+    - name: driver
+      image: debian:trixie-slim
+      command: ["/lab/k8s-cpu/driver.sh"]
+      env:
+        - {name: AERON_THREADING_MODE, value: SHARED}
+        - {name: AERON_SHARED_IDLE_STRATEGY, value: noop}
+        - {name: AERON_TERM_BUFFER_SPARSE_FILE, value: "false"}
+        - {name: AERON_FILE_PAGE_SIZE, value: "2097152"}
+        - {name: AERON_PERFORM_STORAGE_CHECKS, value: "false"}
+      resources:
+        requests: {cpu: "1", memory: 1Gi, hugepages-2Mi: 1Gi}
+        limits: {cpu: "1", memory: 1Gi, hugepages-2Mi: 1Gi}
+      volumeMounts:
+        - {name: aeron, mountPath: /aeron}
+        - {name: lab, mountPath: /lab}
+    - name: app
+      image: debian:trixie-slim
+      command: ["/lab/k8s-cpu/app.sh"]
+      env:
+        - {name: AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY, value: "true"}
+      resources:
+        requests: {cpu: "2", memory: 1Gi, hugepages-2Mi: 1Gi}
+        limits: {cpu: "2", memory: 1Gi, hugepages-2Mi: 1Gi}
+      volumeMounts:
+        - {name: aeron, mountPath: /aeron}
+        - {name: lab, mountPath: /lab}
+  volumes:
+    - name: aeron
+      emptyDir: {medium: HugePages-2Mi}
+    - name: lab
+      hostPath: {path: /srv/x86lab/k8s, type: Directory}

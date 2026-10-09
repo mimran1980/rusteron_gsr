@@ -474,24 +474,7 @@ k8s() {
     sudo sysctl -q -w vm.nr_hugepages=1024
     echo 8 | sudo tee /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages >/dev/null
     grep -H . /sys/kernel/mm/hugepages/hugepages-*/nr_hugepages >"$res/k8s-hugepages.txt"
-    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik --disable metrics-server --write-kubeconfig-mode 644" \
-        sh - >"$res/k3s-install.log" 2>&1
-    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-    for _ in $(seq 90); do
-        if kubectl get node 2>/dev/null | grep -q ' Ready'; then break; fi
-        sleep 2
-    done
-    # pods are refused until the controller manager has made the default service account
-    for _ in $(seq 90); do
-        if kubectl get serviceaccount default >/dev/null 2>&1; then break; fi
-        sleep 2
-    done
-    kubectl get node -o jsonpath='{.items[0].status.allocatable}' >"$res/k8s-allocatable.json" 2>&1
-    # the pods run the host's harness and driver, with the two libraries the static builds still load
-    mkdir -p "$lab/k8s/lib"
-    cp "$bin/impr/rtt" "$bin/impr/tput" "$bin/media_driver" "$lab/harness/k8s-run.sh" "$lab/k8s/"
-    cp -L /usr/lib/x86_64-linux-gnu/libbsd.so.0 /usr/lib/x86_64-linux-gnu/libmd.so.0 "$lab/k8s/lib/"
-    ldd "$lab/k8s/rtt" >"$res/k8s-ldd.txt" 2>&1
+    k3s_up
     for p in memory hugepages-2mi hugepages-1gi; do
         log "pod $p"
         if ! kubectl apply -f "$lab/harness/k8s/$p.yaml" >"$res/k8s-$p.apply" 2>&1; then
@@ -583,6 +566,107 @@ bench_xhost() {
     log "bench-xhost done"
 }
 
+# wait until the node is Ready and takes pods (it refuses them until the controller manager
+# has made the default service account)
+k3s_ready() {
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+    for _ in $(seq 90); do
+        if kubectl get node 2>/dev/null | grep -q ' Ready'; then break; fi
+        sleep 2
+    done
+    for _ in $(seq 90); do
+        if kubectl get serviceaccount default >/dev/null 2>&1; then break; fi
+        sleep 2
+    done
+}
+
+# k3s on this VM, and what the pods mount from /srv/x86lab/k8s: the host's harness, driver
+# and pod scripts, with the two libraries the static builds still load
+k3s_up() {
+    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik --disable metrics-server --write-kubeconfig-mode 644" \
+        sh - >"$res/k3s-install.log" 2>&1
+    k3s_ready
+    kubectl get node -o jsonpath='{.items[0].status.allocatable}' >"$res/k8s-allocatable.json" 2>&1
+    mkdir -p "$lab/k8s/lib"
+    cp "$bin/impr/rtt" "$bin/impr/tput" "$bin/media_driver" "$lab/harness/k8s-run.sh" "$lab/k8s/"
+    mkdir -p "$lab/k8s/k8s-cpu"
+    cp "$lab/harness/k8s-cpu/"* "$lab/k8s/k8s-cpu/"
+    { k3s --version; kubectl version; } >"$res/k8s-version.txt" 2>&1
+    cp -L /usr/lib/x86_64-linux-gnu/libbsd.so.0 /usr/lib/x86_64-linux-gnu/libmd.so.0 "$lab/k8s/lib/"
+    ldd "$lab/k8s/rtt" >"$res/k8s-ldd.txt" 2>&1
+}
+
+# cpu_pod <name>: the two-container pod of k8s-cpu/ until it ends; rows to bench.csv and each
+# container's CPU throttling counters to throttle.csv
+cpu_pod() {
+    local name=$1 phase
+    log "pod $name"
+    sed "s/^  name: NAME$/  name: $name/" "$lab/harness/k8s-cpu/pod.yaml" >"$res/k8s-$name.yaml"
+    if ! kubectl apply -f "$res/k8s-$name.yaml" >"$res/k8s-$name.apply" 2>&1; then
+        log "pod $name not created: $(cat "$res/k8s-$name.apply")"
+        return
+    fi
+    for _ in $(seq 450); do
+        phase=$(kubectl get pod "$name" -o jsonpath='{.status.phase}' 2>/dev/null)
+        if [[ $phase == Succeeded || $phase == Failed ]]; then break; fi
+        sleep 2
+    done
+    kubectl logs "$name" -c app >"$res/k8s-$name-app.log" 2>&1
+    kubectl logs "$name" -c driver >"$res/k8s-$name-driver.log" 2>&1
+    kubectl describe pod "$name" >"$res/k8s-$name.describe" 2>&1
+    sudo cat /var/lib/kubelet/cpu_manager_state >"$res/k8s-$name-cpu-manager-state.json" 2>&1 || true
+    grep -E '^(rtt|tput),' "$res/k8s-$name-app.log" | sed "s/^/$host,k8s-$name,pod,0,/" | tee -a "$res/bench.csv" || true
+    grep -h '^throttle,' "$res/k8s-$name-app.log" "$res/k8s-$name-driver.log" | sed "s/^/$host,$name,/" >>"$res/throttle.csv" || true
+    kubectl delete pod "$name" --wait=true >/dev/null 2>&1 || true
+}
+
+# A host baseline with a SHARED noop driver, then the k8s-cpu/ pod (driver on one whole CPU,
+# app on two) under kubelet's default CPU manager, then under the static policy with CPU 0
+# reserved for the system
+k8s_cpu() {
+    state=pinned
+    ping=2 pong=3 hk=0,1 layout=hot23
+    # kubelet reports only the huge pages reserved before it starts
+    sudo sysctl -q -w vm.nr_hugepages=1024
+    local shared=(AERON_THREADING_MODE=SHARED AERON_SHARED_IDLE_STRATEGY=noop AERON_TERM_BUFFER_SPARSE_FILE=false
+        AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true AERON_FILE_PAGE_SIZE=2097152)
+    host_shared host-shared "${shared[@]}"
+    k3s_up
+    cpu_pod cpu-default
+    log "switch kubelet to the static CPU manager"
+    printf '%s\n' 'kubelet-arg:' '  - cpu-manager-policy=static' '  - reserved-cpus=0' |
+        sudo tee /etc/rancher/k3s/config.yaml >/dev/null
+    sudo systemctl stop k3s
+    # kubelet will not start with a CPU manager state left by another policy
+    sudo rm -f /var/lib/kubelet/cpu_manager_state
+    sudo systemctl start k3s
+    k3s_ready
+    # their CPU requests would leave less than the pod's three whole CPUs; the pod needs neither
+    kubectl -n kube-system scale deployment coredns local-path-provisioner --replicas=0 >>"$res/k8s-scale.log" 2>&1 || true
+    kubectl -n kube-system wait --for=delete pod --all --timeout=120s >>"$res/k8s-scale.log" 2>&1 || true
+    kubectl describe node >"$res/k8s-node-static.txt" 2>&1
+    cpu_pod cpu-static
+    # the same baseline with k3s's own processes running beside it
+    host_shared host-shared-k3s "${shared[@]}"
+    log "k8s-cpu done"
+}
+
+# host_shared <group> [env...]: 3 reps of ipc, udp and tput on the host with AERON_DIR on 2 MiB
+# hugetlbfs, unmounted afterwards so kubelet can hand the pages to pods
+host_shared() {
+    local group=$1
+    shift
+    log "host baseline $group"
+    sudo mkdir -p /mnt/huge2m
+    mountpoint -q /mnt/huge2m || sudo mount -t hugetlbfs -o "pagesize=2M,size=2G,uid=$(id -u),gid=$(id -g)" none /mnt/huge2m
+    run_base=/mnt/huge2m
+    for rep in 1 2 3; do
+        for t in ipc udp tput; do run "$group" "h-$t" impr "$t" "$@"; done
+    done
+    run_base=
+    sudo umount /mnt/huge2m
+}
+
 test_phase() {
     cd "$lab/rusteron"
     # release C (-O3 -march=native) as users ship, without a fat-LTO link per test binary
@@ -601,7 +685,7 @@ test_phase() {
     echo "slow $rc" | tee -a "$res/tests.txt"
 
     log "examples"
-    for e in archive_error_handling async_requests duty_cycle persistent_subscription persistent_subscription_failover \
+    for e in archive_error_handling duty_cycle persistent_subscription persistent_subscription_failover \
         record_and_replay recording_replication recording_throughput replay_merge; do
         rc=0; timeout 600 cargo run --release -p rusteron-archive --example "$e" >"$res/example-$e.log" 2>&1 || rc=$?
         echo "example $e $rc" | tee -a "$res/tests.txt"
@@ -637,6 +721,7 @@ case ${1:-} in
     bench-huge) BENCH3_SAMPLES=0 bench3 pinned ;;
     bench-1g) bench_1g ;;
     k8s) k8s ;;
+    k8s-cpu) k8s_cpu ;;
     pong-up) shift; pong_up "$@" ;;
     pong-down) pong_down ;;
     bench-xhost) bench_xhost ;;

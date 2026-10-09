@@ -58,7 +58,7 @@ limit() {
         build) echo 4800 ;;
         bench) echo 3600 ;;
         abudp) echo 2400 ;;
-        bench-pinned | bench-isolated | bench-huge | bench-1g | k8s) echo 3600 ;;
+        bench-pinned | bench-isolated | bench-huge | bench-1g | k8s | k8s-cpu) echo 3600 ;;
         isolate) echo 300 ;;
         test) echo 5400 ;;
     esac
