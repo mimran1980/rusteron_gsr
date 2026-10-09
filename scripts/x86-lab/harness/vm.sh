@@ -761,6 +761,9 @@ bench8() {
         grep -H . /sys/devices/system/cpu/vulnerabilities/* 2>/dev/null
         echo "thp=$(cat /sys/kernel/mm/transparent_hugepage/enabled) watchdog=$(sysctl -n kernel.watchdog) workqueue=$(cat /sys/devices/virtual/workqueue/cpumask 2>/dev/null)"
         echo "online=$(cat /sys/devices/system/cpu/online) smt=$(cat /sys/devices/system/cpu/smt/control 2>/dev/null) idle=$(cat /sys/devices/system/cpu/cpuidle/current_driver 2>/dev/null)"
+        echo "clocksource=$(cat /sys/devices/system/clocksource/clocksource0/current_clocksource) ksm=$(cat /sys/kernel/mm/ksm/run 2>/dev/null) printk=$(sysctl -n kernel.printk)"
+        grep -E 'CONFIG_INIT_ON_ALLOC_DEFAULT_ON|CONFIG_INIT_ON_FREE_DEFAULT_ON' "/boot/config-$(uname -r)" 2>/dev/null
+        echo "scheduled events: $(curl -s -m 5 -H Metadata:true --noproxy '*' 'http://169.254.169.254/metadata/scheduledevents?api-version=2020-07-01')"
         cat "$res/layouts8.txt"
     } >"$res/state8-$state.txt" 2>&1
     cat /proc/interrupts >"$res/interrupts8-$state-before.txt"
@@ -788,14 +791,22 @@ bench8() {
 # SHARED noop driver on one CPU. ded-threads-busyread: ded-threads with socket busy polling.
 # Each uses the socket profile of Adaptive's low-latency driver (2 MiB socket buffers and
 # initial receiver window) unless it ends in -defaults, which keeps Aeron's (128 KiB receive
-# buffer and window, the OS's send buffer).
+# buffer and window, the OS's send buffer). ded-threads-irqrcv: the NIC's IRQs on the receiver's
+# core. xtput-jumbo: MTU 9000 and Aeron MTU 8192; xtput-iov16: 16-message io vectors and sends.
+# AERON_DIR is on 2 MiB hugetlbfs throughout.
 xhost_env() {
-    local base=(AERON_TERM_BUFFER_SPARSE_FILE=false AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true)
+    local base=(AERON_TERM_BUFFER_SPARSE_FILE=false AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true AERON_FILE_PAGE_SIZE=2097152)
     if [[ $1 != *-defaults ]]; then
         base+=(AERON_SOCKET_SO_SNDBUF=2097152 AERON_SOCKET_SO_RCVBUF=2097152 AERON_RCV_INITIAL_WINDOW_LENGTH=2097152)
     fi
+    case $1 in
+        xtput-jumbo) base+=(AERON_MTU_LENGTH=8192) ;;
+        xtput-iov16)
+            base+=(AERON_SENDER_IO_VECTOR_CAPACITY=16 AERON_RECEIVER_IO_VECTOR_CAPACITY=16
+                AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND=16) ;;
+    esac
     case ${1%-defaults} in
-        ded-threads | ded-threads-busyread | xtput)
+        ded-threads | ded-threads-busyread | ded-threads-irqrcv | xtput | xtput-jumbo | xtput-iov16)
             xenv=("${base[@]}" AERON_SENDER_IDLE_STRATEGY=noop AERON_RECEIVER_IDLE_STRATEGY=noop
                 AERON_CONDUCTOR_CPU_AFFINITY="$first_hk8" AERON_SENDER_CPU_AFFINITY="$xsnd8" AERON_RECEIVER_CPU_AFFINITY="$xrcv8")
             xmask=$hk8 ;;
@@ -814,8 +825,9 @@ xhost_env() {
 pong_up8() {
     local v=$1 ping_ep=$2 pong_ep=$3 dir
     topo8
+    huge8
     xhost_env "$v"
-    dir=$shm/x86lab-pong-$(date +%s%N)
+    dir=$run_base/x86lab-pong-$(date +%s%N)
     setsid env AERON_DIR="$dir" AERON_DIR_DELETE_ON_START=true AERON_DIR_DELETE_ON_SHUTDOWN=true "${xenv[@]}" \
         taskset -c "$xmask" "$bin/media_driver" </dev/null >"$res/pong-driver.log" 2>&1 &
     echo $! >"$res/pong-driver.pid"
@@ -835,8 +847,9 @@ pong_up8() {
 xsub_up8() {
     local v=$1 ep=$2 dir
     topo8
+    huge8
     xhost_env "$v"
-    dir=$shm/x86lab-xsub-$(date +%s%N)
+    dir=$run_base/x86lab-xsub-$(date +%s%N)
     setsid env AERON_DIR="$dir" AERON_DIR_DELETE_ON_START=true AERON_DIR_DELETE_ON_SHUTDOWN=true "${xenv[@]}" \
         taskset -c "$xmask" "$bin/media_driver" </dev/null >"$res/pong-driver.log" 2>&1 &
     echo $! >"$res/pong-driver.pid"
@@ -860,6 +873,39 @@ xsub_result() {
         sleep 0.5
     done
     cat "$res/xsub.out"
+}
+
+# xhost_prepare <variant> <on|off>: before (on) and after (off) one cross-host run, on both hosts:
+# IRQs re-pinned in the isolated and tuned states, the variant's network settings, and the
+# VF, busy-poll and datapath counters, whose change over the run goes to xhost8-runs.csv
+xhost_prepare() {
+    local v=$1 when=$2 setting=
+    case $v in
+        *busyread) setting=busy-net ;;
+        *irqrcv) setting=irq-rcv ;;
+        *jumbo) setting=jumbo ;;
+    esac
+    if [[ $when == on ]]; then
+        if [[ $state != pinned ]]; then
+            pin_irqs "$hk8"
+            "${peer_ssh[@]}" "/srv/x86lab/harness/vm.sh pin-irqs"
+        fi
+        if [[ -n $setting ]]; then
+            "$lab/harness/vm.sh" "$setting" on
+            "${peer_ssh[@]}" "/srv/x86lab/harness/vm.sh $setting on"
+        fi
+        stats_before="$(path_stats) $("${peer_ssh[@]}" /srv/x86lab/harness/vm.sh path-stats)"
+    else
+        local after
+        after="$(path_stats) $("${peer_ssh[@]}" /srv/x86lab/harness/vm.sh path-stats)"
+        awk -v h="$host,$state,$v,$rep" -v a="$after" -v b="$stats_before" \
+            'BEGIN { n = split(a, x, " "); split(b, y, " "); printf "%s", h; for (i = 1; i <= n; i++) printf ",%d", x[i] - y[i]; print "" }' \
+            >>"$res/xhost8-runs.csv"
+        if [[ -n $setting ]]; then
+            "$lab/harness/vm.sh" "$setting" off
+            "${peer_ssh[@]}" "/srv/x86lab/harness/vm.sh $setting off"
+        fi
+    fi
 }
 
 # UDP between the two hosts of a pair, each laid out by topo8: round trips (ping here, pong on
@@ -888,9 +934,13 @@ xhost8() {
         done
         sysctl net.core.busy_read net.core.busy_poll
     } >"$res/xhost8-nic-$state.txt" 2>&1
-    local variants=(ded-threads ded-threads-defaults sharednet-threads shared-1cpu ded-threads-busyread)
+    local variants=(ded-threads ded-threads-defaults sharednet-threads shared-1cpu ded-threads-busyread ded-threads-irqrcv)
+    huge8
+    echo "host,state,variant,rep,vf_rx,vf_tx,busy_poll_rx,path_switches,peer_vf_rx,peer_vf_tx,peer_busy_poll_rx,peer_path_switches" \
+        >>"$res/xhost8-runs.csv"
     for rep in $(seq "${BENCH8_REPS:-5}"); do
-        for v in $(rotate "$rep" xtput xtput-defaults); do
+        for v in $(rotate "$rep" xtput xtput-defaults xtput-jumbo xtput-iov16); do
+            xhost_prepare "$v" on
             "${peer_ssh[@]}" "/srv/x86lab/harness/vm.sh xsub-up8 $v $ping_ep"
             xhost_env "$v"
             hk=$xmask driver_start "${xenv[@]}"
@@ -900,10 +950,11 @@ xhost8() {
             line=$("${peer_ssh[@]}" "/srv/x86lab/harness/vm.sh xsub-result") || true
             [[ -n $line ]] || line="error,$v,udp"
             "${peer_ssh[@]}" "/srv/x86lab/harness/vm.sh pong-down"
+            xhost_prepare "$v" off
             echo "$host,xhost-$state-$v,$layout,$rep,$line" | tee -a "$res/bench.csv"
         done
         for v in $(rotate "$rep" "${variants[@]}"); do
-            if [[ $v == *busyread ]]; then busy_poll 50; fi
+            xhost_prepare "$v" on
             "${peer_ssh[@]}" "/srv/x86lab/harness/vm.sh pong-up8 $v $ping_ep $pong_ep"
             xhost_env "$v"
             hk=$xmask driver_start "${xenv[@]}"
@@ -912,10 +963,11 @@ xhost8() {
                 line="error,$v,xping"
             driver_stop
             "${peer_ssh[@]}" "/srv/x86lab/harness/vm.sh pong-down"
-            if [[ $v == *busyread ]]; then busy_poll 0; fi
+            xhost_prepare "$v" off
             echo "$host,xhost-$state-$v,$layout,$rep,$line" | tee -a "$res/bench.csv"
         done
     done
+    run_base=
     log "xhost8 $state done"
 }
 
@@ -927,7 +979,8 @@ archive_start() {
     [[ $mask == - ]] && mask=$all8
     runs=$((runs + 1))
     run_dir=$shm/x86lab-$runs archive_dir=$shm/x86lab-archive-$runs
-    taskset -c "$mask" java -Xms1g -Xmx1g --add-opens java.base/jdk.internal.misc=ALL-UNNAMED \
+    taskset -c "$mask" java -Xms1g -Xmx1g -XX:+AlwaysPreTouch -XX:+UseParallelGC -XX:-UsePerfData \
+        -XX:+UnlockDiagnosticVMOptions -XX:GuaranteedSafepointInterval=300000 --add-opens java.base/jdk.internal.misc=ALL-UNNAMED \
         -Dagrona.disable.bounds.checks=true -Daeron.dir="$run_dir" \
         -Daeron.dir.delete.on.start=true -Daeron.dir.delete.on.shutdown=true -Daeron.term.buffer.sparse.file=false \
         -Daeron.pre.touch.mapped.memory=true -Daeron.archive.dir="$archive_dir" -Daeron.archive.threading.mode=DEDICATED \
@@ -1114,6 +1167,81 @@ k3s_down() {
     log "k3s down"
 }
 
+# pin_irqs <cpus>: every IRQ to <cpus>. MANA spreads its queues' IRQs over all CPUs again
+# whenever Azure re-adds the VF, so this is redone before each cross-host run.
+pin_irqs() {
+    local irq
+    for irq in /proc/irq/[0-9]*; do echo "$1" | sudo tee "$irq/smp_affinity_list" >/dev/null 2>&1 || true; done
+}
+
+# the accelerated-networking VF behind eth0 (its netdev has eth0 as master), if any
+vf_dev() {
+    local i
+    for i in /sys/class/net/*; do
+        if [[ -e $i/master ]]; then
+            basename "$i"
+            return
+        fi
+    done
+}
+
+# irq_rcv <on|off>: the MANA queues' IRQs on the receiver's core, or back where they were
+irq_rcv() {
+    local n a
+    if [[ $1 == on ]]; then
+        topo8
+        awk -F: '/mana/ { gsub(/ /, "", $1); print $1 }' /proc/interrupts | while read -r n; do
+            echo "$n $(cat "/proc/irq/$n/smp_affinity_list")"
+        done >"$res/mana-irqs.saved"
+        while read -r n a; do echo "$xrcv8" | sudo tee "/proc/irq/$n/smp_affinity_list" >/dev/null 2>&1 || true; done <"$res/mana-irqs.saved"
+    else
+        while read -r n a; do echo "$a" | sudo tee "/proc/irq/$n/smp_affinity_list" >/dev/null 2>&1 || true; done <"$res/mana-irqs.saved"
+    fi
+}
+
+# busy_net <on|off>: socket busy reads (Aeron's receiver calls recvmmsg directly, so
+# net.core.busy_poll, which only poll and select use, would do nothing), with NAPI deferring
+# hard IRQs and flushing on a timer on the VF
+busy_net() {
+    local vf on=$([[ $1 == on ]] && echo 1 || echo 0)
+    vf=$(vf_dev)
+    sudo sysctl -q -w net.core.busy_read=$((on * 50))
+    if [[ -n $vf ]]; then
+        echo $((on * 2)) | sudo tee "/sys/class/net/$vf/napi_defer_hard_irqs" >/dev/null 2>&1 || true
+        echo $((on * 200000)) | sudo tee "/sys/class/net/$vf/gro_flush_timeout" >/dev/null 2>&1 || true
+    fi
+}
+
+# jumbo <on|off>: MTU 9000 inside the VNet, as MANA allows there, with the default route kept at
+# 1500 so that traffic leaving the VNet (ssh from the operator) still fits
+jumbo() {
+    local route
+    if [[ $1 == on ]]; then
+        route=$(ip route show default | head -1)
+        echo "$route" >"$res/default-route.saved"
+        # shellcheck disable=SC2086 # the route's words are ip's arguments
+        sudo ip route replace $route mtu 1500 || true
+        sudo ip link set eth0 mtu 9000
+    else
+        sudo ip link set eth0 mtu 1500
+        route=$(cat "$res/default-route.saved")
+        # shellcheck disable=SC2086
+        sudo ip route replace $route || true
+    fi
+    ip -br link show eth0 >>"$res/jumbo.log" 2>&1
+    ip route show default >>"$res/jumbo.log" 2>&1
+}
+
+# VF received and sent packets on eth0, busy-poll receives and datapath switches so far
+path_stats() {
+    local vf_rx vf_tx bp sw
+    vf_rx=$(ethtool -S eth0 2>/dev/null | awk '/vf_rx_packets:/ { print $2; exit }')
+    vf_tx=$(ethtool -S eth0 2>/dev/null | awk '/vf_tx_packets:/ { print $2; exit }')
+    bp=$(awk '/^TcpExt:/ { if (!h) { for (i = 1; i <= NF; i++) if ($i == "BusyPollRxPackets") c = i; h = 1 } else print $c }' /proc/net/netstat)
+    sw=$(sudo dmesg 2>/dev/null | grep -ci 'data path switched' || true)
+    echo "${vf_rx:-0} ${vf_tx:-0} ${bp:-0} ${sw:-0}"
+}
+
 # the newest Debian kernel, Linux from trixie-backports in its cloud flavour (built for Hyper-V
 # and the MANA NIC), then a reboot into it
 kernel_latest() {
@@ -1142,23 +1270,23 @@ boot8() {
 # what low-latency boxes add on top of isolation: SMT off, no lockup watchdogs or audit,
 # staggered ticks, no transparent huge pages, and idle CPUs polling instead of halting, which
 # with SMT off cannot steal from a busy twin
-TUNE8_ARGS="nosmt idle=poll nowatchdog nmi_watchdog=0 nosoftlockup skew_tick=1 transparent_hugepage=never audit=0"
+TUNE8_ARGS="nosmt idle=poll rcu_nocb_poll nowatchdog nmi_watchdog=0 nosoftlockup skew_tick=1 transparent_hugepage=never audit=0"
 
 # the runtime half of the tuning, after each boot: every IRQ, kernel workqueue and periodic job
 # on CPU 0 or off, and nothing in the background that does not need to run
 tune8_runtime() {
-    sudo systemctl stop irqbalance unattended-upgrades apt-daily.timer apt-daily-upgrade.timer man-db.timer \
+    sudo systemctl stop irqbalance unattended-upgrades walinuxagent apt-daily.timer apt-daily-upgrade.timer man-db.timer \
         fstrim.timer e2scrub_all.timer 2>/dev/null || true
-    for irq in /proc/irq/[0-9]*; do echo "$hk8" | sudo tee "$irq/smp_affinity_list" >/dev/null 2>&1 || true; done
+    pin_irqs "$hk8"
     echo 1 | sudo tee /sys/devices/virtual/workqueue/cpumask >/dev/null 2>&1 || true
+    echo 0 | sudo tee /sys/kernel/mm/ksm/run >/dev/null 2>&1 || true
     sudo sysctl -q -w kernel.watchdog=0 vm.stat_interval=120 kernel.numa_balancing=0 2>/dev/null || true
+    # console messages go synchronously to the serial port the image logs to
+    sudo sysctl -q -w kernel.printk="3 4 1 3" 2>/dev/null || true
+    # as Azure recommends with accelerated networking, so a switch between the VF and the
+    # synthetic path drops nothing
+    sudo sysctl -q -w net.ipv4.conf.all.rp_filter=2 net.ipv4.conf.default.rp_filter=2 2>/dev/null || true
     sudo swapoff -a || true
-    # no receive offloads merging packets, and no interrupt coalescing where the NIC allows it
-    local i
-    for i in $(ls /sys/class/net | grep -v '^lo$'); do
-        sudo ethtool -K "$i" gro off lro off >>"$res/tune8-nic.log" 2>&1 || true
-        sudo ethtool -C "$i" adaptive-rx off rx-usecs 0 >>"$res/tune8-nic.log" 2>&1 || true
-    done
 }
 
 test_phase() {
@@ -1222,6 +1350,11 @@ case ${1:-} in
     pong-up8) shift; pong_up8 "$@" ;;
     xsub-up8) shift; xsub_up8 "$@" ;;
     xsub-result) xsub_result ;;
+    path-stats) path_stats ;;
+    pin-irqs) topo8 && pin_irqs "$hk8" ;;
+    busy-net) busy_net "$2" ;;
+    irq-rcv) irq_rcv "$2" ;;
+    jumbo) jumbo "$2" ;;
     archive8) archive8 ;;
     k8s8) k8s8 ;;
     k3s-down) k3s_down ;;
