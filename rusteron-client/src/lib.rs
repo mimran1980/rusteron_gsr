@@ -3635,7 +3635,8 @@ mod tests {
     fn async_add_subscription_invalid_uri_fails_cleanly() {
         let (aeron, driver, error_handler) = setup_aeron_for_uaf_test();
 
-        let bad_uri = c"aeron:udp?endpoint=not-a-real-host:0|interface=500.500.500.500";
+        // the driver rejects the port before resolving the host, so no DNS lookup slows this down
+        let bad_uri = c"aeron:udp?endpoint=127.0.0.1:99999";
         match aeron.async_add_subscription(bad_uri, 1621, Handlers::NONE, Handlers::NONE) {
             Err(_) => {} // rejected synchronously — fine
             Ok(poller) => {
@@ -4216,7 +4217,8 @@ mod tests {
     fn async_add_publication_invalid_uri_fails_cleanly() {
         let (aeron, driver, error_handler) = setup_aeron_for_uaf_test();
 
-        let bad_uri = c"aeron:udp?endpoint=not-a-real-host:0|interface=500.500.500.500";
+        // the driver rejects the port before resolving the host, so no DNS lookup slows this down
+        let bad_uri = c"aeron:udp?endpoint=127.0.0.1:99999";
         match aeron.async_add_publication(bad_uri, 1622) {
             Err(_) => {} // rejected synchronously — fine
             Ok(poller) => {
