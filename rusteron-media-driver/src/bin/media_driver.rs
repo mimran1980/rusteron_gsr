@@ -15,6 +15,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create Aeron context
     let aeron_context = AeronDriverContext::new()?;
+    // as aeronmd does: without these, AERON_DRIVER_CPUSET_AFFINITY and the
+    // AERON_*_CPU_AFFINITY settings are read but never applied
+    aeron_context.apply_cgroup_cpuset_affinity()?;
+    aeron_context.set_thread_affinity_on_start();
     info!("aeron dir: {:?}", aeron_context.get_dir());
     aeron_context.print_configuration();
 
