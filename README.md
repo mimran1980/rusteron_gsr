@@ -300,40 +300,38 @@ live stream), see [`rusteron-archive`](./rusteron-archive/README.md#persistent-s
 
 ## Tuning on x86-64 Linux
 
-Measured on 2026-10-09 on two Azure 4-vCPU VMs running Debian 13: an AMD EPYC 9V74
-(F4as_v6, 4 cores) and an Intel Xeon Platinum 8573C (D4s_v6, 2 cores with SMT). IPC and UDP
-round trips of 32-byte messages, one in flight, over loopback and between two 2-vCPU VMs in one
-placement group, and IPC throughput; each figure is a median of 3 to 12 runs. The cross-host
-figures are Azure's network; other NICs will differ. Tables, method and caveats:
-[BENCHMARKS.md](./BENCHMARKS.md#x86-64-linux-on-azure-2026-10-09), and for huge pages, CPU
-isolation, Kubernetes, cross-host UDP and Java [here](./BENCHMARKS.md#java-huge-pages-cpu-isolation-kubernetes-and-cross-host-udp-2026-10-09).
+Measured on 2026-10-09 between two Azure `Standard_D8s_v6` VMs (Intel Xeon Platinum 8573C) in one proximity placement group, on Debian 13 with Linux 7.2.6: UDP round trips and throughput between the two hosts, and IPC on each host, with 32-byte messages. Each figure is a median of 5 interleaved runs. Other NICs and clouds will differ. Tables, method and open issues are in [BENCHMARKS.md](./BENCHMARKS.md#intel-d8s_v6-pair-on-azure-2026-10-09).
+
+These were used in every run, and earlier runs on smaller VMs showed each to help:
+- `AERON_TERM_BUFFER_SPARSE_FILE=false` (driver) and `AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true` (clients). Without them a new publication page-faults its way through its log.
+- `AERON_DIR` on 2 MiB `hugetlbfs` with `AERON_FILE_PAGE_SIZE=2097152`.
+- `noop` idle for the driver's sender and receiver.
+- Every busy-spinning thread pinned to its own core, and everything else (interrupts, the driver's conductor, the clients' other threads) on a housekeeping CPU.
 
 | Setting | Measured effect | Cost |
 |---|---|---|
-| `AERON_TERM_BUFFER_SPARSE_FILE=false` (driver) and `AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true` (clients) | IPC p99 3.0 µs → 240 ns (AMD), 2.3 → 1.3 µs (Intel). UDP p99 −5% (AMD), 13.1 → 8.8 µs (Intel). Without them a new publication takes a page fault for each new 4 KiB of its log until it has written through the log once (3 × term length). | The driver allocates and touches the whole log when it creates a publication (192 MiB of `/dev/shm` for IPC at the default term length, 48 MiB for UDP), and each client touches it when it maps it, so create publications at start-up. A UDP receiver's driver and clients do the same for each image (48 MiB) when a publisher connects. |
-| Huge pages for Aeron's files: `huge=always` on the tmpfs, or `AERON_DIR` on `hugetlbfs` with `AERON_FILE_PAGE_SIZE=2097152` (driver) | With the settings above, Intel IPC p99 1.3 µs → 371 ns and p99.9 3.3 → 1.8 µs; with ping and pong on one core's SMT threads, p99 720 → 143 ns, and `hugetlbfs` cut p99.99 most (1.05 µs → 378 ns). On AMD IPC did not change. 1 GiB pages gave nothing more than 2 MiB. In Kubernetes a `HugePages-2Mi` emptyDir did the same (Intel p99 627 → 126 ns). Without pre-touch the tmpfs kind adds rare stalls (max 0.2 ms on AMD, 0.5 ms on Intel). | `huge=always` applies to every user of the mount. `hugetlbfs` needs pages reserved (`vm.nr_hugepages`) and a mount with `size=`, or Aeron's storage check sees no usable space; kubelet mounts without `size=`, so pods need `AERON_PERFORM_STORAGE_CHECKS=false`. |
-| `noop` idle for the driver's sender and receiver (UDP) | The default `backoff` made UDP p50 103 µs instead of 9.5 µs on AMD (4 of 5 runs) and added 31–36 µs from p90 to p99.9 on Intel. Between two Intel hosts it doubled the round trip (48 → 98 µs). | Each spins a whole core. |
-| `AERON_THREADING_MODE=SHARED` with `AERON_SHARED_IDLE_STRATEGY=noop` (UDP) | Intel, against dedicated `noop`: p50 −11%, p99.9 −27%, p99.99 −57%. AMD: p99.9 −19%, but p50 +17% and p99 +24%. | One driver thread does everything. May be specific to loopback, where that thread both sends and receives each message. |
-| In Kubernetes: kubelet's static CPU manager (`cpu-manager-policy=static`, `reserved-cpus`) and Guaranteed pods that request whole CPUs | Each container gets its CPUs to itself, with no CFS quota on Kubernetes 1.36. Under the default policy the same pod was throttled in 13–17% of 100 ms periods, with IPC max 1.8–2.3 ms against 55–87 µs on the host. Latency to p99.9 and throughput matched the host either way. | CPUs reserved per container; kubelet needs a restart (and its CPU manager state deleted) to switch policy. Every thread in the container shares its CPUs, an Aeron client's conductor included. UDP p99.99 in the pod stayed at 0.2–0.6 ms (host 35–51 µs). |
-| Thread placement | Intel IPC with ping and pong on the two SMT threads of one core (driver on the other): p50 294 → 106 ns, throughput −11%. Spinning driver threads on the SMT siblings of the hot threads: IPC throughput −38%, though p99.9 fell from 9.9 to 3.1 µs (two groups run one after the other). Unpinned: AMD IPC throughput −4%. Kernel isolation of the hot CPUs (`isolcpus`, `nohz_full`) gave no gain on 4 vCPUs and slowed UDP by 5–15%, as the driver then shares the other CPUs with every interrupt. | |
-
-These client build settings gave no consistent gain on IPC, with the driver binary unchanged,
-so they can stay at their defaults: `-march=native` for the Aeron C code against
-`RUSTERON_C_MARCH=x86-64` (what the precompiled libraries use) or `x86-64-v3`; Rust
-`-C target-cpu=native` against the default (rusteron's own `.cargo/config.toml` does not reach
-crates that depend on it); static against dynamic linking. For the driver's sender and
-receiver, `spin` was no better than `noop`.
+| Socket buffers and receiver window: `AERON_SOCKET_SO_SNDBUF`, `AERON_SOCKET_SO_RCVBUF` and `AERON_RCV_INITIAL_WINDOW_LENGTH` at 2 MiB, with `net.core.rmem_max`/`wmem_max` raised to allow them | UDP throughput between the hosts 1.9 → 13 M msgs/s. No effect on round-trip latency with one message in flight. | Memory per socket. |
+| MTU 9000 inside the VNet and `AERON_MTU_LENGTH=8192` | UDP throughput 13 → 28.5 M msgs/s. | Azure allows it only inside a VNet and directly peered VNets; keep the default route at 1500 so traffic leaving the VNet still fits. |
+| CPU isolation: `isolcpus=nohz,domain,managed_irq,<hot CPUs> nohz_full=<same> rcu_nocbs=<same> irqaffinity=<housekeeping>` | IPC p99.99 2.5 → 0.8–1.0 µs, and most runs' max 20–67 → 4–7 µs. UDP: no change on its own. | Isolated CPUs take no unpinned work, which then all crowds onto the housekeeping CPUs, so every busy thread must be pinned. |
+| Socket busy reads, `net.core.busy_read=50`, with `napi_defer_hard_irqs=2` and `gro_flush_timeout=200000` on the NIC's VF, on isolated CPUs | UDP round trip p50 38.6 → 31 µs, p99.99 157 → 44–50 µs. `net.core.busy_poll` does nothing for Aeron's receiver, which calls `recvmmsg` directly. | The receiver's core polls the NIC queue itself. |
+| The NIC's queue IRQs on the receiver's core, on isolated CPUs | UDP p99.99 157 → 49–57 µs; with the tuned kernel below, max 74 µs (62–84). | Re-pin them whenever Azure re-adds the VF (host servicing), which spreads them over all CPUs again. |
+| The client's other threads (its conductor) off the busy-spinning CPUs | IPC p99.99 3.1–3.6 → 0.7–1.0 µs on isolated CPUs. | A CPU for them, or the conductor agent invoker. |
+| A tuned kernel on top of isolation: `nosmt idle=poll rcu_nocb_poll nowatchdog nmi_watchdog=0 nosoftlockup skew_tick=1 transparent_hugepage=never audit=0`, all IRQs and workqueues on the housekeeping CPU, background services stopped | UDP p50 38.6 → 34.9 µs. IPC unchanged. | SMT off halves the CPUs; `idle=poll` keeps every idle CPU busy. |
+| `mitigations=off` | UDP p50 34.9 → 33.9 µs and p99.99 156 → 121 µs. IPC unchanged. | Turns off the kernel's protection against CPU side-channel attacks. |
+| Driver threading | Dedicated (pinned `noop` sender and receiver), SHARED_NETWORK and SHARED were within about 2 µs of each other at UDP p50. A SHARED driver costs IPC: p50 0.31 → 0.36–0.42 µs and half the throughput. | Dedicated spins two cores. |
+| In Kubernetes: kubelet's static CPU manager and Guaranteed pods requesting whole CPUs | Each container gets its CPUs to itself, with no CFS quota. Under the default policy a 1-CPU driver container was throttled in 23–55% of 100 ms periods, stalling round trips for up to 1.8 ms; one CPU of headroom or no CPU limit avoided it. | See [BENCHMARKS.md](./BENCHMARKS.md#configuring-a-pod) for the kubelet and pod settings. |
 
 ```bash
 # C media driver (a Java driver reads -D system properties instead)
 export AERON_TERM_BUFFER_SPARSE_FILE=false
-export AERON_SENDER_IDLE_STRATEGY=noop     # UDP
-export AERON_RECEIVER_IDLE_STRATEGY=noop   # UDP
+export AERON_SENDER_IDLE_STRATEGY=noop AERON_RECEIVER_IDLE_STRATEGY=noop
+export AERON_CONDUCTOR_CPU_AFFINITY=0 AERON_SENDER_CPU_AFFINITY=4 AERON_RECEIVER_CPU_AFFINITY=6
+export AERON_SOCKET_SO_SNDBUF=2m AERON_SOCKET_SO_RCVBUF=2m AERON_RCV_INITIAL_WINDOW_LENGTH=2m
+export AERON_FILE_PAGE_SIZE=2097152 AERON_DIR=/mnt/huge/aeron
 # every client
 export AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true
-# huge pages for every /dev/shm user until the next boot, as measured
-sudo mount -o remount,huge=always /dev/shm
-# or explicit 2 MiB pages for AERON_DIR only (driver: AERON_FILE_PAGE_SIZE=2097152)
+# the host
+sudo sysctl -w net.core.rmem_max=16777216 net.core.wmem_max=16777216 net.core.busy_read=50
 sudo sysctl -w vm.nr_hugepages=1536
 sudo mkdir -p /mnt/huge && sudo mount -t hugetlbfs -o pagesize=2M,size=2G,uid="$(id -u)" none /mnt/huge
 ```
