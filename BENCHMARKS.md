@@ -17,7 +17,7 @@
 - **Kernel tuning beyond isolation:**
   - SMT off, `idle=poll`, no watchdogs and the rest of the tuned state took 3.7 µs off the cross-host p50 (38.6 → 34.9 µs). IPC didn't change.
   - `mitigations=off` took off another 1 µs and lowered p99.99 from 156 to 121 µs, at a security cost.
-- **Java archive:** recording to tmpfs ran at 6.2 M msgs/s (1.6 GB/s, 256-byte messages). Confining the whole JVM to the housekeeping CPU cost 25%. A recorded IPC ping-pong sometimes stalls (see [Open issues](#open-issues)).
+- **Java archive:** recording to tmpfs ran at 6.2 M msgs/s (1.6 GB/s, 256-byte messages). Confining the whole JVM to the housekeeping CPU cost 25%.
 
 ## Method
 
@@ -157,13 +157,14 @@ An `ArchivingMediaDriver` (Java 21) runs with `-Xms1g -Xmx1g -XX:+AlwaysPreTouch
 
 | JVM | reps | published (M msgs/s) | recorded (M msgs/s) | recorded MB/s | recorded-ping round trip p50 / p99 / p99.99 / max (µs) |
 |---|---|---|---|---|---|
-| unpinned | 5 | 6.72 (6.50–6.90) | 6.13 (5.88–6.24) | 1569 | stalled in 5 of 5 |
+| unpinned | 5 | 6.72 (6.50–6.90) | 6.13 (5.88–6.24) | 1569 | lost to a harness race (see below) |
 | on CPU 0 | 5 | 5.11 (4.83–5.21) | 4.62 (4.46–4.73) | 1182 | 0.317 / 1.90 / 8.78 / 38.1 |
-| on CPU 0, archive-recorder thread on CPU 6 | 5 | 6.83 (6.59–6.93) | 6.23 (6.00–6.27) | 1595 | 0.322 / 1.93 / 9.10 / 43.4 (1 of 5 stalled) |
-| as above, recorder `noop` idle | 5 | 6.86 (6.75–6.90) | 6.23 (6.16–6.27) | 1594 | 0.322 / 1.93 / 11.0 / 22.9 (2 of 5 stalled) |
+| on CPU 0, archive-recorder thread on CPU 6 | 5 | 6.83 (6.59–6.93) | 6.23 (6.00–6.27) | 1595 | 0.322 / 1.93 / 9.10 / 43.4 (4 reps) |
+| as above, recorder `noop` idle | 5 | 6.86 (6.75–6.90) | 6.23 (6.16–6.27) | 1594 | 0.322 / 1.93 / 11.0 / 22.9 (3 reps) |
 
 - **The recorded ping-pong ran on the archive's embedded Java driver**, not the C driver. Its p99 of about 1.9 µs, against 0.37 µs on the C driver without recording, combines the driver change with the recording, so neither cause is isolated.
 - **Placement:** confining the whole JVM to the housekeeping CPU cut recording throughput by 25%; pinning its recorder to a core of its own got it back. A busy-spinning recorder added nothing.
+- **Missing reps** were lost to a race in the benchmark itself, not the archive. The ping started once its publication was connected, but the archive's recording subscription also connects it. So ping sometimes sent before pong had subscribed, pong missed that first message, and both waited forever. Aeron's counters confirmed it: the ping stream at 64 bytes, recorded by the archive, and pong's subscription joined at 64. The benchmark now waits for pong's own subscription; locally that took the recorded ping-pong from 0 of 5 to 5 of 5.
 
 ## Kubernetes pods (single VM, earlier run, 2026-10-09)
 
@@ -253,13 +254,9 @@ spec:
 - `SO_BUSY_POLL` and `SO_PREFER_BUSY_POLL` per socket: Aeron's C code never sets them.
 - Kernel bypass (DPDK): open-source Aeron has no DPDK transport.
 
-## Open issues
+## Not measured
 
-- **The recorded IPC ping-pong sometimes stalls.**
-  - It stalled in every rep with the JVM unpinned, on both VMs, and in 3 of 15 pinned reps on intel-a. A stall stops the run at its timeout.
-  - During a stall the archive's and the Java driver's threads were all idle, the recorder included. So the archive had stopped consuming a stream it was recording, while the IPC publication waited on it as a subscriber; it was not short of CPU.
-  - Aeron's counters and the archive's error log were not captured in this run; the lab now saves them.
-- **Not measured:** AMD; more than one message in flight; publications created after start-up; a Java driver across hosts.
+AMD; more than one message in flight; publications created after start-up; a Java driver across hosts; recording to a real disk, replays and loads from several streams (the next run).
 
 ## How to run
 
