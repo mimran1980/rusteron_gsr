@@ -167,6 +167,8 @@ loop {
 
 [`examples/duty_cycle.rs`](./examples/duty_cycle.rs) runs this loop on one thread with an agent-invoker client: it connects without blocking through `aeron.main_do_work()`, then adds its publication and builds a persistent subscription through `archive.do_work()`.
 
+Persistent subscriptions share none of their per-poll work: each has its own archive client, and every poll checks its control session before it reads the live image. Idle on two 4-vCPU x86-64 VMs ([BENCHMARKS.md](../BENCHMARKS.md#x86-64-linux-on-azure-2026-10-09)), a poll cost 22–24 ns on both with the client's conductor thread, against 8–12 ns for a plain subscription, and 35 ns (AMD) or 43 ns (Intel) with 100 of them. With the agent invoker every poll also runs the conductor: 54–62 ns, and 69 ns (AMD) or 107 ns (Intel) with 100. The conductor thread was slower to bring 100 of them to LIVE, though (3.6–3.8 s against about 0.8 s), possibly because it sleeps 16 ms when idle (`AERON_CLIENT_IDLE_SLEEP_DURATION`).
+
 Blocking archive calls idle with the C client's default backoff strategy between polls (Aeron C++ yields instead); `archive_context.set_idle_strategy(..)` replaces it.
 
 `archive.do_work()` fails only on an archive error its context has no error handler for. Client faults go to the client's error handler, and a lost archive shows as `archive.get_control_response_subscription().is_connected()` turning false.

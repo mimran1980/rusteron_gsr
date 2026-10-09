@@ -87,7 +87,10 @@ For full build instructions, see [BUILD.md](./BUILD.md).
 A release build from source compiles the Aeron C code for the build machine's CPU
 (`-march=native`). Set `RUSTERON_C_MARCH` (e.g. `x86-64-v3`) when binaries run on
 machines other than the one that built them. The precompiled libraries (`precompile`)
-target the architecture's baseline (`x86-64`, `armv8-a`), so they run on any CPU.
+target the architecture's baseline (`x86-64`, `armv8-a`), so they run on any CPU. On the
+x86-64 VMs in [Tuning on x86-64 Linux](#tuning-on-x86-64-linux), `-march=native` for the
+client's C code showed no consistent gain over `x86-64` or `x86-64-v3` on IPC; the driver's
+build and UDP were not varied.
 
 ### Multi-threaded (`Sync`) handles
 
@@ -292,6 +295,42 @@ Behavioural notes:
 
 For recording, replay, and **persistent subscriptions** (replay history, then seamlessly join a
 live stream), see [`rusteron-archive`](./rusteron-archive/README.md#persistent-subscriptions).
+
+---
+
+## Tuning on x86-64 Linux
+
+Measured on 2026-10-09 on two Azure 4-vCPU VMs running Debian 13: an AMD EPYC 9V74
+(F4as_v6, 4 cores) and an Intel Xeon Platinum 8573C (D4s_v6, 2 cores with SMT). IPC and
+loopback UDP round trips of 32-byte messages, one in flight, and IPC throughput; each figure
+is a median of 5 to 12 runs. Nothing here covers NICs or networks between hosts. Tables,
+method and caveats: [BENCHMARKS.md](./BENCHMARKS.md#x86-64-linux-on-azure-2026-10-09).
+
+| Setting | Measured effect | Cost |
+|---|---|---|
+| `AERON_TERM_BUFFER_SPARSE_FILE=false` (driver) and `AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true` (clients) | IPC p99 3.0 µs → 240 ns (AMD), 2.3 → 1.3 µs (Intel). UDP p99 −5% (AMD), 13.1 → 8.8 µs (Intel). Without them a new publication takes a page fault for each new 4 KiB of its log until it has written through the log once (3 × term length). | The driver allocates and touches the whole log when it creates a publication (192 MiB of `/dev/shm` for IPC at the default term length, 48 MiB for UDP), and each client touches it when it maps it, so create publications at start-up. A UDP receiver's driver and clients do the same for each image (48 MiB) when a publisher connects. |
+| Huge pages for Aeron's files (`huge=always` on the tmpfs) | With the settings above, Intel IPC p99 1.3 µs → 371 ns and p99.9 3.3 → 1.8 µs; on AMD p99 and above did not change. Without pre-touch it adds rare stalls (max 0.2 ms on AMD, 0.5 ms on Intel). | Applies to every user of the mount; a dedicated tmpfs for `AERON_DIR` would keep it to Aeron (not measured). |
+| `noop` idle for the driver's sender and receiver (UDP) | The default `backoff` made UDP p50 103 µs instead of 9.5 µs on AMD (4 of 5 runs) and added 31–36 µs from p90 to p99.9 on Intel. | Each spins a whole core. |
+| `AERON_THREADING_MODE=SHARED` with `AERON_SHARED_IDLE_STRATEGY=noop` (UDP) | Intel, against dedicated `noop`: p50 −11%, p99.9 −27%, p99.99 −57%. AMD: p99.9 −19%, but p50 +17% and p99 +24%. | One driver thread does everything. May be specific to loopback, where that thread both sends and receives each message. |
+| Thread placement | Intel IPC with ping and pong on the two SMT threads of one core (driver on the other): p50 294 → 106 ns, throughput −11%. Spinning driver threads on the SMT siblings of the hot threads: IPC throughput −38%, though p99.9 fell from 9.9 to 3.1 µs (two groups run one after the other). Unpinned: AMD IPC throughput −4%. | |
+
+These client build settings gave no consistent gain on IPC, with the driver binary unchanged,
+so they can stay at their defaults: `-march=native` for the Aeron C code against
+`RUSTERON_C_MARCH=x86-64` (what the precompiled libraries use) or `x86-64-v3`; Rust
+`-C target-cpu=native` against the default (rusteron's own `.cargo/config.toml` does not reach
+crates that depend on it); static against dynamic linking. For the driver's sender and
+receiver, `spin` was no better than `noop`.
+
+```bash
+# C media driver (a Java driver reads -D system properties instead)
+export AERON_TERM_BUFFER_SPARSE_FILE=false
+export AERON_SENDER_IDLE_STRATEGY=noop     # UDP
+export AERON_RECEIVER_IDLE_STRATEGY=noop   # UDP
+# every client
+export AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true
+# huge pages for every /dev/shm user until the next boot, as measured
+sudo mount -o remount,huge=always /dev/shm
+```
 
 ---
 
