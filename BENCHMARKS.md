@@ -2,7 +2,7 @@
 
 # Java, huge pages, CPU isolation, Kubernetes and cross-host UDP (2026-10-09)
 
-The same two machines as in [x86-64 Linux on Azure](#x86-64-linux-on-azure-2026-10-09), with Aeron's Java samples, huge pages, kernel CPU isolation, Kubernetes pods and a pair of 2-vCPU VMs per CPU type for UDP between hosts. The noise rules are the same: medians across reps, with the range across reps in brackets.
+The same two machines as in [x86-64 Linux on Azure](#x86-64-linux-on-azure-2026-10-09), with Aeron's Java samples, huge pages, kernel CPU isolation, Kubernetes pods and a pair of 2-vCPU VMs per CPU type for UDP between hosts. The noise rules are the same: medians across reps, with the range across reps in brackets. `max` is the slowest round trip of each rep, a single sample, so it varies most.
 
 ## Method
 
@@ -21,6 +21,7 @@ The same two machines as in [x86-64 Linux on Azure](#x86-64-linux-on-azure-2026-
   - `hugetlbfs`: `vm.nr_hugepages=1536`; `AERON_DIR` on a `hugetlbfs` mount with `pagesize=2M,size=2G`; `AERON_FILE_PAGE_SIZE=2097152` for the driver. Without `size=`, Aeron's storage check sees no usable space and refuses every log.
 - **1 GiB pages**, a separate run (IPC only, 5 interleaved reps): `hugetlbfs` mounts with `pagesize=2M` and `pagesize=1G`, and `AERON_FILE_PAGE_SIZE` to match. Reserved after boot, only 5 (AMD) and 6 (Intel) of the 8 requested 1 GiB pages could be had.
 - **Kubernetes**: k3s on each VM, and one pod per volume type with `AERON_DIR` on an `emptyDir` of medium `Memory`, `HugePages-2Mi` or `HugePages-1Gi` (configuration below). Each pod ran the harness and the C driver in one container, pinned with `taskset`, 3 reps.
+- **Kubernetes CPU manager**, a later run (k3s v1.36.5, 3 reps): one Guaranteed pod of two containers sharing a `HugePages-2Mi` `emptyDir`. One runs the C driver (`SHARED`, `noop`) with 1 CPU; the other runs the harness with 2, ping and pong pinned one each to its CPUs (to CPUs 2 and 3 when it may use all four). The pod ran under kubelet's default CPU manager, then under the static policy with `reserved-cpus=0`. Host baselines with the same settings ran before k3s was installed and again with it running. Each container recorded its CFS throttling counters (`cpu.stat`), its quota (`cpu.max`) and its CPUs.
 - **Cross-host UDP**: two 2-vCPU VMs per CPU type, in one proximity placement group with accelerated networking:
   - AMD: `Standard_F2as_v6` (2 cores) in Korea Central.
   - Intel: `Standard_D2s_v6` (1 core, 2 SMT threads) in North Central US.
@@ -48,6 +49,13 @@ The same two machines as in [x86-64 Linux on Azure](#x86-64-linux-on-azure-2026-
   - Against a `Memory` volume, a `HugePages-2Mi` volume took Intel IPC p99 from 627 to 126 ns and p99.9 from 791 to 187 ns. AMD did not change.
   - kubelet mounts the huge page volume without `size=`, so Aeron needs `AERON_PERFORM_STORAGE_CHECKS=false`.
   - Intel's `HugePages-1Gi` pod was never scheduled: the node had 4 of the 6 GiB it asked for.
+- **Kubernetes CPU manager:**
+  - **Static policy:** each container got CPUs to itself (driver CPU 1, harness CPUs 2 and 3) and no quota (`cpu.max` was `max`), so it was never throttled.
+  - **Default policy:** the containers could run on all four CPUs under a quota, and were throttled in 13–17% of the 100 ms periods. The driver lost 172 ms in about 40 s. That shows in the max: IPC 1.8–2.3 ms, against 55–87 µs on the host.
+  - **Latency to p99.9 and throughput** were the same in all four setups: host, host with k3s running, and the pod under either policy.
+  - **UDP p99.99** in the pod was 0.2–0.6 ms under either policy, against 35–51 µs on the host. Not investigated; in the pod the driver's one CPU also does its loopback traffic's kernel work.
+  - **Static policy and max:** it removed the millisecond IPC stalls on AMD (max 93 µs), but not on Intel (2.9 ms). There the harness's own Aeron client conductor thread has nowhere to run but the two hot CPUs.
+  - **k3s on the host:** with k3s running, host UDP p50 rose by 3 µs (AMD 11.2 → 14.4 µs, Intel 6.3 → 9.0 µs), likely from the netfilter rules it installs, which pod traffic does not cross. IPC p50 did not move.
 - **Cross-host UDP:**
   - **Floor:** about 42 µs (AMD) and 48 µs (Intel) round trip at p50. That is the Azure network's floor in a placement group.
   - **Idle strategy:** on Intel the default `backoff` doubled it (98 µs, p99 158 µs). On AMD, with two real cores, `backoff` and `noop` were level at p50 and p99.
@@ -59,7 +67,7 @@ The same two machines as in [x86-64 Linux on Azure](#x86-64-linux-on-azure-2026-
 The runs above came from `scripts/x86-lab/lab.sh`, which creates the Azure VMs, runs the phases in `scripts/x86-lab/harness/vm.sh` and deletes the VMs on exit:
 - `bench-pinned`, `isolate` and `bench-isolated` for the Java comparison and isolation;
 - `bench-huge` and `bench-1g` for huge pages;
-- `k8s` for the pods;
+- `k8s` for the pods, and `k8s-cpu` for the CPU manager comparison;
 - `LAB_PAIR=1` with `LAB_NODES` for cross-host UDP.
 
 Its header lists the options. These recipes run the same programs without pinning:
@@ -80,7 +88,7 @@ What the k3s run used, reduced to the parts that matter:
   - 2 MiB pages: `vm.nr_hugepages` in `/etc/sysctl.d`.
   - 1 GiB pages: kernel arguments such as `hugepagesz=1G hugepages=8`, since they are rarely free once the node has run.
 - Huge page requests must equal limits.
-- The driver and its clients must share the volume. Here one container ran both; a driver in its own pod was not tested.
+- The driver and its clients must share the volume: one `emptyDir` per pod, which every container in it can mount. A driver in its own pod was not tested.
 
 ```yaml
 apiVersion: v1
@@ -109,7 +117,49 @@ spec:
 
 For 1 GiB pages, use `hugepages-1Gi`, `medium: HugePages-1Gi` and `AERON_FILE_PAGE_SIZE=1073741824`, and leave room for Aeron rounding each file up to whole pages.
 
-Pinning inside the pod used `taskset` under kubelet's default CPU manager. The CPU limit is a quota per 100 ms period: busy-spinning threads that add up to it use the quota early and freeze the pod for the rest of each period. These pods ran 2–3 spinners against a limit of 4. For exclusive cores, use the static CPU manager policy (`cpu-manager-policy=static` with `reserved-cpus` for housekeeping) and Guaranteed pods that request whole CPUs, with at most one spinning thread per CPU, each pinned. This run did not test that setup.
+## CPUs in Kubernetes
+
+Under kubelet's default CPU manager a CPU limit is a quota per 100 ms period: busy-spinning threads that add up to it use the quota early and freeze the container for the rest of the period. The pods above pinned with `taskset` and ran 2–3 spinners against a limit of 4. With the static CPU manager, a Guaranteed pod's containers that request whole CPUs get those CPUs to themselves, and on Kubernetes 1.36 no quota at all. The CPU manager run used this:
+
+- **kubelet:** `cpu-manager-policy=static` and `reserved-cpus=0`, with CPU 0 left for the system. On k3s that goes in `/etc/rancher/k3s/config.yaml` as `kubelet-arg`. kubelet refuses to start with a state file from another policy, so stop k3s, delete `/var/lib/kubelet/cpu_manager_state`, then start it.
+- **Room for the pod:** the reserved CPUs leave 3 allocatable, and other pods' CPU requests count against them. CoreDNS and local-path-provisioner were scaled to zero so a 3-CPU pod fitted.
+- **The pod:** every container Guaranteed (requests equal limits, whole CPUs), with one spinning thread per CPU, each pinned inside the container. Every other thread in a container, such as an Aeron client's conductor, also runs on those CPUs, so give it one more CPU, or use the conductor agent invoker.
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: aeron-app
+spec:
+  containers:
+    - name: driver
+      image: debian:trixie-slim
+      env:
+        - {name: AERON_DIR, value: /aeron/driver}
+        - {name: AERON_THREADING_MODE, value: SHARED}
+        - {name: AERON_SHARED_IDLE_STRATEGY, value: noop}
+        - {name: AERON_FILE_PAGE_SIZE, value: "2097152"}
+        - {name: AERON_PERFORM_STORAGE_CHECKS, value: "false"}
+        - {name: AERON_TERM_BUFFER_SPARSE_FILE, value: "false"}
+      resources:
+        requests: {cpu: "1", memory: 1Gi, hugepages-2Mi: 1Gi}
+        limits: {cpu: "1", memory: 1Gi, hugepages-2Mi: 1Gi}
+      volumeMounts:
+        - {name: aeron, mountPath: /aeron}
+    - name: app
+      image: debian:trixie-slim
+      env:
+        - {name: AERON_DIR, value: /aeron/driver}
+        - {name: AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY, value: "true"}
+      resources:
+        requests: {cpu: "2", memory: 1Gi, hugepages-2Mi: 1Gi}
+        limits: {cpu: "2", memory: 1Gi, hugepages-2Mi: 1Gi}
+      volumeMounts:
+        - {name: aeron, mountPath: /aeron}
+  volumes:
+    - name: aeron
+      emptyDir: {medium: HugePages-2Mi}
+```
 
 ## Tables
 
@@ -117,12 +167,12 @@ Pinning inside the pod used `taskset` under kubelet's default CPU manager. The C
 
 Java against rusteron, loopback UDP ping-pong RTT (µs):
 
-| run | reps | p50 | p99 | p99.9 | p99.99 |
-|---|---|---|---|---|---|
-| Java, pinned | 5 | 8.85 (8.74–9.69) | 18.38 (18.24–18.46) | 34.49 (32.45–37.22) | 211.33 (158.85–694.78) |
-| rusteron, pinned | 5 | 9.54 (9.53–10.40) | 17.76 (17.73–17.81) | 30.18 (29.04–31.10) | 70.46 (62.69–80.89) |
-| Java, isolated | 5 | 9.53 (9.35–9.54) | 19.44 (19.21–19.86) | 33.53 (32.22–15998.98) | 200.06 (124.48–16007.17) |
-| rusteron, isolated | 5 | 10.95 (10.92–10.97) | 18.70 (18.30–18.75) | 29.50 (29.36–30.91) | 70.66 (69.38–73.79) |
+| run | reps | p50 | p99 | p99.9 | p99.99 | max |
+|---|---|---|---|---|---|---|
+| Java, pinned | 5 | 8.85 (8.74–9.69) | 18.38 (18.24–18.46) | 34.49 (32.45–37.22) | 211.33 (158.85–694.78) | 4370.43 (3307.52–6393.85) |
+| rusteron, pinned | 5 | 9.54 (9.53–10.40) | 17.76 (17.73–17.81) | 30.18 (29.04–31.10) | 70.46 (62.69–80.89) | 4026.37 (1264.64–4141.06) |
+| Java, isolated | 5 | 9.53 (9.35–9.54) | 19.44 (19.21–19.86) | 33.53 (32.22–15998.98) | 200.06 (124.48–16007.17) | 5840.90 (3690.49–24002.56) |
+| rusteron, isolated | 5 | 10.95 (10.92–10.97) | 18.70 (18.30–18.75) | 29.50 (29.36–30.91) | 70.66 (69.38–73.79) | 4028.41 (586.75–4694.02) |
 
 Java against rusteron, IPC throughput (32-byte messages):
 
@@ -135,14 +185,14 @@ Java against rusteron, IPC throughput (32-byte messages):
 
 Huge pages, rusteron harness, pinned (µs; separate run):
 
-| run | reps | p50 | p99 | p99.9 | p99.99 |
-|---|---|---|---|---|---|
-| IPC, off | 5 | 0.180 (0.180–0.180) | 0.231 (0.230–0.231) | 0.992 (0.981–0.992) | 1.48 (1.45–1.53) |
-| IPC, shm | 5 | 0.180 (0.180–0.180) | 0.221 (0.221–0.221) | 0.992 (0.981–1.00) | 1.51 (1.47–1.57) |
-| IPC, hugetlbfs | 5 | 0.180 (0.180–0.180) | 0.220 (0.220–0.221) | 0.981 (0.971–0.981) | 1.47 (1.46–1.48) |
-| UDP, off | 5 | 9.54 (9.51–9.55) | 17.60 (16.59–17.77) | 27.74 (26.54–28.46) | 65.86 (55.94–76.93) |
-| UDP, shm | 5 | 9.53 (9.49–9.97) | 17.36 (16.16–17.60) | 26.06 (24.83–27.98) | 55.68 (55.01–68.80) |
-| UDP, hugetlbfs | 5 | 9.54 (9.51–10.32) | 17.30 (16.41–18.02) | 26.57 (25.36–80.25) | 56.64 (54.43–94.14) |
+| run | reps | p50 | p99 | p99.9 | p99.99 | max |
+|---|---|---|---|---|---|---|
+| IPC, off | 5 | 0.180 (0.180–0.180) | 0.231 (0.230–0.231) | 0.992 (0.981–0.992) | 1.48 (1.45–1.53) | 67.84 (60.61–68.54) |
+| IPC, shm | 5 | 0.180 (0.180–0.180) | 0.221 (0.221–0.221) | 0.992 (0.981–1.00) | 1.51 (1.47–1.57) | 93.69 (65.92–535.55) |
+| IPC, hugetlbfs | 5 | 0.180 (0.180–0.180) | 0.220 (0.220–0.221) | 0.981 (0.971–0.981) | 1.47 (1.46–1.48) | 72.45 (56.06–355.84) |
+| UDP, off | 5 | 9.54 (9.51–9.55) | 17.60 (16.59–17.77) | 27.74 (26.54–28.46) | 65.86 (55.94–76.93) | 620.03 (247.42–4882.43) |
+| UDP, shm | 5 | 9.53 (9.49–9.97) | 17.36 (16.16–17.60) | 26.06 (24.83–27.98) | 55.68 (55.01–68.80) | 454.40 (366.08–580.10) |
+| UDP, hugetlbfs | 5 | 9.54 (9.51–10.32) | 17.30 (16.41–18.02) | 26.57 (25.36–80.25) | 56.64 (54.43–94.14) | 413.95 (341.25–914.43) |
 
 | run | reps | M msgs/s |
 |---|---|---|
@@ -152,23 +202,23 @@ Huge pages, rusteron harness, pinned (µs; separate run):
 
 CPU isolation, rusteron harness, no huge pages (µs):
 
-| run | reps | p50 | p99 | p99.9 | p99.99 |
-|---|---|---|---|---|---|
-| IPC, pinned | 5 | 0.180 (0.180–0.180) | 0.241 (0.240–0.250) | 1.01 (1.01–1.02) | 1.53 (1.51–1.55) |
-| IPC, isolated | 5 | 0.180 (0.180–0.180) | 0.241 (0.240–0.250) | 1.10 (1.10–1.11) | 1.42 (1.38–1.52) |
-| UDP, pinned | 5 | 9.55 (9.53–9.60) | 17.76 (17.73–17.76) | 28.77 (26.73–29.26) | 62.17 (58.21–74.88) |
-| UDP, isolated | 5 | 10.95 (10.91–11.85) | 18.67 (18.51–19.49) | 28.27 (27.42–32.32) | 72.64 (64.64–77.44) |
+| run | reps | p50 | p99 | p99.9 | p99.99 | max |
+|---|---|---|---|---|---|---|
+| IPC, pinned | 5 | 0.180 (0.180–0.180) | 0.241 (0.240–0.250) | 1.01 (1.01–1.02) | 1.53 (1.51–1.55) | 68.61 (38.34–682.50) |
+| IPC, isolated | 5 | 0.180 (0.180–0.180) | 0.241 (0.240–0.250) | 1.10 (1.10–1.11) | 1.42 (1.38–1.52) | 5.31 (2.36–43.65) |
+| UDP, pinned | 5 | 9.55 (9.53–9.60) | 17.76 (17.73–17.76) | 28.77 (26.73–29.26) | 62.17 (58.21–74.88) | 1629.18 (915.46–4845.57) |
+| UDP, isolated | 5 | 10.95 (10.91–11.85) | 18.67 (18.51–19.49) | 28.27 (27.42–32.32) | 72.64 (64.64–77.44) | 1115.13 (492.29–4087.81) |
 
 ### Intel Xeon Platinum 8573C (2 cores × 2 SMT threads)
 
 Java against rusteron, loopback UDP ping-pong RTT (µs):
 
-| run | reps | p50 | p99 | p99.9 | p99.99 |
-|---|---|---|---|---|---|
-| Java, pinned | 4 | 5.62 (5.56–5.72) | 10.03 (8.99–10.97) | 39.62 (37.50–42.59) | 543.74 (384.00–1079.30) |
-| rusteron, pinned | 5 | 5.86 (5.80–6.28) | 8.21 (8.15–8.46) | 36.99 (35.62–43.30) | 58.81 (58.17–62.62) |
-| Java, isolated | 5 | 5.83 (5.80–5.91) | 9.21 (9.04–9.70) | 39.49 (39.01–40.06) | 1074.17 (438.78–1081.34) |
-| rusteron, isolated | 5 | 6.15 (5.93–6.48) | 8.70 (8.52–8.78) | 38.69 (37.34–41.57) | 60.16 (58.24–61.47) |
+| run | reps | p50 | p99 | p99.9 | p99.99 | max |
+|---|---|---|---|---|---|---|
+| Java, pinned | 4 | 5.62 (5.56–5.72) | 10.03 (8.99–10.97) | 39.62 (37.50–42.59) | 543.74 (384.00–1079.30) | 6193.15 (4190.21–8032.26) |
+| rusteron, pinned | 5 | 5.86 (5.80–6.28) | 8.21 (8.15–8.46) | 36.99 (35.62–43.30) | 58.81 (58.17–62.62) | 4009.98 (643.58–12025.85) |
+| Java, isolated | 5 | 5.83 (5.80–5.91) | 9.21 (9.04–9.70) | 39.49 (39.01–40.06) | 1074.17 (438.78–1081.34) | 4122.62 (3559.42–11722.75) |
+| rusteron, isolated | 5 | 6.15 (5.93–6.48) | 8.70 (8.52–8.78) | 38.69 (37.34–41.57) | 60.16 (58.24–61.47) | 739.33 (700.41–3622.91) |
 
 Java against rusteron, IPC throughput (32-byte messages):
 
@@ -181,14 +231,14 @@ Java against rusteron, IPC throughput (32-byte messages):
 
 Huge pages, rusteron harness, pinned (µs; separate run):
 
-| run | reps | p50 | p99 | p99.9 | p99.99 |
-|---|---|---|---|---|---|
-| IPC, off | 5 | 0.112 (0.108–0.114) | 0.720 (0.686–0.746) | 0.886 (0.866–0.903) | 1.04 (1.04–1.06) |
-| IPC, shm | 5 | 0.108 (0.105–0.110) | 0.142 (0.141–0.144) | 0.164 (0.159–0.166) | 0.588 (0.446–0.609) |
-| IPC, hugetlbfs | 5 | 0.109 (0.105–0.110) | 0.144 (0.139–0.144) | 0.166 (0.157–0.166) | 0.378 (0.359–0.390) |
-| UDP, off | 5 | 6.28 (5.84–6.32) | 8.81 (8.25–8.86) | 21.39 (20.03–22.91) | 50.94 (46.02–51.97) |
-| UDP, shm | 5 | 6.28 (5.80–6.29) | 7.86 (7.52–8.15) | 21.58 (19.38–65.53) | 49.53 (39.55–76.73) |
-| UDP, hugetlbfs | 5 | 6.28 (6.27–6.32) | 7.78 (7.60–7.82) | 20.43 (18.89–21.21) | 41.63 (38.98–43.81) |
+| run | reps | p50 | p99 | p99.9 | p99.99 | max |
+|---|---|---|---|---|---|---|
+| IPC, off | 5 | 0.112 (0.108–0.114) | 0.720 (0.686–0.746) | 0.886 (0.866–0.903) | 1.04 (1.04–1.06) | 67.84 (64.99–327.68) |
+| IPC, shm | 5 | 0.108 (0.105–0.110) | 0.142 (0.141–0.144) | 0.164 (0.159–0.166) | 0.588 (0.446–0.609) | 62.30 (57.41–324.10) |
+| IPC, hugetlbfs | 5 | 0.109 (0.105–0.110) | 0.144 (0.139–0.144) | 0.166 (0.157–0.166) | 0.378 (0.359–0.390) | 62.37 (42.49–473.86) |
+| UDP, off | 5 | 6.28 (5.84–6.32) | 8.81 (8.25–8.86) | 21.39 (20.03–22.91) | 50.94 (46.02–51.97) | 2670.59 (91.20–3082.24) |
+| UDP, shm | 5 | 6.28 (5.80–6.29) | 7.86 (7.52–8.15) | 21.58 (19.38–65.53) | 49.53 (39.55–76.73) | 703.49 (431.62–4024.32) |
+| UDP, hugetlbfs | 5 | 6.28 (6.27–6.32) | 7.78 (7.60–7.82) | 20.43 (18.89–21.21) | 41.63 (38.98–43.81) | 433.92 (228.09–695.81) |
 
 | run | reps | M msgs/s |
 |---|---|---|
@@ -198,12 +248,12 @@ Huge pages, rusteron harness, pinned (µs; separate run):
 
 CPU isolation, rusteron harness, no huge pages (µs):
 
-| run | reps | p50 | p99 | p99.9 | p99.99 |
-|---|---|---|---|---|---|
-| IPC, pinned | 5 | 0.107 (0.106–0.108) | 0.666 (0.663–0.672) | 0.858 (0.851–0.860) | 1.01 (1.00–1.01) |
-| IPC, isolated | 5 | 0.109 (0.109–0.111) | 0.674 (0.661–0.677) | 0.794 (0.789–0.815) | 0.953 (0.929–0.963) |
-| UDP, pinned | 5 | 5.84 (5.79–6.36) | 8.20 (8.04–8.29) | 20.18 (19.87–21.36) | 55.90 (50.05–58.21) |
-| UDP, isolated | 5 | 6.11 (6.01–6.12) | 8.63 (8.56–8.65) | 21.07 (20.54–21.97) | 57.05 (49.05–62.37) |
+| run | reps | p50 | p99 | p99.9 | p99.99 | max |
+|---|---|---|---|---|---|---|
+| IPC, pinned | 5 | 0.107 (0.106–0.108) | 0.666 (0.663–0.672) | 0.858 (0.851–0.860) | 1.01 (1.00–1.01) | 189.06 (52.45–421.63) |
+| IPC, isolated | 5 | 0.109 (0.109–0.111) | 0.674 (0.661–0.677) | 0.794 (0.789–0.815) | 0.953 (0.929–0.963) | 6.20 (5.91–9.68) |
+| UDP, pinned | 5 | 5.84 (5.79–6.36) | 8.20 (8.04–8.29) | 20.18 (19.87–21.36) | 55.90 (50.05–58.21) | 2738.18 (604.16–3182.59) |
+| UDP, isolated | 5 | 6.11 (6.01–6.12) | 8.63 (8.56–8.65) | 21.07 (20.54–21.97) | 57.05 (49.05–62.37) | 452.61 (126.02–2566.14) |
 
 ## More tables
 
@@ -211,52 +261,78 @@ CPU isolation, rusteron harness, no huge pages (µs):
 
 2 MiB against 1 GiB huge pages, IPC round trip (µs) and throughput, host:
 
-| run | reps | p50 | p99 | p99.9 | p99.99 | M msgs/s |
-|---|---|---|---|---|---|---|
-| no huge pages | 5 | 0.180 (0.180–0.180) | 0.250 (0.241–0.250) | 1.04 (1.04–1.04) | 1.53 (1.52–1.57) | 26.9 (26.8–26.9) |
-| 2 MiB | 5 | 0.180 (0.180–0.180) | 0.230 (0.230–0.230) | 1.04 (1.03–1.04) | 1.54 (1.52–1.56) | 26.8 (24.7–26.9) |
-| 1 GiB | 5 | 0.180 (0.180–0.180) | 0.230 (0.230–0.231) | 1.03 (1.03–1.04) | 1.51 (1.49–1.54) | 26.9 (26.8–26.9) |
+| run | reps | p50 | p99 | p99.9 | p99.99 | max | M msgs/s |
+|---|---|---|---|---|---|---|---|
+| no huge pages | 5 | 0.180 (0.180–0.180) | 0.250 (0.241–0.250) | 1.04 (1.04–1.04) | 1.53 (1.52–1.57) | 20.69 (12.49–63.94) | 26.9 (26.8–26.9) |
+| 2 MiB | 5 | 0.180 (0.180–0.180) | 0.230 (0.230–0.230) | 1.04 (1.03–1.04) | 1.54 (1.52–1.56) | 21.57 (13.09–39.58) | 26.8 (24.7–26.9) |
+| 1 GiB | 5 | 0.180 (0.180–0.180) | 0.230 (0.230–0.231) | 1.03 (1.03–1.04) | 1.51 (1.49–1.54) | 15.34 (12.65–23.17) | 26.9 (26.8–26.9) |
 
 In a Kubernetes pod (k3s), AERON_DIR on an emptyDir, IPC round trip (µs) and throughput:
 
-| run | reps | p50 | p99 | p99.9 | p99.99 | M msgs/s |
-|---|---|---|---|---|---|---|
-| Memory (tmpfs) | 3 | 0.180 (0.180–0.180) | 0.260 (0.251–0.260) | 1.02 (1.01–1.03) | 1.65 (1.64–9.69) | 28.1 (27.6–28.1) |
-| HugePages-2Mi | 3 | 0.180 (0.180–0.180) | 0.251 (0.251–0.251) | 0.991 (0.981–1.00) | 1.59 (1.57–1.61) | 28.2 (28.2–28.2) |
-| HugePages-1Gi | 3 | 0.180 (0.180–0.180) | 0.250 (0.250–0.250) | 0.991 (0.982–1.00) | 1.64 (1.63–1.65) | 28.1 (28.1–28.2) |
+| run | reps | p50 | p99 | p99.9 | p99.99 | max | M msgs/s |
+|---|---|---|---|---|---|---|---|
+| Memory (tmpfs) | 3 | 0.180 (0.180–0.180) | 0.260 (0.251–0.260) | 1.02 (1.01–1.03) | 1.65 (1.64–9.69) | 68.61 (50.72–2846.72) | 28.1 (27.6–28.1) |
+| HugePages-2Mi | 3 | 0.180 (0.180–0.180) | 0.251 (0.251–0.251) | 0.991 (0.981–1.00) | 1.59 (1.57–1.61) | 21.97 (21.26–358.65) | 28.2 (28.2–28.2) |
+| HugePages-1Gi | 3 | 0.180 (0.180–0.180) | 0.250 (0.250–0.250) | 0.991 (0.982–1.00) | 1.64 (1.63–1.65) | 20.86 (13.15–66.81) | 28.1 (28.1–28.2) |
 
 UDP between two VMs in one placement group, round trip (µs):
 
-| run | reps | p50 | p99 | p99.9 | p99.99 |
-|---|---|---|---|---|---|
-| SHARED, noop | 5 | 41.70 (37.66–46.46) | 52.06 (47.84–55.94) | 81.86 (62.69–111.36) | 219.13 (158.85–276.74) |
-| SHARED, backoff | 5 | 42.14 (38.05–43.81) | 52.13 (48.29–53.41) | 91.65 (88.19–108.09) | 273.15 (202.50–287.23) |
-| SHARED, noop, busy polling | 5 | 41.53 (37.92–46.30) | 51.04 (47.17–55.97) | 86.02 (72.89–91.84) | 307.97 (290.56–360.96) |
+| run | reps | p50 | p99 | p99.9 | p99.99 | max |
+|---|---|---|---|---|---|---|
+| SHARED, noop | 5 | 41.70 (37.66–46.46) | 52.06 (47.84–55.94) | 81.86 (62.69–111.36) | 219.13 (158.85–276.74) | 592.38 (550.91–1055.74) |
+| SHARED, backoff | 5 | 42.14 (38.05–43.81) | 52.13 (48.29–53.41) | 91.65 (88.19–108.09) | 273.15 (202.50–287.23) | 636.41 (632.32–1137.66) |
+| SHARED, noop, busy polling | 5 | 41.53 (37.92–46.30) | 51.04 (47.17–55.97) | 86.02 (72.89–91.84) | 307.97 (290.56–360.96) | 3913.73 (3844.09–4558.85) |
+
+Kubernetes CPU manager: host baselines and the two-container pod, round trip (µs) and IPC throughput:
+
+| run | reps | p50 | p99 | p99.9 | p99.99 | max | M msgs/s |
+|---|---|---|---|---|---|---|---|
+| IPC, host | 3 | 0.210 (0.210–0.210) | 0.290 (0.290–0.291) | 1.11 (1.09–1.12) | 1.71 (1.66–1.75) | 55.01 (20.91–309.76) | 27.4 (27.2–27.5) |
+| IPC, host, k3s running | 3 | 0.210 (0.210–0.210) | 0.290 (0.281–0.291) | 1.11 (1.11–1.12) | 1.71 (1.69–1.84) | 106.30 (27.79–155.26) | 27.4 (27.3–27.5) |
+| IPC, pod, default policy | 3 | 0.210 (0.201–0.210) | 0.290 (0.290–0.291) | 1.10 (1.10–7.49) | 1.75 (1.73–48.61) | 2263.04 (317.18–5505.02) | 28.2 (27.7–28.5) |
+| IPC, pod, static policy | 3 | 0.210 (0.210–0.211) | 0.300 (0.300–0.301) | 1.13 (1.09–1.16) | 1.98 (1.88–10.46) | 93.25 (51.65–1309.69) | 27.5 (27.5–27.5) |
+| UDP, host | 3 | 11.15 (11.14–11.17) | 14.97 (14.66–15.02) | 20.75 (20.56–20.82) | 37.63 (33.38–47.62) | 84.61 (84.29–512.51) |  |
+| UDP, host, k3s running | 3 | 14.38 (14.31–14.56) | 18.03 (17.97–18.29) | 26.73 (26.54–27.10) | 48.06 (30.24–77.25) | 163.46 (87.87–399.10) |  |
+| UDP, pod, default policy | 3 | 11.87 (11.87–11.90) | 16.50 (16.04–17.54) | 28.24 (25.76–29.98) | 486.40 (390.14–492.03) | 3848.19 (3117.05–3854.34) |  |
+| UDP, pod, static policy | 3 | 11.86 (11.79–11.90) | 16.01 (15.95–16.23) | 27.61 (23.12–28.06) | 605.18 (318.21–766.46) | 1515.52 (1054.72–4026.37) |  |
 
 ### Intel Xeon Platinum 8573C
 
 2 MiB against 1 GiB huge pages, IPC round trip (µs) and throughput, host:
 
-| run | reps | p50 | p99 | p99.9 | p99.99 | M msgs/s |
-|---|---|---|---|---|---|---|
-| no huge pages | 5 | 0.110 (0.104–0.112) | 0.675 (0.671–0.705) | 0.882 (0.879–0.897) | 1.05 (1.04–1.06) | 62.4 (61.7–62.6) |
-| 2 MiB | 5 | 0.109 (0.108–0.109) | 0.144 (0.144–0.145) | 0.203 (0.201–0.217) | 0.493 (0.480–0.524) | 64.1 (64.0–64.6) |
-| 1 GiB | 5 | 0.110 (0.106–0.110) | 0.144 (0.143–0.145) | 0.203 (0.198–0.213) | 0.515 (0.501–0.533) | 64.1 (55.5–64.2) |
+| run | reps | p50 | p99 | p99.9 | p99.99 | max | M msgs/s |
+|---|---|---|---|---|---|---|---|
+| no huge pages | 5 | 0.110 (0.104–0.112) | 0.675 (0.671–0.705) | 0.882 (0.879–0.897) | 1.05 (1.04–1.06) | 20.02 (17.70–27.58) | 62.4 (61.7–62.6) |
+| 2 MiB | 5 | 0.109 (0.108–0.109) | 0.144 (0.144–0.145) | 0.203 (0.201–0.217) | 0.493 (0.480–0.524) | 27.05 (15.21–86.72) | 64.1 (64.0–64.6) |
+| 1 GiB | 5 | 0.110 (0.106–0.110) | 0.144 (0.143–0.145) | 0.203 (0.198–0.213) | 0.515 (0.501–0.533) | 18.54 (15.18–62.05) | 64.1 (55.5–64.2) |
 
 In a Kubernetes pod (k3s), AERON_DIR on an emptyDir, IPC round trip (µs) and throughput:
 
-| run | reps | p50 | p99 | p99.9 | p99.99 | M msgs/s |
-|---|---|---|---|---|---|---|
-| Memory (tmpfs) | 3 | 0.104 (0.104–0.104) | 0.627 (0.623–0.630) | 0.791 (0.784–0.791) | 0.963 (0.946–0.974) | 66.7 (66.6–66.8) |
-| HugePages-2Mi | 3 | 0.103 (0.102–0.103) | 0.126 (0.126–0.127) | 0.187 (0.183–0.191) | 0.383 (0.373–0.386) | 68.8 (67.4–69.0) |
+| run | reps | p50 | p99 | p99.9 | p99.99 | max | M msgs/s |
+|---|---|---|---|---|---|---|---|
+| Memory (tmpfs) | 3 | 0.104 (0.104–0.104) | 0.627 (0.623–0.630) | 0.791 (0.784–0.791) | 0.963 (0.946–0.974) | 37.28 (18.11–300.54) | 66.7 (66.6–66.8) |
+| HugePages-2Mi | 3 | 0.103 (0.102–0.103) | 0.126 (0.126–0.127) | 0.187 (0.183–0.191) | 0.383 (0.373–0.386) | 64.32 (57.60–2191.36) | 68.8 (67.4–69.0) |
 
 UDP between two VMs in one placement group, round trip (µs):
 
-| run | reps | p50 | p99 | p99.9 | p99.99 |
-|---|---|---|---|---|---|
-| SHARED, noop | 5 | 47.81 (47.62–49.02) | 68.16 (57.47–74.30) | 93.69 (89.60–98.43) | 339.20 (290.05–404.22) |
-| SHARED, backoff | 5 | 98.11 (95.74–100.03) | 158.46 (155.90–162.81) | 164.48 (159.62–167.17) | 559.10 (445.44–568.32) |
-| SHARED, noop, busy polling | 5 | 46.14 (44.93–47.97) | 62.46 (57.53–64.09) | 90.81 (88.19–93.63) | 356.35 (319.74–382.98) |
+| run | reps | p50 | p99 | p99.9 | p99.99 | max |
+|---|---|---|---|---|---|---|
+| SHARED, noop | 5 | 47.81 (47.62–49.02) | 68.16 (57.47–74.30) | 93.69 (89.60–98.43) | 339.20 (290.05–404.22) | 939.52 (792.58–2879.49) |
+| SHARED, backoff | 5 | 98.11 (95.74–100.03) | 158.46 (155.90–162.81) | 164.48 (159.62–167.17) | 559.10 (445.44–568.32) | 1713.15 (1068.03–2721.79) |
+| SHARED, noop, busy polling | 5 | 46.14 (44.93–47.97) | 62.46 (57.53–64.09) | 90.81 (88.19–93.63) | 356.35 (319.74–382.98) | 817.66 (718.85–3303.42) |
+
+Kubernetes CPU manager: host baselines and the two-container pod, round trip (µs) and IPC throughput:
+
+| run | reps | p50 | p99 | p99.9 | p99.99 | max | M msgs/s |
+|---|---|---|---|---|---|---|---|
+| IPC, host | 3 | 0.273 (0.260–0.290) | 0.378 (0.369–0.381) | 0.406 (0.398–0.407) | 2.88 (2.20–4.16) | 86.66 (40.61–128.32) | 46.0 (45.1–49.8) |
+| IPC, host, k3s running | 3 | 0.263 (0.261–0.264) | 0.390 (0.388–0.405) | 0.421 (0.416–0.432) | 8.65 (2.70–10.57) | 183.94 (161.02–202.11) | 46.4 (45.7–48.0) |
+| IPC, pod, default policy | 3 | 0.268 (0.258–0.276) | 0.377 (0.373–0.395) | 0.439 (0.410–0.453) | 10.77 (3.31–11.57) | 1753.09 (728.06–2287.61) | 47.4 (46.7–50.0) |
+| IPC, pod, static policy | 3 | 0.259 (0.257–0.261) | 0.400 (0.374–0.410) | 0.431 (0.431–0.460) | 11.84 (7.13–16.56) | 2910.21 (253.57–4089.86) | 46.0 (45.0–47.4) |
+| UDP, host | 3 | 6.29 (6.28–6.33) | 7.24 (7.12–7.26) | 20.51 (20.46–20.61) | 34.78 (32.93–35.04) | 92.99 (90.94–132.22) |  |
+| UDP, host, k3s running | 3 | 9.01 (8.03–9.12) | 13.55 (13.19–14.13) | 26.82 (26.41–28.66) | 50.75 (50.21–67.65) | 928.77 (662.01–967.68) |  |
+| UDP, pod, default policy | 3 | 6.88 (5.55–7.02) | 10.81 (9.60–11.57) | 24.57 (23.97–25.33) | 578.05 (232.57–610.30) | 3794.94 (3389.44–7716.86) |  |
+| UDP, pod, static policy | 3 | 6.11 (5.54–6.36) | 10.64 (10.04–10.91) | 23.49 (23.09–24.14) | 219.78 (206.72–247.29) | 2699.26 (2428.93–4751.36) |  |
 
 # x86-64 Linux on Azure (2026-10-09)
 
@@ -331,23 +407,23 @@ Both Azure VMs run Debian 13 (kernel 6.12), rustc 1.95.0, GCC 14 and JDK 21, wit
 
 ## AMD EPYC 9V74 (4 cores, no SMT)
 
-ab: main against impr, IPC (rtt in ns, tput in M msgs/s):
+ab: main against impr, IPC (rtt in ns, max in µs, tput in M msgs/s):
 
-| label | reps | p50 | p90 | p99 | p99.9 | p99.99 | mean | tput |
-|---|---|---|---|---|---|---|---|---|
-| main | 6 | 180 (180–181) | 210 (210–210) | 3020 (2995–3035) | 3195 (3165–3225) | 10987 (10527–11487) | 235 (235–236) | 28.75 (28.34–28.82) |
-| impr | 6 | 171 (170–171) | 200 (200–200) | 3025 (2995–3065) | 3195 (3165–3225) | 10579 (10503–11535) | 226.5 (224–228) | 28.82 (28.03–29.06) |
-| impr-aa | 6 | 171 (171–180) | 200 (191–200) | 3005 (2935–3045) | 3180 (3145–3235) | 10939 (10559–11447) | 225 (224–226) | 28.78 (28.69–28.89) |
+| label | reps | p50 | p90 | p99 | p99.9 | p99.99 | mean | max | tput |
+|---|---|---|---|---|---|---|---|---|---|
+| main | 6 | 180 (180–181) | 210 (210–210) | 3020 (2995–3035) | 3195 (3165–3225) | 10987 (10527–11487) | 235 (235–236) | 230 (79–793) | 28.75 (28.34–28.82) |
+| impr | 6 | 171 (170–171) | 200 (200–200) | 3025 (2995–3065) | 3195 (3165–3225) | 10579 (10503–11535) | 226.5 (224–228) | 331 (65–4239) | 28.82 (28.03–29.06) |
+| impr-aa | 6 | 171 (171–180) | 200 (191–200) | 3005 (2935–3045) | 3180 (3145–3235) | 10939 (10559–11447) | 225 (224–226) | 231 (46–457) | 28.78 (28.69–28.89) |
 
-build: compile and link settings, IPC (ns, M msgs/s):
+build: compile and link settings, IPC (rtt in ns, max in µs, tput in M msgs/s):
 
-| label | reps | p50 | p90 | p99 | p99.9 | p99.99 | mean | tput |
-|---|---|---|---|---|---|---|---|---|
-| impr | 5 | 171 (171–171) | 200 (191–200) | 3005 (3005–3035) | 3185 (3175–3205) | 11223 (11031–11271) | 225 (224–226) | 28.66 (28.59–28.66) |
-| impr-c-x86-64 | 5 | 180 (171–180) | 200 (200–201) | 3005 (2995–3035) | 3165 (3155–3195) | 11239 (11087–11367) | 227 (225–227) | 29.12 (29.11–29.12) |
-| impr-c-x86-64-v3 | 5 | 180 (180–180) | 200 (200–200) | 2995 (2995–3015) | 3175 (3165–3195) | 11231 (11159–11287) | 226 (225–227) | 29.14 (29.13–29.14) |
-| impr-rust-x86-64 | 5 | 180 (171–180) | 200 (181–200) | 3045 (3025–3045) | 3205 (3185–3205) | 11303 (11103–11343) | 226 (224–227) | 29.03 (29.01–29.07) |
-| impr-dynamic | 5 | 171 (171–180) | 200 (200–200) | 3015 (3005–3025) | 3185 (3165–3195) | 11263 (11119–11367) | 226 (225–226) | 28.68 (28.02–28.71) |
+| label | reps | p50 | p90 | p99 | p99.9 | p99.99 | mean | max | tput |
+|---|---|---|---|---|---|---|---|---|---|
+| impr | 5 | 171 (171–171) | 200 (191–200) | 3005 (3005–3035) | 3185 (3175–3205) | 11223 (11031–11271) | 225 (224–226) | 18 (15–32) | 28.66 (28.59–28.66) |
+| impr-c-x86-64 | 5 | 180 (171–180) | 200 (200–201) | 3005 (2995–3035) | 3165 (3155–3195) | 11239 (11087–11367) | 227 (225–227) | 24 (21–80) | 29.12 (29.11–29.12) |
+| impr-c-x86-64-v3 | 5 | 180 (180–180) | 200 (200–200) | 2995 (2995–3015) | 3175 (3165–3195) | 11231 (11159–11287) | 226 (225–227) | 23 (19–47) | 29.14 (29.13–29.14) |
+| impr-rust-x86-64 | 5 | 180 (171–180) | 200 (181–200) | 3045 (3025–3045) | 3205 (3185–3205) | 11303 (11103–11343) | 226 (224–227) | 23 (19–51) | 29.03 (29.01–29.07) |
+| impr-dynamic | 5 | 171 (171–180) | 200 (200–200) | 3015 (3005–3025) | 3185 (3165–3195) | 11263 (11119–11367) | 226 (225–226) | 22 (20–60) | 28.68 (28.02–28.71) |
 
 ipc-knobs: IPC settings (rtt in ns, max in µs, tput in M msgs/s):
 
@@ -363,37 +439,37 @@ ipc-knobs: IPC settings (rtt in ns, max in µs, tput in M msgs/s):
 
 ab: main against impr, loopback UDP rtt (µs):
 
-| label | reps | p50 | p90 | p99 | p99.9 | p99.99 | mean |
-|---|---|---|---|---|---|---|---|
-| main | 6 | 9.52 (9.51–9.54) | 11.25 (11.18–12.76) | 17.90 (17.87–18.56) | 29.21 (27.97–29.49) | 72.48 (64.25–138.50) | 10.22 (10.15–10.25) |
-| impr | 6 | 9.54 (9.52–10.36) | 11.19 (10.94–12.78) | 18.47 (17.87–18.64) | 29.34 (27.54–29.57) | 71.04 (64.45–78.66) | 10.25 (10.18–10.35) |
-| impr-aa | 6 | 10.09 (9.51–10.40) | 10.92 (10.57–11.30) | 18.68 (17.89–19.12) | 29.50 (29.04–40.26) | 74.88 (62.37–86.02) | 10.38 (10.14–10.46) |
+| label | reps | p50 | p90 | p99 | p99.9 | p99.99 | mean | max |
+|---|---|---|---|---|---|---|---|---|
+| main | 6 | 9.52 (9.51–9.54) | 11.25 (11.18–12.76) | 17.90 (17.87–18.56) | 29.21 (27.97–29.49) | 72.48 (64.25–138.50) | 10.22 (10.15–10.25) | 1555.45 (865.28–4538.37) |
+| impr | 6 | 9.54 (9.52–10.36) | 11.19 (10.94–12.78) | 18.47 (17.87–18.64) | 29.34 (27.54–29.57) | 71.04 (64.45–78.66) | 10.25 (10.18–10.35) | 1063.68 (377.60–4263.94) |
+| impr-aa | 6 | 10.09 (9.51–10.40) | 10.92 (10.57–11.30) | 18.68 (17.89–19.12) | 29.50 (29.04–40.26) | 74.88 (62.37–86.02) | 10.38 (10.14–10.46) | 1171.97 (375.30–5566.46) |
 
 UDP rerun (12 reps) as in ab, loopback UDP rtt (µs):
 
-| label | reps | p50 | p90 | p99 | p99.9 | p99.99 | mean |
-|---|---|---|---|---|---|---|---|
-| main | 12 | 9.55 (9.52–10.04) | 11.60 (10.10–12.92) | 18.41 (17.84–18.75) | 28.56 (26.22–81.66) | 64.75 (53.63–99.71) | 10.33 (10.20–10.51) |
-| impr | 12 | 9.52 (9.51–10.38) | 12.55 (10.12–12.83) | 18.41 (17.84–18.72) | 28.85 (26.99–82.11) | 67.23 (56.09–426.50) | 10.34 (10.21–10.70) |
-| impr-aa | 12 | 9.54 (9.52–10.02) | 12.39 (10.74–12.87) | 18.32 (17.87–18.67) | 28.12 (25.93–30.02) | 68.16 (52.38–83.33) | 10.32 (10.16–10.41) |
+| label | reps | p50 | p90 | p99 | p99.9 | p99.99 | mean | max |
+|---|---|---|---|---|---|---|---|---|
+| main | 12 | 9.55 (9.52–10.04) | 11.60 (10.10–12.92) | 18.41 (17.84–18.75) | 28.56 (26.22–81.66) | 64.75 (53.63–99.71) | 10.33 (10.20–10.51) | 524.16 (270.59–3104.77) |
+| impr | 12 | 9.52 (9.51–10.38) | 12.55 (10.12–12.83) | 18.41 (17.84–18.72) | 28.85 (26.99–82.11) | 67.23 (56.09–426.50) | 10.34 (10.21–10.70) | 546.05 (377.86–6803.45) |
+| impr-aa | 12 | 9.54 (9.52–10.02) | 12.39 (10.74–12.87) | 18.32 (17.87–18.67) | 28.12 (25.93–30.02) | 68.16 (52.38–83.33) | 10.32 (10.16–10.41) | 493.06 (352.77–4128.77) |
 
 UDP rerun with pre-touched logs, loopback UDP rtt (µs):
 
-| label | reps | p50 | p90 | p99 | p99.9 | p99.99 | mean |
-|---|---|---|---|---|---|---|---|
-| main | 12 | 9.55 (9.51–10.00) | 11.26 (10.09–12.82) | 17.52 (16.30–17.71) | 27.08 (24.40–79.30) | 56.17 (50.75–93.12) | 10.15 (9.95–10.30) |
-| impr | 12 | 9.68 (9.52–10.40) | 11.15 (10.46–12.76) | 17.57 (16.09–17.76) | 27.62 (25.15–28.46) | 57.05 (48.54–3170.30) | 10.18 (9.98–10.68) |
-| impr-aa | 12 | 9.53 (9.52–10.64) | 11.19 (10.08–12.78) | 17.48 (16.61–17.79) | 27.55 (26.09–81.60) | 58.38 (48.48–96.25) | 10.16 (10.01–10.33) |
+| label | reps | p50 | p90 | p99 | p99.9 | p99.99 | mean | max |
+|---|---|---|---|---|---|---|---|---|
+| main | 12 | 9.55 (9.51–10.00) | 11.26 (10.09–12.82) | 17.52 (16.30–17.71) | 27.08 (24.40–79.30) | 56.17 (50.75–93.12) | 10.15 (9.95–10.30) | 570.62 (248.32–4235.26) |
+| impr | 12 | 9.68 (9.52–10.40) | 11.15 (10.46–12.76) | 17.57 (16.09–17.76) | 27.62 (25.15–28.46) | 57.05 (48.54–3170.30) | 10.18 (9.98–10.68) | 569.86 (257.54–5787.65) |
+| impr-aa | 12 | 9.53 (9.52–10.64) | 11.19 (10.08–12.78) | 17.48 (16.61–17.79) | 27.55 (26.09–81.60) | 58.38 (48.48–96.25) | 10.16 (10.01–10.33) | 528.13 (243.58–15998.98) |
 
 udp-knobs: driver threading and idle strategy, loopback UDP rtt (µs):
 
-| label | reps | p50 | p90 | p99 | p99.9 | p99.99 | mean |
-|---|---|---|---|---|---|---|---|
-| dedicated-noop | 5 | 9.53 (9.51–10.04) | 11.24 (11.15–11.28) | 18.09 (17.87–18.69) | 29.14 (28.25–29.21) | 73.86 (53.44–79.42) | 10.22 (10.15–10.46) |
-| dedicated-spin | 5 | 9.61 (9.57–10.03) | 11.28 (10.81–11.34) | 18.29 (18.18–18.50) | 28.50 (27.36–29.09) | 83.90 (64.00–254.21) | 10.48 (10.39–10.52) |
-| dedicated-backoff | 5 | 103.42 (9.57–106.05) | 104.13 (12.93–111.04) | 111.74 (108.73–117.25) | 127.23 (114.75–149.89) | 167.55 (126.08–257.54) | 81.65 (13.56–104.59) |
-| shared-noop | 5 | 11.16 (11.13–11.21) | 12.79 (12.78–12.83) | 22.37 (22.32–22.43) | 23.63 (23.25–23.70) | 63.81 (43.04–72.83) | 11.99 (11.98–12.06) |
-| shared-network-noop | 5 | 14.26 (14.10–14.70) | 14.41 (14.22–15.02) | 21.86 (21.45–22.37) | 25.02 (24.82–27.26) | 66.43 (57.25–77.89) | 14.42 (14.20–14.90) |
+| label | reps | p50 | p90 | p99 | p99.9 | p99.99 | mean | max |
+|---|---|---|---|---|---|---|---|---|
+| dedicated-noop | 5 | 9.53 (9.51–10.04) | 11.24 (11.15–11.28) | 18.09 (17.87–18.69) | 29.14 (28.25–29.21) | 73.86 (53.44–79.42) | 10.22 (10.15–10.46) | 797.18 (466.43–8011.77) |
+| dedicated-spin | 5 | 9.61 (9.57–10.03) | 11.28 (10.81–11.34) | 18.29 (18.18–18.50) | 28.50 (27.36–29.09) | 83.90 (64.00–254.21) | 10.48 (10.39–10.52) | 8232.96 (385.28–16138.24) |
+| dedicated-backoff | 5 | 103.42 (9.57–106.05) | 104.13 (12.93–111.04) | 111.74 (108.73–117.25) | 127.23 (114.75–149.89) | 167.55 (126.08–257.54) | 81.65 (13.56–104.59) | 875.01 (435.20–1217.54) |
+| shared-noop | 5 | 11.16 (11.13–11.21) | 12.79 (12.78–12.83) | 22.37 (22.32–22.43) | 23.63 (23.25–23.70) | 63.81 (43.04–72.83) | 11.99 (11.98–12.06) | 367.36 (278.01–817.15) |
+| shared-network-noop | 5 | 14.26 (14.10–14.70) | 14.41 (14.22–15.02) | 21.86 (21.45–22.37) | 25.02 (24.82–27.26) | 66.43 (57.25–77.89) | 14.42 (14.20–14.90) | 710.14 (128.13–817.15) |
 
 ps: idle poll cost, ns per poll (2 reps, unpinned), and time to LIVE:
 
@@ -408,23 +484,23 @@ ps: idle poll cost, ns per poll (2 reps, unpinned), and time to LIVE:
 
 ## Intel Xeon Platinum 8573C (2 cores × 2 SMT threads)
 
-ab: main against impr, IPC (rtt in ns, tput in M msgs/s):
+ab: main against impr, IPC (rtt in ns, max in µs, tput in M msgs/s):
 
-| label | reps | p50 | p90 | p99 | p99.9 | p99.99 | mean | tput |
-|---|---|---|---|---|---|---|---|---|
-| main | 6 | 321 (320–321) | 361 (358–362) | 2742 (2617–2793) | 3048 (2955–3093) | 13575 (13543–13735) | 364 (361–365) | 47.06 (45.68–47.53) |
-| impr | 6 | 322 (321–322) | 357 (355–359) | 2745 (2687–2867) | 3072 (3011–3165) | 13503 (13375–13871) | 361.5 (360–364) | 47.23 (45.59–49.34) |
-| impr-aa | 6 | 321.5 (321–323) | 358.5 (356–360) | 2728 (2641–2789) | 3041 (2967–3095) | 13527 (13487–13887) | 361.5 (360–366) | 47.21 (46.39–47.82) |
+| label | reps | p50 | p90 | p99 | p99.9 | p99.99 | mean | max | tput |
+|---|---|---|---|---|---|---|---|---|---|
+| main | 6 | 321 (320–321) | 361 (358–362) | 2742 (2617–2793) | 3048 (2955–3093) | 13575 (13543–13735) | 364 (361–365) | 341 (209–1119) | 47.06 (45.68–47.53) |
+| impr | 6 | 322 (321–322) | 357 (355–359) | 2745 (2687–2867) | 3072 (3011–3165) | 13503 (13375–13871) | 361.5 (360–364) | 376 (68–1041) | 47.23 (45.59–49.34) |
+| impr-aa | 6 | 321.5 (321–323) | 358.5 (356–360) | 2728 (2641–2789) | 3041 (2967–3095) | 13527 (13487–13887) | 361.5 (360–366) | 341 (64–4198) | 47.21 (46.39–47.82) |
 
-build: compile and link settings, IPC (ns, M msgs/s):
+build: compile and link settings, IPC (rtt in ns, max in µs, tput in M msgs/s):
 
-| label | reps | p50 | p90 | p99 | p99.9 | p99.99 | mean | tput |
-|---|---|---|---|---|---|---|---|---|
-| impr | 5 | 294 (294–294) | 316 (316–320) | 2457 (2357–2509) | 9847 (9823–9855) | 14255 (14119–14439) | 346 (346–349) | 76.14 (69.92–76.68) |
-| impr-c-x86-64 | 5 | 294 (294–294) | 317 (315–319) | 2395 (2305–2493) | 9823 (9799–9847) | 14279 (13863–14799) | 346 (344–349) | 76.23 (72.62–77.97) |
-| impr-c-x86-64-v3 | 5 | 294 (293–295) | 316 (314–323) | 2393 (2135–2497) | 9823 (9767–9847) | 14287 (14071–14663) | 346 (341–348) | 75.49 (59.21–77.64) |
-| impr-rust-x86-64 | 5 | 294 (294–294) | 316 (316–317) | 2435 (2153–2471) | 9839 (9823–9871) | 14231 (14087–14543) | 346 (344–348) | 73.38 (71.48–76.33) |
-| impr-dynamic | 5 | 295 (294–297) | 317 (316–327) | 2329 (2325–2455) | 9847 (9807–9871) | 14615 (14583–15039) | 348 (346–358) | 73.55 (72.25–75.84) |
+| label | reps | p50 | p90 | p99 | p99.9 | p99.99 | mean | max | tput |
+|---|---|---|---|---|---|---|---|---|---|
+| impr | 5 | 294 (294–294) | 316 (316–320) | 2457 (2357–2509) | 9847 (9823–9855) | 14255 (14119–14439) | 346 (346–349) | 40 (30–63) | 76.14 (69.92–76.68) |
+| impr-c-x86-64 | 5 | 294 (294–294) | 317 (315–319) | 2395 (2305–2493) | 9823 (9799–9847) | 14279 (13863–14799) | 346 (344–349) | 55 (46–330) | 76.23 (72.62–77.97) |
+| impr-c-x86-64-v3 | 5 | 294 (293–295) | 316 (314–323) | 2393 (2135–2497) | 9823 (9767–9847) | 14287 (14071–14663) | 346 (341–348) | 48 (31–63) | 75.49 (59.21–77.64) |
+| impr-rust-x86-64 | 5 | 294 (294–294) | 316 (316–317) | 2435 (2153–2471) | 9839 (9823–9871) | 14231 (14087–14543) | 346 (344–348) | 58 (34–100) | 73.38 (71.48–76.33) |
+| impr-dynamic | 5 | 295 (294–297) | 317 (316–327) | 2329 (2325–2455) | 9847 (9807–9871) | 14615 (14583–15039) | 348 (346–358) | 58 (34–6033) | 73.55 (72.25–75.84) |
 
 ipc-knobs: IPC settings (rtt in ns, max in µs, tput in M msgs/s):
 
@@ -441,39 +517,39 @@ ipc-knobs: IPC settings (rtt in ns, max in µs, tput in M msgs/s):
 
 ab: main against impr, loopback UDP rtt (µs):
 
-| label | reps | p50 | p90 | p99 | p99.9 | p99.99 | mean |
-|---|---|---|---|---|---|---|---|
-| main | 6 | 6.36 (6.34–6.40) | 6.52 (6.47–6.54) | 12.71 (12.62–12.78) | 21.57 (21.12–45.02) | 53.68 (48.96–61.82) | 6.39 (6.36–6.46) |
-| impr | 6 | 6.39 (6.37–6.41) | 6.55 (6.52–6.58) | 12.71 (12.70–12.85) | 21.45 (20.35–22.86) | 52.08 (48.41–98.94) | 6.41 (6.36–6.61) |
-| impr-aa | 6 | 6.37 (5.87–6.39) | 6.50 (6.47–6.55) | 12.68 (12.56–12.78) | 21.81 (20.21–24.02) | 56.16 (47.07–70.40) | 6.39 (6.35–6.44) |
+| label | reps | p50 | p90 | p99 | p99.9 | p99.99 | mean | max |
+|---|---|---|---|---|---|---|---|---|
+| main | 6 | 6.36 (6.34–6.40) | 6.52 (6.47–6.54) | 12.71 (12.62–12.78) | 21.57 (21.12–45.02) | 53.68 (48.96–61.82) | 6.39 (6.36–6.46) | 1274.88 (448.25–4024.32) |
+| impr | 6 | 6.39 (6.37–6.41) | 6.55 (6.52–6.58) | 12.71 (12.70–12.85) | 21.45 (20.35–22.86) | 52.08 (48.41–98.94) | 6.41 (6.36–6.61) | 1078.27 (255.49–20037.63) |
+| impr-aa | 6 | 6.37 (5.87–6.39) | 6.50 (6.47–6.55) | 12.68 (12.56–12.78) | 21.81 (20.21–24.02) | 56.16 (47.07–70.40) | 6.39 (6.35–6.44) | 2445.31 (475.65–4218.88) |
 
 UDP rerun (12 reps) as in ab, loopback UDP rtt (µs):
 
-| label | reps | p50 | p90 | p99 | p99.9 | p99.99 | mean |
-|---|---|---|---|---|---|---|---|
-| main | 12 | 6.40 (6.30–6.51) | 6.68 (6.62–6.79) | 13.13 (13.00–13.20) | 21.69 (20.53–65.60) | 60.77 (52.06–78.91) | 6.53 (6.46–6.74) |
-| impr | 12 | 6.42 (6.32–6.53) | 6.68 (6.65–6.78) | 13.10 (12.97–13.23) | 22.09 (20.25–62.40) | 59.15 (50.49–79.81) | 6.50 (6.45–6.60) |
-| impr-aa | 12 | 6.40 (6.34–6.50) | 6.68 (6.66–6.84) | 13.05 (12.97–13.33) | 22.02 (20.32–23.33) | 56.85 (52.00–70.59) | 6.50 (6.42–6.62) |
+| label | reps | p50 | p90 | p99 | p99.9 | p99.99 | mean | max |
+|---|---|---|---|---|---|---|---|---|
+| main | 12 | 6.40 (6.30–6.51) | 6.68 (6.62–6.79) | 13.13 (13.00–13.20) | 21.69 (20.53–65.60) | 60.77 (52.06–78.91) | 6.53 (6.46–6.74) | 1418.49 (468.22–4530.18) |
+| impr | 12 | 6.42 (6.32–6.53) | 6.68 (6.65–6.78) | 13.10 (12.97–13.23) | 22.09 (20.25–62.40) | 59.15 (50.49–79.81) | 6.50 (6.45–6.60) | 1369.60 (237.44–5074.94) |
+| impr-aa | 12 | 6.40 (6.34–6.50) | 6.68 (6.66–6.84) | 13.05 (12.97–13.33) | 22.02 (20.32–23.33) | 56.85 (52.00–70.59) | 6.50 (6.42–6.62) | 1042.94 (284.42–4853.76) |
 
 UDP rerun with pre-touched logs, loopback UDP rtt (µs):
 
-| label | reps | p50 | p90 | p99 | p99.9 | p99.99 | mean |
-|---|---|---|---|---|---|---|---|
-| main | 12 | 6.36 (6.29–6.42) | 6.60 (6.55–6.66) | 8.72 (8.57–8.88) | 20.37 (18.66–21.36) | 59.15 (53.79–73.15) | 6.29 (6.20–6.56) |
-| impr | 12 | 6.37 (6.32–6.40) | 6.61 (6.58–6.63) | 8.76 (8.67–8.82) | 21.08 (18.72–22.25) | 55.98 (51.65–65.02) | 6.28 (6.22–6.33) |
-| impr-aa | 12 | 6.37 (6.33–6.43) | 6.61 (6.59–6.66) | 8.71 (8.42–8.87) | 20.48 (19.04–22.78) | 55.86 (51.65–73.53) | 6.27 (6.21–6.37) |
+| label | reps | p50 | p90 | p99 | p99.9 | p99.99 | mean | max |
+|---|---|---|---|---|---|---|---|---|
+| main | 12 | 6.36 (6.29–6.42) | 6.60 (6.55–6.66) | 8.72 (8.57–8.88) | 20.37 (18.66–21.36) | 59.15 (53.79–73.15) | 6.29 (6.20–6.56) | 2957.31 (580.61–16007.17) |
+| impr | 12 | 6.37 (6.32–6.40) | 6.61 (6.58–6.63) | 8.76 (8.67–8.82) | 21.08 (18.72–22.25) | 55.98 (51.65–65.02) | 6.28 (6.22–6.33) | 775.93 (165.63–4816.90) |
+| impr-aa | 12 | 6.37 (6.33–6.43) | 6.61 (6.59–6.66) | 8.71 (8.42–8.87) | 20.48 (19.04–22.78) | 55.86 (51.65–73.53) | 6.27 (6.21–6.37) | 747.01 (116.03–8032.26) |
 
 udp-knobs: driver threading and idle strategy, loopback UDP rtt (µs):
 
-| label | reps | p50 | p90 | p99 | p99.9 | p99.99 | mean |
-|---|---|---|---|---|---|---|---|
-| dedicated-noop | 5 | 6.36 (6.05–6.39) | 6.51 (6.49–6.56) | 12.76 (12.73–12.93) | 20.89 (19.90–21.25) | 50.59 (45.98–64.67) | 6.40 (6.36–6.70) |
-| dedicated-spin | 5 | 6.39 (5.95–6.47) | 6.62 (6.60–6.65) | 12.84 (12.66–12.97) | 21.04 (20.22–42.81) | 58.14 (49.22–92.09) | 6.56 (6.38–6.64) |
-| dedicated-backoff | 5 | 6.53 (5.90–42.59) | 42.75 (6.59–44.99) | 47.90 (12.84–50.81) | 52.29 (23.60–56.38) | 99.97 (67.84–131.20) | 14.22 (6.40–37.16) |
-| shared-noop | 5 | 5.69 (5.66–5.75) | 6.32 (6.27–6.36) | 12.05 (11.98–12.34) | 15.26 (15.08–16.06) | 21.86 (21.49–46.66) | 6.09 (6.04–6.12) |
-| shared-network-noop | 5 | 6.76 (5.53–6.81) | 6.86 (6.85–6.90) | 12.65 (12.55–12.93) | 15.01 (14.61–15.18) | 25.47 (22.72–47.23) | 6.82 (6.07–6.86) |
-| dedicated-noop-smt | 5 | 6.41 (5.04–6.54) | 6.60 (6.53–6.67) | 12.70 (12.65–12.83) | 20.86 (20.05–21.74) | 51.23 (48.45–61.98) | 6.31 (5.83–6.55) |
-| shared-network-noop-smt | 5 | 7.50 (7.47–7.53) | 7.60 (7.58–7.65) | 13.89 (13.86–13.97) | 16.53 (16.45–16.69) | 28.34 (23.25–40.58) | 7.70 (7.68–7.75) |
+| label | reps | p50 | p90 | p99 | p99.9 | p99.99 | mean | max |
+|---|---|---|---|---|---|---|---|---|
+| dedicated-noop | 5 | 6.36 (6.05–6.39) | 6.51 (6.49–6.56) | 12.76 (12.73–12.93) | 20.89 (19.90–21.25) | 50.59 (45.98–64.67) | 6.40 (6.36–6.70) | 441.34 (179.71–20037.63) |
+| dedicated-spin | 5 | 6.39 (5.95–6.47) | 6.62 (6.60–6.65) | 12.84 (12.66–12.97) | 21.04 (20.22–42.81) | 58.14 (49.22–92.09) | 6.56 (6.38–6.64) | 6135.81 (361.47–7180.29) |
+| dedicated-backoff | 5 | 6.53 (5.90–42.59) | 42.75 (6.59–44.99) | 47.90 (12.84–50.81) | 52.29 (23.60–56.38) | 99.97 (67.84–131.20) | 14.22 (6.40–37.16) | 743.42 (339.20–2912.26) |
+| shared-noop | 5 | 5.69 (5.66–5.75) | 6.32 (6.27–6.36) | 12.05 (11.98–12.34) | 15.26 (15.08–16.06) | 21.86 (21.49–46.66) | 6.09 (6.04–6.12) | 177.02 (56.99–720.38) |
+| shared-network-noop | 5 | 6.76 (5.53–6.81) | 6.86 (6.85–6.90) | 12.65 (12.55–12.93) | 15.01 (14.61–15.18) | 25.47 (22.72–47.23) | 6.82 (6.07–6.86) | 343.04 (90.17–766.98) |
+| dedicated-noop-smt | 5 | 6.41 (5.04–6.54) | 6.60 (6.53–6.67) | 12.70 (12.65–12.83) | 20.86 (20.05–21.74) | 51.23 (48.45–61.98) | 6.31 (5.83–6.55) | 4022.27 (375.30–16490.49) |
+| shared-network-noop-smt | 5 | 7.50 (7.47–7.53) | 7.60 (7.58–7.65) | 13.89 (13.86–13.97) | 16.53 (16.45–16.69) | 28.34 (23.25–40.58) | 7.70 (7.68–7.75) | 439.81 (347.65–1164.29) |
 
 ps: idle poll cost, ns per poll (2 reps, unpinned), and time to LIVE:
 
