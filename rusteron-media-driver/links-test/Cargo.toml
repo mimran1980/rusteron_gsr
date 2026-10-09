@@ -3,7 +3,7 @@ name = "rusteron-media-driver-links-test"
 version = "0.0.0"
 edition = "2024"
 publish = false
-description = "Checks that rusteron-media-driver exports its Aeron header paths to dependents' build scripts"
+description = "Checks that rusteron-media-driver exports the Aeron header paths a custom UDP transport compiles against"
 
 [package.metadata.release]
 release = false

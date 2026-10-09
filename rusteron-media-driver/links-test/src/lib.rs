@@ -1,5 +1,7 @@
-//! Checks that `rusteron-media-driver` exports its Aeron header paths through its
-//! `links` key: this crate's build script compiles `transport.c` against them.
+//! Guards `rusteron-media-driver`'s `links` export. A custom UDP transport (kernel bypass,
+//! for example) is C compiled against the Aeron header paths that export hands to its build
+//! script. This crate's build script does the same with `transport.c`, so a broken export
+//! fails here rather than in a transport crate.
 
 #[cfg(test)]
 mod tests {

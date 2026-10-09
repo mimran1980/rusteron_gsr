@@ -109,14 +109,37 @@ For a caller-built `AeronDriverContext`, `AeronDriver::launch_embedded_guard(ctx
 
 ## Building C against Aeron's headers
 
-The crate declares `links = "aeron_driver"`, so a dependent's build script can compile C
-(a custom UDP transport, say) against the vendored Aeron sources:
+Some driver extensions are C compiled against Aeron's own headers. The main one is a custom
+UDP transport, such as kernel bypass with DPDK or ef_vi: it fills in Aeron's
+`aeron_udp_channel_transport_bindings_t` and is installed with
+`AeronDriverContext::set_udp_channel_transport_bindings`. That C must see the headers of the
+Aeron this crate builds, or the structs it fills in will not match the driver's, and those
+headers exist only in this crate's vendored Aeron sources. So the crate declares
+`links = "aeron_driver"`, and Cargo hands their paths to the build script of every crate that
+depends on it directly:
 
 | Variable | Directory |
 |---|---|
 | `DEP_AERON_DRIVER_INCLUDE` | the media driver's headers |
 | `DEP_AERON_DRIVER_CLIENT_INCLUDE` | the client headers they include |
 | `DEP_AERON_DRIVER_AERON_ROOT` | the Aeron source tree |
+
+```rust,ignore
+// build.rs of a crate that depends on rusteron-media-driver
+fn main() {
+    let dep = |key: &str| std::env::var(format!("DEP_AERON_DRIVER_{key}")).unwrap();
+    cc::Build::new()
+        .file("transport.c")
+        .include(dep("INCLUDE"))
+        .include(dep("CLIENT_INCLUDE"))
+        .compile("my_transport");
+}
+```
+
+The key has one cost: Cargo allows a single package per `links` name in a build, so two
+semver-incompatible versions of `rusteron-media-driver` cannot share a dependency graph. The
+workspace crate [`links-test`](./links-test) compiles a C file against these paths, so the
+export cannot break unnoticed.
 
 ## Contributing & License
 

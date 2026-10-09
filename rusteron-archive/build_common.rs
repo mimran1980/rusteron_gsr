@@ -115,8 +115,11 @@ fn emit_link_libs(link_type: &LinkType, config: &RusteronBuildConfig) {
 }
 
 pub fn rusteron_build_main(config: &RusteronBuildConfig) {
-    // A crate with a `links` key hands these to its dependents' build scripts as
-    // DEP_<LINKS>_INCLUDE, DEP_<LINKS>_CLIENT_INCLUDE and DEP_<LINKS>_AERON_ROOT.
+    // C built outside this crate, such as a custom UDP transport, must compile against the
+    // headers of the Aeron built here. rusteron-media-driver's `links = "aeron_driver"` key
+    // hands these to its direct dependents' build scripts as DEP_AERON_DRIVER_INCLUDE,
+    // DEP_AERON_DRIVER_CLIENT_INCLUDE and DEP_AERON_DRIVER_AERON_ROOT; crates without the key
+    // ignore them.
     let aeron_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("aeron");
     println!("cargo:include={}", aeron_root.join(config.header_subdir).display());
     println!("cargo:client_include={}", aeron_root.join("aeron-client/src/main/c").display());
