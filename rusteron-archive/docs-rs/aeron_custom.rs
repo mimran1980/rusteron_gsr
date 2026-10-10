@@ -310,16 +310,25 @@ impl AeronHeader {
         }
     }
 
+    /// The fragment's data frame, read in place; `None` for a null header.
+    #[inline]
+    fn frame_values(&self) -> Option<&aeron_data_header_t> {
+        // SAFETY: `aeron_header_t` (aeron_image.h) starts with its `aeron_data_header_t *frame`,
+        // which stays valid for the handler call; rusteron-client's
+        // `aeron_claim_commit_roundtrip_is_received` test catches a layout change.
+        unsafe { self.get_inner().cast::<*const aeron_data_header_t>().as_ref()?.as_ref() }
+    }
+
     /// Session id of this fragment, or `None` if Aeron could not read the header.
     #[inline]
     pub fn session_id(&self) -> Option<i32> {
-        self.get_values().ok().map(|v| v.frame().session_id())
+        self.frame_values().map(|f| f.session_id)
     }
 
     /// Stream id of this fragment, or `None` if Aeron could not read the header.
     #[inline]
     pub fn stream_id(&self) -> Option<i32> {
-        self.get_values().ok().map(|v| v.frame().stream_id())
+        self.frame_values().map(|f| f.stream_id)
     }
 
     /// Reserved value of this fragment, or `None` if Aeron could not read the header. A
@@ -327,19 +336,19 @@ impl AeronHeader {
     /// receiver can measure end-to-end latency.
     #[inline]
     pub fn reserved_value(&self) -> Option<i64> {
-        self.get_values().ok().map(|v| v.frame().reserved_value())
+        self.frame_values().map(|f| f.reserved_value)
     }
 
     /// Term id of this fragment, or `None` if Aeron could not read the header.
     #[inline]
     pub fn term_id(&self) -> Option<i32> {
-        self.get_values().ok().map(|v| v.frame().term_id())
+        self.frame_values().map(|f| f.term_id)
     }
 
     /// Term offset of this fragment, or `None` if Aeron could not read the header.
     #[inline]
     pub fn term_offset(&self) -> Option<i32> {
-        self.get_values().ok().map(|v| v.frame().term_offset())
+        self.frame_values().map(|f| f.term_offset)
     }
 }
 
