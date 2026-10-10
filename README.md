@@ -92,6 +92,61 @@ x86-64 VMs in [Tuning on x86-64 Linux](#tuning-on-x86-64-linux), `-march=native`
 client's C code showed no consistent gain over `x86-64` or `x86-64-v3` on IPC; the driver's
 build and UDP were not varied.
 
+### Cross-language LTO (Linux)
+
+A static build can let LLVM inline Aeron's C into the Rust that calls it: `try_claim` +
+`commit` and the fragment handler collapse into their callers instead of crossing an FFI call
+(and, for `poll`, an indirect call per fragment). Only the final binary can turn it on, since
+rusteron's own build settings do not reach crates that depend on it.
+
+1. Install clang, lld and llvm-ar with **the same LLVM major version as rustc** (`rustc -vV`
+   prints `LLVM version: 22.x`). From [apt.llvm.org](https://apt.llvm.org):
+   `wget https://apt.llvm.org/llvm.sh && sudo bash llvm.sh 22 && sudo apt install lld-22`.
+   Upgrade them together with Rust: rustc's LLVM cannot read bitcode from another major, and
+   the build stops with the fix when they differ.
+2. Link Aeron statically and use fat LTO in the final binary's `Cargo.toml`:
+
+   ```toml
+   [dependencies]
+   rusteron-client = { version = "0.2", features = ["static"] }
+
+   [profile.release]
+   lto = "fat"
+   codegen-units = 1
+   ```
+
+3. Add to the final binary's `.cargo/config.toml` (use `aarch64-unknown-linux-gnu` on Arm):
+
+   ```toml
+   [target.x86_64-unknown-linux-gnu]
+   linker = "clang-22"
+   rustflags = ["-Clinker-plugin-lto", "-Clink-arg=-fuse-ld=lld-22", "-Ctarget-cpu=native"]
+
+   [env]
+   CC = "clang-22"
+   ```
+
+   `-Clinker-plugin-lto` is the switch: rusteron's build script sees it and compiles Aeron C
+   to LLVM bitcode with `$CC` (or `RUSTERON_CLANG`), for the CPU named by `-Ctarget-cpu`.
+   C and Rust must target the same CPU, or LLVM refuses to inline across them. `CC` also
+   covers other C dependencies, which the `cc` crate compiles to bitcode under the same flag.
+   C uses full LTO (`-flto`) to match Rust's `lto = "fat"`; with Rust `lto = "thin"`, set
+   `RUSTERON_C_LTO=thin`. Mixing fat Rust with thin C inlines nothing.
+
+4. Check it worked. The build prints
+   `cross-language LTO: Aeron C compiled to bitcode by clang-22 (LLVM 22) with -flto` for each
+   rusteron crate (Cargo shows build-script warnings only for path dependencies), and the inlined
+   C functions no longer exist in the binary:
+
+   ```bash
+   nm target/release/my-app | grep -cE ' aeron_(publication_try_claim|buffer_claim_commit|image_poll)$'   # 0
+   ```
+
+The `precompile` libraries are native code and cannot take part (the build warns). macOS is not
+supported: rust-lld cannot read the macOS SDK, Apple's linker needs a matching `libLTO.dylib`
+and rejects rustc's LTO flags, and clang marks Apple-silicon code with CPU features that rustc
+does not, which blocks inlining.
+
 ### Multi-threaded (`Send` and `Sync`) handles
 
 By default every handle uses `Rc` and is neither `Send` nor `Sync`: it stays on the thread
