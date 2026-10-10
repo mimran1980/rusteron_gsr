@@ -170,8 +170,6 @@ loop {
 # }
 ```
 
-[`examples/duty_cycle.rs`](./examples/duty_cycle.rs) runs this loop on one thread with an agent-invoker client, after a blocking setup whose calls run the conductor themselves.
-
 Persistent subscriptions share none of their per-poll work: each has its own archive client, and every poll checks its control session before it reads the live image. Idle, on two 4-vCPU Azure VMs on 2026-10-09 (an earlier run than the one in BENCHMARKS.md), a poll cost 22–24 ns on both with the client's conductor thread, against 8–12 ns for a plain subscription, and 35 ns (AMD) or 43 ns (Intel) with 100 of them. With the agent invoker every poll also runs the conductor: 54–62 ns, and 69 ns (AMD) or 107 ns (Intel) with 100. The conductor thread was slower to bring 100 of them to LIVE, though (3.6–3.8 s against about 0.8 s), possibly because it sleeps 16 ms when idle (`AERON_CLIENT_IDLE_SLEEP_DURATION`).
 
 Blocking archive calls idle with the C client's default backoff strategy between polls (Aeron C++ yields instead); `archive_context.set_idle_strategy(..)` replaces it.
@@ -275,7 +273,6 @@ For a fully runnable version, see the example and integration tests:
 - [`examples/replay_merge.rs`](./examples/replay_merge.rs) — late-joiner catch-up: replay recorded history, then merge seamlessly onto the live MDC stream (`AeronArchiveReplayMerge`)
 - [`examples/recording_throughput.rs`](./examples/recording_throughput.rs) — recording throughput measurement (publish rate vs archiver catch-up) and `list_recordings` descriptor enumeration
 - [`examples/recording_replication.rs`](./examples/recording_replication.rs) — archive-to-archive replication (`archive.replicate`): a destination archive pulls a finished recording from a source archive and the copy is verified (port of `RecordingReplicator`)
-- [`examples/duty_cycle.rs`](./examples/duty_cycle.rs) — one duty cycle on an agent-invoker client: `archive.do_work()` (the client's conductor and recording signals), a persistent subscription poll and an offer
 - `persistent_subscription_tests::test_persistent_subscription_listener_live_joined` (callback wiring)
 - `persistent_subscription_integration::test_end_to_end_persistent_subscription` (record → replay → live)
 
