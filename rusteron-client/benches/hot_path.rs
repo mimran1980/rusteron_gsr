@@ -1,5 +1,6 @@
 //! Per-operation cost of the hot paths over IPC: `offer`, `try_claim` + `commit`, `poll` per
-//! fragment, and header reads inside the poll handler (the slope between 0, 1 and 4 reads).
+//! fragment, header reads inside the poll handler (the slope between 0, 1 and 4 reads), and the
+//! generated `get_constants` getters.
 //! Used to compare build setups such as cross-language LTO.
 //! Run with `cargo bench -p rusteron-client --features static --bench hot_path`.
 
@@ -139,6 +140,12 @@ fn hot_path(c: &mut Criterion) {
         })
     });
 
+    g.bench_function("publication_get_constants", |b| {
+        b.iter(|| black_box(h.publisher.get_constants()))
+    });
+    g.bench_function("subscription_get_constants", |b| {
+        b.iter(|| black_box(h.subscription.get_constants()))
+    });
     let mut received = 0u64;
     let c_subscription = h.subscription.get_inner();
     g.bench_function("c_poll_per_fragment", |b| {

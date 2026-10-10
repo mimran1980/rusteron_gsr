@@ -970,6 +970,7 @@ impl CWrapper {
             let rt = ReturnType::new(method.arguments[1].clone(), wrappers.clone());
             let return_type = rt.get_new_return_type(false, false);
             let getter_method = format_ident!("get_{}", fn_name);
+            let c_fn = format_ident!("{}", method.fn_name);
             let method_docs = method_docs
                 .iter()
                 .cloned()
@@ -979,9 +980,14 @@ impl CWrapper {
                 #[inline]
                 #(#method_docs)*
                 pub fn #getter_method #where_clause(#possible_self) -> Result<#return_type, AeronCError> {
-                    let result = #return_type::new_zeroed_on_stack();
-                    self.#fn_name(&result)?;
-                    Ok(result)
+                    let mut value = std::mem::MaybeUninit::uninit();
+                    // SAFETY: Aeron's constants/values functions fill every field when they
+                    // return 0 and write nothing otherwise, so no zeroing is needed
+                    let code = unsafe { #c_fn(self.get_inner(), value.as_mut_ptr()) };
+                    if code < 0 {
+                        return Err(AeronCError::from_code(code));
+                    }
+                    Ok(#return_type::from(unsafe { value.assume_init() }))
                 }
             });
             debug_fields.push(quote! {

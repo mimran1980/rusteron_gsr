@@ -6962,9 +6962,12 @@ impl AeronCnc {
     #[doc = "Fetch the sets of constant values associated with this command and control file."]
     #[doc = ""]
     pub fn get_constants(&self) -> Result<AeronCncConstants, AeronCError> {
-        let result = AeronCncConstants::new_zeroed_on_stack();
-        self.constants(&result)?;
-        Ok(result)
+        let mut value = std::mem::MaybeUninit::uninit();
+        let code = unsafe { aeron_cnc_constants(self.get_inner(), value.as_mut_ptr()) };
+        if code < 0 {
+            return Err(AeronCError::from_code(code));
+        }
+        Ok(AeronCncConstants::from(unsafe { value.assume_init() }))
     }
     #[inline]
     #[doc = "Get the current file name of the cnc file."]
@@ -10100,9 +10103,12 @@ impl AeronCounter {
     #[doc = "Fill in a structure with the constants in use by a counter."]
     #[doc = ""]
     pub fn get_constants(&self) -> Result<AeronCounterConstants, AeronCError> {
-        let result = AeronCounterConstants::new_zeroed_on_stack();
-        self.constants(&result)?;
-        Ok(result)
+        let mut value = std::mem::MaybeUninit::uninit();
+        let code = unsafe { aeron_counter_constants(self.get_inner(), value.as_mut_ptr()) };
+        if code < 0 {
+            return Err(AeronCError::from_code(code));
+        }
+        Ok(AeronCounterConstants::from(unsafe { value.assume_init() }))
     }
     #[inline]
     #[doc = "Check if the counter is closed"]
@@ -32371,9 +32377,12 @@ impl AeronExclusivePublication {
     #[doc = "Fill in a structure with the constants in use by a publication."]
     #[doc = ""]
     pub fn get_constants(&self) -> Result<AeronPublicationConstants, AeronCError> {
-        let result = AeronPublicationConstants::new_zeroed_on_stack();
-        self.constants(&result)?;
-        Ok(result)
+        let mut value = std::mem::MaybeUninit::uninit();
+        let code = unsafe { aeron_exclusive_publication_constants(self.get_inner(), value.as_mut_ptr()) };
+        if code < 0 {
+            return Err(AeronCError::from_code(code));
+        }
+        Ok(AeronPublicationConstants::from(unsafe { value.assume_init() }))
     }
     #[inline]
     #[doc = "Get the current position to which the publication has advanced for this stream."]
@@ -34509,9 +34518,12 @@ impl AeronHeader {
     #[doc = "Get all of the field values from the header. This will do a memcpy into the supplied header_values_t pointer."]
     #[doc = ""]
     pub fn get_values(&self) -> Result<AeronHeaderValues, AeronCError> {
-        let result = AeronHeaderValues::new_zeroed_on_stack();
-        self.values(&result)?;
-        Ok(result)
+        let mut value = std::mem::MaybeUninit::uninit();
+        let code = unsafe { aeron_header_values(self.get_inner(), value.as_mut_ptr()) };
+        if code < 0 {
+            return Err(AeronCError::from_code(code));
+        }
+        Ok(AeronHeaderValues::from(unsafe { value.assume_init() }))
     }
     #[inline]
     #[doc = "Get the current position to which the Image has advanced on reading this message."]
@@ -36759,9 +36771,12 @@ impl AeronImage {
     #[doc = "Fill in a structure with the constants in use by a image."]
     #[doc = ""]
     pub fn get_constants(&self) -> Result<AeronImageConstants, AeronCError> {
-        let result = AeronImageConstants::new_zeroed_on_stack();
-        self.constants(&result)?;
-        Ok(result)
+        let mut value = std::mem::MaybeUninit::uninit();
+        let code = unsafe { aeron_image_constants(self.get_inner(), value.as_mut_ptr()) };
+        if code < 0 {
+            return Err(AeronCError::from_code(code));
+        }
+        Ok(AeronImageConstants::from(unsafe { value.assume_init() }))
     }
     #[inline]
     #[doc = "The position this image has been consumed to by the subscriber."]
@@ -49937,9 +49952,12 @@ impl AeronPublication {
     #[doc = "Fill in a structure with the constants in use by a publication."]
     #[doc = ""]
     pub fn get_constants(&self) -> Result<AeronPublicationConstants, AeronCError> {
-        let result = AeronPublicationConstants::new_zeroed_on_stack();
-        self.constants(&result)?;
-        Ok(result)
+        let mut value = std::mem::MaybeUninit::uninit();
+        let code = unsafe { aeron_publication_constants(self.get_inner(), value.as_mut_ptr()) };
+        if code < 0 {
+            return Err(AeronCError::from_code(code));
+        }
+        Ok(AeronPublicationConstants::from(unsafe { value.assume_init() }))
     }
     #[inline]
     #[doc = "Get the current position to which the publication has advanced for this stream."]
@@ -60089,9 +60107,12 @@ impl AeronSubscription {
     #[doc = "Fill in a structure with the constants in use by a subscription."]
     #[doc = ""]
     pub fn get_constants(&self) -> Result<AeronSubscriptionConstants, AeronCError> {
-        let result = AeronSubscriptionConstants::new_zeroed_on_stack();
-        self.constants(&result)?;
-        Ok(result)
+        let mut value = std::mem::MaybeUninit::uninit();
+        let code = unsafe { aeron_subscription_constants(self.get_inner(), value.as_mut_ptr()) };
+        if code < 0 {
+            return Err(AeronCError::from_code(code));
+        }
+        Ok(AeronSubscriptionConstants::from(unsafe { value.assume_init() }))
     }
     #[inline]
     #[doc = "Count of images associated to this subscription."]
