@@ -264,7 +264,11 @@ fn build_from_source(config: &RusteronBuildConfig, docs_rs: &Path) {
         let release_flags = rusteron_code_gen::c_build::release_c_flags(
             &var("CARGO_CFG_TARGET_ARCH").unwrap_or_default(),
             &var("CARGO_CFG_TARGET_VENDOR").unwrap_or_default(),
-            var("PUBLISH_ARTIFACTS").is_some(),
+            if var("PUBLISH_ARTIFACTS").is_some() {
+                rusteron_code_gen::c_build::CpuTarget::Baseline
+            } else {
+                rusteron_code_gen::c_build::CpuTarget::ThisCpu
+            },
             var("RUSTERON_C_MARCH").as_deref(),
         );
         cmake_config.define("CMAKE_CXX_FLAGS_RELEASE", &release_flags);
