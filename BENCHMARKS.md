@@ -380,12 +380,72 @@ These pods ran in an earlier run on one `Standard_D8s_v6`, on Linux 6.12 with k3
   - On separate cores: 0.35–0.38 µs.
   - The pods weren't isolated, and in all but `st-d3-a3` p99.99 stayed near 9 µs.
 
-### Configuring a pod
+### Recommended settings for Kubernetes
 
-- **kubelet:** `cpu-manager-policy=static` and `reserved-cpus=0`. On k3s these go in `/etc/rancher/k3s/config.yaml` as `kubelet-arg`. kubelet refuses to start with a state file from another policy, so stop k3s, delete `/var/lib/kubelet/cpu_manager_state`, then start it.
-- **Room for the pod:** other pods' CPU requests count against the allocatable CPUs. CoreDNS and local-path-provisioner were scaled to zero.
-- **Huge pages:** reserve them on the node before kubelet starts (`vm.nr_hugepages` in `/etc/sysctl.d`), or kubelet does not report them. Huge page requests must equal limits. kubelet mounts the volume without `size=`, so the driver needs `AERON_PERFORM_STORAGE_CHECKS=false`.
-- **Containers:** make every one Guaranteed with whole CPUs, with one spinning thread per CPU, each pinned inside the container. Give the client's other threads one more CPU: every thread in a container shares its CPUs. The driver and its clients share one `emptyDir`, which every container in the pod can mount.
+Each setting is marked with where its evidence comes from:
+- **[pod]:** the pod measurements above.
+- **[host]:** the host measurements in this file, carried over to pods.
+- **[untested]:** neither.
+
+**The node**
+- **[pod] Huge pages:** set `vm.nr_hugepages` in `/etc/sysctl.d` on the node before kubelet starts, or kubelet does not report them.
+  - Earlier 4-vCPU runs found that 2 MiB pages for `AERON_DIR` cut Intel's IPC p99 from about 0.7 to 0.14 µs, and p99.99 from 1.05 to 0.4–0.6 µs.
+  - They made no difference on AMD, and 1 GiB pages gained nothing over 2 MiB.
+- **[host] Socket buffer limits:** set `net.core.rmem_max` and `wmem_max` in `/etc/sysctl.d`, at least as large as the windows you configure. They are node-wide, not per pod, and a reboot undoes `sysctl -w`. A driver whose window exceeds its receive buffer refuses to start.
+- **[host] Busy reads for UDP:**
+  - Set `net.core.busy_read=50`, with `napi_defer_hard_irqs=2` and `gro_flush_timeout=200000` on the NIC's VF.
+  - Or put the NIC's queue interrupts on the receiver's CPU. Choose one; together they gained nothing.
+  - Both helped only on isolated CPUs.
+- **[host] Isolation of the CPUs kubelet hands out:** `isolcpus=nohz,domain,managed_irq,<CPUs> nohz_full=<CPUs> rcu_nocbs=<CPUs> irqaffinity=<reserved CPUs>`. On a host, isolation cut IPC p99.99 from 2.5 to 0.8–1.0 µs.
+  - **[untested] in pods.** The kernel doesn't balance load across isolated CPUs, so non-Guaranteed pods in kubelet's shared pool would pile up on them. Keep such nodes for Guaranteed pods.
+- **[host] Archive nodes:** `vm.dirty_bytes` and `vm.dirty_background_bytes` (see the archive section) are node-wide too.
+
+**kubelet**
+- **[pod] The static CPU manager:** `cpu-manager-policy=static`, with `reserved-cpus` set to the housekeeping CPUs, the same ones as `irqaffinity`.
+  - It gives every Guaranteed container whole CPUs to itself, with no CFS quota.
+  - On k3s these go in `/etc/rancher/k3s/config.yaml` as `kubelet-arg`.
+  - kubelet refuses to start with a state file from another policy: stop it, delete `/var/lib/kubelet/cpu_manager_state`, then start it.
+- **[pod] Room for the pod:** other pods' CPU requests count against the allocatable CPUs.
+- **[untested] Whole cores with SMT on:** the static policy's `full-pcpus-only=true` option keeps a container's CPUs on whole cores, but rejects odd CPU requests. With `nosmt` it doesn't matter.
+
+**Pods**
+- **[pod] Every container Guaranteed:** requests equal limits, in whole CPUs.
+  - Give one CPU to each busy-spinning thread, plus one for the conductor and the other threads. Every thread in a container shares its CPUs.
+  - On a host, the client's conductor on the spinning CPUs held IPC p99.99 at 3.1–3.6 µs, against 0.7–1.0 µs.
+- **[pod] If the static policy is not available:** don't set a CPU limit equal to the spinning threads. Drivers limited that way were throttled in 23–55% of 100 ms periods. One more CPU, or no CPU limit, avoided it.
+- **[pod] Huge pages:** requests must equal limits.
+  - Share one `emptyDir: {medium: HugePages-2Mi}` between the driver and app containers.
+  - Set `AERON_PERFORM_STORAGE_CHECKS=false`, because kubelet mounts hugetlbfs without `size=`.
+- **[host] Term buffers and mappings:** set `AERON_TERM_BUFFER_SPARSE_FILE=false` on the driver and `AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true` on the clients.
+
+**The driver container**
+- **[host] IPC only:** a dedicated driver with its default idle strategies spins nothing, and one CPU is enough. On a host, a SHARED `noop` driver cost IPC: p50 0.31 → 0.36–0.42 µs, and half the throughput.
+- **[host] UDP:** dedicated, with a `noop` sender and receiver each pinned, which is 3 CPUs with the conductor.
+  - Short of CPUs, SHARED_NETWORK (2 CPUs) gave the same UDP latency and throughput.
+  - SHARED gave 12% less throughput.
+- **[untested] in a pod: pinning inside the container.** Inside a container the CPU numbers aren't known in advance. Set `AERON_DRIVER_CPUSET_AFFINITY=true`, and Aeron reads the `AERON_*_CPU_AFFINITY` values as indexes into the container's cpuset: 0 for its first CPU, and so on.
+  - This needs cgroup v2. rusteron's `media_driver` applies it, as `aeronmd` does.
+  - It is checked in Aeron's code but not run in a pod: in the measured pods it wasn't applied yet.
+
+**The app container**
+- **[host] Pinning:** pin each spinning thread to one of the container's CPUs, read from `/sys/fs/cgroup/cpuset.cpus.effective`. Leave one CPU for the client's conductor, or run the client with the conductor agent invoker.
+- **[pod] Placement:** kubelet picks the CPUs.
+  - Ping and pong on one core's two SMT threads, with the client's other threads on a third CPU, gave 0.115 µs at p50.
+  - On separate cores they gave 0.35–0.38 µs.
+
+**Networking**
+- **[untested] UDP from a pod.** The UDP results here used the host's network stack, and a CNI overlay adds its own path. For low-latency UDP between nodes, use `hostNetwork: true` and measure it.
+- **[host] Windows:** 2 MiB socket buffers and receiver window lifted throughput 1.9 → 13 M msgs/s. Across regions, size the window to the round trip (16 MiB for 53 ms gave 119 MB/s).
+- **[host] Jumbo frames:** MTU 9000 with `AERON_MTU_LENGTH=8192` inside the VNet doubled throughput again.
+- **[host] Avoid packet loss** before anything else: 0.1% loss cost a third of the throughput, and a lost request or reply waited about 100 ms.
+
+**An archive**
+- **[untested] in a pod:**
+  - Run the archive in its own Guaranteed container with at least 2 whole CPUs. On a host, confining the whole JVM to one CPU cost 25% of recording throughput; a core of its own for the recorder got it back.
+  - Put the archive directory on a volume sized for throughput: Premium SSD v2 on Azure, or local NVMe through a local persistent volume only if the archive is replicated elsewhere.
+  - Use file sync level 0, with the node's `vm.dirty_*` limits raised for bursts.
+
+The pods above used a SHARED `noop` driver. This example follows the recommendations instead, with a dedicated driver for UDP on the host's network. It has not itself been run:
 
 ```yaml
 apiVersion: v1
@@ -393,19 +453,29 @@ kind: Pod
 metadata:
   name: aeron-app
 spec:
+  hostNetwork: true  # UDP between nodes on the host's stack; not measured from a pod
   containers:
     - name: driver
       image: debian:trixie-slim
       env:
         - {name: AERON_DIR, value: /aeron/driver}
-        - {name: AERON_THREADING_MODE, value: SHARED}
-        - {name: AERON_SHARED_IDLE_STRATEGY, value: noop}
+        - {name: AERON_THREADING_MODE, value: DEDICATED}
+        - {name: AERON_SENDER_IDLE_STRATEGY, value: noop}
+        - {name: AERON_RECEIVER_IDLE_STRATEGY, value: noop}
+        # indexes into the container's cpuset, not CPU numbers
+        - {name: AERON_DRIVER_CPUSET_AFFINITY, value: "true"}
+        - {name: AERON_CONDUCTOR_CPU_AFFINITY, value: "0"}
+        - {name: AERON_SENDER_CPU_AFFINITY, value: "1"}
+        - {name: AERON_RECEIVER_CPU_AFFINITY, value: "2"}
+        - {name: AERON_SOCKET_SO_SNDBUF, value: 2m}
+        - {name: AERON_SOCKET_SO_RCVBUF, value: 2m}
+        - {name: AERON_RCV_INITIAL_WINDOW_LENGTH, value: 2m}
         - {name: AERON_FILE_PAGE_SIZE, value: "2097152"}
         - {name: AERON_PERFORM_STORAGE_CHECKS, value: "false"}  # kubelet mounts hugetlbfs without size=
         - {name: AERON_TERM_BUFFER_SPARSE_FILE, value: "false"}
       resources:
-        requests: {cpu: "2", memory: 1Gi, hugepages-2Mi: 1Gi}
-        limits: {cpu: "2", memory: 1Gi, hugepages-2Mi: 1Gi}
+        requests: {cpu: "3", memory: 1Gi, hugepages-2Mi: 1Gi}
+        limits: {cpu: "3", memory: 1Gi, hugepages-2Mi: 1Gi}
       volumeMounts:
         - {name: aeron, mountPath: /aeron}
     - name: app
@@ -414,6 +484,7 @@ spec:
         - {name: AERON_DIR, value: /aeron/driver}
         - {name: AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY, value: "true"}
       resources:
+        # two spinning threads (ping and pong), plus one CPU for the client's other threads
         requests: {cpu: "3", memory: 1Gi, hugepages-2Mi: 1Gi}
         limits: {cpu: "3", memory: 1Gi, hugepages-2Mi: 1Gi}
       volumeMounts:
