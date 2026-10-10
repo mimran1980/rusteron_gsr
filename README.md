@@ -311,6 +311,12 @@ Measured on 2026-10-09 between two Azure `Standard_D8s_v6` VMs (Intel Xeon Plati
 
 These were used in every run, and earlier runs on smaller VMs showed each to help:
 - `AERON_TERM_BUFFER_SPARSE_FILE=false` (driver) and `AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true` (clients). Without them a new publication page-faults its way through its log.
+  - **TODO: upgrade to Aeron 1.53.2 or later, and until then pre-touch only on Linux and Windows.**
+    - On Linux and Windows, Aeron's C client pre-touches through the operating system (`MAP_POPULATE` on Linux), which leaves the data alone.
+    - Elsewhere, macOS included, Aeron 1.52.2 (the version rusteron builds) writes 0 into the first byte of every page of a log it maps, which may already hold live frames, and so corrupts them. An archive replay lost its frames this way in every run on a Mac.
+    - Aeron 1.53.2 (2026-09-18) fixed it with a compare-and-swap of 0 for 0: "Fix log buffer corruption when pre-touch is used and the native pre-touch is not available".
+    - `rusteron-client/examples/embedded_ping_pong.rs` turns pre-touch on on every platform.
+    - After `just update-aeron-version 1.53.3`, or any later release, delete this note.
 - `AERON_DIR` on 2 MiB `hugetlbfs` with `AERON_FILE_PAGE_SIZE=2097152`.
 - `noop` idle for the driver's sender and receiver.
 - Every busy-spinning thread pinned to its own core, and everything else (interrupts, the driver's conductor, the clients' other threads) on a housekeeping CPU.
