@@ -278,8 +278,9 @@ impl AeronArchiveAsyncConnect {
     #[inline]
     /// recommend using this method instead of standard `new` as it will link the archive to aeron so if a drop occurs archive is dropped before aeron
     pub fn new_with_aeron(ctx: &AeronArchiveContext, aeron: &Aeron) -> Result<Self, AeronCError> {
-        // A terminal poll frees the connect and marks it released, so this deletes only an
-        // abandoned one. The held client outlives it, which keeps cancelling its adds safe.
+        // SAFETY: a terminal poll frees the connect and marks it released, so the cleanup
+        // deletes only an abandoned one. The held client outlives it, which keeps cancelling
+        // its adds safe.
         let resource_async = ManagedCResource::new(
             |connect| unsafe { aeron_archive_async_connect(connect, ctx.into()) },
             Some(Box::new(|connect| unsafe {
@@ -623,14 +624,22 @@ impl PersistentSubscriptionBuilder {
     }
 
     /// A builder whose subscription and `archive_context` both use `aeron`, which it sets on
-    /// the context too, so neither is left pointing at another client. Close the
-    /// subscription first, then drop `archive_context`, then `aeron`.
+    /// the context too, so neither is left pointing at another client. The built
+    /// subscription keeps both open until it closes.
+    ///
+    /// # Errors
+    ///
+    /// Returns the Aeron error if the context cannot be created or either setter fails.
     pub fn new_with_aeron(archive_context: &AeronArchiveContext, aeron: &Aeron) -> Result<Self, AeronCError> {
         archive_context.set_aeron(aeron)?;
         Self::new()?.aeron(aeron)?.archive_context(archive_context)
     }
 
     /// Set the Aeron client to use.
+    ///
+    /// # Errors
+    ///
+    /// Returns the Aeron error if the context rejects the client.
     pub fn aeron(mut self, aeron: &Aeron) -> Result<Self, AeronCError> {
         self.ctx.set_aeron(aeron)?;
         self.aeron = Some(aeron.clone());
@@ -638,6 +647,10 @@ impl PersistentSubscriptionBuilder {
     }
 
     /// Set the archive context to use.
+    ///
+    /// # Errors
+    ///
+    /// Returns the Aeron error if the context rejects the archive context.
     pub fn archive_context(mut self, ctx: &AeronArchiveContext) -> Result<Self, AeronCError> {
         self.ctx.set_archive_context(ctx)?;
         self.archive_context = Some(ctx.clone());
