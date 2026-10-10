@@ -46,8 +46,9 @@ repo=$(cd "$here/../.." && pwd)
 group=rusteron-lab
 user=$(id -un)
 out=$repo/target/x86lab/results/$(date +%Y%m%d-%H%M%S)
-# main's tree, for the arms that A/B against it
-main_tree=$repo/target/x86lab/rusteron-main
+# main's tree, for the arms that A/B against it, one per commit so a moved main is extracted afresh
+main_sha=$(git -C "$repo" rev-parse main) || exit 1
+main_tree=$repo/target/x86lab/rusteron-main-$main_sha
 known=$out/known_hosts
 read -ra nodes <<<"${LAB_NODES:-intel-a:northcentralus:Standard_D8s_v6 intel-b:northcentralus:Standard_D8s_v6}"
 read -ra phases <<<"${LAB_PHASES:-bootstrap build bench test}"
@@ -57,6 +58,9 @@ ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=accept-new -o "UserKnownHost
     -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=10)
 created=0
 before=?
+# the network watchers, and whether their group existed, before this run: teardown leaves those alone
+watchers_before=
+watcher_group_before=true
 
 log() { echo "[$(date +%T)] $*"; }
 
@@ -87,6 +91,13 @@ limit() {
     esac
 }
 
+# new_watchers < "<id> <location>" lines: the ids of the watchers in a lab region that were not
+# there before this run (Azure ids compare case-insensitively)
+new_watchers() {
+    awk -v r=" $lab_regions " -v old=" ${watchers_before//$'\n'/ } " \
+        'index(r, " " $2 " ") && !index(tolower(old), " " tolower($1) " ") { print $1 }'
+}
+
 teardown() {
     local rc=$? id attempt
     trap - EXIT HUP INT TERM
@@ -97,15 +108,15 @@ teardown() {
             if az group delete -n "$group" --yes; then break; fi
             sleep 20
         done
-        # the network watchers Azure added for our networks, and their group if that empties it;
-        # a watcher can show up in listings late, so look three times
+        # the network watchers Azure added for our networks, and their group if this run created
+        # it and that empties it; a watcher can show up in listings late, so look three times
         for attempt in 1 2 3; do
             id=$(az resource list -g NetworkWatcherRG --query "[?type=='Microsoft.Network/networkWatchers'].{id:id, l:location}" \
-                -o tsv 2>/dev/null | awk -v r=" $lab_regions " 'index(r, " " $2 " ") { print $1 }')
+                -o tsv 2>/dev/null | new_watchers)
             if [[ -n $id ]]; then az resource delete --ids $id -o none; fi
             if ((attempt < 3)); then sleep 20; fi
         done
-        if [[ $(az group exists -n NetworkWatcherRG) == true &&
+        if [[ $watcher_group_before == false && $(az group exists -n NetworkWatcherRG) == true &&
             $(az resource list -g NetworkWatcherRG --query 'length(@)' -o tsv) == 0 ]]; then
             az group delete -n NetworkWatcherRG --yes
         fi
@@ -169,15 +180,16 @@ pair_bench() {
     return "$rc"
 }
 
-# main at its own submodule commits, extracted once into target/
+# main at its own submodule commits, extracted once per commit into target/; a failed extraction
+# stays in the .partial directory, so it is never mistaken for a whole tree
 make_main_tree() {
-    local sub
+    local sub tmp=$main_tree.partial
     if [[ -d $main_tree ]]; then return; fi
-    mkdir -p "$main_tree"
-    git -C "$repo" archive main | tar -x -C "$main_tree"
+    mkdir -p "$tmp" && git -C "$repo" archive "$main_sha" | tar -x -C "$tmp" || return 1
     for sub in rusteron-client/aeron rusteron-archive/aeron rusteron-media-driver/aeron; do
-        git -C "$repo/$sub" archive "$(git -C "$repo" rev-parse "main:$sub")" | tar -x -C "$main_tree/$sub"
+        git -C "$repo/$sub" archive "$(git -C "$repo" rev-parse "$main_sha:$sub")" | tar -x -C "$tmp/$sub" || return 1
     done
+    mv "$tmp" "$main_tree"
 }
 
 # what git tracks in this checkout (with the submodules), main's tree and the harness;
@@ -189,8 +201,8 @@ sync_to() {
         ssh "${ssh_opts[@]}" "$user@$ip" 'mkdir -p /srv/x86lab/rusteron && tar -xzf - -C /srv/x86lab/rusteron') &&
         tar -C "$here" --no-xattrs --no-mac-metadata --exclude target -czf - harness |
         ssh "${ssh_opts[@]}" "$user@$ip" 'tar -xzf - -C /srv/x86lab' &&
-        tar -C "$(dirname "$main_tree")" --no-xattrs --no-mac-metadata -czf - rusteron-main |
-        ssh "${ssh_opts[@]}" "$user@$ip" 'tar -xzf - -C /srv/x86lab'
+        tar -C "$main_tree" --no-xattrs --no-mac-metadata -czf - . |
+        ssh "${ssh_opts[@]}" "$user@$ip" 'mkdir -p /srv/x86lab/rusteron-main && tar -xzf - -C /srv/x86lab/rusteron-main'
 }
 
 fetch() {
@@ -236,14 +248,20 @@ run_phase() {
     return "$rc"
 }
 
+# run_node <name> <ip>: every phase on one node, stopping at a failed bootstrap or build; a later
+# phase that fails still lets the rest run, and the node then reports failure
 run_node() {
-    local name=$1 ip=$2 phase rc
+    local name=$1 ip=$2 phase rc failed=0
     prepare_node "$name" "$ip" || return 1
     for phase in "${phases[@]}"; do
         rc=0
         run_phase "$name" "$ip" "$phase" || rc=$?
-        if ((rc != 0)) && [[ $phase == bootstrap || $phase == build ]]; then return "$rc"; fi
+        if ((rc != 0)); then
+            failed=1
+            if [[ $phase == bootstrap || $phase == build ]]; then return "$rc"; fi
+        fi
     done
+    return "$failed"
 }
 
 # LAB_LOCKSTEP=1, with LAB_PAIR=1: each phase runs on every node at once and finishes on all of
@@ -329,12 +347,17 @@ main() {
         exit 1
     fi
     before=$(az resource list --query 'length(@)' -o tsv)
-    { git -C "$repo" rev-parse HEAD main; git -C "$repo" status --short; } >"$out/shas.txt"
+    watchers_before=$(az resource list --resource-type Microsoft.Network/networkWatchers --query '[].id' -o tsv) &&
+        watcher_group_before=$(az group exists -n NetworkWatcherRG) || {
+        echo "could not list the existing network watchers: not creating anything" >&2
+        exit 1
+    }
+    { git -C "$repo" rev-parse HEAD; echo "$main_sha"; git -C "$repo" status --short; } >"$out/shas.txt"
     key=$HOME/.ssh/id_rsa.pub
     mine=$(curl -fsS https://api.ipify.org)/32
     # the Mac must not sleep while the lab runs
     if command -v caffeinate >/dev/null; then caffeinate -i -w $$ & fi
-    make_main_tree
+    make_main_tree || { echo "could not extract main's tree into $main_tree.partial" >&2; exit 1; }
 
     trap teardown EXIT HUP INT TERM
     created=1
