@@ -135,11 +135,11 @@ rusteron's own build settings do not reach crates that depend on it.
 
 4. Check it worked. The build prints
    `cross-language LTO: Aeron C compiled to bitcode by clang-22 (LLVM 22) with -flto` for each
-   rusteron crate (Cargo shows build-script warnings only for path dependencies), and the inlined
-   C functions no longer exist in the binary:
+   rusteron crate (Cargo shows build-script warnings only for path dependencies), and in an
+   unstripped binary that claims, the inlined claim functions no longer exist:
 
    ```bash
-   nm target/release/my-app | grep -cE ' aeron_(publication_try_claim|buffer_claim_commit|image_poll)$'   # 0
+   nm target/release/my-app | grep -cE ' aeron_(publication_try_claim|buffer_claim_commit)$'   # 0
    ```
 
 The `precompile` libraries are native code and cannot take part (the build warns). macOS is not
