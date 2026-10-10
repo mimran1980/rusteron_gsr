@@ -757,6 +757,7 @@ bench8() {
         # would all crowd onto CPU 0
         variants=(client conductor-hot shared-1cpu)
         if [[ $state == tuned* ]]; then tune8_runtime; fi
+        if [[ $state == tunedx* ]]; then tune8x_runtime; fi
     fi
     {
         echo "state=$state kernel=$(uname -r)"
@@ -765,6 +766,7 @@ bench8() {
         grep -H . /sys/devices/system/cpu/vulnerabilities/* 2>/dev/null
         echo "thp=$(cat /sys/kernel/mm/transparent_hugepage/enabled) watchdog=$(sysctl -n kernel.watchdog) workqueue=$(cat /sys/devices/virtual/workqueue/cpumask 2>/dev/null)"
         echo "online=$(cat /sys/devices/system/cpu/online) smt=$(cat /sys/devices/system/cpu/smt/control 2>/dev/null) idle=$(cat /sys/devices/system/cpu/cpuidle/current_driver 2>/dev/null)"
+        echo "timer_migration=$(sysctl -n kernel.timer_migration) writeback=$(cat /sys/bus/workqueue/devices/writeback/cpumask 2>/dev/null) rcuo_cpus=$(ps -eo psr=,comm= | awk '$2 ~ /^rcuo/ { print $1 }' | sort -un | tr '\n' ' ')"
         echo "clocksource=$(cat /sys/devices/system/clocksource/clocksource0/current_clocksource) ksm=$(cat /sys/kernel/mm/ksm/run 2>/dev/null) printk=$(sysctl -n kernel.printk)"
         grep -E 'CONFIG_INIT_ON_ALLOC_DEFAULT_ON|CONFIG_INIT_ON_FREE_DEFAULT_ON' "/boot/config-$(uname -r)" 2>/dev/null
         echo "scheduled events: $(curl -s -m 5 -H Metadata:true --noproxy '*' 'http://169.254.169.254/metadata/scheduledevents?api-version=2020-07-01')"
@@ -799,7 +801,8 @@ bench8() {
 # core. xtput-jumbo: MTU 9000 and Aeron MTU 8192; xtput-iov16: 16-message io vectors and sends.
 # ded-threads-wide: 16 MiB socket buffers and initial receiver window over 64 MiB terms, which a
 # long round trip needs to keep the link full. ded-threads-sm1ms: the receiver's periodic status
-# message every 1 ms instead of 200. AERON_DIR is on 2 MiB hugetlbfs throughout.
+# message every 1 ms instead of 200. ded-threads-msgs2: at most 2 messages per sender cycle.
+# AERON_DIR is on 2 MiB hugetlbfs throughout.
 xhost_env() {
     local base=(AERON_TERM_BUFFER_SPARSE_FILE=false AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true AERON_FILE_PAGE_SIZE=2097152)
     if [[ $1 != *-defaults ]]; then
@@ -811,6 +814,8 @@ xhost_env() {
     fi
     # a lost status message otherwise stalls a window-blocked publisher until the next, 200 ms later
     if [[ $1 == *-sm1ms ]]; then base+=(AERON_RCV_STATUS_MESSAGE_TIMEOUT=1000000); fi
+    # as Aeron's low-latency C driver script: at most 2 messages per sender cycle (the default is 4)
+    if [[ $1 == *-msgs2 ]]; then base+=(AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND=2); fi
     case $1 in
         xtput-jumbo) base+=(AERON_MTU_LENGTH=8192) ;;
         xtput-iov16)
@@ -818,7 +823,7 @@ xhost_env() {
                 AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND=16) ;;
     esac
     case ${1%-defaults} in
-        ded-threads | ded-threads-wide | ded-threads-sm1ms | ded-threads-busyread | ded-threads-irqrcv | ded-threads-busyread-irqrcv | xtput | xtput-jumbo | xtput-iov16)
+        ded-threads | ded-threads-wide | ded-threads-sm1ms | ded-threads-msgs2 | ded-threads-busyread | ded-threads-irqrcv | ded-threads-busyread-irqrcv | xtput | xtput-jumbo | xtput-iov16)
             xenv=("${base[@]}" AERON_SENDER_IDLE_STRATEGY=noop AERON_RECEIVER_IDLE_STRATEGY=noop
                 AERON_CONDUCTOR_CPU_AFFINITY="$first_hk8" AERON_SENDER_CPU_AFFINITY="$xsnd8" AERON_RECEIVER_CPU_AFFINITY="$xrcv8")
             xmask=$hk8 ;;
@@ -945,8 +950,9 @@ xhost8() {
         sysctl net.core.busy_read net.core.busy_poll
     } >"$res/xhost8-nic-$state.txt" 2>&1
     local variants=(ded-threads ded-threads-defaults sharednet-threads shared-1cpu ded-threads-busyread ded-threads-irqrcv
-        ded-threads-busyread-irqrcv)
+        ded-threads-busyread-irqrcv ded-threads-msgs2)
     huge8
+    drops8 "$state before"
     echo "host,state,variant,rep,vf_rx,vf_tx,busy_poll_rx,path_switches,peer_vf_rx,peer_vf_tx,peer_busy_poll_rx,peer_path_switches" \
         >>"$res/xhost8-runs.csv"
     for rep in $(seq "${BENCH8_REPS:-5}"); do
@@ -979,7 +985,26 @@ xhost8() {
         done
     done
     run_base=
+    drops8 "$state after"
     log "xhost8 $state done"
+}
+
+# drops8 <label>: where UDP can drop packets on this host (socket buffers, the softirq backlog,
+# the NIC), appended to drops8.txt, so a run's before and after can be compared
+drops8() {
+    local row=0 processed dropped squeezed rest dev
+    {
+        echo "== $1 $(date +%T)"
+        nstat -az UdpRcvbufErrors UdpSndbufErrors UdpInErrors 2>/dev/null | tail -n +2
+        # one row per online CPU, in hex: packets processed, dropped, budget exhausted (time_squeeze)
+        while read -r processed dropped squeezed rest; do
+            echo "softnet row$row processed=$((16#$processed)) dropped=$((16#$dropped)) squeezed=$((16#$squeezed))"
+            row=$((row + 1))
+        done </proc/net/softnet_stat
+        for dev in eth0 $(vf_dev); do
+            ethtool -S "$dev" 2>/dev/null | grep -Ei 'drop|miss|err' | grep -v ': 0$' | sed "s/^/$dev /" || true
+        done
+    } >>"$res/drops8.txt" 2>&1
 }
 
 # loss <basis points|off> [peer ip]: drops that share of the UDP packets arriving from the peer,
@@ -1376,6 +1401,10 @@ boot8() {
 # staggered ticks, no transparent huge pages, and idle CPUs polling instead of halting, which
 # with SMT off cannot steal from a busy twin
 TUNE8_ARGS="nosmt idle=poll rcu_nocb_poll nowatchdog nmi_watchdog=0 nosoftlockup skew_tick=1 transparent_hugepage=never audit=0"
+# tune8x: tuned's network-latency profile on top, not yet measured here: no expedited RCU grace
+# periods, which interrupt every CPU, and RCU leaves a nohz_full CPU alone until a grace period
+# is 1 s old
+TUNE8X_ARGS="$TUNE8_ARGS rcupdate.rcu_normal_after_boot=1 rcutree.nohz_full_patience_delay=1000"
 
 # the runtime half of the tuning, after each boot: every IRQ, kernel workqueue and periodic job
 # on CPU 0 or off, and nothing in the background that does not need to run
@@ -1392,6 +1421,16 @@ tune8_runtime() {
     # synthetic path drops nothing
     sudo sysctl -q -w net.ipv4.conf.all.rp_filter=2 net.ipv4.conf.default.rp_filter=2 2>/dev/null || true
     sudo swapoff -a || true
+}
+
+# the runtime half of tune8x, from tuned's network-latency and cpu-partitioning profiles: timers
+# stay on the CPU that armed them, the writeback workqueue and RCU's offload kthreads go to the
+# housekeeping CPU, and memory is not compacted proactively
+tune8x_runtime() {
+    local pid
+    sudo sysctl -q -w kernel.timer_migration=0 vm.compaction_proactiveness=0 2>/dev/null || true
+    echo 1 | sudo tee /sys/bus/workqueue/devices/writeback/cpumask >/dev/null 2>&1 || true
+    for pid in $(pgrep '^rcuo'); do sudo taskset -pc "$hk8" "$pid" >/dev/null 2>&1 || true; done
 }
 
 # --- archive under load -------------------------------------------------------------------
@@ -1809,6 +1848,8 @@ case ${1:-} in
     bench8-tuned) bench8 tuned ;;
     tune8-nomit) boot8 "$TUNE8_ARGS mitigations=off" ;;
     bench8-tuned-nomit) bench8 tuned-nomit ;;
+    tune8x) boot8 "$TUNE8X_ARGS" ;;
+    bench8-tunedx) bench8 tunedx ;;
     pong-up) shift; pong_up "$@" ;;
     pong-down) pong_down ;;
     bench-xhost) bench_xhost ;;
