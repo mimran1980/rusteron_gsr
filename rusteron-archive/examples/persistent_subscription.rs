@@ -31,8 +31,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let resp_port = find_unused_udp_port(req_port + 1).expect("no free port");
     let events_port = find_unused_udp_port(resp_port + 1).expect("no free port");
 
-    // Keep `_process` in scope so the Java Archive lives for the whole example.
-    let _process = EmbeddedArchiveMediaDriverProcess::build_and_start(
+    // Keep `process` in scope so the Java Archive lives for the whole example.
+    let process = EmbeddedArchiveMediaDriverProcess::build_and_start(
         &aeron_dir,
         &archive_dir,
         &format!("aeron:udp?endpoint=localhost:{req_port}"),
@@ -40,20 +40,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &format!("aeron:udp?endpoint=localhost:{events_port}"),
     )?;
 
-    // Aeron client + archive context built by hand: the persistent subscription below
-    // takes this context and client (new_with_aeron), which the testing helper
-    // `process.archive_connect()` does not return.
+    // An Aeron client and an archive context on it: the persistent subscription below
+    // takes both (new_with_aeron), which the testing helper `process.archive_connect()`
+    // does not return.
     let aeron_context = AeronContext::new()?;
     aeron_context.set_dir(&cformat!("{aeron_dir}"))?;
     aeron_context.set_client_name(&cformat!("ps-example-{id}"))?;
     let aeron = Aeron::new(&aeron_context)?;
     aeron.start()?;
 
-    let archive_context = AeronArchiveContext::new()?;
-    archive_context.set_aeron(&aeron)?;
-    archive_context.set_control_request_channel(&cformat!("aeron:udp?endpoint=localhost:{req_port}"))?;
-    archive_context.set_control_response_channel(&cformat!("aeron:udp?endpoint=localhost:{resp_port}"))?;
-    archive_context.set_recording_events_channel(&cformat!("aeron:udp?endpoint=localhost:{events_port}"))?;
+    let archive_context = process.archive_context(&aeron)?;
 
     let archive =
         AeronArchiveAsyncConnect::new_with_aeron(&archive_context, &aeron)?.poll_blocking(Duration::from_secs(20))?;

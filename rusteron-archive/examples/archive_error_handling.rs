@@ -64,11 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let aeron = Aeron::new(&aeron_context)?;
     aeron.start()?;
 
-    let archive_context = AeronArchiveContext::new()?;
-    archive_context.set_aeron(&aeron)?;
-    archive_context.set_control_request_channel(&cformat!("{request_channel}"))?;
-    archive_context.set_control_response_channel(&cformat!("{response_channel}"))?;
-    archive_context.set_recording_events_channel(&cformat!("{events_channel}"))?;
+    let archive_context = process.archive_context(&aeron)?;
     archive_context.set_error_handler(Some(|code: i32, msg: &str| {
         eprintln!("[archive error] {code}: {msg}");
     }))?;
@@ -139,7 +135,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Reconnect pattern: bounded retries with back-off; each attempt has its own timeout.
     println!("restarting archive...");
-    let _process = EmbeddedArchiveMediaDriverProcess::build_and_start(
+    let process2 = EmbeddedArchiveMediaDriverProcess::build_and_start(
         &format!("target/aeron/{id}_err2/shm"),
         &format!("target/aeron/{id}_err2/archive"),
         &request_channel,
@@ -151,11 +147,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     aeron_context2.set_error_handler(Some(|code: i32, msg: &str| eprintln!("[client error] {code}: {msg}")))?;
     let aeron2 = Aeron::new(&aeron_context2)?;
     aeron2.start()?;
-    let archive_context2 = AeronArchiveContext::new()?;
-    archive_context2.set_aeron(&aeron2)?;
-    archive_context2.set_control_request_channel(&cformat!("{request_channel}"))?;
-    archive_context2.set_control_response_channel(&cformat!("{response_channel}"))?;
-    archive_context2.set_recording_events_channel(&cformat!("{events_channel}"))?;
+    let archive_context2 = process2.archive_context(&aeron2)?;
     archive_context2.set_error_handler(Some(|code: i32, msg: &str| eprintln!("[archive error] {code}: {msg}")))?;
     let deadline = Instant::now() + Duration::from_secs(30);
     let archive2 = loop {

@@ -1,5 +1,5 @@
 use crate::IntoCString;
-use crate::{Aeron, AeronArchive, AeronArchiveAsyncConnect, AeronArchiveContext, AeronContext};
+use crate::{Aeron, AeronArchive, AeronArchiveAsyncConnect, AeronArchiveContext, AeronCError, AeronContext};
 use log::info;
 use log::{error, warn};
 use regex::Regex;
@@ -133,6 +133,21 @@ impl EmbeddedArchiveMediaDriverProcess {
             .spawn()
     }
 
+    /// An archive context on `aeron` with this archive's control request, control response
+    /// and recording events channels.
+    ///
+    /// # Errors
+    ///
+    /// Returns the Aeron error if the context cannot be created or rejects a setting.
+    pub fn archive_context(&self, aeron: &Aeron) -> Result<AeronArchiveContext, AeronCError> {
+        let context = AeronArchiveContext::new()?;
+        context.set_aeron(aeron)?;
+        context.set_control_request_channel(&self.control_request_channel.as_str().into_c_string())?;
+        context.set_control_response_channel(&self.control_response_channel.as_str().into_c_string())?;
+        context.set_recording_events_channel(&self.recording_events_channel.as_str().into_c_string())?;
+        Ok(context)
+    }
+
     pub fn archive_connect(&self) -> Result<(AeronArchive, Aeron), io::Error> {
         let start = Instant::now();
         let deadline = valgrind_timeout(30);
@@ -144,17 +159,7 @@ impl EmbeddedArchiveMediaDriverProcess {
                     .expect("invalid client name");
                 if let Ok(aeron) = Aeron::new(&aeron_context) {
                     if aeron.start().is_ok() {
-                        if let Ok(archive_context) = AeronArchiveContext::new() {
-                            archive_context.set_aeron(&aeron).expect("invalid aeron");
-                            archive_context
-                                .set_control_request_channel(&self.control_request_channel.as_str().into_c_string())
-                                .expect("invalid control request channel");
-                            archive_context
-                                .set_control_response_channel(&self.control_response_channel.as_str().into_c_string())
-                                .expect("invalid control response channel");
-                            archive_context
-                                .set_recording_events_channel(&self.recording_events_channel.as_str().into_c_string())
-                                .expect("invalid recording events channel");
+                        if let Ok(archive_context) = self.archive_context(&aeron) {
                             if let Ok(connect) = AeronArchiveAsyncConnect::new_with_aeron(&archive_context, &aeron) {
                                 if let Ok(archive) = connect.poll_blocking(valgrind_timeout(10)) {
                                     let i = archive.get_archive_id();

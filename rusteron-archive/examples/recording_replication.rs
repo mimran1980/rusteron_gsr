@@ -57,9 +57,9 @@ fn start_archive(name: &str, first_port: u16) -> Result<ArchiveInstance, Box<dyn
 
     let archive = AeronArchive::connect(
         &aeron,
-        &control_request_channel,
-        &format!("aeron:udp?endpoint=localhost:{resp_port}"),
-        Some(&format!("aeron:udp?endpoint=localhost:{events_port}")),
+        &process.control_request_channel,
+        &process.control_response_channel,
+        Some(&process.recording_events_channel),
         Duration::from_secs(20),
     )?;
     println!("[{name}] archive up (control {control_request_channel})");
