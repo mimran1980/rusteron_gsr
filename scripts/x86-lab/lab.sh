@@ -81,11 +81,11 @@ limit() {
         bench) echo 3600 ;;
         abudp) echo 2400 ;;
         bench-pinned | bench-isolated | bench-huge | bench-1g | k8s | k8s-cpu | bench8 | archive8 | bench8-isolated) echo 3600 ;;
-        bench8-tuned | bench8-tuned-nomit | xhost8-* | xnet8-* | disks8 | diskbench8*) echo 3600 ;;
+        bench8-tuned | bench8-tuned-nomit | bench8-tunedx | xhost8-* | xnet8-* | disks8 | diskbench8*) echo 3600 ;;
         archload8 | archburst8 | xarchload8) echo 7200 ;;
         xarcrtt8) echo 1800 ;;
         k8s8) echo 5400 ;;
-        isolate | isolate8 | tune8 | tune8-nomit | k3s-down) echo 600 ;;
+        isolate | isolate8 | tune8 | tune8-nomit | tune8x | k3s-down) echo 600 ;;
         kernel) echo 1200 ;;
         test) echo 5400 ;;
     esac
