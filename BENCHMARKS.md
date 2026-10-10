@@ -604,11 +604,7 @@ the claim path inlined (`offer` 6.16 â†’ 5.85 ns, `try_claim` + `commit` 5.75 â†
 unchanged), and macOS is not a supported setup (see below).
 
 Other build settings made no difference beyond noise on the Mac: Rust `lto = "thin"` against
-`"fat"`, and `panic = "abort"`. C `-flto=thin` beside Rust's fat LTO inlined nothing. On top of
-cross-language LTO on Linux, a non-PIE build (`-Crelocation-model=static`) changed nothing, and
-raising the link-time inline threshold (`-Clink-arg=-Wl,-mllvm,-inline-threshold=1000`) still
-left `offer` out of line while pushing `aeron_subscription_poll` out, so `poll` went back to
-1.61 ns per fragment. Neither is recommended.
+`"fat"`, and `panic = "abort"`. C `-flto=thin` beside Rust's fat LTO inlined nothing.
 
 The generated `get_constants` and `get_values` getters now let Aeron fill uninitialised memory
 instead of zeroing the struct first, as Aeron writes every field on success: on the Mac,
