@@ -522,6 +522,129 @@ spec:
       emptyDir: {medium: HugePages-2Mi}
 ```
 
+## Hot paths: in-place header reads and cross-language LTO (2026-10-11)
+
+Per-operation cost of the client's hot paths, from `rusteron-client/benches/hot_path.rs`: an
+embedded driver over IPC, a 32-byte payload, and header reads timed as the slope from 0 to 4
+reads per fragment with every result kept alive. Each figure is the median of 3 runs of each
+build, interleaved. Spreads were within about 2%. Two machines:
+
+- **Mac:** Apple M4, macOS, Rust 1.95.0.
+- **Linux:** a Debian arm64 Docker VM on the same M4, Rust 1.98.1, rustc's generic CPU. The
+  absolute numbers are indicative only, but the builds ran side by side, so the differences hold.
+
+The LTO builds link a separate crate that depends on rusteron, as an application would, with
+`lto = "fat"`, `codegen-units = 1` and Aeron C compiled by clang 22 with `-flto`.
+
+**One header field read** (`header.session_id()` and the others), ns per read:
+
+| Build | Mac | Linux |
+|---|---|---|
+| Through `aeron_header_values` (before) | 3.45 | 6.96 |
+| Through `aeron_header_values`, cross-language LTO | 0.51 | 1.52 |
+| In place (now) | 0.15 | 0.15 |
+| In place, cross-language LTO | 0.14 | 0.13 |
+
+Reading the frame in place is what removes the cost, on every build. Cross-language LTO inlines
+`aeron_header_values` and drops its zeroing and copy, but its null checks, error path and the
+wrapper's branches remain.
+
+**Publish and receive**, ns per operation (Linux; header reads in place in all three):
+
+| Build | `offer` | `try_claim` + `commit` | `poll` per fragment |
+|---|---|---|---|
+| Aeron C built by gcc (default) | 7.18 | 5.74 | 1.68 |
+| Aeron C built by clang 22, no LTO | 6.55 | 6.41 | 1.65 |
+| clang 22, cross-language LTO | 5.81 | 5.56 | 0.99 |
+
+On Linux the whole `poll` path inlines: `aeron_subscription_poll`, `aeron_image_poll`, the
+fragment trampoline and the closure become one loop, with no indirect call per fragment.
+`try_claim` and `commit` inline too. `offer` stays a call, being too large for LLVM's inliner,
+and about half of its gain comes from building Aeron with clang rather than gcc. On the Mac only
+the claim path inlined (`offer` 6.16 → 5.85 ns, `try_claim` + `commit` 5.75 → 5.29 ns, `poll`
+unchanged), and macOS is not a supported setup (see below).
+
+Other build settings made no difference beyond noise on the Mac: Rust `lto = "thin"` against
+`"fat"`, and `panic = "abort"`. C `-flto=thin` beside Rust's fat LTO inlined nothing. A release
+build with cross-language LTO took 87 s against 39 s on the Mac, and 55 s against 42 s on Linux.
+
+### Turning on cross-language LTO (Linux)
+
+Only the final binary can turn it on: rusteron's own build settings do not reach crates that
+depend on it.
+
+1. Install clang, lld and llvm-ar with the same LLVM major version as rustc. Rust 1.98.1 uses
+   LLVM 22:
+
+   ```bash
+   rustc -vV | grep LLVM                 # LLVM version: 22.1.8
+   wget https://apt.llvm.org/llvm.sh
+   sudo bash llvm.sh 22
+   sudo apt install lld-22
+   ```
+
+   Upgrade them together with Rust. rusteron's build stops with the fix when they differ.
+
+2. In the application's `Cargo.toml`, link Aeron statically and use fat LTO:
+
+   ```toml
+   [dependencies]
+   rusteron-client = { version = "0.2", features = ["static"] }
+   rusteron-media-driver = { version = "0.2", features = ["static"] }
+
+   [profile.release]
+   lto = "fat"
+   codegen-units = 1
+   ```
+
+3. In the application's `.cargo/config.toml`:
+
+   ```toml
+   [target.x86_64-unknown-linux-gnu]
+   linker = "clang-22"
+   rustflags = ["-Clinker-plugin-lto", "-Clink-arg=-fuse-ld=lld-22", "-Ctarget-cpu=native"]
+
+   [target.aarch64-unknown-linux-gnu]
+   linker = "clang-22"
+   rustflags = ["-Clinker-plugin-lto", "-Clink-arg=-fuse-ld=lld-22", "-Ctarget-cpu=native"]
+
+   [env]
+   CC = "clang-22"
+   ```
+
+   With `-Clinker-plugin-lto` set, rusteron's build script compiles Aeron C to LLVM bitcode with
+   `$CC` (or `RUSTERON_CLANG`), for the CPU named by `-Ctarget-cpu`. C and Rust must target the
+   same CPU, or LLVM refuses to inline across them. `CC` also covers other C dependencies, which
+   the `cc` crate compiles to bitcode under the same flag. In a Dockerfile the same settings are
+   environment variables:
+
+   ```dockerfile
+   ENV CC=clang-22
+   ENV RUSTFLAGS="-C target-cpu=native -C linker-plugin-lto -C linker=clang-22 -C link-arg=-fuse-ld=lld-22"
+   ```
+
+4. Check it worked. `cargo build --release` prints
+   `cross-language LTO: Aeron C compiled to bitcode by clang-22 (LLVM 22) with -flto` for each
+   rusteron crate (Cargo shows build-script warnings only for path dependencies), and in an
+   unstripped binary that claims, the claim functions are gone:
+
+   ```bash
+   nm target/release/my-app | grep -cE ' aeron_(publication_try_claim|buffer_claim_commit)$'   # 0
+   ```
+
+C uses full LTO (`-flto`) to match Rust's `lto = "fat"`. With Rust `lto = "thin"`, set
+`RUSTERON_C_LTO=thin`. The `precompile` libraries are native code and cannot take part (the build
+warns). macOS is not supported: rust-lld cannot read the macOS SDK, Apple's linker rejects
+rustc's LTO flags, and clang marks Apple-silicon code with CPU features rustc does not, which
+blocks inlining.
+
+### Running the hot-path bench
+
+```bash
+cargo bench -p rusteron-client --features static --bench hot_path   # plain build
+just bench-lto                                                     # cross-language LTO (Linux)
+```
+
 ## What else was checked
 
 **No effect inside an Azure Hyper-V guest, or not used in Aeron's path:**
