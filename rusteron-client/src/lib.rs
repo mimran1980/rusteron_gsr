@@ -914,6 +914,14 @@ mod tests {
                 |msg, header| {
                     if msg == claim_payload {
                         received.set(Some(header.reserved_value()));
+                        // the in-place reads must agree with Aeron C's own copy of the header
+                        let c = header.get_values().expect("aeron_header_values");
+                        let frame = c.frame();
+                        assert_eq!(header.session_id(), Some(frame.session_id()));
+                        assert_eq!(header.stream_id(), Some(frame.stream_id()));
+                        assert_eq!(header.term_id(), Some(frame.term_id()));
+                        assert_eq!(header.term_offset(), Some(frame.term_offset()));
+                        assert_eq!(header.reserved_value(), Some(frame.reserved_value()));
                     }
                 },
                 1024,
