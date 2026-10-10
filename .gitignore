@@ -9,3 +9,4 @@ rusteron-*/artifacts/
 /id_ed25519.pub
 /.DS_Store
 /package-lock.json
+.env
