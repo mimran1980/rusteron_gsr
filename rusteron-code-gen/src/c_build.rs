@@ -60,6 +60,11 @@ pub fn lto_release_c_flags(arch: &str, rustc_cpu: Option<&str>) -> String {
         Some(cpu) => flags.push_str(&format!(" -march={cpu}")),
         None => {}
     }
+    if arch == "x86_64" {
+        // clang gives Ice Lake server and later Intel CPUs SGX, which LLVM's own CPU models
+        // (and so rustc's) lack; Aeron uses no SGX
+        flags.push_str(" -mno-sgx");
+    }
     flags
 }
 
@@ -104,10 +109,13 @@ mod tests {
             "-O3 -DNDEBUG -funroll-loops -mcpu=native"
         );
         assert_eq!(
-            lto_release_c_flags("x86_64", Some("znver4")),
-            "-O3 -DNDEBUG -funroll-loops -march=znver4"
+            lto_release_c_flags("x86_64", Some("emeraldrapids")),
+            "-O3 -DNDEBUG -funroll-loops -march=emeraldrapids -mno-sgx"
         );
-        assert_eq!(lto_release_c_flags("x86_64", None), "-O3 -DNDEBUG -funroll-loops");
+        assert_eq!(
+            lto_release_c_flags("x86_64", None),
+            "-O3 -DNDEBUG -funroll-loops -mno-sgx"
+        );
         assert_eq!(
             rustc_target_cpu("-Ctarget-cpu=native\x1f-Clinker-plugin-lto"),
             Some("native")
