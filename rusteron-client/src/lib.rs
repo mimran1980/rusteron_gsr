@@ -4715,9 +4715,14 @@ mod tests {
         }
         let image = subscription.image_at_index(0).expect("image at 0");
 
-        subscription.close().unwrap();
-        // gives the client conductor time to free the image
-        sleep(Duration::from_millis(200));
+        let closed = Arc::new(AtomicUsize::new(0));
+        let close_handler = Handler::new(CloseNotificationCount { count: closed.clone() });
+        subscription.close_with_handler(Some(&close_handler)).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while closed.load(Ordering::SeqCst) == 0 && Instant::now() < deadline {
+            sleep(Duration::from_millis(10));
+        }
+        assert_eq!(1, closed.load(Ordering::SeqCst), "the C close finished before the drop");
         drop(image);
 
         drop(publication);

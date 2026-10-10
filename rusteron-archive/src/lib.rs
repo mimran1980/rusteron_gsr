@@ -1495,11 +1495,11 @@ mod tests {
             let context = AeronArchiveContext::new()?;
             context.set_aeron(&aeron)?;
             context
-                .set_control_request_channel(&format!("aeron:udp?endpoint=localhost:{request_port}").into_c_string())?;
+                .set_control_request_channel(&format!("aeron:udp?endpoint=127.0.0.1:{request_port}").into_c_string())?;
             context.set_control_response_channel(
-                &format!("aeron:udp?endpoint=localhost:{response_port}").into_c_string(),
+                &format!("aeron:udp?endpoint=127.0.0.1:{response_port}").into_c_string(),
             )?;
-            let endpoint = format!("endpoint=localhost:{response_port}|");
+            let endpoint = format!("endpoint=127.0.0.1:{response_port}|");
             let receivers = || {
                 let mut count = 0;
                 aeron.counters_reader().foreach_counter_fn(|_, _, _, _, label: &str| {

@@ -1185,7 +1185,7 @@ mod tests {
             .archive_context(&archive_context)?
             .live_channel(live_channel)?
             .live_stream_id(stream_id)?
-            .replay_channel("aeron:udp?endpoint=localhost:0")?
+            .replay_channel("aeron:udp?endpoint=127.0.0.1:0")?
             .replay_stream_id(stream_id + 1)?
             .start_position(0)?
             .recording_id(recording_id)?
@@ -1258,7 +1258,7 @@ mod tests {
             .recording_id(0)?
             .live_channel("aeron:ipc")?
             .live_stream_id(3701)?
-            .replay_channel("aeron:udp?endpoint=localhost:0")?
+            .replay_channel("aeron:udp?endpoint=127.0.0.1:0")?
             .replay_stream_id(3702)?
             .build()?;
         assert_eq!(archive_context.get_aeron().get_inner(), other.get_inner());
@@ -1290,7 +1290,7 @@ mod tests {
             .recording_id(0)?
             .live_channel("aeron:ipc")?
             .live_stream_id(3601)?
-            .replay_channel("aeron:udp?endpoint=localhost:0")?
+            .replay_channel("aeron:udp?endpoint=127.0.0.1:0")?
             .replay_stream_id(3602)?
             .build()?;
         assert_eq!(archive_context.get_aeron().get_inner(), other.get_inner());
@@ -1362,7 +1362,7 @@ mod tests {
                 .recording_id(0)?
                 .live_channel("aeron:ipc")?
                 .live_stream_id(3501)?
-                .replay_channel("aeron:udp?endpoint=localhost:0")?
+                .replay_channel("aeron:udp?endpoint=127.0.0.1:0")?
                 .replay_stream_id(3502)?
                 .build()?
         };
@@ -1393,7 +1393,7 @@ mod tests {
             .recording_id(0)?
             .live_channel("aeron:ipc")?
             .live_stream_id(3401)?
-            .replay_channel("aeron:udp?endpoint=localhost:0")?
+            .replay_channel("aeron:udp?endpoint=127.0.0.1:0")?
             .replay_stream_id(3402)?
             .build()?;
         drop(aeron);
@@ -1477,7 +1477,7 @@ mod tests {
             .archive_context(&archive_context)?
             .live_channel(live_channel)?
             .live_stream_id(stream_id)?
-            .replay_channel("aeron:udp?endpoint=localhost:0")?
+            .replay_channel("aeron:udp?endpoint=127.0.0.1:0")?
             .replay_stream_id(stream_id + 1)?
             .start_from_beginning()?
             .recording_id(recording_id)?
