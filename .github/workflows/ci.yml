@@ -29,7 +29,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.95.0
+          toolchain: 1.98.1
           components: clippy, rustfmt
 
       # aeron archive cmake for some reason starts java
@@ -89,7 +89,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.95.0
+          toolchain: 1.98.1
           components: rustfmt
 
       - name: Install dependencies
@@ -240,3 +240,45 @@ jobs:
             rusteron-archive/artifacts
             rusteron-client/artifacts
             rusteron-media-driver/artifacts
+
+  cross-language-lto:
+    # Aeron C compiled to bitcode by a clang matching rustc's LLVM and inlined into Rust at link time
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    name: Cross-language LTO
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-22.04-arm]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.98.1
+          components: rustfmt
+
+      - name: Install dependencies and the LLVM that rustc uses
+        run: |
+          sudo apt-get update && sudo apt-get install -y pkg-config libbsd-dev uuid-dev cmake lsb-release wget gnupg software-properties-common
+          llvm=$(rustc -vV | sed -n 's/^LLVM version: \([0-9]*\).*/\1/p')
+          wget -q https://apt.llvm.org/llvm.sh && sudo bash llvm.sh "$llvm" && sudo apt-get install -y "lld-$llvm"
+          echo "CC=clang-$llvm" >> "$GITHUB_ENV"
+          echo "RUSTFLAGS=-Ctarget-cpu=native -Clinker-plugin-lto -Clinker=clang-$llvm -Clink-arg=-fuse-ld=lld-$llvm" >> "$GITHUB_ENV"
+
+      - name: Test
+        run: cargo test -p rusteron-client --features static --lib -- --nocapture
+
+      - name: Check the claim path was inlined
+        run: |
+          cargo bench -p rusteron-client --features static --bench hot_path --no-run 2>&1 | tee build.log
+          grep -q "cross-language LTO: Aeron C compiled to bitcode" build.log
+          bin=$(grep -o 'Executable.*' build.log | tail -1 | sed 's/.*(\(.*\))/\1/')
+          left=$(nm "$bin" | grep -cE ' (aeron_publication_try_claim|aeron_buffer_claim_commit)$' || true)
+          echo "out-of-line claim functions: $left"
+          test "$left" = 0
