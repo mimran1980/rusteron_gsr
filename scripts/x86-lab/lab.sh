@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# rusteron's x86-64 lab: an Intel VM and an AMD VM in Azure resource group rusteron-lab,
+# rusteron's x86-64 lab: two Intel VMs in one region, in Azure resource group rusteron-lab,
 # which exists only while this script runs. It creates both, copies this checkout, main's
 # tree and the harness, runs harness/vm.sh's phases on both at once, copies the results to
 # target/x86lab/results/<stamp>/<node>/after-<phase> after each phase, and deletes the group
@@ -49,7 +49,7 @@ out=$repo/target/x86lab/results/$(date +%Y%m%d-%H%M%S)
 # main's tree, for the arms that A/B against it
 main_tree=$repo/target/x86lab/rusteron-main
 known=$out/known_hosts
-read -ra nodes <<<"${LAB_NODES:-intel:northcentralus:Standard_D4s_v6 amd:koreacentral:Standard_F4as_v6}"
+read -ra nodes <<<"${LAB_NODES:-intel-a:northcentralus:Standard_D8s_v6 intel-b:northcentralus:Standard_D8s_v6}"
 read -ra phases <<<"${LAB_PHASES:-bootstrap build bench test}"
 # the regions the nodes are in, whose network watchers teardown removes
 lab_regions=$(for n in "${nodes[@]}"; do IFS=: read -r _ r _ <<<"$n"; echo "$r"; done | sort -u | tr '\n' ' ')
