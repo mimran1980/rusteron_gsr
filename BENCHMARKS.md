@@ -405,7 +405,26 @@ The host settings' sources are listed under [Tuning on x86-64 Linux](./README.md
   - Both helped only on isolated CPUs.
 - **[host] Isolation of the CPUs kubelet hands out:** `isolcpus=nohz,domain,managed_irq,<CPUs> nohz_full=<CPUs> rcu_nocbs=<CPUs> irqaffinity=<reserved CPUs>`. On a host, isolation cut IPC p99.99 from 2.5 to 0.8–1.0 µs.
   - **[untested] in pods.** The kernel doesn't balance load across isolated CPUs, so non-Guaranteed pods in kubelet's shared pool would pile up on them. Keep such nodes for Guaranteed pods.
+- **[host] A tuned kernel on top of isolation:**
+  - The options were `nosmt idle=poll rcu_nocb_poll nowatchdog nmi_watchdog=0 nosoftlockup skew_tick=1 transparent_hugepage=never audit=0`.
+  - They cut the UDP p50 from 38.6 to 34.9 µs, and left IPC unchanged.
+  - With `idle=poll`, an idle CPU spins instead of entering a C-state.
+  - **[untested]** On AWS instance types that let the guest control C-states, AWS's `intel_idle.max_cstate=1 processor.max_cstate=1` is the milder alternative. Use one or the other (README: [On AWS](./README.md#tuning-on-x86-64-linux)).
 - **[host] Archive nodes:** `vm.dirty_bytes` and `vm.dirty_background_bytes` (see the archive section) are node-wide too.
+
+**Applying the node settings.** None of the settings above can go in a pod spec. `net.core.busy_read` isn't a namespaced sysctl, so `securityContext.sysctls` can't set it, and [Kubernetes](https://kubernetes.io/docs/tasks/administer-cluster/sysctl-cluster/) allows no `net.*` sysctls with `hostNetwork`. **[untested]** by platform:
+- **AKS:**
+  - [Custom node configuration](https://learn.microsoft.com/en-us/azure/aks/custom-node-configuration-reference) sets the socket buffer limits and transparent huge pages per node pool (`az aks nodepool add --linux-os-config`).
+  - It doesn't cover `busy_read` or `vm.dirty_*`. Microsoft says "use a daemon set" beyond its subset.
+  - It has no kernel command line field, so isolation and `idle=poll` need a custom node image.
+  - Its kubelet configuration has `cpuManagerPolicy` and `topologyManagerPolicy`, but no `reservedSystemCPUs` or CPU manager policy options.
+- **EKS:**
+  - On Amazon Linux 2023, kubelet settings go in nodeadm's [`NodeConfig`](https://awslabs.github.io/amazon-eks-ami/nodeadm/doc/api/) through the [launch template's user data](https://docs.aws.amazon.com/eks/latest/userguide/launch-templates.html), as do the sysctl files.
+  - Kernel options need a custom AMI.
+  - Bottlerocket takes kernel options in [`settings.boot.kernel-parameters`](https://bottlerocket.dev/en/os/1.42.x/api/settings/boot/), with `reboot-to-reconcile = true`.
+- **OpenShift:**
+  - A [`PerformanceProfile`](https://docs.redhat.com/en/documentation/openshift_container_platform/4.22/html/scalability_and_performance/cnf-provisioning-low-latency-workloads) sets the isolated and reserved CPUs, huge pages and extra kernel options.
+  - CRI-O's pod annotations then turn off C-states, CFS quota, and load and IRQ balancing per pod; see the commented lines in the example below. containerd has no equivalent.
 
 **kubelet**
 - **[pod] The static CPU manager:** `cpu-manager-policy=static`, with `reserved-cpus` set to the housekeeping CPUs, the same ones as `irqaffinity`.
@@ -414,6 +433,10 @@ The host settings' sources are listed under [Tuning on x86-64 Linux](./README.md
   - kubelet refuses to start with a state file from another policy: stop it, delete `/var/lib/kubelet/cpu_manager_state`, then start it.
 - **[pod] Room for the pod:** other pods' CPU requests count against the allocatable CPUs.
 - **[untested] Whole cores with SMT on:** the static policy's `full-pcpus-only=true` option keeps a container's CPUs on whole cores, but rejects odd CPU requests. With `nosmt` it doesn't matter.
+- **[untested] Nothing on the reserved CPUs:**
+  - Without the [`strict-cpu-reservation`](https://kubernetes.io/docs/tasks/administer-cluster/cpu-management-policies/) option, pods in the shared pool also run on the reserved CPUs, which take the interrupts.
+  - With it, only system daemons do. It is GA from Kubernetes 1.35.
+  - Turning it on needs the same `cpu_manager_state` reset.
 
 **Pods**
 - **[pod] Every container Guaranteed:** requests equal limits, in whole CPUs.
@@ -462,7 +485,7 @@ Aeron's IPC is memory-mapped files in `AERON_DIR`. The driver and every client m
   - On separate cores they gave 0.35–0.38 µs.
 
 **Networking**
-- **[untested] UDP from a pod.** The UDP results here used the host's network stack, and a CNI overlay adds its own path. For low-latency UDP between nodes, use `hostNetwork: true` and measure it.
+- **[untested] UDP from a pod.** The UDP results here used the host's network stack, and a CNI overlay adds its own path. For low-latency UDP between nodes, use `hostNetwork: true` and measure it. A VF can't be handed to a pod instead: the [SR-IOV device plugin's README](https://github.com/k8snetworkplumbingwg/sriov-network-device-plugin/blob/master/README.md) says the SR-IOV CNI "doesn't support running in a virtualized environment".
 - **[host] Windows:** 2 MiB socket buffers and receiver window lifted throughput 1.9 → 13 M msgs/s. Across regions, size the window to the round trip (16 MiB for 53 ms gave 119 MB/s).
 - **[host] Jumbo frames:** MTU 9000 with `AERON_MTU_LENGTH=8192` inside the VNet doubled throughput again.
 - **[host] Avoid packet loss** before anything else: 0.1% loss cost a third of the throughput, and a lost request or reply waited about 100 ms.
@@ -476,11 +499,25 @@ Aeron's IPC is memory-mapped files in `AERON_DIR`. The driver and every client m
 The pods above used a SHARED `noop` driver. This example follows the recommendations instead, with a dedicated driver in the pod for UDP on the host's network. It has not itself been run. `hostNetwork` puts it outside the baseline profile too:
 
 ```yaml
+# Needs, on the node (see "The node" and "kubelet" above; none of it can go in a pod spec):
+#   kernel options: isolcpus=nohz,domain,managed_irq,<CPUs> nohz_full=<CPUs> rcu_nocbs=<CPUs>
+#     irqaffinity=<reserved CPUs>, and idle=poll (or intel_idle.max_cstate=1 processor.max_cstate=1
+#     on AWS instance types that allow it)
+#   /etc/sysctl.d: vm.nr_hugepages, net.core.rmem_max and wmem_max, net.core.busy_read=50
+#   kubelet: cpuManagerPolicy static, reservedSystemCPUs = the irqaffinity CPUs
 apiVersion: v1
 kind: Pod
 metadata:
   name: aeron-app
+  # OpenShift with a PerformanceProfile only (CRI-O; not measured here), with runtimeClassName below:
+  # annotations:
+  #   cpu-load-balancing.crio.io: "disable"
+  #   cpu-quota.crio.io: "disable"
+  #   irq-load-balancing.crio.io: "disable"
+  #   cpu-c-states.crio.io: "disable"
+  #   cpu-freq-governor.crio.io: "performance"
 spec:
+  # runtimeClassName: performance-<profile name>
   hostNetwork: true  # UDP between nodes on the host's stack; not measured from a pod
   containers:
     - name: driver
@@ -501,6 +538,8 @@ spec:
         - {name: AERON_FILE_PAGE_SIZE, value: "2097152"}
         - {name: AERON_PERFORM_STORAGE_CHECKS, value: "false"}  # kubelet mounts hugetlbfs without size=
         - {name: AERON_TERM_BUFFER_SPARSE_FILE, value: "false"}
+        # as Aeron's low-latency C driver script (the default is 4); not measured here
+        # - {name: AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND, value: "2"}
       resources:
         requests: {cpu: "3", memory: 1Gi, hugepages-2Mi: 1Gi}
         limits: {cpu: "3", memory: 1Gi, hugepages-2Mi: 1Gi}
@@ -525,11 +564,10 @@ spec:
 ## What else was checked
 
 **No effect inside an Azure Hyper-V guest, or not used in Aeron's path:**
-- Interrupt coalescing (`ethtool -C`): MANA has no coalescing control.
+- Interrupt coalescing (`ethtool -C`): MANA has no coalescing control. On AWS, [AWS recommends](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ena-improve-network-latency-linux.html) turning the ENA NIC's off for latency (`ethtool -C <interface> adaptive-rx off rx-usecs 0 tx-usecs 0`); not measured here.
 - GRO and LRO: plain UDP sockets are never merged.
 - `net.core.busy_poll`: Aeron's receiver calls `recvmmsg` directly, never `poll`, so only `busy_read` matters.
-- Limiting C-states and `haltpoll`: `idle=poll` bypasses cpuidle, and `haltpoll` needs KVM.
-- `tsc=reliable`: Hyper-V already marks the TSC reliable, and `tsc` was the clock source.
+- Limiting C-states (`intel_idle.max_cstate`, `processor.max_cstate`): the Hyper-V guest has no cpuidle driver (every run recorded `none`), so there are no C-states to limit; `idle=poll` keeps idle CPUs spinning instead. `haltpoll` needs KVM. On AWS instance types that let the guest control C-states, [AWS recommends](https://docs.aws.amazon.com/linux/al2/ug/processor_state_control.html) `intel_idle.max_cstate=1 processor.max_cstate=1`; not measured here.- `tsc=reliable`: Hyper-V already marks the TSC reliable, and `tsc` was the clock source.
 - `mlockall`: there is no swap, and Aeron's memory is pre-touched.
 
 **Not done, with the reason:**
@@ -547,6 +585,11 @@ LAB_ARMS="impr impr-ps" LAB_EXTRAS=samples \
 LAB_PHASES="bootstrap kernel build bench8 xhost8-pinned archive8 isolate8 bench8-isolated xhost8-isolated tune8 bench8-tuned xhost8-tuned tune8-nomit bench8-tuned-nomit xhost8-tuned-nomit" \
 scripts/x86-lab/lab.sh
 ```
+
+The settings recommended elsewhere but not yet measured, against the tuned state:
+- **The kernel options:** add `tune8x bench8-tunedx xhost8-tunedx`. That is the tuned kernel plus tuned's `network-latency` RCU options, timers kept in place, and the writeback workqueue and RCU's offload kthreads on the housekeeping CPU.
+- **The send batch:** every `xhost8-*` phase also runs `ded-threads-msgs2`, which sends at most 2 messages per sender cycle.
+- **Drops:** every `xhost8-*` phase records the ping host's UDP drop counters before and after in `drops8.txt`.
 
 The archive under load, with three disks on each VM:
 

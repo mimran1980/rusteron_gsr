@@ -349,6 +349,37 @@ Where these settings are recommended:
 - **Busy reads:** `net.core.busy_read` and the socket buffer limits are in the [kernel's net sysctls](https://docs.kernel.org/admin-guide/sysctl/net.html). The kernel's [NAPI documentation](https://docs.kernel.org/networking/napi.html) recommends setting `napi_defer_hard_irqs` and `gro_flush_timeout` together.
 - **Jumbo frames on Azure:** Microsoft's [Configure MTU for virtual machines in Azure](https://learn.microsoft.com/en-us/azure/virtual-network/how-to-virtual-machine-mtu) gives MTU 9000 on the MANA NIC, but only within a VNet and directly peered VNets in the same region. Gateways, global peering and the internet stay at 1500.
 - **Kubernetes:** [Control CPU Management Policies on the Node](https://kubernetes.io/docs/tasks/administer-cluster/cpu-management-policies/) and [Manage HugePages](https://kubernetes.io/docs/tasks/manage-hugepages/scheduling-hugepages/).
+- **On AWS (not measured here):**
+  - AWS's [Improve network latency for Linux based EC2 instances](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ena-improve-network-latency-linux.html) recommends:
+    - a cluster placement group;
+    - `net.core.busy_read=50`, as here. Its `net.core.busy_poll=50` does nothing for Aeron, whose receiver calls `recvmmsg` directly;
+    - limiting deeper C-states;
+    - turning off the ENA NIC's interrupt moderation: `sudo ethtool -C <interface> adaptive-rx off rx-usecs 0 tx-usecs 0`.
+  - [Processor state control](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/processor_state_control.html) lists the instance types whose guests may limit C-states, and the fewer that may also set P-states. Support varies by type.
+  - The [Amazon Linux 2 guide](https://docs.aws.amazon.com/linux/al2/ug/processor_state_control.html) keeps idle cores in C1 with the kernel options `intel_idle.max_cstate=1 processor.max_cstate=1`. For the steadiest frequency it turns off Turbo Boost with `echo 1 | sudo tee /sys/devices/system/cpu/intel_pstate/no_turbo`.
+  - `idle=poll`, as in the tuned kernel above, goes further: idle CPUs never enter a C-state at all. Use one or the other.
+  - On these Azure VMs the C-state options do nothing: the guest has no cpuidle driver, so there are no C-states to limit. Frequency control was not checked.
+
+Recommended elsewhere, and not yet measured here (the lab's `tune8x` state and `ded-threads-msgs2` variant test the kernel and send-batch items):
+- **Aeron's low-latency C driver script:**
+  - [`low-latency-c-media-driver`](https://github.com/aeron-io/aeron/blob/master/aeron-samples/scripts/low-latency-c-media-driver) also sets `AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND=2` (the default is 4).
+  - It also sets `AERON_CONDUCTOR_IDLE_STRATEGY=spin`, which spins a whole core.
+- **Messages within the MTU:** Aeron's [Java Programming Guide](https://github.com/aeron-io/aeron/wiki/Java-Programming-Guide) says "For the lowest latency, keep messages within the MTU size."
+- **Stalls and loss, watched:**
+  - Lower `AERON_DRIVER_CONDUCTOR_CYCLE_THRESHOLD`, `AERON_DRIVER_SENDER_CYCLE_THRESHOLD` and `AERON_DRIVER_RECEIVER_CYCLE_THRESHOLD`. The default is 100 ms; Aeron's benchmark driver uses 1 ms.
+  - Then watch AeronStat's "work cycle exceeded threshold count" counters, and the NAK counters and `loss-report.dat` ([Monitoring and Debugging](https://github.com/aeron-io/aeron/wiki/Monitoring-and-Debugging)).
+  - On the host, watch `nstat -az UdpRcvbufErrors UdpInErrors`, the drops in `/proc/net/softnet_stat` and `ethtool -S` ([Red Hat's network tuning](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/monitoring_and_managing_system_status_and_performance/tuning-the-network-performance_monitoring-and-managing-system-status-and-performance)).
+- **RCU, timers and kernel threads:**
+  - tuned's [`network-latency` profile](https://github.com/redhat-performance/tuned/blob/master/profiles/network-latency/tuned.conf) adds `rcupdate.rcu_normal_after_boot=1`, `rcutree.nohz_full_patience_delay=1000` and `kernel.timer_migration=0`.
+  - Its [`cpu-partitioning` profile](https://github.com/redhat-performance/tuned/blob/master/profiles/cpu-partitioning/tuned.conf) also moves the writeback workqueue (`/sys/bus/workqueue/devices/writeback/cpumask`) to the housekeeping CPUs.
+  - The kernel's [NO_HZ documentation](https://docs.kernel.org/timers/no_hz.html) leaves pinning RCU's `rcuo` kthreads to userspace.
+  - The kernel's [CPU isolation guide](https://docs.kernel.org/admin-guide/cpu-isolation.html) prefers cpuset isolated partitions, which can be changed at run time, to `isolcpus`.
+- **Connection tracking:** if any firewall rule loads conntrack, a `notrack` rule at raw priority keeps Aeron's packets out of it ([nftables wiki](https://wiki.nftables.org/wiki-nftables/index.php/Setting_packet_connection_tracking_metainformation)).
+- **AWS's ENA driver:**
+  - Its [best practices guide](https://github.com/amzn/amzn-drivers/blob/master/kernel/linux/ena/ENA_Linux_Best_Practices.rst) suggests `busy_read` and `busy_poll` of 70.
+  - It suggests keeping irqbalance but banning the hot CPUs (`IRQBALANCE_BANNED_CPUS`), and running the application on the vCPU that takes its queue's IRQ.
+  - [ENA Express](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ena-express.html) can add "tens of microseconds" to median latency, so leave it off for latency.
+- **Azure placement:** after host maintenance, check `az ppg show --include-colocation-status` ([co-location](https://learn.microsoft.com/en-us/azure/virtual-machines/co-location)). A VM moved out of alignment needs a full deallocate and start.
 
 Packet loss costs far more than its share:
 - 0.1% UDP loss cut same-zone throughput by a third, and 1% by 91%. Every lost packet was still retransmitted.
