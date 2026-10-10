@@ -81,7 +81,10 @@ impl Harness {
             }
             elapsed += start.elapsed();
             let published = (self.publisher.position() - before) / FRAME_LEN;
-            assert!(published + 1 >= batch as i64, "only {published} of {batch} publishes landed");
+            assert!(
+                published + 1 >= batch as i64,
+                "only {published} of {batch} publishes landed"
+            );
             self.drain();
             left -= batch;
         }

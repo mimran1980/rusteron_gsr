@@ -93,6 +93,15 @@ build-docker-samples:
 bench:
   cargo bench
 
+# The hot-path bench with cross-language LTO (Linux): needs clang, lld and llvm-ar of rustc's LLVM major
+bench-lto:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  llvm=$(rustc -vV | sed -n 's/^LLVM version: \([0-9]*\).*/\1/p')
+  export CC=clang-$llvm
+  export RUSTFLAGS="-Ctarget-cpu=native -Clinker-plugin-lto -Clinker=clang-$llvm -Clink-arg=-fuse-ld=lld-$llvm"
+  cargo bench -p rusteron-client --features static --bench hot_path
+
 # Compile every documentation example, then generate the rust docs locally. The READMEs and
 # docs/ guides are include_str!'d into the crates, so their ```rust fences are doc tests;
 # a fragment compiles through hidden `# ` setup lines
