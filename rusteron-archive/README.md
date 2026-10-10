@@ -92,12 +92,15 @@ Retained-callback setters take the callback by value (a closure or trait impl), 
 alive inside the registering resource, and return the `Handler` for optional state access.
 For synchronous polling, pass a stack closure:
 
-```rust,ignore
+```rust,no_run
+# use rusteron_archive::*;
+# fn snippet(archive_context: &AeronArchiveContext, subscription: &AeronSubscription) -> Result<(), AeronCError> {
 // retained (e.g. an error handler on the archive context)
 archive_context.set_error_handler(Some(|code: i32, msg: &str| eprintln!("archive error {code}: {msg}")))?;
 
 // synchronous poll — note the fragment-limit argument
 subscription.poll_fn(|buf: &[u8], header: AeronHeader| println!("{} bytes", buf.len()), 10)?;
+# Ok(()) }
 ```
 
 `Handlers::NONE` fits any optional callback slot.
@@ -157,11 +160,14 @@ Each object is driven by its own call, once a cycle:
 | Persistent subscription | `ps.poll_fn(..)` | Drives its own archive client. With the agent invoker every poll also runs the client's conductor, so many persistent subscriptions on one client should use its conductor thread. |
 | `AeronArchiveReplayMerge` | `merge.poll_fn(..)` | Until it has merged or failed, poll only the merge and leave its archive client alone: `archive.do_work()`, `poll_for_error` and blocking calls read the same responses, skip the merge's, and stall it until its progress timeout. Archive errors come back as `Err` from the merge's poll. |
 
-```rust,ignore
+```rust,no_run
+# use rusteron_archive::*;
+# fn snippet(archive: &AeronArchive, ps: &AeronArchivePersistentSubscription) -> Result<(), AeronCError> {
 loop {
     archive.do_work()?;
     ps.poll_fn(|message, _header| { /* a replayed or live message */ }, 100)?;
 }
+# }
 ```
 
 [`examples/duty_cycle.rs`](./examples/duty_cycle.rs) runs this loop on one thread with an agent-invoker client, after a blocking setup whose calls run the conductor themselves.
@@ -184,7 +190,9 @@ A **persistent subscription** replays a recording from a start position, then se
 
 Rusteron exposes it via `PersistentSubscriptionBuilder::new_with_aeron(&archive_context, &aeron)` (one client for the subscription and its archive context), `build()`, and the `PersistentSubscriptionListener` trait — a 1:1 wrapper over the Aeron C API (`aeron_archive_persistent_subscription_*`), mirroring Aeron's `PersistentSubscription.Context` field-for-field.
 
-```rust,ignore
+```rust,no_run
+# use rusteron_archive::{Aeron, AeronArchiveContext, AeronPublication};
+# fn snippet(archive_context: &AeronArchiveContext, aeron: &Aeron, publication: &AeronPublication, recording_id: i64) -> Result<(), Box<dyn std::error::Error>> {
 use rusteron_archive::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -225,28 +233,38 @@ while !ps.is_live() {
 }
 
 ps.close()?;
+# Ok(()) }
 ```
 
 **Polling & errors.** `ps.poll_fn()` drives the PS state machine *and* its own archive client, so it needs nothing from your `AeronArchive`; see [Duty Cycle](#duty-cycle) for what else to call each cycle. Loop on `ps.is_live()`, checking `ps.has_failed()` each iteration (reason via `get_failure_reason()`). The listener's `on_error` covers non-terminal errors; `on_live_left`/`on_live_joined` may fire repeatedly as it falls back and rejoins.
 
 **Fragment assembly (already done for you).** Unlike `AeronSubscription`, the persistent subscription **reassembles fragments internally** — the C `aeron_archive_persistent_subscription_poll` routes each image through `aeron_image_fragment_assembler_handler`, so your handler receives whole messages directly. Just poll:
 
-```rust,ignore
+```rust,no_run
+# use rusteron_archive::*;
+# fn snippet(ps: &AeronArchivePersistentSubscription) -> Result<(), AeronCError> {
 loop {
     // handler receives whole messages; no assembler needed
     ps.poll_fn(|buf, _hdr| { /* handle reassembled message */ }, 100)?;
 }
+# }
 ```
 
 If you prefer the shared assembler API (e.g. to reuse a collector across subscription types), `AeronFragmentClosureAssembler` works too — it polls the PS internally, so it advances the state machine and delivers messages in one call. **Do not also call `ps.poll_fn(…)` separately**: that consumes the messages before the assembler sees them.
 
-```rust,ignore
+```rust,no_run
+# use rusteron_archive::*;
+# #[derive(Default)]
+# struct Collector { done: bool }
+# impl Collector { fn on_msg(&mut self, _msg: &[u8], _header: AeronHeader) { self.done = true; } }
+# fn snippet(ps: AeronArchivePersistentSubscription) -> Result<(), Box<dyn std::error::Error>> {
 let mut assembler = AeronFragmentClosureAssembler::new()?;
 let mut ctx = Collector::default();
 loop {
     assembler.poll(&ps, &mut ctx, Collector::on_msg, 100)?;  // polls the PS internally
     if ctx.done { break; }
 }
+# Ok(()) }
 ```
 
 For a fully runnable version, see the example and integration tests:

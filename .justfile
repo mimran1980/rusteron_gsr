@@ -93,10 +93,14 @@ build-docker-samples:
 bench:
   cargo bench
 
-# Generate rust docs locally
+# Compile every documentation example, then generate the rust docs locally. The READMEs and
+# docs/ guides are include_str!'d into the crates, so their ```rust fences are doc tests;
+# a fragment compiles through hidden `# ` setup lines, never `rust,ignore`
 docs:
   cargo clean --doc
+  if git ls-files '*.md' | xargs grep -n '```rust,ignore'; then echo "these Markdown examples are never compiled: make them rust,no_run with hidden setup lines"; exit 1; fi
   cargo test  --workspace --doc
+  cargo test  -p rusteron-client --doc --features multi-threaded
   cargo doc --workspace --no-deps --open
 
 # CANNOT USE MIRI due to ffi :(

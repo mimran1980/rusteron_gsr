@@ -36,6 +36,8 @@ log     = { workspace = true }
 regex   = { workspace = true, optional = true }
 
 [dev-dependencies]
+# compiles the README's build.rs example for a crate building C against the exported headers
+cc          = "1"
 fd-lock     = { workspace = true }
 rusteron-code-gen = { workspace = true }
 serial_test = { workspace = true }

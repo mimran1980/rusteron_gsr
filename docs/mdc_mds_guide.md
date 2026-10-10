@@ -54,21 +54,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 You can dynamically detach endpoints as network paths change or servers fail:
 
-```rust,ignore
+```rust,no_run
+# use rusteron_client::*;
+# use std::time::Duration;
+# fn snippet(subscription: &AeronSubscription, destination_a: &str) -> Result<(), AeronCError> {
 // Remove a destination from the subscription
 subscription.remove_destination(&cformat!("{destination_a}"), Duration::from_secs(5))?;
+# Ok(()) }
 ```
 
 ### 3. MDC Publication (Dynamic Control Mode)
 
 A publication with a control endpoint and `control-mode=dynamic` sends to every subscriber that registers with it. Each subscriber names its own endpoint and the publisher's control address:
 
-```rust,no_run
+```rust
 use rusteron_client::*;
+use rusteron_media_driver::testing::EmbeddedDriver;
 use std::time::Duration;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let aeron = Aeron::connect(None)?;
+    let driver = EmbeddedDriver::launch()?; // or Aeron::connect(None) for a driver already running
+    let aeron = Aeron::connect_dir(driver.dir())?;
 
     let mdc = AeronUriStringBuilder::udp_control("127.0.0.1:20200", ControlMode::Dynamic)?.build(256)?;
     let publication = aeron.add_publication(&cformat!("{mdc}"), 1004, Duration::from_secs(5))?;

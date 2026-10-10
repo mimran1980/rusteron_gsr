@@ -107,7 +107,10 @@ ops Aeron C documents as thread-safe
 rusteron-client = { version = "0.2", features = ["multi-threaded"] }
 ```
 
-```rust,ignore
+```rust,no_run
+# use rusteron_client::*;
+# #[cfg(feature = "multi-threaded")]
+# fn snippet(publication: &AeronPublication) -> Result<(), Box<dyn std::error::Error>> {
 // AeronPublication is Sync under `multi-threaded`, so threads share `&publication`.
 std::thread::scope(|s| -> Result<(), AeronOfferError> {
     let a = s.spawn(|| publication.offer(b"hello"));
@@ -116,6 +119,7 @@ std::thread::scope(|s| -> Result<(), AeronOfferError> {
     b.join().expect("publisher thread panicked")?;
     Ok(())
 })?;
+# Ok(()) }
 ```
 
 > **The flag only lifts the Rust-side barrier — it does not make the underlying Aeron
@@ -150,7 +154,7 @@ Build tasks use [`just`](https://github.com/casey/just). Run `just` to list comm
 <details>
 <summary>Expand for usage example</summary>
 
-```rust,no_run
+```rust
 use rusteron_client::{
     cformat, Aeron, AeronContext, AeronErrorHandlerLogger, AeronHeader, BackoffIdleStrategy,
     Handlers, IdleStrategy,
@@ -230,7 +234,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 Every channel/URI argument is a `&CStr` (the C API's type), so every heap allocation is
 visible at the call site. Recommended three-tier pattern, cheapest first:
 
-```rust,ignore
+```rust,no_run
+# use rusteron_client::*;
+# fn snippet(aeron: &Aeron, port: u16, endpoint: &str, reconnect_attempts: usize) -> Result<(), AeronCError> {
 // 1. Constant channels: c"..." literals — compile-time &'static CStr, zero runtime cost.
 aeron.async_add_publication(c"aeron:ipc", 10)?;
 
@@ -243,6 +249,7 @@ let chan: std::ffi::CString = cformat!("aeron:udp?endpoint={endpoint}");
 for _ in 0..reconnect_attempts {
     aeron.async_add_publication(&chan, 10)?; // no allocation per call
 }
+# Ok(()) }
 ```
 
 ---

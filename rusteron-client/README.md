@@ -75,15 +75,20 @@ callback by value (a closure or any `impl Trait`), heap-allocate it into a refer
 `Handler`, and keep a clone inside the registering resource — it is freed when that resource
 drops, no manual `release()`:
 
-```rust,ignore
+```rust,no_run
+# use rusteron_client::*;
+# fn snippet(ctx: &AeronContext) -> Result<(), AeronCError> {
 ctx.set_error_handler(Some(|code: i32, msg: &str| eprintln!("aeron error {code}: {msg}")))?;
+# Ok(()) }
 ```
 
 Reading state through the returned `Handler` is only safe when the callback runs on the
 reading thread (an agent-invoker client, or synchronous callbacks); otherwise share it
 explicitly:
 
-```rust,ignore
+```rust,no_run
+# use rusteron_client::*;
+# fn snippet(ctx: &AeronContext) -> Result<(), AeronCError> {
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -95,6 +100,7 @@ ctx.set_error_handler(Some(move |_code: i32, _msg: &str| {
 }))?;
 // ... later, from the application thread
 println!("{} errors", errors.load(Ordering::Relaxed));
+# Ok(()) }
 ```
 
 Registration methods that return a resource (e.g. `add_subscription` with image handlers) take
@@ -105,10 +111,13 @@ Registration methods that return a resource (e.g. `add_subscription` with image 
 Invoked only during the call, so they take a stack closure — zero allocation, may borrow
 local state:
 
-```rust,ignore
+```rust,no_run
+# use rusteron_client::*;
+# fn snippet(subscription: &AeronSubscription) -> Result<(), AeronCError> {
 subscription.poll_fn(|buf: &[u8], header: AeronHeader| {
     println!("received {} bytes", buf.len());
 }, 10)?;
+# Ok(()) }
 ```
 
 For messages larger than the MTU, wrap the delegate in an `AeronFragmentAssembler` (it
@@ -116,7 +125,9 @@ reassembles fragments before calling back) — `poll_fn` delivers raw fragments
 only. `Handler::with_fragment_assembler` builds the reference-counted pair (it replaces the
 deprecated `Handler::leak_with_fragment_assembler`):
 
-```rust,ignore
+```rust,no_run
+# use rusteron_client::AeronSubscription;
+# fn snippet(subscription: &AeronSubscription) -> Result<(), Box<dyn std::error::Error>> {
 use rusteron_client::{AeronFragmentHandlerCallback, AeronHeader, Handler};
 
 struct OnMessage { bytes: u64 }
@@ -130,13 +141,16 @@ impl AeronFragmentHandlerCallback for OnMessage {
 let (assembler, on_message) = Handler::with_fragment_assembler(OnMessage { bytes: 0 })?;
 let fragments = subscription.poll(Some(&assembler), 10)?;
 println!("{} bytes so far", on_message.bytes);
+# Ok(()) }
 ```
 
 To pass state through a stack context instead, use `AeronFragmentClosureAssembler`; its `poll` borrows a `&mut T`
 context for the call (the callback is a `fn` pointer, not a closure, so pass state through
 the context):
 
-```rust,ignore
+```rust,no_run
+# use rusteron_client::AeronSubscription;
+# fn snippet(subscription: AeronSubscription) -> Result<(), Box<dyn std::error::Error>> {
 use rusteron_client::{AeronFragmentClosureAssembler, AeronHeader};
 
 struct Stats { bytes: u64 }
@@ -146,6 +160,7 @@ let mut assembler = AeronFragmentClosureAssembler::new()?;
 let mut stats = Stats { bytes: 0 };
 assembler.poll(&subscription, &mut stats, on_msg, 10)?; // 10 = fragment limit
 // stats.bytes now holds the reassembled payload sizes
+# Ok(()) }
 ```
 
 No callback for an optional slot? `Handlers::NONE` fits any callback parameter.
@@ -158,12 +173,15 @@ Prefer the typed [`AeronUriStringBuilder`] over hand-written URI strings — par
 typed setters, so misspelled keys and malformed values are caught before they reach the
 driver:
 
-```rust,ignore
+```rust,no_run
+# use rusteron_client::*;
+# fn snippet(id: i64) -> Result<(), AeronCError> {
 let channel = AeronUriStringBuilder::udp("localhost:20121")?.build(256)?;
 let mds_sub = AeronUriStringBuilder::udp_control("localhost:9998", ControlMode::Manual)?.build(256)?;
 let response = AeronUriStringBuilder::udp_control("localhost:9999", ControlMode::Response)?
     .response_correlation_id(id)?
     .build(256)?;
+# Ok(()) }
 ```
 
 Constructors: `ipc()`, `udp(endpoint)`, `udp_control(control, ControlMode)`; plus ~50 typed
@@ -172,7 +190,8 @@ setters (`session_id`, `mtu_length`, `term_length`, `fc`, `gtag`, `reliable`, �
 
 ## Minimal Pub/Sub
 
-```rust,ignore
+```rust,no_run
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
 use rusteron_client::*;
 use std::time::Duration;
 
@@ -212,6 +231,7 @@ while !received {
     }, 10)?;
     idle.idle(fragments);
 }
+# Ok(()) }
 ```
 
 > **Note on `poll_blocking` / `add_*(.., timeout)`:** these block the calling thread in a
@@ -316,15 +336,20 @@ For detailed guides and code snippets on Aeron features in Rust, see:
 
 - **Client errors**: install an error handler on the context (`ctx.set_error_handler(Some(handler))`) so async errors aren't silently lost — Aeron's samples always do.
 - **`offer()` / `try_claim()` results**: `Result<i64, AeronOfferError>` — `Ok` is the new log position; the error is a typed sentinel with `is_retryable()` (back-pressured, admin action, not connected — retry, ideally with an idle strategy) vs fatal (closed, max position exceeded). This mirrors Aeron's `BasicPublisher.checkResult` without magic numbers:
-  ```rust,ignore
+  ```rust,no_run
+  # use rusteron_client::*;
+  # fn snippet(publication: &AeronPublication, msg: &[u8], idle: &mut BackoffIdleStrategy) -> Result<(), Box<dyn std::error::Error>> {
   match publication.offer(msg) {
       Ok(_) => {}
       Err(e) if e.is_retryable() => idle.idle(0), // no work done: back off, then retry
       Err(e) => return Err(e.into()),             // publication gone
   }
+  # Ok(()) }
   ```
   Zero-copy `try_claim_owned()` returns an RAII `AeronClaim`; an uncommitted claim aborts on drop:
-  ```rust,ignore
+  ```rust,no_run
+  # use rusteron_client::*;
+  # fn snippet(publication: &AeronPublication, msg: &[u8], idle: &mut BackoffIdleStrategy) -> Result<(), Box<dyn std::error::Error>> {
   match publication.try_claim_owned(msg.len()) {
       Ok(mut claim) => {
           claim.data().copy_from_slice(msg);
@@ -334,6 +359,7 @@ For detailed guides and code snippets on Aeron features in Rust, see:
       Err(e) if e.is_retryable() => idle.idle(0),
       Err(e) => return Err(e.into()),
   }
+  # Ok(()) }
   ```
   For branch-free hot paths, `offer_raw()` / `try_claim_raw()` return the raw `i64` sentinel.
   The typed path costs the same on the happy path — the error enum only materialises on the
@@ -345,7 +371,9 @@ For detailed guides and code snippets on Aeron features in Rust, see:
 Poll loops should back off when a cycle does no work. Rusteron ports Aeron's `IdleStrategy`
 (`idle(work_count)` returns immediately when work was done, otherwise backs off):
 
-```rust,ignore
+```rust,no_run
+# use rusteron_client::{AeronFragmentHandlerCallback, AeronSubscription, AeronCError, Handler};
+# fn snippet<H: AeronFragmentHandlerCallback>(subscription: &AeronSubscription, handler: Handler<H>) -> Result<(), AeronCError> {
 use rusteron_client::{BackoffIdleStrategy, IdleStrategy};
 
 let mut idle = BackoffIdleStrategy::new(); // spin → yield → sleep, Aeron's default
@@ -354,6 +382,7 @@ loop {
     if fragments == 0 { /* break when done */ }
     idle.idle(fragments);
 }
+# }
 ```
 
 Available: [`BusySpinIdleStrategy`] (lowest latency, pins a core), [`YieldingIdleStrategy`],

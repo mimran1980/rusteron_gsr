@@ -86,7 +86,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 <details>
 <summary>Embedded Media Driver</summary>
 
-```rust,no_run
+```rust
 // Embeds the media driver in this process: unique directory, stopped and joined on drop.
 use rusteron_media_driver::testing::EmbeddedDriver;
 use rusteron_media_driver::Aeron;
@@ -124,7 +124,7 @@ depends on it directly:
 | `DEP_AERON_DRIVER_CLIENT_INCLUDE` | the client headers they include |
 | `DEP_AERON_DRIVER_AERON_ROOT` | the Aeron source tree |
 
-```rust,ignore
+```rust,no_run
 // build.rs of a crate that depends on rusteron-media-driver
 fn main() {
     let dep = |key: &str| std::env::var(format!("DEP_AERON_DRIVER_{key}")).unwrap();
