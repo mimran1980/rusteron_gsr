@@ -965,7 +965,7 @@ mod tests {
         info!("connected to archive, adding publication");
         assert!(!aeron.is_closed());
 
-        let (session_id, publisher_thread) = reply_merge_publisher(&archive, aeron.clone(), running.clone())?;
+        let (session_id, publisher_thread) = reply_merge_publisher(&archive, &aeron_dir, running.clone())?;
 
         {
             let context = AeronContext::new()?;
@@ -1008,49 +1008,51 @@ mod tests {
         Ok(())
     }
 
+    /// Publishes on its own thread and client (without `multi-threaded` a publication stays
+    /// on the thread whose client created it), recorded by `archive` once the thread has
+    /// sent its session id.
     fn reply_merge_publisher(
         archive: &AeronArchive,
-        aeron: Aeron,
+        aeron_dir: &str,
         running: Arc<AtomicBool>,
     ) -> Result<(i32, JoinHandle<()>), AeronCError> {
-        let publication = aeron.add_publication(
-            // &format!("aeron:udp?control={CONTROL_ENDPOINT}|control-mode=dynamic|term-length=65536|fc=tagged,g:99901/1,t:5s"),
-            &format!("aeron:udp?control={CONTROL_ENDPOINT}|control-mode=dynamic|term-length=65536").into_c_string(),
-            STREAM_ID,
-            Duration::from_secs(5),
-        )?;
-
-        info!(
-            "publication {} [status={:?}]",
-            publication.channel(),
-            publication.channel_status()
-        );
-        assert_eq!(1, publication.channel_status());
-
-        let session_id = publication.session_id();
-        let recording_channel = format!(
-            // "aeron:udp?endpoint={RECORDING_ENDPOINT}|control={CONTROL_ENDPOINT}|session-id={session_id}|gtag=99901"
-            "aeron:udp?endpoint={RECORDING_ENDPOINT}|control={CONTROL_ENDPOINT}|session-id={session_id}"
-        );
-        info!("recording channel {}", recording_channel);
-        archive.start_recording(
-            &recording_channel.into_c_string(),
-            STREAM_ID,
-            SOURCE_LOCATION_REMOTE,
-            true,
-        )?;
-
-        info!("waiting for publisher to be connected");
-        while !publication.is_connected() {
-            thread::sleep(Duration::from_millis(100));
-        }
-        info!("publisher to be connected");
-        let counters_reader = aeron.counters_reader();
-        let counter_id =
-            crate::testing::find_counter_id_by_session_blocking(&counters_reader, session_id, Duration::from_secs(10))?;
-        let recording_id = RecordingPos::get_recording_id_block(&counters_reader, counter_id, Duration::from_secs(5))?;
-        let mut caught_up_count = 0;
+        let (session_tx, session_rx) = std::sync::mpsc::channel();
+        let aeron_dir = aeron_dir.to_string();
         let publisher_thread = thread::spawn(move || {
+            let aeron = Aeron::connect_dir(&aeron_dir).expect("publisher client");
+            let publication = aeron
+                .add_publication(
+                    &format!("aeron:udp?control={CONTROL_ENDPOINT}|control-mode=dynamic|term-length=65536")
+                        .into_c_string(),
+                    STREAM_ID,
+                    Duration::from_secs(5),
+                )
+                .expect("publication");
+            info!(
+                "publication {} [status={:?}]",
+                publication.channel(),
+                publication.channel_status()
+            );
+            assert_eq!(1, publication.channel_status());
+            let session_id = publication.session_id();
+            session_tx.send(session_id).expect("session id");
+
+            info!("waiting for publisher to be connected");
+            while !publication.is_connected() && running.load(Ordering::Acquire) {
+                thread::sleep(Duration::from_millis(100));
+            }
+            info!("publisher to be connected");
+            let counters_reader = aeron.counters_reader();
+            let counter_id = crate::testing::find_counter_id_by_session_blocking(
+                &counters_reader,
+                session_id,
+                Duration::from_secs(10),
+            )
+            .expect("recording counter");
+            let recording_id =
+                RecordingPos::get_recording_id_block(&counters_reader, counter_id, Duration::from_secs(5))
+                    .expect("recording id");
+            let mut caught_up_count = 0;
             let mut message_count = 0;
 
             while running.load(Ordering::Acquire) {
@@ -1085,6 +1087,19 @@ mod tests {
             }
             info!("Publisher thread terminated");
         });
+
+        let session_id = session_rx
+            .recv_timeout(Duration::from_secs(10))
+            .map_err(|_| AeronCError::with_message(-1, "the publisher thread sent no session id"))?;
+        let recording_channel =
+            format!("aeron:udp?endpoint={RECORDING_ENDPOINT}|control={CONTROL_ENDPOINT}|session-id={session_id}");
+        info!("recording channel {}", recording_channel);
+        archive.start_recording(
+            &recording_channel.into_c_string(),
+            STREAM_ID,
+            SOURCE_LOCATION_REMOTE,
+            true,
+        )?;
         Ok((session_id, publisher_thread))
     }
 

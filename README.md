@@ -92,15 +92,17 @@ x86-64 VMs in [Tuning on x86-64 Linux](#tuning-on-x86-64-linux), `-march=native`
 client's C code showed no consistent gain over `x86-64` or `x86-64-v3` on IPC; the driver's
 build and UDP were not varied.
 
-### Multi-threaded (`Sync`) handles
+### Multi-threaded (`Send` and `Sync`) handles
 
-Publication, subscription, counter and counters-reader handles are `Send` but **not `Sync`**
-by default; they use `Rc` and may be moved to one owning thread. The `Aeron` client and
-`AeronExclusivePublication` become `Send` only under `multi-threaded`; other handles
-(contexts, images) stay on the thread that created them. Enable `multi-threaded` to swap
-`Rc` → `Arc` and add `unsafe impl Sync`, so `&Handle` can be shared across threads for the
-ops Aeron C documents as thread-safe
-(`offer` / `try_claim` / `position` / `is_connected`):
+By default every handle uses `Rc` and is neither `Send` nor `Sync`: it stays on the thread
+whose client created it. A publication or subscription holds an `Rc` clone of its `Aeron`
+client, so moving it to another thread would race the client's reference count. To work on
+another thread, give that thread a client of its own (`Aeron::connect_dir`), or enable
+`multi-threaded`, which swaps `Rc` → `Arc`:
+- **`Send`:** the client, and publication, exclusive publication, subscription, counter and
+  counters-reader handles, may move to another thread.
+- **`Sync`:** `&Handle` may be shared across threads for the ops Aeron C documents as
+  thread-safe (`offer` / `try_claim` / `position` / `is_connected`).
 
 ```toml
 [dependencies]
@@ -126,11 +128,10 @@ std::thread::scope(|s| -> Result<(), AeronOfferError> {
 > object thread-safe.** Sharing is correct only for objects Aeron C documents as
 > thread-safe for concurrent use, e.g. `AeronPublication` (`ConcurrentPublication`),
 > `AeronCounter`, and `Aeron` itself. `AeronSubscription` is documented by Aeron as
-> **not** threadsafe and must not be shared between subscribers — it stays `Send`-only
-> (never `Sync`) even under `multi-threaded`, so it can be moved to one other thread but
-> never accessed concurrently from several. `AeronExclusivePublication` is
-> single-producer by design and must not be shared across threads either (it only gains
-> `Send` under `multi-threaded`, never `Sync`). It is the caller's responsibility to
+> **not** threadsafe and must not be shared between subscribers. Under `multi-threaded`
+> it gains only `Send`, never `Sync`, so it can be moved to one other thread but never
+> accessed concurrently from several. `AeronExclusivePublication` is single-producer by
+> design and likewise gains only `Send`. It is the caller's responsibility to
 > check the thread-safety of each object before sharing `&Handle`.
 
 ---
@@ -274,7 +275,7 @@ Old → new for every renamed/changed API
 | `ctx.set_error_handler(Some(&handler))` (borrowed) | `ctx.set_error_handler(Some(handler_or_closure))` | Retained setters take the value; closures work directly; returns the `Handler`. |
 | `aeron.close()` — freed children immediately | deferred close | Frees when the last reference drops; `unsafe close_now()` forces immediate. |
 | `Handler` was `Sync` | `Send` only | The conductor thread invokes callbacks; sharing `&Handler` across threads raced. |
-| `AeronPublication` / `AeronSubscription` / … were `Sync` | `Send` only by default; `Sync` only under `multi-threaded`, and only for types Aeron C documents as thread-safe | Handles use `Rc` (single-thread ownership). Enable the `multi-threaded` feature (`Rc` → `Arc`) to get `unsafe impl Sync` for `AeronPublication`/`AeronCounter`/`Aeron` (share `&Handle` across threads for `offer` / `try_claim` / `position` / `is_connected`). `AeronSubscription` and `AeronExclusivePublication` are documented by Aeron as not safe to share and remain `Send`-only (never `Sync`), even with `multi-threaded`. |
+| `AeronPublication` / `AeronSubscription` / … were `Send` and `Sync` | Neither by default; `Send` only under `multi-threaded`, and `Sync` only there and only for types Aeron C documents as thread-safe | Handles use `Rc` (single-thread ownership), and a handle shares its client's refcount, so moving one to another thread raced it. Give each thread its own client, or enable the `multi-threaded` feature (`Rc` → `Arc`): the handles become `Send`, and `AeronPublication`/`AeronCounter`/`Aeron` also `Sync` (share `&Handle` across threads for `offer` / `try_claim` / `position` / `is_connected`). `AeronSubscription` and `AeronExclusivePublication` are documented by Aeron as not safe to share and stay `Send`-only (never `Sync`). |
 | `publication.offer(buf, supplier)` → raw `i64` | `publication.offer_raw(buf, supplier)` | Same branch-free sentinel return, renamed to make "raw" explicit. |
 | `publication.offer_result(buf, supplier)` → `Result<_, AeronCError>` | `publication.offer_with_reserved_value(buf, supplier)` → `Result<_, AeronOfferError>` | Typed offer errors with `is_retryable()`. |
 | `publication.offer_result_simple(buf)` | `publication.offer(buf)` | The common no-supplier case is now the flagship name. |

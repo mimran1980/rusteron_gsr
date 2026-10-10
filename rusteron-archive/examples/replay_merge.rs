@@ -18,8 +18,6 @@ use rusteron_archive::testing::{
     EmbeddedArchiveMediaDriverProcess, find_counter_id_by_session_blocking, find_unused_udp_port,
 };
 use rusteron_archive::*;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
@@ -81,46 +79,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let counter_id = find_counter_id_by_session_blocking(&counters, session_id, Duration::from_secs(10))?;
     let recording_id = RecordingPos::get_recording_id_block(&counters, counter_id, Duration::from_secs(5))?;
 
-    // Publish the history as fast as flow control allows, then pace the live phase so the
-    // archiver stays caught up.
-    let published = Arc::new(AtomicU64::new(0));
-    let running = Arc::new(AtomicBool::new(true));
-    let publisher = {
-        let published = published.clone();
-        let running = running.clone();
-        let counters = aeron.counters_reader();
-        std::thread::spawn(move || {
-            let mut n = 0u64;
-            while running.load(Ordering::Acquire) {
-                let message = format!("message-{n}");
-                loop {
-                    match publication.offer(message.as_bytes()) {
-                        Ok(_) => break,
-                        Err(e) if e.is_retryable() => sleep(Duration::from_millis(1)),
-                        Err(e) => {
-                            eprintln!("publisher stopping: {e}");
-                            return;
-                        }
-                    }
-                }
-                n += 1;
-                published.store(n, Ordering::Release);
-                if n > HISTORY_MESSAGES {
-                    // live phase: pace it and let the archiver stay caught up
-                    while counters.get_counter_value(counter_id) < publication.position() {
-                        // a stopped recording never catches up, and its counter id may be reused
-                        if !RecordingPos::is_active(&counters, counter_id, recording_id).unwrap_or(false) {
-                            eprintln!("publisher stopping: recording {recording_id} stopped");
-                            return;
-                        }
-                        sleep(Duration::from_micros(300));
-                    }
-                }
+    // Publish the history as fast as flow control allows. Everything runs on this thread:
+    // without `multi-threaded` a publication stays on the thread whose client created it.
+    let mut published = 0u64;
+    while published < HISTORY_MESSAGES {
+        let message = format!("message-{published}");
+        loop {
+            match publication.offer(message.as_bytes()) {
+                Ok(_) => break,
+                Err(e) if e.is_retryable() => sleep(Duration::from_millis(1)),
+                Err(e) => return Err(e.into()),
             }
-        })
-    };
-    while published.load(Ordering::Acquire) < HISTORY_MESSAGES {
-        sleep(Duration::from_millis(10));
+        }
+        published += 1;
     }
     println!("{HISTORY_MESSAGES} historical messages recorded; late joiner starting");
 
@@ -154,6 +125,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if Instant::now() > deadline {
             return Err("timed out waiting for replay merge".into());
         }
+        // the live stream goes on while the joiner catches up
+        publish_live(&publication, &counters, (counter_id, recording_id), &mut published)?;
         // Archive errors arrive as Err from poll_fn; polling the archive here would take
         // the merge's own responses and stall it.
         if replay_merge.poll_fn(|_buf, _hdr| received += 1, 256)? == 0 {
@@ -161,23 +134,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     assert!(replay_merge.is_live_added());
-    println!(
-        "merged onto live after {received} replayed messages (published so far: {})",
-        published.load(Ordering::Acquire)
-    );
+    println!("merged onto live after {received} replayed messages (published so far: {published})");
 
     // Once merged, the plain subscription IS the live stream — poll it directly.
     let mut live_received = 0u64;
     let deadline = Instant::now() + Duration::from_secs(10);
     while live_received < 1_000 && Instant::now() < deadline {
+        publish_live(&publication, &counters, (counter_id, recording_id), &mut published)?;
         subscription.poll_fn(|_buf, _hdr| live_received += 1, 256)?;
     }
     assert!(live_received >= 1_000, "expected live traffic after the merge");
     println!("received {live_received} further messages live; replay-merge complete");
 
-    running.store(false, Ordering::Release);
-    publisher.join().ok();
     drop(replay_merge);
     drop(subscription);
+    Ok(())
+}
+
+/// Offers the next live message once the archiver has recorded everything published so far,
+/// so it stays caught up; does nothing until then.
+fn publish_live(
+    publication: &AeronPublication,
+    counters: &AeronCountersReader,
+    (counter_id, recording_id): (i32, i64),
+    published: &mut u64,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if counters.get_counter_value(counter_id) < publication.position() {
+        // a stopped recording never catches up, and its counter id may be reused
+        if !RecordingPos::is_active(counters, counter_id, recording_id)? {
+            return Err(format!("recording {recording_id} stopped").into());
+        }
+        return Ok(());
+    }
+    match publication.offer(format!("message-{published}").as_bytes()) {
+        Ok(_) => *published += 1,
+        Err(e) if e.is_retryable() => {}
+        Err(e) => return Err(e.into()),
+    }
     Ok(())
 }

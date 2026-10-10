@@ -49,15 +49,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let subscription = aeron
         .async_add_subscription(AERON_IPC_STREAM, STREAM_ID, Handlers::NONE, Handlers::NONE)?
         .poll_blocking(Duration::from_secs(5))?;
-    // offer() reports NotConnected until the image links; the publisher loop retries it
-    let publication = aeron
-        .async_add_publication(AERON_IPC_STREAM, STREAM_ID)?
-        .poll_blocking(Duration::from_secs(5))?;
 
     let running = Arc::new(AtomicBool::new(true));
     let publisher = {
         let running = running.clone();
-        std::thread::spawn(move || {
+        let dir = driver.dir().to_string();
+        // the publisher thread has its own client: without `multi-threaded` a handle stays
+        // on the thread whose client created it
+        std::thread::spawn(move || -> Result<(), AeronCError> {
+            let aeron = Aeron::connect_dir(&dir)?;
+            // offer() reports NotConnected until the image links; the loop below retries it
+            let publication = aeron
+                .async_add_publication(AERON_IPC_STREAM, STREAM_ID)?
+                .poll_blocking(Duration::from_secs(5))?;
             let message = vec![b'1'; MESSAGE_LEN];
             let mut idle = BackoffIdleStrategy::new();
             while running.load(Ordering::Acquire) {
@@ -70,6 +74,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             }
+            Ok(())
         })
     };
 
@@ -84,7 +89,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     running.store(false, Ordering::Release);
-    publisher.join().map_err(|_| "publisher thread panicked")?;
+    publisher.join().map_err(|_| "publisher thread panicked")??;
     if counter.bad > 0 {
         return Err(format!("{} corrupt messages", counter.bad).into());
     }

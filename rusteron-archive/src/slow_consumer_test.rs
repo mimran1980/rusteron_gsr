@@ -117,7 +117,7 @@ mod tests {
         EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().ok();
 
         // 1. Start Archive/Publisher Driver
-        let (aeron_archive, archive_context, _media_driver_archive, archive_error_handler) =
+        let (aeron_archive, archive_context, media_driver_archive, archive_error_handler) =
             start_aeron_archive_with_config("archive", 8000)?;
 
         let archive_connector = AeronArchiveAsyncConnect::new_with_aeron(&archive_context, &aeron_archive)?;
@@ -150,42 +150,32 @@ mod tests {
             archive.start_recording(&channel.clone().into_c_string(), stream_id, source_location, true)?;
         info!("Started recording subscription_id={}", subscription_id);
 
-        // Create publication on Archive Driver
-        let publication = aeron_archive
-            .async_add_publication(&channel.into_c_string(), stream_id)?
-            .poll_blocking(Duration::from_secs(5))?;
-
-        // Wait for publication to be connected (recording started)
-        let start = Instant::now();
-        while !publication.is_connected() && start.elapsed() < Duration::from_secs(5) {
-            sleep(Duration::from_millis(10));
-        }
-        assert!(publication.is_connected());
-
-        // Find recording id
-        let session_id = publication.get_constants()?.session_id;
-        let counters_reader = aeron_archive.counters_reader();
-        let mut counter_id = -1;
-        let start = Instant::now();
-        while counter_id == -1 && start.elapsed() < Duration::from_secs(5) {
-            counter_id = RecordingPos::find_counter_id_by_session(&counters_reader, session_id);
-            sleep(Duration::from_millis(10));
-        }
-        assert!(counter_id >= 0, "Could not find recording counter");
-
-        let recording_id = RecordingPos::get_recording_id(&counters_reader, counter_id)?;
-        info!("Recording ID: {}", recording_id);
-
+        // Publisher thread, flooding the archive driver with its own client (without
+        // `multi-threaded` a publication stays on the thread whose client created it); it
+        // sends its session id once the recording has connected
         let running = Arc::new(AtomicBool::new(true));
         let running_clone = running.clone();
-        let publication_clone = publication.clone();
-
-        // Publisher thread
+        let (session_tx, session_rx) = std::sync::mpsc::channel();
+        let publisher_dir = media_driver_archive.aeron_dir.to_str()?.to_string();
         let publisher_thread = thread::spawn(move || {
+            let aeron = Aeron::connect_dir(&publisher_dir).expect("publisher client");
+            let publication = aeron
+                .async_add_publication(&channel.into_c_string(), stream_id)
+                .and_then(|publication| publication.poll_blocking(Duration::from_secs(5)))
+                .expect("publication");
+            let start = Instant::now();
+            while !publication.is_connected() && start.elapsed() < Duration::from_secs(5) {
+                sleep(Duration::from_millis(10));
+            }
+            assert!(publication.is_connected());
+            session_tx
+                .send(publication.get_constants().expect("constants").session_id)
+                .expect("session id");
+
             let mut seq = 0u64;
             while running_clone.load(Ordering::Acquire) {
                 let message = seq.to_le_bytes();
-                while publication_clone.offer_raw(&message, Handlers::NONE) <= 0 {
+                while publication.offer_raw(&message, Handlers::NONE) <= 0 {
                     if !running_clone.load(Ordering::Acquire) {
                         break;
                     }
@@ -200,6 +190,20 @@ mod tests {
             }
             seq
         });
+
+        // Find recording id
+        let session_id = session_rx.recv_timeout(Duration::from_secs(10))?;
+        let counters_reader = aeron_archive.counters_reader();
+        let mut counter_id = -1;
+        let start = Instant::now();
+        while counter_id == -1 && start.elapsed() < Duration::from_secs(5) {
+            counter_id = RecordingPos::find_counter_id_by_session(&counters_reader, session_id);
+            sleep(Duration::from_millis(10));
+        }
+        assert!(counter_id >= 0, "Could not find recording counter");
+
+        let recording_id = RecordingPos::get_recording_id(&counters_reader, counter_id)?;
+        info!("Recording ID: {}", recording_id);
 
         // Wait a bit for some data to be recorded
         sleep(Duration::from_secs(2));

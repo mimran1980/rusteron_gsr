@@ -52,14 +52,18 @@ fn main() -> Result<(), Box<dyn Error>> {
         .async_add_exclusive_publication(CHANNEL, STREAM_ID)?
         .poll_blocking(Duration::from_secs(5))?;
 
-    let subscription = aeron
-        .async_add_subscription(CHANNEL, STREAM_ID, Handlers::NONE, Handlers::NONE)?
-        .poll_blocking(Duration::from_secs(5))?;
-
-    // named like the Java sample's thread, so it can be found and pinned
-    let subscriber_thread = thread::Builder::new()
-        .name("subscriber".to_string())
-        .spawn(move || ImageRateSubscriber::new(running_subscriber, subscription, MESSAGE_LENGTH).run())?;
+    // named like the Java sample's thread, so it can be found and pinned. It has its own
+    // client: without `multi-threaded` a handle stays on the thread whose client created it
+    let subscriber_thread =
+        thread::Builder::new()
+            .name("subscriber".to_string())
+            .spawn(move || -> Result<(), AeronCError> {
+                let aeron = Aeron::connect_dir(&dir)?;
+                let subscription = aeron
+                    .async_add_subscription(CHANNEL, STREAM_ID, Handlers::NONE, Handlers::NONE)?
+                    .poll_blocking(Duration::from_secs(5))?;
+                ImageRateSubscriber::new(running_subscriber, subscription, MESSAGE_LENGTH).run()
+            })?;
 
     let published = Publisher::new(running_publisher, publication).run();
     subscriber_thread.join().expect("subscriber thread panicked")?;

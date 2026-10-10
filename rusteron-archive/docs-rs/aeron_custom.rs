@@ -8,23 +8,15 @@ pub static AERON_IPC_STREAM: &std::ffi::CStr = c"aeron:ipc";
 /// your own iovec array for larger gathers.
 pub const MAX_OFFER_PARTS: usize = 8;
 
-// SAFETY: not sound without `multi-threaded`. These handles wrap `Rc` (via
-// `CResource::OwnedOnHeap`), a non-atomic refcount kept for latency, and a publication,
-// subscription or counter also holds an `Rc` clone of its `Aeron` client. Even a single
-// moved handle therefore shares the client's refcount with the thread that created it:
-// dropping the handle on its new thread while the original thread clones or drops the
-// client (as every `add_*` does) races that refcount, which can close the client early
-// or leak it. `Send` is kept so a handle can be handed to a dedicated thread; that is
-// safe only while no other thread touches the client's refcount, or with
-// `multi-threaded` (below, atomic `Arc`).
+// Without `multi-threaded` these handles are neither `Send` nor `Sync`: they wrap `Rc`
+// (via `CResource::OwnedOnHeap`), a non-atomic refcount kept for latency, and a
+// publication, subscription or counter also holds an `Rc` clone of its `Aeron` client.
+// A handle moved to another thread would share the client's refcount with the thread
+// that created it, and dropping it there while that thread clones or drops the client
+// (as every `add_*` does) races the refcount, which can close the client early or leak
+// it. To use a handle from another thread, enable `multi-threaded`, or create the
+// client and its handles on that thread.
 //
-// `Sync` is intentionally NOT implemented by default: sharing `&Handle` across
-// threads would let two threads `Rc::clone` concurrently and race the refcount.
-unsafe impl Send for AeronCountersReader {}
-unsafe impl Send for AeronSubscription {}
-unsafe impl Send for AeronPublication {}
-unsafe impl Send for AeronCounter {}
-
 // SAFETY: under `multi-threaded` the refcount is atomic (`Arc`), so `Send` is sound,
 // and `Sync` is implemented (where the underlying Aeron object is documented
 // threadsafe for concurrent access) so `&Handle` can be shared across threads. The
@@ -38,6 +30,14 @@ unsafe impl Send for AeronCounter {}
 // usable concurrently from multiple threads regardless of the refcount type — it's
 // `Send`-only, matching "hand off to one other thread, don't share concurrently".
 // Enable with `features = ["multi-threaded"]` in Cargo.toml.
+#[cfg(feature = "multi-threaded")]
+unsafe impl Send for AeronCountersReader {}
+#[cfg(feature = "multi-threaded")]
+unsafe impl Send for AeronSubscription {}
+#[cfg(feature = "multi-threaded")]
+unsafe impl Send for AeronPublication {}
+#[cfg(feature = "multi-threaded")]
+unsafe impl Send for AeronCounter {}
 #[cfg(feature = "multi-threaded")]
 unsafe impl Sync for AeronCountersReader {}
 #[cfg(feature = "multi-threaded")]

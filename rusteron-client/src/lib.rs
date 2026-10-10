@@ -490,6 +490,17 @@ mod tests {
         std::env::var_os("RUSTERON_VALGRIND").is_some()
     }
 
+    /// A client of its own for a test thread: without `multi-threaded` a handle stays on the
+    /// thread whose client created it.
+    fn thread_client(dir: &str, driver_timeout_ms: u64) -> Result<Aeron, AeronCError> {
+        let ctx = AeronContext::new()?;
+        ctx.set_dir(&dir.into_c_string())?;
+        ctx.set_driver_timeout_ms(driver_timeout_ms)?;
+        let aeron = Aeron::new(&ctx)?;
+        aeron.start()?;
+        Ok(aeron)
+    }
+
     #[test]
     fn string_into_keeps_only_valid_written_bytes() -> Result<(), Box<dyn error::Error>> {
         let builder = AeronUriStringBuilder::new_zeroed_on_heap();
@@ -1481,8 +1492,6 @@ mod tests {
 
         aeron.start()?;
         info!("client started");
-        let publisher = aeron.add_publication(AERON_IPC_STREAM, 123, Duration::from_secs(5))?;
-        info!("created publisher");
 
         assert!(AeronCncMetadata::load_from_file(ctx.get_dir())?.pid > 0);
         let cstr = std::ffi::CString::new(ctx.get_dir()).unwrap();
@@ -1516,7 +1525,13 @@ mod tests {
 
         let publisher_handler = {
             let stop_publisher = stop_publisher.clone();
+            let dir = ctx.get_dir().to_string();
             std::thread::spawn(move || {
+                let aeron = thread_client(&dir, driver_timeout_ms).expect("publisher client");
+                let publisher = aeron
+                    .add_publication(AERON_IPC_STREAM, 123, Duration::from_secs(5))
+                    .expect("publisher");
+                info!("created publisher");
                 let binding = "1".repeat(string_len);
                 let large_msg = binding.as_bytes();
                 loop {
@@ -1682,8 +1697,6 @@ mod tests {
         aeron.start()?;
         info!("client started");
         const STREAM_ID: i32 = 123;
-        let publisher = aeron.add_publication(AERON_IPC_STREAM, STREAM_ID, Duration::from_secs(5))?;
-        info!("created publisher");
 
         let subscription = aeron.add_subscription(
             AERON_IPC_STREAM,
@@ -1702,7 +1715,13 @@ mod tests {
 
         let publisher_handler = {
             let stop_publisher = stop_publisher.clone();
+            let dir = ctx.get_dir().to_string();
             std::thread::spawn(move || {
+                let aeron = thread_client(&dir, driver_timeout_ms).expect("publisher client");
+                let publisher = aeron
+                    .add_publication(AERON_IPC_STREAM, STREAM_ID, Duration::from_secs(5))
+                    .expect("publisher");
+                info!("created publisher");
                 let binding = "1".repeat(string_len);
                 let msg = binding.as_bytes();
                 let buffer = AeronBufferClaim::default();
@@ -1863,30 +1882,10 @@ mod tests {
         let constants = counter.get_constants()?;
         let counter_id = constants.counter_id;
 
-        let stop_publisher = Arc::new(AtomicBool::new(false));
-
-        let publisher_handler = {
-            let stop_publisher = stop_publisher.clone();
-            let counter = counter.clone();
-            std::thread::spawn(move || {
-                for _ in 0..150 {
-                    if stop_publisher.load(Ordering::Acquire) || counter.is_closed() {
-                        break;
-                    }
-                    counter.addr_atomic().fetch_add(1, Ordering::SeqCst);
-                }
-                info!("stopping publisher thread");
-            })
-        };
-
-        let now = Instant::now();
-        while counter.addr_atomic().load(Ordering::SeqCst) < 100 && now.elapsed() < Duration::from_secs(10) {
-            sleep(Duration::from_micros(10));
+        for _ in 0..150 {
+            counter.addr_atomic().fetch_add(1, Ordering::SeqCst);
         }
-
-        assert!(now.elapsed() < Duration::from_secs(10));
-
-        info!("counter is {}", counter.addr_atomic().load(Ordering::SeqCst));
+        assert_eq!(counter.addr_atomic().load(Ordering::SeqCst), 150);
 
         info!("stopping client");
 
@@ -1907,10 +1906,6 @@ mod tests {
         assert_eq!(reader.get_counter_label(utf8_id, 5)?, "lbl\u{e9}");
         let buffers = AeronCountersReaderBuffers::default();
         reader.get_buffers(&buffers)?;
-
-        stop_publisher.store(true, Ordering::SeqCst);
-
-        let _ = publisher_handler.join().unwrap();
 
         stop.store(true, Ordering::SeqCst);
         let _ = driver_handle.join().unwrap();
@@ -1970,7 +1965,6 @@ mod tests {
         let aeron = Aeron::new(&ctx)?;
         aeron.start()?;
 
-        let publisher = aeron.add_publication(AERON_IPC_STREAM, 123, Duration::from_secs(5))?;
         let subscription = aeron.add_subscription(
             AERON_IPC_STREAM,
             123,
@@ -1987,7 +1981,12 @@ mod tests {
         // Spawn a publisher thread that repeatedly sends "test" messages.
         let publisher_thread = {
             let stop_publisher = stop_publisher.clone();
+            let dir = ctx.get_dir().to_string();
             std::thread::spawn(move || {
+                let aeron = thread_client(&dir, driver_timeout_ms).expect("publisher client");
+                let publisher = aeron
+                    .add_publication(AERON_IPC_STREAM, 123, Duration::from_secs(5))
+                    .expect("publisher");
                 while !stop_publisher.load(Ordering::Acquire) {
                     let msg = b"test";
                     let result = publisher.offer_raw(msg, Handlers::NONE);

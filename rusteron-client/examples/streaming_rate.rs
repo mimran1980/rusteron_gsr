@@ -42,16 +42,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let publication = aeron
         .async_add_publication(AERON_IPC_STREAM, STREAM_ID)?
         .poll_blocking(Duration::from_secs(5))?;
-    let subscription = aeron
-        .async_add_subscription(AERON_IPC_STREAM, STREAM_ID, Handlers::NONE, Handlers::NONE)?
-        .poll_blocking(Duration::from_secs(5))?;
 
     // ── rate subscriber (rate_subscriber.c) ─────────────────────────────
     // The subscriber keeps plain counters (single writer, no atomics on the hot path) and
     // returns them when it stops. It stops once it has seen everything the publisher sent.
+    // It has its own client: without `multi-threaded` a handle stays on the thread whose
+    // client created it. Offers report NotConnected until its subscription joins.
     let target = Arc::new(AtomicU64::new(u64::MAX));
     let target_sub = target.clone();
+    let dir = driver.dir().to_string();
     let subscriber = thread::spawn(move || -> Result<(u64, u64), AeronCError> {
+        let aeron = Aeron::connect_dir(&dir)?;
+        let subscription = aeron
+            .async_add_subscription(AERON_IPC_STREAM, STREAM_ID, Handlers::NONE, Handlers::NONE)?
+            .poll_blocking(Duration::from_secs(5))?;
         // fragment assembler so messages larger than the MTU are reassembled
         let mut assembler = AeronFragmentClosureAssembler::new()?;
         let mut counters = (0u64, 0u64);
