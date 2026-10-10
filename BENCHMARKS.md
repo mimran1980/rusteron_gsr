@@ -418,19 +418,26 @@ Each setting is marked with where its evidence comes from:
   - Set `AERON_PERFORM_STORAGE_CHECKS=false`, because kubelet mounts hugetlbfs without `size=`.
 - **[host] Term buffers and mappings:** set `AERON_TERM_BUFFER_SPARSE_FILE=false` on the driver and `AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true` on the clients.
 
-**Why a huge-page `emptyDir`, not `hostIPC: true`**
+**Sharing `AERON_DIR`: one driver per pod, or one per node**
 
-Aeron's IPC is memory-mapped files in `AERON_DIR`, so the driver and its clients need only a directory they can all see.
+Aeron's IPC is memory-mapped files in `AERON_DIR`. The driver and every client must see the same directory, and anything that can mount it can read and publish on every stream and command the driver. Aeron's IPC has no authentication. So decide who may mount the directory, and give the driver and clients the same uid or gid.
 
-`hostIPC: true` shares the host's IPC namespace instead: System V shared memory, semaphores and POSIX message queues, none of which Aeron uses. With containerd and CRI-O it also mounts the host's `/dev/shm` into the pod, the only part that would matter. Against the `emptyDir`, that mount has four drawbacks:
-- **[host] No huge pages.** The host's `/dev/shm` is a tmpfs with 4 KiB pages unless the node turns on transparent huge pages for shared memory. In the earlier Intel runs, 4 KiB pages gave IPC p99 of about 0.7 µs, against 0.14 µs on hugetlbfs, or on tmpfs with transparent huge pages.
-- **Security.** The pod sees every shared memory segment, message queue and `/dev/shm` file on the node. That includes other pods' Aeron directories, which it can read and write. The Pod Security Standards' baseline profile forbids `hostIPC`.
-- **Accounting.** kubelet reserves huge pages and charges them to the pod, with requests equal to limits. Pages in the host's tmpfs are charged to whichever container first touches them.
-- **Clean-up.** An `emptyDir` goes with its pod. Files in the host's `/dev/shm` outlive it, so a crashed driver's buffers hold node memory until someone deletes them.
-
-Two cases where the `emptyDir` is not the whole answer:
-- **Within one pod, `hostIPC` isn't needed at all.** Its containers already share the pod's IPC namespace and its `/dev/shm`. That `/dev/shm` is usually capped at 64 MiB, though, while one IPC publication with Aeron's default 64 MiB terms needs about 192 MiB. Hence a sized volume.
-- **[untested] One driver per node shared by several app pods** (a DaemonSet, say) can't use an `emptyDir`, which never spans pods. A `hostPath` volume for just the Aeron directory, on the node's hugetlbfs mount, shares the files and their huge pages without the host's IPC namespace.
+- **[pod] A driver in each pod:** run the driver as a container beside the app, sharing an `emptyDir: {medium: HugePages-2Mi}` as in the example below. This was the measured layout.
+  - kubelet reserves and charges the huge pages to the pod.
+  - The directory goes with the pod.
+  - It needs no access to the host, so it passes the Pod Security Standards' baseline and restricted profiles.
+  - The cost is a driver's CPUs in every pod: 3 for a dedicated UDP driver.
+  - The pod's own `/dev/shm` can't replace the volume: it is usually capped at 64 MiB, while one IPC publication with Aeron's default 64 MiB terms needs about 192 MiB.
+- **[untested] One driver per node, shared by several app pods** (a DaemonSet, say): the pods must share a directory on the node.
+  - **`hostPath` for just that directory, on the node's hugetlbfs mount**, keeps the huge pages. The driver pod must request `hugepages-2Mi` covering all its log buffers: kubelet caps each pod's huge pages at its request, and a page fault beyond that kills the process with `SIGBUS`.
+    - With non-sparse term buffers the driver touches every page as it creates a log, so its clients should map pages that already exist. Whether a client pod with no huge-page request can still fault one in was not checked.
+    - Size the mount (`size=`) or set `AERON_PERFORM_STORAGE_CHECKS=false`.
+  - **`hostPath` on the node's `/dev/shm`**, or **`hostIPC: true`**, which mounts the host's `/dev/shm` with containerd and CRI-O: either works, but `hostIPC` also hands the pod the host's whole IPC namespace, which Aeron doesn't use. System V shared memory, semaphores, message queues and every other file in `/dev/shm` come with it.
+    - **[host] Page size:** `/dev/shm` uses 4 KiB pages unless the node sets transparent huge pages for shared memory to `always` (`/sys/kernel/mm/transparent_hugepage/shmem_enabled`). In the earlier Intel runs, that matched hugetlbfs: IPC p99 0.14 µs, against 0.7 µs with 4 KiB pages.
+  - **Either way:**
+    - The baseline profile forbids `hostPath` and `hostIPC` (and `hostNetwork`), so the namespace needs the privileged profile or a policy exception.
+    - Files on the node outlive the driver's pod; set `AERON_DIR_DELETE_ON_START=true` so a restarted driver clears what a crashed one left.
+    - Pages in the host's tmpfs are charged to whichever container first touches them, not to a pod's request.
 
 **The driver container**
 - **[host] IPC only:** a dedicated driver with its default idle strategies spins nothing, and one CPU is enough. On a host, a SHARED `noop` driver cost IPC: p50 0.31 → 0.36–0.42 µs, and half the throughput.
@@ -459,7 +466,7 @@ Two cases where the `emptyDir` is not the whole answer:
   - Put the archive directory on a volume sized for throughput: Premium SSD v2 on Azure, or local NVMe through a local persistent volume only if the archive is replicated elsewhere.
   - Use file sync level 0, with the node's `vm.dirty_*` limits raised for bursts.
 
-The pods above used a SHARED `noop` driver. This example follows the recommendations instead, with a dedicated driver for UDP on the host's network. It has not itself been run:
+The pods above used a SHARED `noop` driver. This example follows the recommendations instead, with a dedicated driver in the pod for UDP on the host's network. It has not itself been run. `hostNetwork` puts it outside the baseline profile too:
 
 ```yaml
 apiVersion: v1
