@@ -335,6 +335,19 @@ These were used in every run, and earlier runs on smaller VMs showed each to hel
 | Across regions, socket buffers and initial window sized to the round trip: 16 MiB for 53 ms between West US 3 and North Central US, over 64 MiB terms, with `net.core.rmem_max`/`wmem_max` raised to match and kept in `/etc/sysctl.d` | Throughput 18 → 119 MB/s on a clean link. At 0.1% loss both carried 10–13 MB/s. | Memory per socket. If `rmem_max` resets (a reboot undoes `sysctl -w`), the driver refuses to start, as the window exceeds the receive buffer. |
 | In Kubernetes: kubelet's static CPU manager and Guaranteed pods requesting whole CPUs | Each container gets its CPUs to itself, with no CFS quota. Under the default policy, containers limited to exactly their spinning threads' CPUs were throttled (23–55% of 100 ms periods for a 1-CPU driver); one CPU of headroom or no CPU limit avoided it. | See [BENCHMARKS.md](./BENCHMARKS.md#recommended-settings-for-kubernetes) for the kubelet and pod settings. |
 
+Where these settings are recommended:
+- **Aeron's settings:**
+  - Aeron's [Best Practices Guide](https://github.com/aeron-io/aeron/wiki/Best-Practices-Guide) gives:
+    - socket receive buffers of 2–4 MB and a receiver window of 2 MB or more for throughput;
+    - DEDICATED threading when there are cores to spare, else SHARED_NETWORK or SHARED;
+    - the low-latency driver's busy-spin conductor with `noop` sender and receiver.
+  - Its [Configuration Options](https://github.com/aeron-io/aeron/wiki/Configuration-Options) explain sparse term files ("can cause latency pauses"), pre-touch ("to avoid soft page faults"), the file page size for huge pages, and the C driver's CPU affinity and cpuset options.
+- **CPU isolation, thread pinning and IRQ affinity:** Erik Rigtorp's [Low Latency Tuning Guide](https://rigtorp.se/low-latency-guide/) covers these, along with SMT off (`nosmt`), transparent huge pages off with explicit huge pages, and `mitigations=off`.
+- **The tuned kernel command line:** SUSE's [kernel arguments for low latency and high performance](https://documentation.suse.com/suse-edge/3.1/html/edge/atip-features.html) include `isolcpus=domain,nohz,managed_irq`, `nohz_full`, `rcu_nocbs`, `rcu_nocb_poll`, `irqaffinity`, `idle=poll`, `skew_tick=1`, `nosoftlockup`, `nowatchdog` and `nmi_watchdog=0`. The [Linux kernel parameters](https://docs.kernel.org/admin-guide/kernel-parameters.html) document every one.
+- **Busy reads:** `net.core.busy_read` and the socket buffer limits are in the [kernel's net sysctls](https://docs.kernel.org/admin-guide/sysctl/net.html). The kernel's [NAPI documentation](https://docs.kernel.org/networking/napi.html) recommends setting `napi_defer_hard_irqs` and `gro_flush_timeout` together.
+- **Jumbo frames on Azure:** Microsoft's [Configure MTU for virtual machines in Azure](https://learn.microsoft.com/en-us/azure/virtual-network/how-to-virtual-machine-mtu) gives MTU 9000 on the MANA NIC, but only within a VNet and directly peered VNets in the same region. Gateways, global peering and the internet stay at 1500.
+- **Kubernetes:** [Control CPU Management Policies on the Node](https://kubernetes.io/docs/tasks/administer-cluster/cpu-management-policies/) and [Manage HugePages](https://kubernetes.io/docs/tasks/manage-hugepages/scheduling-hugepages/).
+
 Packet loss costs far more than its share:
 - 0.1% UDP loss cut same-zone throughput by a third, and 1% by 91%. Every lost packet was still retransmitted.
 - In request/response traffic, a lost message waits for the sender's next heartbeat, 100 ms in the C driver.
@@ -377,6 +390,13 @@ Measured on 2026-10-10 with a Java Archive on two Azure `Standard_D8ds_v6`, reco
 - **Leave headroom for replays.** While recording ran flat out at the disk's limit, replays from that disk slowed from about 1 GB/s to 67–246 MB/s on local NVMe.
 - **Local NVMe was the fastest and costs nothing extra:** 545 MB/s sustained, 1 GB/s of replays, and `fdatasync` in 0.03 ms against 0.8 ms on Premium SSD v2. Its data is gone when the VM stops or its host fails, though, so use it only for an archive that is replicated elsewhere.
 - **File sync level 1 or 2** makes every write wait for the disk. That cost nothing sustained on local NVMe. On Premium SSD v2 it was measured only while the new disks were still slow, at 56–220 MB/s, so its cost at full speed is unknown.
+
+Sources:
+- **Aeron's [Archive guide](https://github.com/aeron-io/aeron/wiki/Aeron-Archive)** defines the file sync levels: 0 writes to the page cache, 1 forces data to disk, 2 forces data and metadata. It also notes that the archive's "major limitation is the performance of the storage for the recordings".
+- **Disk performance models:**
+  - Microsoft's [disk types](https://learn.microsoft.com/en-us/azure/virtual-machines/disks-types#premium-ssd-v2): Premium SSD v2 includes 3,000 IOPS and 125 MB/s, with more throughput bought at 0.25 MB/s per IOPS. It is designed to deliver what was provisioned 99.9% of the time, and needs a zonal VM in most regions.
+  - AWS's [gp3 volumes](https://docs.aws.amazon.com/ebs/latest/userguide/general-purpose.html#gp3-ebs-volume-type) work the same way: 3,000 IOPS and 125 MiB/s included, up to 2,000 MiB/s.
+- **The kernel's [vm sysctls](https://docs.kernel.org/admin-guide/sysctl/vm.html)** describe `dirty_bytes` and `dirty_background_bytes`. Setting one clears its `dirty_*ratio` counterpart.
 
 ---
 

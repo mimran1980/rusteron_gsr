@@ -387,6 +387,13 @@ Each setting is marked with where its evidence comes from:
 - **[host]:** the host measurements in this file, carried over to pods.
 - **[untested]:** neither.
 
+The Kubernetes behaviour relied on here is documented in:
+- [Control CPU Management Policies on the Node](https://kubernetes.io/docs/tasks/administer-cluster/cpu-management-policies/): only Guaranteed containers with integer CPU requests get exclusive CPUs, and `--reserved-cpus` sets the system's.
+- [Manage HugePages](https://kubernetes.io/docs/tasks/manage-hugepages/scheduling-hugepages/): pages are allocated on the node first, requests equal limits, and an `emptyDir` with `medium: HugePages-2Mi` is capped at the pod's request.
+- [Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/): the baseline profile forbids `hostNetwork`, `hostIPC` and `hostPath`.
+
+The host settings' sources are listed under [Tuning on x86-64 Linux](./README.md#tuning-on-x86-64-linux) in the README.
+
 **The node**
 - **[pod] Huge pages:** set `vm.nr_hugepages` in `/etc/sysctl.d` on the node before kubelet starts, or kubelet does not report them.
   - Earlier 4-vCPU runs found that 2 MiB pages for `AERON_DIR` cut Intel's IPC p99 from about 0.7 to 0.14 µs, and p99.99 from 1.05 to 0.4–0.6 µs.
