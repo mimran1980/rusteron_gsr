@@ -531,10 +531,6 @@ spec:
 - `SO_BUSY_POLL` and `SO_PREFER_BUSY_POLL` per socket: Aeron's C code never sets them.
 - Kernel bypass (DPDK): open-source Aeron has no DPDK transport.
 
-## Not measured
-
-AMD; more than one message in flight; publications created after start-up; a Java driver across hosts; AWS disks; whether new Premium SSD v2 disks are slow for a fixed time after creation; why packet loss cuts throughput so far; Aeron's congestion control (`cc=cubic`) and multicast or multi-destination channels.
-
 ## How to run
 
 ```bash
@@ -566,7 +562,7 @@ LAB_PHASES="bootstrap kernel build isolate8 disks8 xhost8-isolated xnet8-zone xn
 scripts/x86-lab/lab.sh
 ```
 
-`lab.sh` refuses to start unless more than 10 USD of the subscription's free credit is left. It deletes the VMs on any exit. Its header lists the options, and the phases are in `scripts/x86-lab/harness/vm.sh`. Results go to `target/x86lab/results/<time>/<vm>/after-<phase>/results/`: `bench.csv`, `xhost8-runs.csv`, and each state's kernel settings and interrupt counts.
+`lab.sh` deletes the VMs on any exit. Its header lists the options, and the phases are in `scripts/x86-lab/harness/vm.sh`. Results go to `target/x86lab/results/<time>/<vm>/after-<phase>/results/`: `bench.csv`, `xhost8-runs.csv`, and each state's kernel settings and interrupt counts.
 
 These recipes run the samples on one machine without pinning:
 
