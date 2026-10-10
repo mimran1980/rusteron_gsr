@@ -252,6 +252,8 @@ fn build_from_source(config: &RusteronBuildConfig, docs_rs: &Path) {
         }
         if cfg!(target_os = "linux") {
             println!("cargo:rustc-link-lib=uuid");
+            // clang turns the ring buffers' packed 64-bit atomics into __atomic_* calls on aarch64
+            println!("cargo:rustc-link-lib=atomic");
         }
     }
 
