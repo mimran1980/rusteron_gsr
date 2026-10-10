@@ -263,6 +263,7 @@ for _ in 0..reconnect_attempts {
 - **Reference-counted handlers.** `Handler::leak()`/`release()` are gone; `Handler::new()` is `Arc`-backed and freed when the last clone drops. Retained-callback setters take the value (closure or trait impl) and return the `Handler`. `Handlers::NONE` covers "no callback".
 - **Typed errors.** `offer`/`try_claim` return `Result<i64, AeronOfferError>` with `is_retryable()`. `AeronCError` construction is allocation-free (never reads `aeron_errmsg()`); `capture_errmsg()` opts into attaching the message. Archive control ops return `Result<_, AeronArchiveError>` (`From` keeps `?` working).
 - **Hot path.** `offer_parts(&[&header, &payload])` publishes several buffers as one message with no intermediate Vec; C-string args follow the `c""`/`cformat!`/reuse pattern above.
+- **After 0.2.10, handles are `Send` only under `multi-threaded`.** Up to 0.2.10, publication, subscription, counter and counters-reader handles were `Send` without it, which was unsound: each shares its client's `Rc` reference count. Code that moves one to another thread now gives that thread its own client (`Aeron::connect_dir`) or enables `multi-threaded`.
 - **Convenience.** `Aeron::connect_dir`, `AeronDriver::launch_embedded_guard` (RAII), `ChannelUri::add_session_id`, `AeronUriStringBuilder::ipc()/udp()`, retained-image accessors, direct constant getters, and ported samples (basic_publisher/subscriber, ping/pong, file transfer, MDS, request/response).
 
 ## Migrating from 0.1.168 to 0.2
@@ -316,7 +317,7 @@ These were used in every run, and earlier runs on smaller VMs showed each to hel
     - On Linux and Windows, Aeron's C client pre-touches through the operating system (`MAP_POPULATE` on Linux), which leaves the data alone.
     - Elsewhere, macOS included, Aeron 1.52.2 (the version rusteron builds) writes 0 into the first byte of every page of a log it maps, which may already hold live frames, and so corrupts them. An archive replay lost its frames this way in every run on a Mac.
     - Aeron 1.53.2 (2026-09-18) fixed it with a compare-and-swap of 0 for 0: "Fix log buffer corruption when pre-touch is used and the native pre-touch is not available".
-    - `rusteron-client/examples/embedded_ping_pong.rs` turns pre-touch on on every platform.
+    - `rusteron-client/examples/embedded_ping_pong.rs` pre-touches only on Linux and Windows; after the upgrade, turn it on everywhere.
     - After `just update-aeron-version 1.53.3`, or any later release, delete this note.
 - `AERON_DIR` on 2 MiB `hugetlbfs` with `AERON_FILE_PAGE_SIZE=2097152`.
 - `noop` idle for the driver's sender and receiver.
@@ -366,9 +367,14 @@ export AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true
 # the host
 sudo sysctl -w net.core.rmem_max=16777216 net.core.wmem_max=16777216 net.core.busy_read=50
 # the NIC's VF (its netdev has eth0 as master), as measured with busy_read
-for i in /sys/class/net/*; do [ -e "$i/master" ] && vf=$(basename "$i"); done
-echo 2 | sudo tee /sys/class/net/$vf/napi_defer_hard_irqs
-echo 200000 | sudo tee /sys/class/net/$vf/gro_flush_timeout
+vf=
+for i in /sys/class/net/*; do [ "$(basename "$(readlink "$i/master")")" = eth0 ] && vf=$(basename "$i"); done
+if [ -n "$vf" ]; then
+  echo 2 | sudo tee /sys/class/net/$vf/napi_defer_hard_irqs
+  echo 200000 | sudo tee /sys/class/net/$vf/gro_flush_timeout
+else
+  echo "no VF has eth0 as master: is accelerated networking on?" >&2
+fi
 sudo sysctl -w vm.nr_hugepages=1536
 sudo mkdir -p /mnt/huge && sudo mount -t hugetlbfs -o pagesize=2M,size=2G,uid="$(id -u)" none /mnt/huge
 ```

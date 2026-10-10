@@ -16,7 +16,7 @@ git_repository := `git config --get remote.origin.url 2>/dev/null || echo "unkno
 git_branch := `git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown"`
 build_time := `date -u '+%Y-%m-%d_%H:%M:%S'`
 build_by := `whoami`
-aeron_version := `cat rusteron-client/aeron/version.txt`
+aeron_version := `cat rusteron-client/aeron/version.txt 2>/dev/null || echo "unknown"`
 
 # =============================================================================
 # Rust

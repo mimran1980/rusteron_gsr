@@ -1282,7 +1282,8 @@ pin_irqs() {
 vf_dev() {
     local i
     for i in /sys/class/net/*; do
-        if [[ -e $i/master ]]; then
+        # a container's veth also has a master, its bridge
+        if [[ $(basename "$(readlink "$i/master")") == eth0 ]]; then
             basename "$i"
             return
         fi
