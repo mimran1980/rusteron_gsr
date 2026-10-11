@@ -166,6 +166,8 @@ impl Lane for Exclusive<'_> {
     fn position_limit(&self) -> i64 {
         self.0.exclusive.position_limit()
     }
+    // the exclusive lane drains its own subscription, which clippy misreads as the wrong field
+    #[allow(clippy::misnamed_getters)]
     fn subscription(&self) -> &AeronSubscription {
         &self.0.exclusive_subscription
     }
