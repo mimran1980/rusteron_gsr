@@ -275,11 +275,14 @@ jobs:
         run: cargo test -p rusteron-client --features static --lib -- --nocapture
 
       - name: Check the publish calls were inlined
+        # pipefail, so a failed build piped into tee fails the step
+        shell: bash
         run: |
           cargo bench -p rusteron-client --features static --bench hot_path --no-run 2>&1 | tee build.log
           grep -q "cross-language LTO: Aeron C compiled to bitcode" build.log
           bin=$(grep -o 'Executable.*' build.log | tail -1 | sed 's/.*(\(.*\))/\1/')
-          nm "$bin" | grep -E ' aeron_(exclusive_)?publication_(offer|try_claim)$| aeron_buffer_claim_commit$' || true
-          left=$(nm "$bin" | grep -cE ' aeron_(exclusive_)?publication_(offer|try_claim)$| aeron_buffer_claim_commit$' || true)
+          test -x "$bin"
+          nm "$bin" | grep -E ' aeron_(exclusive_)?publication_(offerv?|try_claim)$| aeron_buffer_claim_commit$' || true
+          left=$(nm "$bin" | grep -cE ' aeron_(exclusive_)?publication_(offerv?|try_claim)$| aeron_buffer_claim_commit$' || true)
           echo "out-of-line publish functions: $left"
           test "$left" = 0

@@ -134,19 +134,28 @@ rusteron's own build settings do not reach crates that depend on it.
    C uses full LTO (`-flto`) to match Rust's `lto = "fat"`; with Rust `lto = "thin"`, set
    `RUSTERON_C_LTO=thin`. Mixing fat Rust with thin C inlines nothing.
 
-   `-locally-hot-callsite-threshold` lets LLVM inline larger functions at call sites inside loops.
-   At its default (525), Aeron's `offer`, `offerv` and `try_claim` (585 to 1085 by LLVM's cost
-   model) stay calls wherever the application calls them from more than one place; at 3000 they
-   inline into hot loops while other call sites keep the normal threshold.
+   `-locally-hot-callsite-threshold` raises LLVM's inlining limit at call sites it estimates as
+   hot: run at least 60 times as often as the entry of the function containing them, which in
+   practice means a loop in that same function once earlier inlining is done. At its default
+   (525), Aeron's `offer`, `offerv` and `try_claim` (585 to 1085 by LLVM's cost model) stay calls
+   wherever the application calls them from more than one place; at 3000 they inline at the hot
+   call sites, while every other call site keeps the normal threshold (250).
 
 4. Check it worked. The build prints
    `cross-language LTO: Aeron C compiled to bitcode by clang-22 (LLVM 22) with -flto` for each
-   rusteron crate (Cargo shows build-script warnings only for path dependencies), and in an
-   unstripped binary the publish functions it calls in loops no longer exist:
+   rusteron crate (Cargo shows build-script warnings only for path dependencies). If the
+   application calls the publish functions only from hot loops, they no longer exist in an
+   unstripped binary:
 
    ```bash
-   nm target/release/my-app | grep -E ' aeron_(exclusive_)?publication_(offer|try_claim)$|aeron_buffer_claim_commit$'   # prints nothing
+   nm target/release/my-app | grep -E ' aeron_(exclusive_)?publication_(offerv?|try_claim)$| aeron_buffer_claim_commit$'   # prints nothing
    ```
+
+   A call made anywhere else (start-up, a one-off message, a retry path) keeps a separate copy of
+   that function even when the hot loop inlined it. To check the hot call sites themselves, link
+   with LLVM's remarks (`-Clink-arg=-Wl,--opt-remarks-filename,remarks.yaml
+   -Clink-arg=-Wl,--opt-remarks-passes,inline`): each call site is listed as inlined or as
+   "too costly".
 
 The `precompile` libraries are native code and cannot take part (the build warns). macOS is not
 supported: rust-lld cannot read the macOS SDK, Apple's linker needs a matching `libLTO.dylib`

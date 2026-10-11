@@ -598,8 +598,8 @@ wrapper's branches remain.
 
 On Linux the whole `poll` path inlines: `aeron_subscription_poll`, `aeron_image_poll`, the
 fragment trampoline and the closure become one loop, with no indirect call per fragment.
-`try_claim` and `commit` inline too, but only because this bench called each from one place (see
-[Inlining every publish call](#inlining-every-publish-call)). `offer` stays a call, being too
+`commit` inlines anyway (LLVM cost 10); `try_claim` inlines only because this bench called it from
+one place (see [Inlining every publish call](#inlining-every-publish-call)). `offer` stays a call, being too
 large for LLVM's inliner, and about half of its gain comes from building Aeron with clang rather
 than gcc. On the Mac only
 the claim path inlined (`offer` 6.16 → 5.85 ns, `try_claim` + `commit` 5.75 → 5.29 ns, `poll`
@@ -619,12 +619,13 @@ on Linux.
 ### Inlining every publish call
 
 LLVM inlines a call when the callee's cost, by its own model, is below a threshold: 250 at `-O3`,
-525 for a call inside a loop ("locally hot"), with a 15000 bonus when the call is the only one to
-that function in the whole program. The bench above called each publish function from one place,
+525 for a call it estimates as hot ("locally hot": run at least 60 times as often as its function's
+entry, typically inside a loop), with a 15000 bonus when the call is the only one to that function
+in the whole program. The bench above called each publish function from one place,
 so that bonus inlined `try_claim`. A real application calls them from several, and so does the
 bench now (it publishes once through each before timing). LLVM's remarks
 (`-Clink-arg=-Wl,--opt-remarks-filename,remarks.yaml -Clink-arg=-Wl,--opt-remarks-passes,inline`)
-then give, for the timed loops:
+then give, on the Linux VM, for the timed loops:
 
 | Function | LLVM cost | Inlined at the default (525) | With `-locally-hot-callsite-threshold=3000` |
 |---|---|---|---|
@@ -643,8 +644,12 @@ term rotation and back-pressure status, all inlined into each function.
 
 Raising the general threshold does not work: `-inline-threshold=325` left the loop threshold at
 525, and `-inline-threshold=1000` pushed `aeron_subscription_poll` out of line. The locally hot
-threshold changes only call sites inside loops, so `poll` keeps its shape. Medians of 3
-interleaved runs on the Mac (native, ns per operation):
+threshold changes only call sites LLVM estimates as hot, so it never pushes `poll` out: on the
+Linux VM `poll` stays inlined, and on the Mac, where LTO alone left it a call (1.62 ns), the flag
+inlines it too (0.97 ns). At a call site that is not hot, `aeron_subscription_poll` (335) is over
+the normal threshold of 250 and stays a call whatever the flag. An x86 run of a downstream
+application, without the flag, found `try_claim` and both polls still calls at several of its call
+sites. Medians of 3 interleaved runs on the Mac (native, ns per operation):
 
 | Operation | Plain | Cross-language LTO | LTO + locally hot threshold |
 |---|---|---|---|
@@ -717,7 +722,7 @@ depend on it.
    `$CC` (or `RUSTERON_CLANG`), for the CPU named by `-Ctarget-cpu`. C and Rust must target the
    same CPU, or LLVM refuses to inline across them. `CC` also covers other C dependencies, which
    the `cc` crate compiles to bitcode under the same flag. `-locally-hot-callsite-threshold`
-   lets Aeron's `offer`, `offerv` and `try_claim` inline into hot loops (see above). In a
+   lets Aeron's `offer`, `offerv` and `try_claim` inline at hot call sites (see above). In a
    Dockerfile the same settings are environment variables:
 
    ```dockerfile
@@ -727,12 +732,17 @@ depend on it.
 
 4. Check it worked. `cargo build --release` prints
    `cross-language LTO: Aeron C compiled to bitcode by clang-22 (LLVM 22) with -flto` for each
-   rusteron crate (Cargo shows build-script warnings only for path dependencies), and in an
-   unstripped binary the publish functions it calls in loops are gone (this prints nothing):
+   rusteron crate (Cargo shows build-script warnings only for path dependencies). If the
+   application calls the publish functions only from hot loops, they are gone from an unstripped
+   binary (this prints nothing):
 
    ```bash
-   nm target/release/my-app | grep -E ' aeron_(exclusive_)?publication_(offer|try_claim)$|aeron_buffer_claim_commit$'
+   nm target/release/my-app | grep -E ' aeron_(exclusive_)?publication_(offerv?|try_claim)$| aeron_buffer_claim_commit$'
    ```
+
+   A call made anywhere else (start-up, a one-off message, a retry path) keeps a separate copy of
+   that function even when the hot loop inlined it; LLVM's remarks (above) show each call site as
+   inlined or "too costly".
 
 C uses full LTO (`-flto`) to match Rust's `lto = "fat"`. With Rust `lto = "thin"`, set
 `RUSTERON_C_LTO=thin`. The `precompile` libraries are native code and cannot take part (the build
