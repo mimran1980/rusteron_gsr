@@ -269,16 +269,17 @@ jobs:
           llvm=$(rustc -vV | sed -n 's/^LLVM version: \([0-9]*\).*/\1/p')
           wget -q https://apt.llvm.org/llvm.sh && sudo bash llvm.sh "$llvm" && sudo apt-get install -y "lld-$llvm"
           echo "CC=clang-$llvm" >> "$GITHUB_ENV"
-          echo "RUSTFLAGS=-Ctarget-cpu=native -Clinker-plugin-lto -Clinker=clang-$llvm -Clink-arg=-fuse-ld=lld-$llvm" >> "$GITHUB_ENV"
+          echo "RUSTFLAGS=-Ctarget-cpu=native -Clinker-plugin-lto -Clinker=clang-$llvm -Clink-arg=-fuse-ld=lld-$llvm -Clink-arg=-Wl,-mllvm,-locally-hot-callsite-threshold=3000" >> "$GITHUB_ENV"
 
       - name: Test
         run: cargo test -p rusteron-client --features static --lib -- --nocapture
 
-      - name: Check the claim path was inlined
+      - name: Check the publish calls were inlined
         run: |
           cargo bench -p rusteron-client --features static --bench hot_path --no-run 2>&1 | tee build.log
           grep -q "cross-language LTO: Aeron C compiled to bitcode" build.log
           bin=$(grep -o 'Executable.*' build.log | tail -1 | sed 's/.*(\(.*\))/\1/')
-          left=$(nm "$bin" | grep -cE ' (aeron_publication_try_claim|aeron_buffer_claim_commit)$' || true)
-          echo "out-of-line claim functions: $left"
+          nm "$bin" | grep -E ' aeron_(exclusive_)?publication_(offer|try_claim)$| aeron_buffer_claim_commit$' || true
+          left=$(nm "$bin" | grep -cE ' aeron_(exclusive_)?publication_(offer|try_claim)$| aeron_buffer_claim_commit$' || true)
+          echo "out-of-line publish functions: $left"
           test "$left" = 0
