@@ -120,7 +120,8 @@ rusteron's own build settings do not reach crates that depend on it.
    ```toml
    [target.x86_64-unknown-linux-gnu]
    linker = "clang-22"
-   rustflags = ["-Clinker-plugin-lto", "-Clink-arg=-fuse-ld=lld-22", "-Ctarget-cpu=native"]
+   rustflags = ["-Clinker-plugin-lto", "-Clink-arg=-fuse-ld=lld-22", "-Ctarget-cpu=native",
+                "-Clink-arg=-Wl,-mllvm,-locally-hot-callsite-threshold=3000"]
 
    [env]
    CC = "clang-22"
@@ -133,13 +134,18 @@ rusteron's own build settings do not reach crates that depend on it.
    C uses full LTO (`-flto`) to match Rust's `lto = "fat"`; with Rust `lto = "thin"`, set
    `RUSTERON_C_LTO=thin`. Mixing fat Rust with thin C inlines nothing.
 
+   `-locally-hot-callsite-threshold` lets LLVM inline larger functions at call sites inside loops.
+   At its default (525), Aeron's `offer`, `offerv` and `try_claim` (585 to 1085 by LLVM's cost
+   model) stay calls wherever the application calls them from more than one place; at 3000 they
+   inline into hot loops while other call sites keep the normal threshold.
+
 4. Check it worked. The build prints
    `cross-language LTO: Aeron C compiled to bitcode by clang-22 (LLVM 22) with -flto` for each
    rusteron crate (Cargo shows build-script warnings only for path dependencies), and in an
-   unstripped binary that claims, the inlined claim functions no longer exist:
+   unstripped binary the publish functions it calls in loops no longer exist:
 
    ```bash
-   nm target/release/my-app | grep -cE ' aeron_(publication_try_claim|buffer_claim_commit)$'   # 0
+   nm target/release/my-app | grep -E ' aeron_(exclusive_)?publication_(offer|try_claim)$|aeron_buffer_claim_commit$'   # prints nothing
    ```
 
 The `precompile` libraries are native code and cannot take part (the build warns). macOS is not
