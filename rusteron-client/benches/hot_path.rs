@@ -6,7 +6,8 @@
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use rusteron_client::bindings::{
-    aeron_exclusive_publication_offerv, aeron_header_t, aeron_iovec_t, aeron_subscription_poll,
+    aeron_exclusive_publication_offerv, aeron_exclusive_publication_t, aeron_header_t, aeron_iovec_t,
+    aeron_subscription_poll,
 };
 use rusteron_client::*;
 use rusteron_media_driver::testing::EmbeddedDriver;
@@ -68,6 +69,42 @@ fn harness() -> Harness {
         _ctx: ctx,
         _driver: driver,
     }
+}
+
+/// Publishes once through every publish call before timing. Besides warming up, this gives each
+/// Aeron C function a second call site, as a real application has: under LTO, LLVM inlines a
+/// function called from one site only almost regardless of its size, which would flatter the
+/// timed loops.
+fn warm_up(h: &Harness) {
+    let _ = h.publisher.offer(&h.payload);
+    if h.publisher.try_claim_raw(PAYLOAD_LEN, &h.claim) >= 0 {
+        let _ = h.claim.commit();
+    }
+    let _ = h.exclusive.offer(&h.payload);
+    if h.exclusive.try_claim_raw(PAYLOAD_LEN, &h.claim) >= 0 {
+        let _ = h.claim.commit();
+    }
+    offerv(h.exclusive.get_inner(), &h.payload);
+    while h.subscription.poll_fn(|_, _| {}, 1024).expect("drain") > 0 {}
+    while h.exclusive_subscription.poll_fn(|_, _| {}, 1024).expect("drain") > 0 {}
+}
+
+/// `aeron_exclusive_publication_offerv` of `payload` in two halves.
+#[inline]
+fn offerv(publication: *mut aeron_exclusive_publication_t, payload: &[u8]) -> i64 {
+    let (head, tail) = payload.split_at(payload.len() / 2);
+    let mut iov = [
+        aeron_iovec_t {
+            iov_base: head.as_ptr().cast_mut(),
+            iov_len: head.len(),
+        },
+        aeron_iovec_t {
+            iov_base: tail.as_ptr().cast_mut(),
+            iov_len: tail.len(),
+        },
+    ];
+    // SAFETY: the publication outlives the call, and C only reads through the vectors.
+    unsafe { aeron_exclusive_publication_offerv(publication, iov.as_mut_ptr(), 2, None, std::ptr::null_mut()) }
 }
 
 /// A publication with the subscription that drains it.
@@ -164,6 +201,7 @@ unsafe extern "C" fn c_count(clientd: *mut c_void, _buffer: *const u8, length: u
 
 fn hot_path(c: &mut Criterion) {
     let h = harness();
+    warm_up(&h);
     let mut g = c.benchmark_group("hot_path");
 
     let (concurrent, exclusive) = (Concurrent(&h), Exclusive(&h));
@@ -203,21 +241,7 @@ fn hot_path(c: &mut Criterion) {
     g.bench_function("exclusive_offerv_2x16b", |b| {
         b.iter_custom(|iters| {
             exclusive.time_publish(iters, || {
-                let (head, tail) = h.payload.split_at(PAYLOAD_LEN / 2);
-                let mut iov = [
-                    aeron_iovec_t {
-                        iov_base: head.as_ptr().cast_mut(),
-                        iov_len: head.len(),
-                    },
-                    aeron_iovec_t {
-                        iov_base: tail.as_ptr().cast_mut(),
-                        iov_len: tail.len(),
-                    },
-                ];
-                // SAFETY: the publication outlives the bench and the vectors outlive the call.
-                black_box(unsafe {
-                    aeron_exclusive_publication_offerv(c_exclusive, iov.as_mut_ptr(), 2, None, std::ptr::null_mut())
-                });
+                black_box(offerv(c_exclusive, black_box(&h.payload)));
             })
         })
     });
