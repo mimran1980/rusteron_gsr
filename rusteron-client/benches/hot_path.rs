@@ -1,11 +1,13 @@
-//! Per-operation cost of the hot paths over IPC: `offer`, `try_claim` + `commit`, `poll` per
-//! fragment, header reads inside the poll handler (the slope between 0, 1 and 4 reads), and the
+//! Per-operation cost of the hot paths over IPC: `offer`, `offerv` and `try_claim` + `commit` on
+//! concurrent and exclusive publications, `poll` per fragment, header reads inside the poll handler (the slope between 0, 1 and 4 reads), and the
 //! generated `get_constants` getters.
 //! Used to compare build setups such as cross-language LTO.
 //! Run with `cargo bench -p rusteron-client --features static --bench hot_path`.
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use rusteron_client::bindings::{aeron_header_t, aeron_subscription_poll};
+use rusteron_client::bindings::{
+    aeron_exclusive_publication_offerv, aeron_header_t, aeron_iovec_t, aeron_subscription_poll,
+};
 use rusteron_client::*;
 use rusteron_media_driver::testing::EmbeddedDriver;
 use std::ffi::{CStr, c_void};
@@ -13,6 +15,7 @@ use std::hint::black_box;
 use std::time::{Duration, Instant};
 
 const STREAM_ID: i32 = 7003;
+const EXCLUSIVE_STREAM_ID: i32 = 7004;
 static CHANNEL: &CStr = AERON_IPC_STREAM;
 const PAYLOAD_LEN: usize = 32;
 // a 32-byte payload takes a 64-byte frame
@@ -22,6 +25,8 @@ const BATCH: u64 = 1024;
 struct Harness {
     publisher: AeronPublication,
     subscription: AeronSubscription,
+    exclusive: AeronExclusivePublication,
+    exclusive_subscription: AeronSubscription,
     claim: AeronBufferClaim,
     payload: [u8; PAYLOAD_LEN],
     _aeron: Aeron,
@@ -41,14 +46,22 @@ fn harness() -> Harness {
     let subscription = aeron
         .add_subscription(CHANNEL, STREAM_ID, Handlers::NONE, Handlers::NONE, timeout)
         .unwrap();
+    let exclusive = aeron
+        .add_exclusive_publication(CHANNEL, EXCLUSIVE_STREAM_ID, timeout)
+        .unwrap();
+    let exclusive_subscription = aeron
+        .add_subscription(CHANNEL, EXCLUSIVE_STREAM_ID, Handlers::NONE, Handlers::NONE, timeout)
+        .unwrap();
     let deadline = Instant::now() + timeout;
-    while !publisher.is_connected() {
+    while !publisher.is_connected() || !exclusive.is_connected() {
         assert!(Instant::now() < deadline, "publication never connected");
         std::thread::sleep(Duration::from_millis(1));
     }
     Harness {
         publisher,
         subscription,
+        exclusive,
+        exclusive_subscription,
         claim: AeronBufferClaim::default(),
         payload: [7u8; PAYLOAD_LEN],
         _aeron: aeron,
@@ -57,15 +70,16 @@ fn harness() -> Harness {
     }
 }
 
-impl Harness {
+/// A publication with the subscription that drains it.
+trait Lane {
+    fn position(&self) -> i64;
+    fn position_limit(&self) -> i64;
+    fn subscription(&self) -> &AeronSubscription;
+
     fn wait_for_window(&self, batch: u64) {
-        while self.publisher.position_limit() - self.publisher.position() < batch as i64 * FRAME_LEN {
+        while self.position_limit() - self.position() < batch as i64 * FRAME_LEN {
             std::thread::yield_now();
         }
-    }
-
-    fn drain(&self) {
-        while self.subscription.poll_fn(|_, _| {}, 1024).expect("drain") > 0 {}
     }
 
     /// Times `iters` publishes in batches, draining between batches untimed.
@@ -75,30 +89,59 @@ impl Harness {
         while left > 0 {
             let batch = left.min(BATCH);
             self.wait_for_window(batch);
-            let before = self.publisher.position();
+            let before = self.position();
             let start = Instant::now();
             for _ in 0..batch {
                 publish();
             }
             elapsed += start.elapsed();
-            let published = (self.publisher.position() - before) / FRAME_LEN;
+            let published = (self.position() - before) / FRAME_LEN;
             assert!(
                 published + 1 >= batch as i64,
                 "only {published} of {batch} publishes landed"
             );
-            self.drain();
+            while self.subscription().poll_fn(|_, _| {}, 1024).expect("drain") > 0 {}
             left -= batch;
         }
         elapsed
     }
+}
 
+struct Concurrent<'a>(&'a Harness);
+struct Exclusive<'a>(&'a Harness);
+
+impl Lane for Concurrent<'_> {
+    fn position(&self) -> i64 {
+        self.0.publisher.position()
+    }
+    fn position_limit(&self) -> i64 {
+        self.0.publisher.position_limit()
+    }
+    fn subscription(&self) -> &AeronSubscription {
+        &self.0.subscription
+    }
+}
+
+impl Lane for Exclusive<'_> {
+    fn position(&self) -> i64 {
+        self.0.exclusive.position()
+    }
+    fn position_limit(&self) -> i64 {
+        self.0.exclusive.position_limit()
+    }
+    fn subscription(&self) -> &AeronSubscription {
+        &self.0.exclusive_subscription
+    }
+}
+
+impl Harness {
     /// Publishes batches untimed and times polling every fragment back with `poll`.
     fn time_poll(&self, iters: u64, mut poll: impl FnMut(usize) -> usize) -> Duration {
         let mut elapsed = Duration::ZERO;
         let mut left = iters;
         while left > 0 {
             let batch = left.min(BATCH);
-            self.wait_for_window(batch);
+            Concurrent(self).wait_for_window(batch);
             for _ in 0..batch {
                 while self.publisher.offer(&self.payload).is_err() {}
             }
@@ -123,19 +166,58 @@ fn hot_path(c: &mut Criterion) {
     let h = harness();
     let mut g = c.benchmark_group("hot_path");
 
+    let (concurrent, exclusive) = (Concurrent(&h), Exclusive(&h));
     g.bench_function("offer_32b", |b| {
         b.iter_custom(|iters| {
-            h.time_publish(iters, || {
+            concurrent.time_publish(iters, || {
                 let _ = black_box(h.publisher.offer(black_box(&h.payload)));
             })
         })
     });
     g.bench_function("try_claim_commit_32b", |b| {
         b.iter_custom(|iters| {
-            h.time_publish(iters, || {
+            concurrent.time_publish(iters, || {
                 if h.publisher.try_claim_raw(PAYLOAD_LEN, &h.claim) >= 0 {
                     let _ = black_box(h.claim.commit());
                 }
+            })
+        })
+    });
+    g.bench_function("exclusive_offer_32b", |b| {
+        b.iter_custom(|iters| {
+            exclusive.time_publish(iters, || {
+                let _ = black_box(h.exclusive.offer(black_box(&h.payload)));
+            })
+        })
+    });
+    g.bench_function("exclusive_try_claim_commit_32b", |b| {
+        b.iter_custom(|iters| {
+            exclusive.time_publish(iters, || {
+                if h.exclusive.try_claim_raw(PAYLOAD_LEN, &h.claim) >= 0 {
+                    let _ = black_box(h.claim.commit());
+                }
+            })
+        })
+    });
+    let c_exclusive = h.exclusive.get_inner();
+    g.bench_function("exclusive_offerv_2x16b", |b| {
+        b.iter_custom(|iters| {
+            exclusive.time_publish(iters, || {
+                let (head, tail) = h.payload.split_at(PAYLOAD_LEN / 2);
+                let mut iov = [
+                    aeron_iovec_t {
+                        iov_base: head.as_ptr().cast_mut(),
+                        iov_len: head.len(),
+                    },
+                    aeron_iovec_t {
+                        iov_base: tail.as_ptr().cast_mut(),
+                        iov_len: tail.len(),
+                    },
+                ];
+                // SAFETY: the publication outlives the bench and the vectors outlive the call.
+                black_box(unsafe {
+                    aeron_exclusive_publication_offerv(c_exclusive, iov.as_mut_ptr(), 2, None, std::ptr::null_mut())
+                });
             })
         })
     });
