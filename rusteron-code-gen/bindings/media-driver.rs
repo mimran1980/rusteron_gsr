@@ -9,16 +9,13 @@ pub const AERON_CLIENT_ERROR_DRIVER_BUFFER_FULL: u32 = 1004;
 pub const AERON_CLIENT_MAX_LOCAL_ADDRESS_STR_LEN: u32 = 64;
 pub const AERON_RESPONSE_ADDRESS_TYPE_IPV4: u32 = 1;
 pub const AERON_RESPONSE_ADDRESS_TYPE_IPV6: u32 = 2;
-#[doc = " The top level Aeron directory used for communication between a Media Driver and client."]
 pub const AERON_DIR_ENV_VAR: &[u8; 10] = b"AERON_DIR\0";
 pub const AERON_DRIVER_TIMEOUT_ENV_VAR: &[u8; 21] = b"AERON_DRIVER_TIMEOUT\0";
 pub const AERON_CLIENT_RESOURCE_LINGER_DURATION_ENV_VAR: &[u8; 38] = b"AERON_CLIENT_RESOURCE_LINGER_DURATION\0";
 pub const AERON_CLIENT_IDLE_SLEEP_DURATION_ENV_VAR: &[u8; 33] = b"AERON_CLIENT_IDLE_SLEEP_DURATION\0";
 pub const AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY_ENV_VAR: &[u8; 37] = b"AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY\0";
 pub const AERON_CLIENT_NAME_ENV_VAR: &[u8; 18] = b"AERON_CLIENT_NAME\0";
-#[doc = " Function name to call on start of each agent."]
 pub const AERON_AGENT_ON_START_FUNCTION_ENV_VAR: &[u8; 30] = b"AERON_AGENT_ON_START_FUNCTION\0";
-#[doc = " Counters Reader functions and definitions"]
 pub const AERON_COUNTER_CACHE_LINE_LENGTH: u32 = 64;
 pub const AERON_COUNTER_MAX_CLIENT_NAME_LENGTH: u32 = 100;
 pub const AERON_COUNTER_RECORD_UNUSED: u32 = 0;
@@ -26,17 +23,11 @@ pub const AERON_COUNTER_RECORD_ALLOCATED: u32 = 1;
 pub const AERON_COUNTER_RECORD_RECLAIMED: i32 = -1;
 pub const AERON_COUNTER_NOT_FREE_TO_REUSE: u64 = 9223372036854775807;
 pub const AERON_NULL_COUNTER_ID: i32 = -1;
-#[doc = " The publication is not connected to a subscriber, this can be an intermittent state as subscribers come and go."]
 pub const AERON_PUBLICATION_NOT_CONNECTED: i32 = -1;
-#[doc = " The offer failed due to back pressure from the subscribers preventing further transmission."]
 pub const AERON_PUBLICATION_BACK_PRESSURED: i32 = -2;
-#[doc = " The offer failed due to an administration action and should be retried.\n The action is an operation such as log rotation which is likely to have succeeded by the next retry attempt."]
 pub const AERON_PUBLICATION_ADMIN_ACTION: i32 = -3;
-#[doc = " The publication has been closed and should no longer be used."]
 pub const AERON_PUBLICATION_CLOSED: i32 = -4;
-#[doc = " The offer failed due to reaching the maximum position of the stream given term buffer length times the total\n possible number of terms.\n <p>\n If this happens then the publication should be closed and a new one added. To make it less likely to happen then\n increase the term buffer length."]
 pub const AERON_PUBLICATION_MAX_POSITION_EXCEEDED: i32 = -5;
-#[doc = " An error has occurred. Such as a bad argument."]
 pub const AERON_PUBLICATION_ERROR: i32 = -6;
 pub const AERON_COMPILER_GCC: u32 = 1;
 pub const AERON_COMPILER_LLVM: u32 = 1;
@@ -93,160 +84,88 @@ pub const AERON_URI_INVALID_TAG: i32 = -1;
 pub const AERON_URI_MAX_LENGTH: u32 = 4096;
 pub const AERON_MAX_HOSTNAME_LEN: u32 = 256;
 pub const AERON_CHANNEL_STATUS_INDICATOR_NOT_ALLOCATED: i32 = -1;
-#[doc = " Warn if the top level Aeron directory exists when starting the driver."]
 pub const AERON_DIR_WARN_IF_EXISTS_ENV_VAR: &[u8; 25] = b"AERON_DIR_WARN_IF_EXISTS\0";
-#[doc = " Threading Mode to be used by the driver."]
 pub const AERON_THREADING_MODE_ENV_VAR: &[u8; 21] = b"AERON_THREADING_MODE\0";
-#[doc = " Attempt to delete directories on start if they exist."]
+pub const AERON_THREAD_NAMING_ENV_VAR: &[u8; 20] = b"AERON_THREAD_NAMING\0";
 pub const AERON_DIR_DELETE_ON_START_ENV_VAR: &[u8; 26] = b"AERON_DIR_DELETE_ON_START\0";
-#[doc = " Attempt to delete directories on shutdown."]
 pub const AERON_DIR_DELETE_ON_SHUTDOWN_ENV_VAR: &[u8; 29] = b"AERON_DIR_DELETE_ON_SHUTDOWN\0";
-#[doc = " Length (in bytes) of the conductor buffer for control commands from the clients to the media driver conductor."]
 pub const AERON_TO_CONDUCTOR_BUFFER_LENGTH_ENV_VAR: &[u8; 30] = b"AERON_CONDUCTOR_BUFFER_LENGTH\0";
-#[doc = " Length (in bytes) of the broadcast buffers from the media driver to the clients."]
 pub const AERON_TO_CLIENTS_BUFFER_LENGTH_ENV_VAR: &[u8; 28] = b"AERON_CLIENTS_BUFFER_LENGTH\0";
-#[doc = " Length (in bytes) of the value buffer for the system counters."]
 pub const AERON_COUNTERS_VALUES_BUFFER_LENGTH_ENV_VAR: &[u8; 29] = b"AERON_COUNTERS_BUFFER_LENGTH\0";
-#[doc = " Length (in bytes) of the buffer for the distinct error log."]
 pub const AERON_ERROR_BUFFER_LENGTH_ENV_VAR: &[u8; 26] = b"AERON_ERROR_BUFFER_LENGTH\0";
-#[doc = " Client liveness timeout in nanoseconds"]
 pub const AERON_CLIENT_LIVENESS_TIMEOUT_ENV_VAR: &[u8; 30] = b"AERON_CLIENT_LIVENESS_TIMEOUT\0";
-#[doc = " Length (in bytes) of the log buffers for publication terms."]
 pub const AERON_TERM_BUFFER_LENGTH_ENV_VAR: &[u8; 25] = b"AERON_TERM_BUFFER_LENGTH\0";
-#[doc = " Length (in bytes) of the log buffers for IPC publication terms."]
 pub const AERON_IPC_TERM_BUFFER_LENGTH_ENV_VAR: &[u8; 29] = b"AERON_IPC_TERM_BUFFER_LENGTH\0";
-#[doc = " Should term buffers be created sparse."]
 pub const AERON_TERM_BUFFER_SPARSE_FILE_ENV_VAR: &[u8; 30] = b"AERON_TERM_BUFFER_SPARSE_FILE\0";
-#[doc = " Should storage checks should be performed when allocating files."]
 pub const AERON_PERFORM_STORAGE_CHECKS_ENV_VAR: &[u8; 29] = b"AERON_PERFORM_STORAGE_CHECKS\0";
-#[doc = " Specify the interval which checks for re-resolutions of names occurs."]
 pub const AERON_LOW_FILE_STORE_WARNING_THRESHOLD_ENV_VAR: &[u8; 39] = b"AERON_LOW_FILE_STORE_WARNING_THRESHOLD\0";
-#[doc = " Should a spy subscription simulate a connection to a network publication."]
 pub const AERON_SPIES_SIMULATE_CONNECTION_ENV_VAR: &[u8; 32] = b"AERON_SPIES_SIMULATE_CONNECTION\0";
-#[doc = " Page size for alignment of all files."]
 pub const AERON_FILE_PAGE_SIZE_ENV_VAR: &[u8; 21] = b"AERON_FILE_PAGE_SIZE\0";
-#[doc = " Length (in bytes) of the maximum transmission unit of the publication."]
 pub const AERON_MTU_LENGTH_ENV_VAR: &[u8; 17] = b"AERON_MTU_LENGTH\0";
-#[doc = " Length (in bytes) of the maximum transmission unit of the IPC publication."]
 pub const AERON_IPC_MTU_LENGTH_ENV_VAR: &[u8; 21] = b"AERON_IPC_MTU_LENGTH\0";
-#[doc = " Window limit on IPC Publication side."]
 pub const AERON_IPC_PUBLICATION_TERM_WINDOW_LENGTH_ENV_VAR: &[u8; 41] = b"AERON_IPC_PUBLICATION_TERM_WINDOW_LENGTH\0";
-#[doc = " Window limit on Publication side."]
 pub const AERON_PUBLICATION_TERM_WINDOW_LENGTH_ENV_VAR: &[u8; 37] = b"AERON_PUBLICATION_TERM_WINDOW_LENGTH\0";
-#[doc = " Linger timeout in nanoseconds on publications."]
 pub const AERON_PUBLICATION_LINGER_TIMEOUT_ENV_VAR: &[u8; 33] = b"AERON_PUBLICATION_LINGER_TIMEOUT\0";
-#[doc = " SO_RCVBUF setting on UDP sockets which must be sufficient for Bandwidth Delay Product (BDP)."]
 pub const AERON_SOCKET_SO_RCVBUF_ENV_VAR: &[u8; 23] = b"AERON_SOCKET_SO_RCVBUF\0";
-#[doc = " SO_SNDBUF setting on UDP sockets which must be sufficient for Bandwidth Delay Product (BDP)."]
 pub const AERON_SOCKET_SO_SNDBUF_ENV_VAR: &[u8; 23] = b"AERON_SOCKET_SO_SNDBUF\0";
-#[doc = " IP_MULTICAST_TTL setting on outgoing UDP sockets."]
 pub const AERON_SOCKET_MULTICAST_TTL_ENV_VAR: &[u8; 27] = b"AERON_SOCKET_MULTICAST_TTL\0";
-#[doc = " Ratio of sending data to polling status messages in the Sender."]
 pub const AERON_SEND_TO_STATUS_POLL_RATIO_ENV_VAR: &[u8; 32] = b"AERON_SEND_TO_STATUS_POLL_RATIO\0";
-#[doc = " Status Message timeout in nanoseconds."]
 pub const AERON_RCV_STATUS_MESSAGE_TIMEOUT_ENV_VAR: &[u8; 33] = b"AERON_RCV_STATUS_MESSAGE_TIMEOUT\0";
 pub const AERON_MULTICAST_MIN_FLOW_CONTROL_STRATEGY_NAME: &[u8; 14] = b"multicast_min\0";
 pub const AERON_MULTICAST_MAX_FLOW_CONTROL_STRATEGY_NAME: &[u8; 14] = b"multicast_max\0";
 pub const AERON_MULTICAST_TAGGED_FLOW_CONTROL_STRATEGY_NAME: &[u8; 17] = b"multicast_tagged\0";
 pub const AERON_UNICAST_MAX_FLOW_CONTROL_STRATEGY_NAME: &[u8; 12] = b"unicast_max\0";
-#[doc = " Supplier for flow control structure to be employed for multicast channels."]
 pub const AERON_MULTICAST_FLOWCONTROL_SUPPLIER_ENV_VAR: &[u8; 37] = b"AERON_MULTICAST_FLOWCONTROL_SUPPLIER\0";
-#[doc = " Supplier for flow control structure to be employed for unicast channels."]
 pub const AERON_UNICAST_FLOWCONTROL_SUPPLIER_ENV_VAR: &[u8; 35] = b"AERON_UNICAST_FLOWCONTROL_SUPPLIER\0";
-#[doc = " Image liveness timeout in nanoseconds"]
 pub const AERON_IMAGE_LIVENESS_TIMEOUT_ENV_VAR: &[u8; 29] = b"AERON_IMAGE_LIVENESS_TIMEOUT\0";
-#[doc = " Length of the initial window which must be sufficient for Bandwidth Delay Product (BDP)."]
 pub const AERON_RCV_INITIAL_WINDOW_LENGTH_ENV_VAR: &[u8; 32] = b"AERON_RCV_INITIAL_WINDOW_LENGTH\0";
-#[doc = " Supplier for congestion control structure to be employed for Images."]
 pub const AERON_CONGESTIONCONTROL_SUPPLIER_ENV_VAR: &[u8; 33] = b"AERON_CONGESTIONCONTROL_SUPPLIER\0";
-#[doc = " Should Cubic congestion control measure RTT."]
 pub const AERON_CUBICCONGESTIONCONTROL_MEASURERTT_ENV_VAR: &[u8; 40] = b"AERON_CUBICCONGESTIONCONTROL_MEASURERTT\0";
-#[doc = " Initial RTT measurement in nanoseconds for Cubic congestion control."]
 pub const AERON_CUBICCONGESTIONCONTROL_INITIALRTT_ENV_VAR: &[u8; 40] = b"AERON_CUBICCONGESTIONCONTROL_INITIALRTT\0";
-#[doc = " Should Cubic congestion control account for TCP behavior in low RTT values after a loss.\n <p>\n <b>WARNING:</b> Be aware that throughput utilization becomes important. Turning this on may drastically be off\n the necessary throughput if utilization is low."]
 pub const AERON_CUBICCONGESTIONCONTROL_TCPMODE_ENV_VAR: &[u8; 37] = b"AERON_CUBICCONGESTIONCONTROL_TCPMODE\0";
-#[doc = " Length (in bytes) of the buffer for the loss report log."]
 pub const AERON_LOSS_REPORT_BUFFER_LENGTH_ENV_VAR: &[u8; 32] = b"AERON_LOSS_REPORT_BUFFER_LENGTH\0";
-#[doc = " Timeout for publication unblock in nanoseconds."]
 pub const AERON_PUBLICATION_UNBLOCK_TIMEOUT_ENV_VAR: &[u8; 34] = b"AERON_PUBLICATION_UNBLOCK_TIMEOUT\0";
-#[doc = " Timeout for publication connection in nanoseconds."]
 pub const AERON_PUBLICATION_CONNECTION_TIMEOUT_ENV_VAR: &[u8; 37] = b"AERON_PUBLICATION_CONNECTION_TIMEOUT\0";
-#[doc = " Interval (in nanoseconds) between checks for timers and timeouts."]
 pub const AERON_TIMER_INTERVAL_ENV_VAR: &[u8; 21] = b"AERON_TIMER_INTERVAL\0";
-#[doc = " Idle strategy to be employed by Sender for DEDICATED Threading Mode."]
 pub const AERON_SENDER_IDLE_STRATEGY_ENV_VAR: &[u8; 27] = b"AERON_SENDER_IDLE_STRATEGY\0";
-#[doc = " Idle strategy to be employed by Conductor for DEDICATED or SHARED_NETWORK Threading Mode."]
 pub const AERON_CONDUCTOR_IDLE_STRATEGY_ENV_VAR: &[u8; 30] = b"AERON_CONDUCTOR_IDLE_STRATEGY\0";
-#[doc = " Idle strategy to be employed by Receiver for DEDICATED Threading Mode."]
 pub const AERON_RECEIVER_IDLE_STRATEGY_ENV_VAR: &[u8; 29] = b"AERON_RECEIVER_IDLE_STRATEGY\0";
-#[doc = " Idle strategy to be employed by Sender and Receiver for SHARED_NETWORK Threading Mode."]
 pub const AERON_SHAREDNETWORK_IDLE_STRATEGY_ENV_VAR: &[u8; 34] = b"AERON_SHAREDNETWORK_IDLE_STRATEGY\0";
-#[doc = " Idle strategy to be employed by Conductor, Sender, and Receiver for SHARED Threading Mode."]
 pub const AERON_SHARED_IDLE_STRATEGY_ENV_VAR: &[u8; 27] = b"AERON_SHARED_IDLE_STRATEGY\0";
-#[doc = " Idle strategy init args to be employed by Sender for DEDICATED Threading Mode."]
 pub const AERON_SENDER_IDLE_STRATEGY_INIT_ARGS_ENV_VAR: &[u8; 37] = b"AERON_SENDER_IDLE_STRATEGY_INIT_ARGS\0";
-#[doc = " Idle strategy init args to be employed by Conductor for DEDICATED or SHARED_NETWORK Threading Mode."]
 pub const AERON_CONDUCTOR_IDLE_STRATEGY_INIT_ARGS_ENV_VAR: &[u8; 40] = b"AERON_CONDUCTOR_IDLE_STRATEGY_INIT_ARGS\0";
-#[doc = " Idle strategy init args to be employed by Receiver for DEDICATED Threading Mode."]
 pub const AERON_RECEIVER_IDLE_STRATEGY_INIT_ARGS_ENV_VAR: &[u8; 39] = b"AERON_RECEIVER_IDLE_STRATEGY_INIT_ARGS\0";
-#[doc = " Idle strategy init args to be employed by Sender and Receiver for SHARED_NETWORK Threading Mode."]
 pub const AERON_SHAREDNETWORK_IDLE_STRATEGY_INIT_ARGS_ENV_VAR: &[u8; 44] =
     b"AERON_SHAREDNETWORK_IDLE_STRATEGY_INIT_ARGS\0";
-#[doc = " Idle strategy init args to be employed by Conductor, Sender, and Receiver for SHARED Threading Mode."]
 pub const AERON_SHARED_IDLE_STRATEGY_ENV_INIT_ARGS_VAR: &[u8; 37] = b"AERON_SHARED_IDLE_STRATEGY_INIT_ARGS\0";
-#[doc = " Idle strategy to be employed by AsyncExecutor when enabled."]
 pub const AERON_DRIVER_NATIVE_RESOURCE_AGENT_IDLE_STRATEGY_ENV_VAR: &[u8; 49] =
     b"AERON_DRIVER_NATIVE_RESOURCE_AGENT_IDLE_STRATEGY\0";
-#[doc = " Idle strategy init args to be employed AsyncExecutor when enabled."]
 pub const AERON_DRIVER_NATIVE_RESOURCE_AGENT_IDLE_STRATEGY_INIT_ARGS_ENV_VAR: &[u8; 59] =
     b"AERON_DRIVER_NATIVE_RESOURCE_AGENT_IDLE_STRATEGY_INIT_ARGS\0";
-#[doc = " Timeout for freed counters before they can be reused."]
 pub const AERON_COUNTERS_FREE_TO_REUSE_TIMEOUT_ENV_VAR: &[u8; 37] = b"AERON_COUNTERS_FREE_TO_REUSE_TIMEOUT\0";
-#[doc = " Timeout for a receiver to be tracked."]
 pub const AERON_FLOW_CONTROL_RECEIVER_TIMEOUT_ENV_VAR: &[u8; 36] = b"AERON_FLOW_CONTROL_RECEIVER_TIMEOUT\0";
-#[doc = " Default receiver tag for publishers to group endpoints by using tagged flow control."]
 pub const AERON_FLOW_CONTROL_GROUP_TAG_ENV_VAR: &[u8; 29] = b"AERON_FLOW_CONTROL_GROUP_TAG\0";
-#[doc = " Default required group size to use in tagged multicast flow control."]
 pub const AERON_FLOW_CONTROL_GROUP_MIN_SIZE_ENV_VAR: &[u8; 34] = b"AERON_FLOW_CONTROL_GROUP_MIN_SIZE\0";
-#[doc = " Default receiver tag to be sent on status messages from channel to handle tagged flow control."]
 pub const AERON_RECEIVER_GROUP_TAG_ENV_VAR: &[u8; 25] = b"AERON_RECEIVER_GROUP_TAG\0";
-#[doc = " Function name to call for termination validation."]
 pub const AERON_DRIVER_TERMINATION_VALIDATOR_ENV_VAR: &[u8; 35] = b"AERON_DRIVER_TERMINATION_VALIDATOR\0";
-#[doc = " Should the driver print its configuration on start to stdout."]
 pub const AERON_PRINT_CONFIGURATION_ON_START_ENV_VAR: &[u8; 26] = b"AERON_PRINT_CONFIGURATION\0";
-#[doc = " Property name for default boolean value for if a stream is reliable. True to NAK, false to gap fill."]
 pub const AERON_RELIABLE_STREAM_ENV_VAR: &[u8; 22] = b"AERON_RELIABLE_STREAM\0";
-#[doc = " Property name for default boolean value for if subscriptions should have a tether for flow control."]
 pub const AERON_TETHER_SUBSCRIPTIONS_ENV_VAR: &[u8; 27] = b"AERON_TETHER_SUBSCRIPTIONS\0";
-#[doc = " Untethered subscriptions window limit timeout after which they are removed from flow control."]
 pub const AERON_UNTETHERED_WINDOW_LIMIT_TIMEOUT_ENV_VAR: &[u8; 38] = b"AERON_UNTETHERED_WINDOW_LIMIT_TIMEOUT\0";
-#[doc = " Timeout for an untethered subscriptions to stay in the linger state."]
 pub const AERON_UNTETHERED_LINGER_TIMEOUT_ENV_VAR: &[u8; 32] = b"AERON_UNTETHERED_LINGER_TIMEOUT\0";
-#[doc = " Untethered subscriptions resting timeout before they are allowed to re join an active stream."]
 pub const AERON_UNTETHERED_RESTING_TIMEOUT_ENV_VAR: &[u8; 33] = b"AERON_UNTETHERED_RESTING_TIMEOUT\0";
-#[doc = " Expected size of multicast receiver groups property name."]
 pub const AERON_NAK_MULTICAST_GROUP_SIZE_ENV_VAR: &[u8; 31] = b"AERON_NAK_MULTICAST_GROUP_SIZE\0";
-#[doc = " Max backoff time for multicast NAK delay randomisation in nanoseconds."]
 pub const AERON_NAK_MULTICAST_MAX_BACKOFF_ENV_VAR: &[u8; 32] = b"AERON_NAK_MULTICAST_MAX_BACKOFF\0";
-#[doc = " How long to delay before sending an initial NAK."]
 pub const AERON_NAK_UNICAST_DELAY_ENV_VAR: &[u8; 24] = b"AERON_NAK_UNICAST_DELAY\0";
-#[doc = " A ratio to apply to the nak unicast delay to calculate the resend delay. Used as a multipler."]
 pub const AERON_NAK_UNICAST_RETRY_DELAY_RATIO_ENV_VAR: &[u8; 36] = b"AERON_NAK_UNICAST_RETRY_DELAY_RATIO\0";
-#[doc = " Max number of active retransmissions tracked for udp streams with group semantics."]
 pub const AERON_MAX_RESEND_ENV_VAR: &[u8; 17] = b"AERON_MAX_RESEND\0";
-#[doc = " How long to delay before sending a retransmit following a NAK."]
 pub const AERON_RETRANSMIT_UNICAST_DELAY_ENV_VAR: &[u8; 31] = b"AERON_RETRANSMIT_UNICAST_DELAY\0";
-#[doc = " How long to linger after delay on a NAK."]
 pub const AERON_RETRANSMIT_UNICAST_LINGER_ENV_VAR: &[u8; 32] = b"AERON_RETRANSMIT_UNICAST_LINGER\0";
-#[doc = " Group semantics for network subscriptions."]
 pub const AERON_RECEIVER_GROUP_CONSIDERATION_ENV_VAR: &[u8; 35] = b"AERON_RECEIVER_GROUP_CONSIDERATION\0";
-#[doc = " Property name for default boolean value for if a stream is rejoinable. True to allow rejoin, false to not."]
 pub const AERON_REJOIN_STREAM_ENV_VAR: &[u8; 20] = b"AERON_REJOIN_STREAM\0";
 pub const AERON_DRIVER_CONNECT_ENV_VAR: &[u8; 21] = b"AERON_DRIVER_CONNECT\0";
-#[doc = " Bindings for UDP Channel Transports."]
 pub const AERON_UDP_CHANNEL_TRANSPORT_BINDINGS_MEDIA_ENV_VAR: &[u8; 43] =
     b"AERON_UDP_CHANNEL_TRANSPORT_BINDINGS_MEDIA\0";
-#[doc = " Bindings for Conductor UDP Channel Transports."]
 pub const AERON_CONDUCTOR_UDP_CHANNEL_TRANSPORT_BINDINGS_MEDIA_ENV_VAR: &[u8; 53] =
     b"AERON_CONDUCTOR_UDP_CHANNEL_TRANSPORT_BINDINGS_MEDIA\0";
 pub const AERON_UDP_CHANNEL_OUTGOING_INTERCEPTORS_ENV_VAR: &[u8; 40] = b"AERON_UDP_CHANNEL_OUTGOING_INTERCEPTORS\0";
@@ -254,40 +173,25 @@ pub const AERON_UDP_CHANNEL_INCOMING_INTERCEPTORS_ENV_VAR: &[u8; 40] = b"AERON_U
 pub const AERON_PUBLICATION_RESERVED_SESSION_ID_LOW_ENV_VAR: &[u8; 42] = b"AERON_PUBLICATION_RESERVED_SESSION_ID_LOW\0";
 pub const AERON_PUBLICATION_RESERVED_SESSION_ID_HIGH_ENV_VAR: &[u8; 43] =
     b"AERON_PUBLICATION_RESERVED_SESSION_ID_HIGH\0";
-#[doc = " Set the name of the MediaDriver for name resolver purposes."]
 pub const AERON_DRIVER_RESOLVER_NAME_ENV_VAR: &[u8; 27] = b"AERON_DRIVER_RESOLVER_NAME\0";
-#[doc = " The interface of the MediaDriver for name resolver purposes.\n\n The format is hostname:port."]
 pub const AERON_DRIVER_RESOLVER_INTERFACE_ENV_VAR: &[u8; 32] = b"AERON_DRIVER_RESOLVER_INTERFACE\0";
-#[doc = " Get the bootstrap neighbor of the Media Driver for name resolver purposes.\n\n The format is comma separated list of hostname:port pairs and follows the URI format for the endpoint parameter."]
 pub const AERON_DRIVER_RESOLVER_BOOTSTRAP_NEIGHBOR_ENV_VAR: &[u8; 41] = b"AERON_DRIVER_RESOLVER_BOOTSTRAP_NEIGHBOR\0";
-#[doc = " Specify the name of the name resolver (supplier) to be used by this media driver"]
 pub const AERON_NAME_RESOLVER_SUPPLIER_ENV_VAR: &[u8; 29] = b"AERON_NAME_RESOLVER_SUPPLIER\0";
 pub const AERON_NAME_RESOLVER_SUPPLIER_DEFAULT: &[u8; 8] = b"default\0";
-#[doc = " Specify the name of the name resolver (supplier) to be used by this media driver"]
 pub const AERON_NAME_RESOLVER_INIT_ARGS_ENV_VAR: &[u8; 30] = b"AERON_NAME_RESOLVER_INIT_ARGS\0";
-#[doc = " Property name for time to wait before removing a neighbor entry from the cache if an update for that neighbor has\n not been received."]
 pub const AERON_DRIVER_RESOLVER_NEIGHBOR_TIMEOUT_ENV_VAR: &[u8; 39] = b"AERON_DRIVER_RESOLVER_NEIGHBOR_TIMEOUT\0";
-#[doc = " Property name for the interval between sending name to address messages for this driver to its neighbors."]
 pub const AERON_DRIVER_RESOLVER_SELF_RESOLUTION_INTERVAL_ENV_VAR: &[u8; 47] =
     b"AERON_DRIVER_RESOLVER_SELF_RESOLUTION_INTERVAL\0";
-#[doc = " Property name for the interval between sending name to address messages for all known neighbors."]
 pub const AERON_DRIVER_RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_ENV_VAR: &[u8; 51] =
     b"AERON_DRIVER_RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL\0";
 pub const AERON_DRIVER_RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_ENV_VAR: &[u8; 61] =
     b"AERON_DRIVER_RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL\0";
-#[doc = " Specify the interval which checks for re-resolutions of names occurs."]
 pub const AERON_DRIVER_RERESOLUTION_CHECK_INTERVAL_ENV_VAR: &[u8; 41] = b"AERON_DRIVER_RERESOLUTION_CHECK_INTERVAL\0";
-#[doc = " Specify the sender wildcard port range."]
 pub const AERON_DRIVER_SENDER_WILDCARD_PORT_RANGE_ENV_VAR: &[u8; 33] = b"AERON_SENDER_WILDCARD_PORT_RANGE\0";
-#[doc = " Specify the receiver wildcard port range."]
 pub const AERON_DRIVER_RECEIVER_WILDCARD_PORT_RANGE_ENV_VAR: &[u8; 35] = b"AERON_RECEIVER_WILDCARD_PORT_RANGE\0";
-#[doc = " Specify the duty cycle time threshold for the conductor."]
 pub const AERON_DRIVER_CONDUCTOR_CYCLE_THRESHOLD_ENV_VAR: &[u8; 39] = b"AERON_DRIVER_CONDUCTOR_CYCLE_THRESHOLD\0";
-#[doc = " Specify the duty cycle time threshold for the sender."]
 pub const AERON_DRIVER_SENDER_CYCLE_THRESHOLD_ENV_VAR: &[u8; 36] = b"AERON_DRIVER_SENDER_CYCLE_THRESHOLD\0";
-#[doc = " Specify the duty cycle time threshold for the receiver."]
 pub const AERON_DRIVER_RECEIVER_CYCLE_THRESHOLD_ENV_VAR: &[u8; 38] = b"AERON_DRIVER_RECEIVER_CYCLE_THRESHOLD\0";
-#[doc = " Specify the duty cycle time threshold for the name_resolver."]
 pub const AERON_DRIVER_NAME_RESOLVER_THRESHOLD_ENV_VAR: &[u8; 37] = b"AERON_DRIVER_NAME_RESOLVER_THRESHOLD\0";
 pub const AERON_RECEIVER_IO_VECTOR_CAPACITY_ENV_VAR: &[u8; 34] = b"AERON_RECEIVER_IO_VECTOR_CAPACITY\0";
 pub const AERON_SENDER_IO_VECTOR_CAPACITY_ENV_VAR: &[u8; 32] = b"AERON_SENDER_IO_VECTOR_CAPACITY\0";
@@ -301,10 +205,8 @@ pub const AERON_DRIVER_NATIVE_RESOURCE_AGENT_CPU_AFFINITY_ENV_VAR: &[u8; 48] =
     b"AERON_DRIVER_NATIVE_RESOURCE_AGENT_CPU_AFFINITY\0";
 pub const AERON_DRIVER_CPUSET_AFFINITY_ENV_VAR: &[u8; 29] = b"AERON_DRIVER_CPUSET_AFFINITY\0";
 pub const AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS_ENV_VAR: &[u8; 39] = b"AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS\0";
-#[doc = " Set the list of filenames to dynamic libraries to load upon context init."]
 pub const AERON_DRIVER_DYNAMIC_LIBRARIES_ENV_VAR: &[u8; 31] = b"AERON_DRIVER_DYNAMIC_LIBRARIES\0";
 pub const AERON_ENABLE_EXPERIMENTAL_FEATURES_ENV_VAR: &[u8; 35] = b"AERON_ENABLE_EXPERIMENTAL_FEATURES\0";
-#[doc = " Limit the number of sessions for a given stream that the driver will support"]
 pub const AERON_DRIVER_STREAM_SESSION_LIMIT_ENV_VAR: &[u8; 34] = b"AERON_DRIVER_STREAM_SESSION_LIMIT\0";
 pub const AERON_URI_PROTOTYPE_VALUE_CORRELATION_ID: i32 = -2;
 pub const AERON_UDP_CHANNEL_TRANSPORT_MAX_INTERCEPTORS: u32 = 2;
@@ -322,7 +224,6 @@ pub const AERON_LOGBUFFER_TERM_MIN_LENGTH: u32 = 65536;
 pub const AERON_LOGBUFFER_TERM_MAX_LENGTH: u32 = 1073741824;
 pub const AERON_LOGBUFFER_DEFAULT_FRAME_HEADER_MAX_LENGTH: u32 = 128;
 pub const AERON_MAX_UDP_PAYLOAD_LENGTH: u32 = 65504;
-pub const AERON_LOGBUFFER_FRAME_ALIGNMENT: u32 = 32;
 pub const AERON_PUBLICATIONS_DIR: &[u8; 13] = b"publications\0";
 pub const AERON_IMAGES_DIR: &[u8; 7] = b"images\0";
 pub const AERON_RB_PADDING_MSG_TYPE_ID: i32 = -1;
@@ -551,10 +452,44 @@ pub const AERON_COUNTER_SEQUENCER_REPLAY_INDEX_MAX_SEQUENCE_INDEX_COUNTER_TYPE_I
 pub const AERON_COUNTER_SEQUENCER_REPLAY_INDEX_MAX_SEQUENCE_LOG_POSITION_COUNTER_TYPE_ID: u32 = 523;
 pub const AERON_COUNTER_SEQUENCER_REPLAY_INDEX_INITIAL_SEQUENCE_INDEX_COUNTER_TYPE_ID: u32 = 524;
 pub const AERON_COUNTER_SEQUENCER_REPLAY_INDEX_INITIAL_SEQUENCE_LOG_POSITION_COUNTER_TYPE_ID: u32 = 525;
+pub const AERON_COUNTER_SEQUENCER_APPLICATION_GREATEST_COMMITTED_MESSAGE_ID_COUNTER_TYPE_ID: u32 = 526;
+pub const AERON_COUNTER_SEQUENCER_REPLAY_SERVICE_SESSION_COUNT_TYPE_ID: u32 = 531;
+pub const AERON_COUNTER_SEQUENCER_REPLAY_SERVICE_INDEXED_TERM_COUNT_TYPE_ID: u32 = 535;
+pub const AERON_COUNTER_SEQUENCER_REPLAY_SERVICE_TOTAL_TERM_COUNT_TYPE_ID: u32 = 536;
+pub const AERON_COUNTER_SEQUENCER_REPLAY_SERVICE_REPLAY_JOB_TYPE_ID: u32 = 537;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_ACTIVE_STORE_OPERATIONS_COUNTER_TYPE_ID: u32 = 538;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_ACTIVE_LOAD_OPERATIONS_COUNTER_TYPE_ID: u32 = 539;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_REPLICATING_COUNT_TYPE_ID: u32 = 540;
+pub const AERON_COUNTER_SEQUENCER_APPLICATION_LAST_READ_TIMESTAMP_COUNTER_TYPE_ID: u32 = 541;
+pub const AERON_COUNTER_SEQUENCER_REPLAY_CLIENT_LOG_REPLAY_SEQUENCE_INDEX_TYPE_ID: u32 = 542;
+pub const AERON_COUNTER_SEQUENCER_REPLAY_SERVICE_STATE_TYPE_ID: u32 = 543;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_STATE_TYPE_ID: u32 = 544;
 pub const AERON_COUNTER_SEQUENCER_REPLAY_SERVICE_MAX_CYCLE_TIME_COUNTER_TYPE_ID: u32 = 545;
 pub const AERON_COUNTER_SEQUENCER_REPLAY_SERVICE_CYCLE_TIME_THRESHOLD_EXCEEDED_TYPE_ID: u32 = 546;
 pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_MAX_CYCLE_TIME_COUNTER_TYPE_ID: u32 = 547;
 pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_CYCLE_TIME_THRESHOLD_EXCEEDED_TYPE_ID: u32 = 548;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_ACTIVE_SESSIONS_COUNTER_TYPE_ID: u32 = 549;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_ACTIVE_ADMIN_OPERATIONS_COUNTER_TYPE_ID: u32 = 550;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_QUEUED_OPERATIONS_TYPE_ID: u32 = 551;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_STORE_ERROR_COUNT_TYPE_ID: u32 = 552;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_LOAD_ERROR_COUNT_TYPE_ID: u32 = 553;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_LIST_ERROR_COUNT_TYPE_ID: u32 = 554;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_ADMIN_ERROR_COUNT_TYPE_ID: u32 = 555;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_STORAGE_MODULE_ERROR_COUNT_TYPE_ID: u32 = 556;
+pub const AERON_COUNTER_SEQUENCER_APPLICATION_SNAPSHOT_LAST_STORED_SEQUENCE_INDEX_TYPE_ID: u32 = 557;
+pub const AERON_COUNTER_SEQUENCER_APPLICATION_SNAPSHOT_LAST_LOADED_SEQUENCE_INDEX_TYPE_ID: u32 = 558;
+pub const AERON_COUNTER_SEQUENCER_APPLICATION_SNAPSHOT_ACTIVITY_STATE_TYPE_ID: u32 = 559;
+pub const AERON_COUNTER_SEQUENCER_APPLICATION_SNAPSHOT_LOAD_ERROR_COUNT_TYPE_ID: u32 = 560;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_TOTAL_STORE_OPERATIONS_COUNTER_TYPE_ID: u32 = 561;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_TOTAL_LOAD_OPERATIONS_COUNTER_TYPE_ID: u32 = 562;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_TOTAL_LIST_OPERATIONS_COUNTER_TYPE_ID: u32 = 563;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_TOTAL_FIND_LATEST_OPERATIONS_COUNTER_TYPE_ID: u32 = 564;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_TOTAL_ADMIN_OPERATIONS_COUNTER_TYPE_ID: u32 = 565;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_ACTIVE_LIST_OPERATIONS_COUNTER_TYPE_ID: u32 = 566;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_ACTIVE_FIND_LATEST_OPERATIONS_COUNTER_TYPE_ID: u32 = 567;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_ACTIVE_DESCRIBE_OPERATIONS_COUNTER_TYPE_ID: u32 = 568;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_TOTAL_DESCRIBE_OPERATIONS_COUNTER_TYPE_ID: u32 = 569;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_DESCRIBE_ERROR_COUNT_TYPE_ID: u32 = 570;
 pub const AERON_COUNTER_CHANNEL_ENDPOINT_STATUS_INITIALIZING: u32 = 0;
 pub const AERON_COUNTER_CHANNEL_ENDPOINT_STATUS_ERRORED: i32 = -1;
 pub const AERON_COUNTER_CHANNEL_ENDPOINT_STATUS_NO_ID_ALLOCATED: i32 = -1;
@@ -567,6 +502,11 @@ pub const AERON_DRIVER_AGENT_ROLE_NAME_RECEIVER: &[u8; 9] = b"receiver\0";
 pub const AERON_DRIVER_AGENT_ROLE_NAME_SENDER: &[u8; 7] = b"sender\0";
 pub const AERON_DRIVER_AGENT_ROLE_NAME_SHARED_NETWORK: &[u8; 19] = b"[sender, receiver]\0";
 pub const AERON_DRIVER_AGENT_ROLE_NAME_SHARED: &[u8; 30] = b"[conductor, sender, receiver]\0";
+pub const AERON_DRIVER_AGENT_ROLE_NAME_CONDUCTOR_NEW: &[u8; 13] = b"aeron-md-cnd\0";
+pub const AERON_DRIVER_AGENT_ROLE_NAME_RECEIVER_NEW: &[u8; 13] = b"aeron-md-rcv\0";
+pub const AERON_DRIVER_AGENT_ROLE_NAME_SENDER_NEW: &[u8; 13] = b"aeron-md-snd\0";
+pub const AERON_DRIVER_AGENT_ROLE_NAME_SHARED_NETWORK_NEW: &[u8; 13] = b"aeron-md-net\0";
+pub const AERON_DRIVER_AGENT_ROLE_NAME_SHARED_NEW: &[u8; 13] = b"aeron-md-shd\0";
 pub const AERON_COMMAND_RB_CAPACITY: u32 = 131072;
 pub const AERON_COMMAND_RB_RESERVE: u32 = 1024;
 pub const AERON_COMMAND_DRAIN_LIMIT: u32 = 1;
@@ -575,6 +515,22 @@ pub const AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND: u32 = 16;
 pub const AERON_DRIVER_RECEIVER_IO_VECTOR_LENGTH_MAX: u32 = 16;
 pub const AERON_DRIVER_RECEIVER_MAX_UDP_PACKET_LENGTH: u32 = 65536;
 pub const AERON_ERROR_BUFFER_LENGTH_DEFAULT: u32 = 4194304;
+pub const AERON_ERROR_CODE_UNKNOWN_CODE_VALUE: i32 = -1;
+pub const AERON_ERROR_CODE_UNUSED: u32 = 0;
+pub const AERON_ERROR_CODE_INVALID_CHANNEL: u32 = 1;
+pub const AERON_ERROR_CODE_UNKNOWN_SUBSCRIPTION: u32 = 2;
+pub const AERON_ERROR_CODE_UNKNOWN_PUBLICATION: u32 = 3;
+pub const AERON_ERROR_CODE_CHANNEL_ENDPOINT_ERROR: u32 = 4;
+pub const AERON_ERROR_CODE_UNKNOWN_COUNTER: u32 = 5;
+pub const AERON_ERROR_CODE_UNKNOWN_COMMAND_TYPE_ID: u32 = 6;
+pub const AERON_ERROR_CODE_MALFORMED_COMMAND: u32 = 7;
+pub const AERON_ERROR_CODE_NOT_SUPPORTED: u32 = 8;
+pub const AERON_ERROR_CODE_UNKNOWN_HOST: u32 = 9;
+pub const AERON_ERROR_CODE_RESOURCE_TEMPORARILY_UNAVAILABLE: u32 = 10;
+pub const AERON_ERROR_CODE_GENERIC_ERROR: u32 = 11;
+pub const AERON_ERROR_CODE_STORAGE_SPACE: u32 = 12;
+pub const AERON_ERROR_CODE_IMAGE_REJECTED: u32 = 13;
+pub const AERON_ERROR_CODE_PUBLICATION_REVOKED: u32 = 14;
 pub const AERON_CONTROL_PROTOCOL_MAJOR_VERSION: u32 = 1;
 pub const AERON_CONTROL_PROTOCOL_MINOR_VERSION: u32 = 0;
 pub const AERON_CONTROL_PROTOCOL_PATCH_VERSION: u32 = 0;
@@ -609,22 +565,6 @@ pub const AERON_RESPONSE_ON_CLIENT_TIMEOUT: u32 = 3850;
 pub const AERON_RESPONSE_ON_STATIC_COUNTER: u32 = 3851;
 pub const AERON_RESPONSE_ON_PUBLICATION_ERROR: u32 = 3852;
 pub const AERON_RESPONSE_ON_NEXT_AVAILABLE_SESSION_ID: u32 = 3853;
-pub const AERON_ERROR_CODE_UNKNOWN_CODE_VALUE: i32 = -1;
-pub const AERON_ERROR_CODE_UNUSED: u32 = 0;
-pub const AERON_ERROR_CODE_INVALID_CHANNEL: u32 = 1;
-pub const AERON_ERROR_CODE_UNKNOWN_SUBSCRIPTION: u32 = 2;
-pub const AERON_ERROR_CODE_UNKNOWN_PUBLICATION: u32 = 3;
-pub const AERON_ERROR_CODE_CHANNEL_ENDPOINT_ERROR: u32 = 4;
-pub const AERON_ERROR_CODE_UNKNOWN_COUNTER: u32 = 5;
-pub const AERON_ERROR_CODE_UNKNOWN_COMMAND_TYPE_ID: u32 = 6;
-pub const AERON_ERROR_CODE_MALFORMED_COMMAND: u32 = 7;
-pub const AERON_ERROR_CODE_NOT_SUPPORTED: u32 = 8;
-pub const AERON_ERROR_CODE_UNKNOWN_HOST: u32 = 9;
-pub const AERON_ERROR_CODE_RESOURCE_TEMPORARILY_UNAVAILABLE: u32 = 10;
-pub const AERON_ERROR_CODE_GENERIC_ERROR: u32 = 11;
-pub const AERON_ERROR_CODE_STORAGE_SPACE: u32 = 12;
-pub const AERON_ERROR_CODE_IMAGE_REJECTED: u32 = 13;
-pub const AERON_ERROR_CODE_PUBLICATION_REVOKED: u32 = 14;
 pub const AERON_COMMAND_REMOVE_PUBLICATION_FLAG_REVOKE: u32 = 1;
 pub const AERON_FORMAT_DATE_MAX_LENGTH: u32 = 100;
 pub const AERON_FORMAT_NUMBER_TO_LOCALE_STR_LEN: u32 = 32;
@@ -2513,15 +2453,15 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[doc = " Retrieves the first local socket address for this subscription. If this is not MDS then it will be the one\n representing endpoint for this subscription.\n\n @see aeron_subscription_local_sockaddrs\n @param subscription to query\n @param address for the received address\n @param address_len available length for the copied address.\n @return -1 on error, 0 if address not found, 1 if address is found."]
+    #[doc = " Retrieves the first local socket address for this subscription. If this is not MDS then it will be the one\n representing endpoint for this subscription.\n\n @param subscription to query.\n @param address buffer to hold the resolved endooint.\n @param address_len available length for the copied address.\n @return -1 on error, 0 if address not found, 1 if address is found.\n @see aeron_subscription_local_sockaddrs"]
     pub fn aeron_subscription_resolved_endpoint(
         subscription: *mut aeron_subscription_t,
-        address: *const ::std::os::raw::c_char,
+        address: *mut ::std::os::raw::c_char,
         address_len: usize,
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[doc = " Retrieves the channel URI for this subscription with any wildcard ports filled in. If the channel is not UDP or\n does not have a wildcard port (<code>0</code>), then it will return the original URI.\n\n @param subscription to query\n @param uri buffer to hold the resolved uri\n @param uri_len length of the buffer\n @return -1 on failure or the number of bytes written to the buffer (excluding the NULL terminator). Writing is done\n on a per key basis, so if the buffer was truncated before writing completed, it will only include the byte count up\n to the key that overflowed. However, the invariant that if the number returned >= uri_len, then output will have been\n truncated."]
+    #[doc = " Retrieves the channel URI for this subscription with any wildcard ports filled in. If the channel is not UDP or\n does not have a wildcard port (<code>0</code>), then it will return the original URI.\n\n @param subscription to query.\n @param uri buffer to hold the resolved uri.\n @param uri_len length of the buffer.\n @return -1 on failure or the number of bytes written to the buffer (excluding the NULL terminator). Writing is done\n on a per key basis, so if the buffer was truncated before writing completed, it will only include the byte count up\n to the key that overflowed. However, the invariant that if the number returned >= uri_len, then output will have been\n truncated."]
     pub fn aeron_subscription_try_resolve_channel_endpoint_port(
         subscription: *mut aeron_subscription_t,
         uri: *mut ::std::os::raw::c_char,
@@ -2601,10 +2541,6 @@ unsafe extern "C" {
     pub fn aeron_image_position(image: *mut aeron_image_t) -> i64;
 }
 unsafe extern "C" {
-    #[doc = " Set the subscriber position for this image to indicate where it has been consumed to.\n\n @param image to set the position of.\n @param new_position for the consumption point.\n @deprecated Will be removed in <code>1.53.0</code>."]
-    pub fn aeron_image_set_position(image: *mut aeron_image_t, position: i64) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     #[doc = " Is the current consumed position at the end of the stream?\n\n @param image to check.\n @return true if at the end of the stream or false if not."]
     pub fn aeron_image_is_end_of_stream(image: *mut aeron_image_t) -> bool;
 }
@@ -2657,16 +2593,6 @@ unsafe extern "C" {
         limit_position: i64,
         fragment_limit: usize,
     ) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
-    #[doc = " Peek for new messages in a stream by scanning forward from an initial position. If new messages are found then\n they will be delivered to the handler up to a limited position.\n <p>\n Use a controlled fragment assembler to assemble messages which span multiple fragments. Scans must also\n start at the beginning of a message so that the assembler is reset.\n\n @param image to peek.\n @param initial_position from which to peek forward.\n @param handler to which message fragments are delivered.\n @param clientd to pass to the handler.\n @param limit_position up to which can be scanned.\n @return the resulting position after the scan terminates which is a complete message or -1 for error.\n @deprecated Will be removed in <code>1.53.0</code>."]
-    pub fn aeron_image_controlled_peek(
-        image: *mut aeron_image_t,
-        initial_position: i64,
-        handler: aeron_controlled_fragment_handler_t,
-        clientd: *mut ::std::os::raw::c_void,
-        limit_position: i64,
-    ) -> i64;
 }
 unsafe extern "C" {
     #[doc = " Poll for new messages in a stream. If new messages are found beyond the last consumed position then they\n will be delivered to the handler up to a limited number of bytes.\n <p>\n A scan will terminate if a padding frame is encountered. If first frame in a scan is padding then a block\n for the padding is notified. If the padding comes after the first frame in a scan then the scan terminates\n at the offset the padding frame begins. Padding frames are delivered singularly in a block.\n <p>\n Padding frames may be for a greater range than the limit offset but only the header needs to be valid so\n relevant length of the frame is data header length.\n\n @param image to poll.\n @param handler to which block is delivered.\n @param clientd to pass to the handler.\n @param block_length_limit up to which a block may be in length.\n @return the number of bytes that have been consumed or -1 for error."]
@@ -3135,6 +3061,9 @@ unsafe extern "C" {
 unsafe extern "C" {
     pub fn aeron_thread_set_affinity(name: *const ::std::os::raw::c_char, cpu_affinity_no: u8)
     -> ::std::os::raw::c_int;
+}
+unsafe extern "C" {
+    pub fn aeron_thread_get_affinity(cpu_affinity: *mut u8) -> ::std::os::raw::c_int;
 }
 pub type pthread_cond_t = __darwin_pthread_cond_t;
 pub type pthread_mutex_t = __darwin_pthread_mutex_t;
@@ -3947,6 +3876,22 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn aeron_driver_context_get_threading_mode(context: *mut aeron_driver_context_t) -> aeron_threading_mode_t;
+}
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_thread_naming_enum {
+    AERON_THREAD_NAMING_CLASSIC = 0,
+    AERON_THREAD_NAMING_NEW = 1,
+}
+pub use self::aeron_thread_naming_enum as aeron_thread_naming_t;
+unsafe extern "C" {
+    pub fn aeron_driver_context_set_thread_naming(
+        context: *mut aeron_driver_context_t,
+        naming: aeron_thread_naming_t,
+    ) -> ::std::os::raw::c_int;
+}
+unsafe extern "C" {
+    pub fn aeron_driver_context_get_thread_naming(context: *mut aeron_driver_context_t) -> aeron_thread_naming_t;
 }
 unsafe extern "C" {
     pub fn aeron_driver_context_set_dir_delete_on_start(
@@ -6382,7 +6327,7 @@ const _: () = {
 pub type aeron_status_message_optional_header_t = aeron_status_message_optional_header_stct;
 #[repr(C, packed(4))]
 #[derive(Debug, Default, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct aeron_error_stct {
+pub struct aeron_error_header_stct {
     pub frame_header: aeron_frame_header_t,
     pub session_id: i32,
     pub stream_id: i32,
@@ -6393,19 +6338,24 @@ pub struct aeron_error_stct {
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of aeron_error_stct"][::std::mem::size_of::<aeron_error_stct>() - 40usize];
-    ["Alignment of aeron_error_stct"][::std::mem::align_of::<aeron_error_stct>() - 4usize];
-    ["Offset of field: aeron_error_stct::frame_header"]
-        [::std::mem::offset_of!(aeron_error_stct, frame_header) - 0usize];
-    ["Offset of field: aeron_error_stct::session_id"][::std::mem::offset_of!(aeron_error_stct, session_id) - 8usize];
-    ["Offset of field: aeron_error_stct::stream_id"][::std::mem::offset_of!(aeron_error_stct, stream_id) - 12usize];
-    ["Offset of field: aeron_error_stct::receiver_id"][::std::mem::offset_of!(aeron_error_stct, receiver_id) - 16usize];
-    ["Offset of field: aeron_error_stct::group_tag"][::std::mem::offset_of!(aeron_error_stct, group_tag) - 24usize];
-    ["Offset of field: aeron_error_stct::error_code"][::std::mem::offset_of!(aeron_error_stct, error_code) - 32usize];
-    ["Offset of field: aeron_error_stct::error_length"]
-        [::std::mem::offset_of!(aeron_error_stct, error_length) - 36usize];
+    ["Size of aeron_error_header_stct"][::std::mem::size_of::<aeron_error_header_stct>() - 40usize];
+    ["Alignment of aeron_error_header_stct"][::std::mem::align_of::<aeron_error_header_stct>() - 4usize];
+    ["Offset of field: aeron_error_header_stct::frame_header"]
+        [::std::mem::offset_of!(aeron_error_header_stct, frame_header) - 0usize];
+    ["Offset of field: aeron_error_header_stct::session_id"]
+        [::std::mem::offset_of!(aeron_error_header_stct, session_id) - 8usize];
+    ["Offset of field: aeron_error_header_stct::stream_id"]
+        [::std::mem::offset_of!(aeron_error_header_stct, stream_id) - 12usize];
+    ["Offset of field: aeron_error_header_stct::receiver_id"]
+        [::std::mem::offset_of!(aeron_error_header_stct, receiver_id) - 16usize];
+    ["Offset of field: aeron_error_header_stct::group_tag"]
+        [::std::mem::offset_of!(aeron_error_header_stct, group_tag) - 24usize];
+    ["Offset of field: aeron_error_header_stct::error_code"]
+        [::std::mem::offset_of!(aeron_error_header_stct, error_code) - 32usize];
+    ["Offset of field: aeron_error_header_stct::error_length"]
+        [::std::mem::offset_of!(aeron_error_header_stct, error_length) - 36usize];
 };
-pub type aeron_error_t = aeron_error_stct;
+pub type aeron_error_header_t = aeron_error_header_stct;
 #[repr(C, packed(4))]
 #[derive(Debug, Default, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct aeron_rttm_header_stct {
@@ -6758,10 +6708,17 @@ unsafe extern "C" {
         mapped_file: *mut aeron_mapped_file_t,
         path: *const ::std::os::raw::c_char,
         fill_with_zeroes: bool,
+        page_size: u64,
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
     pub fn aeron_map_existing_file(
+        mapped_file: *mut aeron_mapped_file_t,
+        path: *const ::std::os::raw::c_char,
+    ) -> ::std::os::raw::c_int;
+}
+unsafe extern "C" {
+    pub fn aeron_map_readonly_file(
         mapped_file: *mut aeron_mapped_file_t,
         path: *const ::std::os::raw::c_char,
     ) -> ::std::os::raw::c_int;
@@ -8363,7 +8320,14 @@ unsafe extern "C" {
     pub fn aeron_cnc_version_volatile(metadata: *mut aeron_cnc_metadata_t) -> i32;
 }
 unsafe extern "C" {
-    pub fn aeron_cnc_map_file_and_load_metadata(
+    pub fn aeron_cnc_map_existing_file_and_load_metadata(
+        dir: *const ::std::os::raw::c_char,
+        mapped_file: *mut aeron_mapped_file_t,
+        metadata: *mut *mut aeron_cnc_metadata_t,
+    ) -> aeron_cnc_load_result_t;
+}
+unsafe extern "C" {
+    pub fn aeron_cnc_map_readonly_file_and_load_metadata(
         dir: *const ::std::os::raw::c_char,
         mapped_file: *mut aeron_mapped_file_t,
         metadata: *mut *mut aeron_cnc_metadata_t,
@@ -8821,6 +8785,7 @@ pub type aeron_receive_channel_loss_supplier_func_t = ::std::option::Option<
 pub struct aeron_driver_context_stct {
     pub aeron_dir: [::std::os::raw::c_char; 4096usize],
     pub threading_mode: aeron_threading_mode_t,
+    pub thread_naming: aeron_thread_naming_t,
     pub receiver_group_consideration: aeron_inferable_boolean_t,
     pub dirs_delete_on_start: bool,
     pub dirs_delete_on_shutdown: bool,
@@ -9146,32 +9111,34 @@ const _: () = {
         [::std::mem::offset_of!(aeron_driver_context_stct, aeron_dir) - 0usize];
     ["Offset of field: aeron_driver_context_stct::threading_mode"]
         [::std::mem::offset_of!(aeron_driver_context_stct, threading_mode) - 4096usize];
+    ["Offset of field: aeron_driver_context_stct::thread_naming"]
+        [::std::mem::offset_of!(aeron_driver_context_stct, thread_naming) - 4100usize];
     ["Offset of field: aeron_driver_context_stct::receiver_group_consideration"]
-        [::std::mem::offset_of!(aeron_driver_context_stct, receiver_group_consideration) - 4100usize];
+        [::std::mem::offset_of!(aeron_driver_context_stct, receiver_group_consideration) - 4104usize];
     ["Offset of field: aeron_driver_context_stct::dirs_delete_on_start"]
-        [::std::mem::offset_of!(aeron_driver_context_stct, dirs_delete_on_start) - 4104usize];
+        [::std::mem::offset_of!(aeron_driver_context_stct, dirs_delete_on_start) - 4108usize];
     ["Offset of field: aeron_driver_context_stct::dirs_delete_on_shutdown"]
-        [::std::mem::offset_of!(aeron_driver_context_stct, dirs_delete_on_shutdown) - 4105usize];
+        [::std::mem::offset_of!(aeron_driver_context_stct, dirs_delete_on_shutdown) - 4109usize];
     ["Offset of field: aeron_driver_context_stct::warn_if_dirs_exist"]
-        [::std::mem::offset_of!(aeron_driver_context_stct, warn_if_dirs_exist) - 4106usize];
+        [::std::mem::offset_of!(aeron_driver_context_stct, warn_if_dirs_exist) - 4110usize];
     ["Offset of field: aeron_driver_context_stct::term_buffer_sparse_file"]
-        [::std::mem::offset_of!(aeron_driver_context_stct, term_buffer_sparse_file) - 4107usize];
+        [::std::mem::offset_of!(aeron_driver_context_stct, term_buffer_sparse_file) - 4111usize];
     ["Offset of field: aeron_driver_context_stct::perform_storage_checks"]
-        [::std::mem::offset_of!(aeron_driver_context_stct, perform_storage_checks) - 4108usize];
+        [::std::mem::offset_of!(aeron_driver_context_stct, perform_storage_checks) - 4112usize];
     ["Offset of field: aeron_driver_context_stct::spies_simulate_connection"]
-        [::std::mem::offset_of!(aeron_driver_context_stct, spies_simulate_connection) - 4109usize];
+        [::std::mem::offset_of!(aeron_driver_context_stct, spies_simulate_connection) - 4113usize];
     ["Offset of field: aeron_driver_context_stct::print_configuration_on_start"]
-        [::std::mem::offset_of!(aeron_driver_context_stct, print_configuration_on_start) - 4110usize];
+        [::std::mem::offset_of!(aeron_driver_context_stct, print_configuration_on_start) - 4114usize];
     ["Offset of field: aeron_driver_context_stct::reliable_stream"]
-        [::std::mem::offset_of!(aeron_driver_context_stct, reliable_stream) - 4111usize];
+        [::std::mem::offset_of!(aeron_driver_context_stct, reliable_stream) - 4115usize];
     ["Offset of field: aeron_driver_context_stct::tether_subscriptions"]
-        [::std::mem::offset_of!(aeron_driver_context_stct, tether_subscriptions) - 4112usize];
+        [::std::mem::offset_of!(aeron_driver_context_stct, tether_subscriptions) - 4116usize];
     ["Offset of field: aeron_driver_context_stct::rejoin_stream"]
-        [::std::mem::offset_of!(aeron_driver_context_stct, rejoin_stream) - 4113usize];
+        [::std::mem::offset_of!(aeron_driver_context_stct, rejoin_stream) - 4117usize];
     ["Offset of field: aeron_driver_context_stct::ats_enabled"]
-        [::std::mem::offset_of!(aeron_driver_context_stct, ats_enabled) - 4114usize];
+        [::std::mem::offset_of!(aeron_driver_context_stct, ats_enabled) - 4118usize];
     ["Offset of field: aeron_driver_context_stct::connect_enabled"]
-        [::std::mem::offset_of!(aeron_driver_context_stct, connect_enabled) - 4115usize];
+        [::std::mem::offset_of!(aeron_driver_context_stct, connect_enabled) - 4119usize];
     ["Offset of field: aeron_driver_context_stct::driver_timeout_ms"]
         [::std::mem::offset_of!(aeron_driver_context_stct, driver_timeout_ms) - 4120usize];
     ["Offset of field: aeron_driver_context_stct::client_liveness_timeout_ns"]
@@ -12566,6 +12533,7 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn aeron_send_channel_endpoint_on_nak(
+        sender: *mut aeron_driver_sender_t,
         endpoint: *mut aeron_send_channel_endpoint_t,
         buffer: *mut u8,
         length: usize,
@@ -12584,6 +12552,7 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn aeron_send_channel_endpoint_on_error(
+        sender: *mut aeron_driver_sender_t,
         endpoint: *mut aeron_send_channel_endpoint_t,
         conductor_proxy: *mut aeron_driver_conductor_proxy_t,
         buffer: *mut u8,
@@ -13358,6 +13327,7 @@ unsafe extern "C" {
         buffer: *mut u8,
         length: usize,
         addr: *mut sockaddr_storage,
+        media_receive_timestamp: *mut timespec,
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
@@ -13735,6 +13705,7 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn aeron_receive_channel_endpoint_on_setup(
+        receiver: *mut aeron_driver_receiver_t,
         endpoint: *mut aeron_receive_channel_endpoint_t,
         destination: *mut aeron_receive_destination_t,
         buffer: *mut u8,
@@ -14218,6 +14189,7 @@ pub struct aeron_publication_image_stct {
     pub time_of_last_packet_ns: i64,
     pub invalidation_reason: *const ::std::os::raw::c_char,
     pub is_sm_enabled: bool,
+    pub is_next_sm_deadline_reset_requested: bool,
     pub response_session_id: i64,
     pub is_end_of_stream: bool,
     pub is_sending_eos_sm: bool,
@@ -14230,6 +14202,7 @@ pub struct aeron_publication_image_stct {
     pub loss_gap_fills_counter: *mut i64,
     pub mapped_bytes_counter: *mut i64,
     pub publication_images_revoked_counter: *mut i64,
+    pub invalid_packets_counter: *mut i64,
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -14411,7 +14384,7 @@ const _: () = {
 };
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of aeron_publication_image_stct"][::std::mem::size_of::<aeron_publication_image_stct>() - 1056usize];
+    ["Size of aeron_publication_image_stct"][::std::mem::size_of::<aeron_publication_image_stct>() - 1064usize];
     ["Alignment of aeron_publication_image_stct"][::std::mem::align_of::<aeron_publication_image_stct>() - 8usize];
     ["Offset of field: aeron_publication_image_stct::padding_before"]
         [::std::mem::offset_of!(aeron_publication_image_stct, padding_before) - 0usize];
@@ -14511,6 +14484,8 @@ const _: () = {
         [::std::mem::offset_of!(aeron_publication_image_stct, invalidation_reason) - 960usize];
     ["Offset of field: aeron_publication_image_stct::is_sm_enabled"]
         [::std::mem::offset_of!(aeron_publication_image_stct, is_sm_enabled) - 968usize];
+    ["Offset of field: aeron_publication_image_stct::is_next_sm_deadline_reset_requested"]
+        [::std::mem::offset_of!(aeron_publication_image_stct, is_next_sm_deadline_reset_requested) - 969usize];
     ["Offset of field: aeron_publication_image_stct::response_session_id"]
         [::std::mem::offset_of!(aeron_publication_image_stct, response_session_id) - 976usize];
     ["Offset of field: aeron_publication_image_stct::is_end_of_stream"]
@@ -14535,6 +14510,8 @@ const _: () = {
         [::std::mem::offset_of!(aeron_publication_image_stct, mapped_bytes_counter) - 1040usize];
     ["Offset of field: aeron_publication_image_stct::publication_images_revoked_counter"]
         [::std::mem::offset_of!(aeron_publication_image_stct, publication_images_revoked_counter) - 1048usize];
+    ["Offset of field: aeron_publication_image_stct::invalid_packets_counter"]
+        [::std::mem::offset_of!(aeron_publication_image_stct, invalid_packets_counter) - 1056usize];
 };
 impl Default for aeron_publication_image_stct {
     fn default() -> Self {
@@ -14605,6 +14582,7 @@ unsafe extern "C" {
         buffer: *const u8,
         length: usize,
         addr: *mut sockaddr_storage,
+        media_receive_timestamp: *mut timespec,
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
@@ -14891,6 +14869,14 @@ impl Default for aeron_subscribable_list_entry_stct {
     }
 }
 pub type aeron_subscribable_list_entry_t = aeron_subscribable_list_entry_stct;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_subscription_link_setup_status_enum {
+    AERON_SUBSCRIPTION_LINK_SETUP_STATUS_PENDING = 0,
+    AERON_SUBSCRIPTION_LINK_SETUP_STATUS_COMPLETE = 1,
+    AERON_SUBSCRIPTION_LINK_SETUP_STATUS_ERROR = 2,
+}
+pub use self::aeron_subscription_link_setup_status_enum as aeron_subscription_link_setup_status_t;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct aeron_subscription_link_stct {
@@ -14901,6 +14887,8 @@ pub struct aeron_subscription_link_stct {
     pub is_rejoin: bool,
     pub has_session_id: bool,
     pub is_response: bool,
+    pub is_setup_complete: bool,
+    pub setup_status: aeron_subscription_link_setup_status_t,
     pub group: aeron_inferable_boolean_t,
     pub stream_id: i32,
     pub session_id: i32,
@@ -14942,7 +14930,7 @@ impl Default for aeron_subscription_link_stct_subscribable_list_stct {
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of aeron_subscription_link_stct"][::std::mem::size_of::<aeron_subscription_link_stct>() - 4176usize];
+    ["Size of aeron_subscription_link_stct"][::std::mem::size_of::<aeron_subscription_link_stct>() - 4184usize];
     ["Alignment of aeron_subscription_link_stct"][::std::mem::align_of::<aeron_subscription_link_stct>() - 8usize];
     ["Offset of field: aeron_subscription_link_stct::channel"]
         [::std::mem::offset_of!(aeron_subscription_link_stct, channel) - 0usize];
@@ -14958,24 +14946,28 @@ const _: () = {
         [::std::mem::offset_of!(aeron_subscription_link_stct, has_session_id) - 4100usize];
     ["Offset of field: aeron_subscription_link_stct::is_response"]
         [::std::mem::offset_of!(aeron_subscription_link_stct, is_response) - 4101usize];
+    ["Offset of field: aeron_subscription_link_stct::is_setup_complete"]
+        [::std::mem::offset_of!(aeron_subscription_link_stct, is_setup_complete) - 4102usize];
+    ["Offset of field: aeron_subscription_link_stct::setup_status"]
+        [::std::mem::offset_of!(aeron_subscription_link_stct, setup_status) - 4104usize];
     ["Offset of field: aeron_subscription_link_stct::group"]
-        [::std::mem::offset_of!(aeron_subscription_link_stct, group) - 4104usize];
+        [::std::mem::offset_of!(aeron_subscription_link_stct, group) - 4108usize];
     ["Offset of field: aeron_subscription_link_stct::stream_id"]
-        [::std::mem::offset_of!(aeron_subscription_link_stct, stream_id) - 4108usize];
+        [::std::mem::offset_of!(aeron_subscription_link_stct, stream_id) - 4112usize];
     ["Offset of field: aeron_subscription_link_stct::session_id"]
-        [::std::mem::offset_of!(aeron_subscription_link_stct, session_id) - 4112usize];
+        [::std::mem::offset_of!(aeron_subscription_link_stct, session_id) - 4116usize];
     ["Offset of field: aeron_subscription_link_stct::channel_length"]
-        [::std::mem::offset_of!(aeron_subscription_link_stct, channel_length) - 4116usize];
+        [::std::mem::offset_of!(aeron_subscription_link_stct, channel_length) - 4120usize];
     ["Offset of field: aeron_subscription_link_stct::registration_id"]
-        [::std::mem::offset_of!(aeron_subscription_link_stct, registration_id) - 4120usize];
+        [::std::mem::offset_of!(aeron_subscription_link_stct, registration_id) - 4128usize];
     ["Offset of field: aeron_subscription_link_stct::client_id"]
-        [::std::mem::offset_of!(aeron_subscription_link_stct, client_id) - 4128usize];
+        [::std::mem::offset_of!(aeron_subscription_link_stct, client_id) - 4136usize];
     ["Offset of field: aeron_subscription_link_stct::endpoint"]
-        [::std::mem::offset_of!(aeron_subscription_link_stct, endpoint) - 4136usize];
+        [::std::mem::offset_of!(aeron_subscription_link_stct, endpoint) - 4144usize];
     ["Offset of field: aeron_subscription_link_stct::spy_channel"]
-        [::std::mem::offset_of!(aeron_subscription_link_stct, spy_channel) - 4144usize];
+        [::std::mem::offset_of!(aeron_subscription_link_stct, spy_channel) - 4152usize];
     ["Offset of field: aeron_subscription_link_stct::subscribable_list"]
-        [::std::mem::offset_of!(aeron_subscription_link_stct, subscribable_list) - 4152usize];
+        [::std::mem::offset_of!(aeron_subscription_link_stct, subscribable_list) - 4160usize];
 };
 impl Default for aeron_subscription_link_stct {
     fn default() -> Self {
@@ -17421,6 +17413,15 @@ pub enum aeron_driver_native_resource_agent_command_state_enum {
     AERON_DRIVER_NATIVE_RESOURCE_AGENT_COMMAND_STATE_FAILED = 2,
 }
 pub use self::aeron_driver_native_resource_agent_command_state_enum as aeron_driver_native_resource_agent_command_state_t;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum aeron_driver_native_resource_agent_command_type_enum {
+    AERON_DRIVER_NATIVE_RESOURCE_AGENT_COMMAND_TYPE_RESOLVE_ADDRESS = 1,
+    AERON_DRIVER_NATIVE_RESOURCE_AGENT_COMMAND_TYPE_PARSE_CHANNEL = 2,
+    AERON_DRIVER_NATIVE_RESOURCE_AGENT_COMMAND_TYPE_FREE_LOG_BUFFER = 3,
+    AERON_DRIVER_NATIVE_RESOURCE_AGENT_COMMAND_TYPE_MAP_LOG_BUFFER = 4,
+}
+pub use self::aeron_driver_native_resource_agent_command_type_enum as aeron_driver_native_resource_agent_command_type_t;
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct aeron_driver_native_resource_agent_command_result_stct {
@@ -17520,49 +17521,26 @@ impl Default for aeron_driver_native_resource_agent_proxy_stct {
     }
 }
 #[repr(C)]
-#[derive(Debug, Default, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct aeron_driver_native_resource_agent_proxy_cmd_stct {
-    pub execute: ::std::option::Option<
-        unsafe extern "C" fn(
-            native_resource_agent: *mut aeron_driver_native_resource_agent_t,
-            cmd: *mut aeron_driver_native_resource_agent_proxy_cmd_stct,
-        ),
-    >,
-}
-#[allow(clippy::unnecessary_operation, clippy::identity_op)]
-const _: () = {
-    ["Size of aeron_driver_native_resource_agent_proxy_cmd_stct"]
-        [::std::mem::size_of::<aeron_driver_native_resource_agent_proxy_cmd_stct>() - 8usize];
-    ["Alignment of aeron_driver_native_resource_agent_proxy_cmd_stct"]
-        [::std::mem::align_of::<aeron_driver_native_resource_agent_proxy_cmd_stct>() - 8usize];
-    ["Offset of field: aeron_driver_native_resource_agent_proxy_cmd_stct::execute"]
-        [::std::mem::offset_of!(aeron_driver_native_resource_agent_proxy_cmd_stct, execute) - 0usize];
-};
-pub type aeron_driver_native_resource_agent_proxy_cmd_t = aeron_driver_native_resource_agent_proxy_cmd_stct;
-#[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct aeron_driver_native_resource_agent_proxy_cmd_resolve_address_stct {
-    pub base: aeron_driver_native_resource_agent_proxy_cmd_t,
     pub address_resolution_params: *mut aeron_name_resolver_async_resolve_t,
     pub result: *mut aeron_driver_native_resource_agent_command_result_t,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
     ["Size of aeron_driver_native_resource_agent_proxy_cmd_resolve_address_stct"]
-        [::std::mem::size_of::<aeron_driver_native_resource_agent_proxy_cmd_resolve_address_stct>() - 24usize];
+        [::std::mem::size_of::<aeron_driver_native_resource_agent_proxy_cmd_resolve_address_stct>() - 16usize];
     ["Alignment of aeron_driver_native_resource_agent_proxy_cmd_resolve_address_stct"]
         [::std::mem::align_of::<aeron_driver_native_resource_agent_proxy_cmd_resolve_address_stct>() - 8usize];
-    ["Offset of field: aeron_driver_native_resource_agent_proxy_cmd_resolve_address_stct::base"]
-        [::std::mem::offset_of!(aeron_driver_native_resource_agent_proxy_cmd_resolve_address_stct, base) - 0usize];
     ["Offset of field: aeron_driver_native_resource_agent_proxy_cmd_resolve_address_stct::address_resolution_params"][::std::mem::offset_of!(
         aeron_driver_native_resource_agent_proxy_cmd_resolve_address_stct,
         address_resolution_params
     )
-        - 8usize];
+        - 0usize];
     ["Offset of field: aeron_driver_native_resource_agent_proxy_cmd_resolve_address_stct::result"][::std::mem::offset_of!(
         aeron_driver_native_resource_agent_proxy_cmd_resolve_address_stct,
         result
-    ) - 16usize];
+    ) - 8usize];
 };
 impl Default for aeron_driver_native_resource_agent_proxy_cmd_resolve_address_stct {
     fn default() -> Self {
@@ -17578,24 +17556,21 @@ pub type aeron_driver_native_resource_agent_proxy_cmd_resolve_address_t =
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct aeron_driver_native_resource_agent_proxy_cmd_parse_channel_stct {
-    pub base: aeron_driver_native_resource_agent_proxy_cmd_t,
     pub async_parse: *mut aeron_udp_channel_async_parse_t,
     pub result: *mut aeron_driver_native_resource_agent_command_result_t,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
     ["Size of aeron_driver_native_resource_agent_proxy_cmd_parse_channel_stct"]
-        [::std::mem::size_of::<aeron_driver_native_resource_agent_proxy_cmd_parse_channel_stct>() - 24usize];
+        [::std::mem::size_of::<aeron_driver_native_resource_agent_proxy_cmd_parse_channel_stct>() - 16usize];
     ["Alignment of aeron_driver_native_resource_agent_proxy_cmd_parse_channel_stct"]
         [::std::mem::align_of::<aeron_driver_native_resource_agent_proxy_cmd_parse_channel_stct>() - 8usize];
-    ["Offset of field: aeron_driver_native_resource_agent_proxy_cmd_parse_channel_stct::base"]
-        [::std::mem::offset_of!(aeron_driver_native_resource_agent_proxy_cmd_parse_channel_stct, base) - 0usize];
     ["Offset of field: aeron_driver_native_resource_agent_proxy_cmd_parse_channel_stct::async_parse"][::std::mem::offset_of!(
         aeron_driver_native_resource_agent_proxy_cmd_parse_channel_stct,
         async_parse
-    ) - 8usize];
+    ) - 0usize];
     ["Offset of field: aeron_driver_native_resource_agent_proxy_cmd_parse_channel_stct::result"]
-        [::std::mem::offset_of!(aeron_driver_native_resource_agent_proxy_cmd_parse_channel_stct, result) - 16usize];
+        [::std::mem::offset_of!(aeron_driver_native_resource_agent_proxy_cmd_parse_channel_stct, result) - 8usize];
 };
 impl Default for aeron_driver_native_resource_agent_proxy_cmd_parse_channel_stct {
     fn default() -> Self {
@@ -17611,26 +17586,23 @@ pub type aeron_driver_native_resource_agent_proxy_cmd_parse_channel_t =
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct aeron_driver_native_resource_agent_proxy_cmd_free_log_buffer_stct {
-    pub base: aeron_driver_native_resource_agent_proxy_cmd_t,
     pub mapped_raw_log: *mut aeron_mapped_raw_log_t,
     pub log_file_name: *const ::std::os::raw::c_char,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
     ["Size of aeron_driver_native_resource_agent_proxy_cmd_free_log_buffer_stct"]
-        [::std::mem::size_of::<aeron_driver_native_resource_agent_proxy_cmd_free_log_buffer_stct>() - 24usize];
+        [::std::mem::size_of::<aeron_driver_native_resource_agent_proxy_cmd_free_log_buffer_stct>() - 16usize];
     ["Alignment of aeron_driver_native_resource_agent_proxy_cmd_free_log_buffer_stct"]
         [::std::mem::align_of::<aeron_driver_native_resource_agent_proxy_cmd_free_log_buffer_stct>() - 8usize];
-    ["Offset of field: aeron_driver_native_resource_agent_proxy_cmd_free_log_buffer_stct::base"]
-        [::std::mem::offset_of!(aeron_driver_native_resource_agent_proxy_cmd_free_log_buffer_stct, base) - 0usize];
     ["Offset of field: aeron_driver_native_resource_agent_proxy_cmd_free_log_buffer_stct::mapped_raw_log"][::std::mem::offset_of!(
         aeron_driver_native_resource_agent_proxy_cmd_free_log_buffer_stct,
         mapped_raw_log
-    ) - 8usize];
+    ) - 0usize];
     ["Offset of field: aeron_driver_native_resource_agent_proxy_cmd_free_log_buffer_stct::log_file_name"][::std::mem::offset_of!(
         aeron_driver_native_resource_agent_proxy_cmd_free_log_buffer_stct,
         log_file_name
-    ) - 16usize];
+    ) - 8usize];
 };
 impl Default for aeron_driver_native_resource_agent_proxy_cmd_free_log_buffer_stct {
     fn default() -> Self {
@@ -17646,7 +17618,6 @@ pub type aeron_driver_native_resource_agent_proxy_cmd_free_log_buffer_t =
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_stct {
-    pub base: aeron_driver_native_resource_agent_proxy_cmd_t,
     pub log_file_name: *const ::std::os::raw::c_char,
     pub term_length: usize,
     pub is_sparse: bool,
@@ -17655,25 +17626,23 @@ pub struct aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_stct {
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
     ["Size of aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_stct"]
-        [::std::mem::size_of::<aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_stct>() - 40usize];
+        [::std::mem::size_of::<aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_stct>() - 32usize];
     ["Alignment of aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_stct"]
         [::std::mem::align_of::<aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_stct>() - 8usize];
-    ["Offset of field: aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_stct::base"]
-        [::std::mem::offset_of!(aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_stct, base) - 0usize];
     ["Offset of field: aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_stct::log_file_name"][::std::mem::offset_of!(
         aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_stct,
         log_file_name
-    ) - 8usize];
+    ) - 0usize];
     ["Offset of field: aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_stct::term_length"][::std::mem::offset_of!(
         aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_stct,
         term_length
-    ) - 16usize];
+    ) - 8usize];
     ["Offset of field: aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_stct::is_sparse"][::std::mem::offset_of!(
         aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_stct,
         is_sparse
-    ) - 24usize];
+    ) - 16usize];
     ["Offset of field: aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_stct::result"]
-        [::std::mem::offset_of!(aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_stct, result) - 32usize];
+        [::std::mem::offset_of!(aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_stct, result) - 24usize];
 };
 impl Default for aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_stct {
     fn default() -> Self {
@@ -17769,25 +17738,25 @@ unsafe extern "C" {
 unsafe extern "C" {
     pub fn aeron_driver_native_resource_agent_on_resolve_address(
         native_resource_agent: *mut aeron_driver_native_resource_agent_t,
-        cmd: *mut aeron_driver_native_resource_agent_proxy_cmd_t,
+        cmd: *mut aeron_driver_native_resource_agent_proxy_cmd_resolve_address_t,
     );
 }
 unsafe extern "C" {
     pub fn aeron_driver_native_resource_agent_on_parse_udp_channel(
         native_resource_agent: *mut aeron_driver_native_resource_agent_t,
-        cmd: *mut aeron_driver_native_resource_agent_proxy_cmd_t,
+        cmd: *mut aeron_driver_native_resource_agent_proxy_cmd_parse_channel_t,
     );
 }
 unsafe extern "C" {
     pub fn aeron_driver_native_resource_agent_on_free_log_buffer(
         native_resource_agent: *mut aeron_driver_native_resource_agent_t,
-        cmd: *mut aeron_driver_native_resource_agent_proxy_cmd_t,
+        cmd: *mut aeron_driver_native_resource_agent_proxy_cmd_free_log_buffer_t,
     );
 }
 unsafe extern "C" {
     pub fn aeron_driver_native_resource_agent_on_map_log_buffer(
         native_resource_agent: *mut aeron_driver_native_resource_agent_t,
-        cmd: *mut aeron_driver_native_resource_agent_proxy_cmd_t,
+        cmd: *mut aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_t,
     );
 }
 #[repr(C)]
