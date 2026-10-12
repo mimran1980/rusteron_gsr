@@ -415,7 +415,7 @@ mod tests {
             let minor = unsafe { crate::aeron_version_minor() };
             let patch = unsafe { crate::aeron_version_patch() };
 
-            let cargo_version = "1.52.2";
+            let cargo_version = "1.53.3";
             let aeron_version = format!("{}.{}.{}", major, minor, patch);
             assert_eq!(aeron_version, cargo_version);
 
@@ -4299,7 +4299,7 @@ mod tests {
         // flow to sub B is **not** expected to stop here.
         //
         // Confirmed upstream bug (still present in aeron-io/aeron `master` as of this
-        // writing, and in the vendored 1.52.2 submodule): `aeron_client_conductor_
+        // writing, and in the vendored 1.53.3 submodule): `aeron_client_conductor_
         // on_cmd_destination_by_id()` in `aeron-client/src/main/c/aeron_client_conductor.c`
         // populates `command->destination_registration_id` with the *parent publication's*
         // own `resource_registration_id` instead of the destination's actual

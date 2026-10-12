@@ -18,7 +18,6 @@ fn run_gradle_build_if_missing(aeron_path: &Path) {
         Command::new(gradle)
             .current_dir(dir)
             .args([
-                ":aeron-agent:jar",
                 ":aeron-samples:jar",
                 ":aeron-archive:jar",
                 ":aeron-all:jar",

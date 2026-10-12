@@ -614,6 +614,19 @@ mod tests {
             AeronArchiveError::parse("errorCode=99, ?").code,
             AeronArchiveErrorCode::Unknown(99)
         );
+        // client-mapped codes (wire + 200) as embedded by the error handler since 1.53.3
+        assert_eq!(
+            AeronArchiveError::parse("response for correlationId=7, errorCode=205, error: x").code,
+            AeronArchiveErrorCode::UnknownRecording
+        );
+        assert_eq!(
+            AeronArchiveError::parse("errorCode=216, x").code,
+            AeronArchiveErrorCode::InvalidPosition
+        );
+        assert_eq!(
+            AeronArchiveError::parse("errorCode=217, x").code,
+            AeronArchiveErrorCode::Unknown(217)
+        );
         // no code present -> Generic
         assert_eq!(
             AeronArchiveError::parse("subscription to archive is not connected").code,
@@ -633,16 +646,16 @@ mod tests {
         }
     }
 
-    /// Pins the enum to the aeron C header: every `ARCHIVE_ERROR_CODE_*` constant the
-    /// submodule defines must map to a named variant. When `just update-aeron-version`
+    /// Pins the enum to the aeron C source: every `ARCHIVE_ERROR_CODE_*` define the
+    /// submodule has must map to a named variant. When `just update-aeron-version`
     /// pulls a release that adds or renumbers codes, this fails and points at the gap.
     #[test]
-    fn archive_error_codes_match_the_c_header() {
+    fn archive_error_codes_match_the_c_source() {
         let header = std::fs::read_to_string(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/aeron/aeron-archive/src/main/c/client/aeron_archive.h"
+            "/aeron/aeron-archive/src/main/c/client/aeron_archive_client.c"
         ))
-        .expect("aeron submodule header missing");
+        .expect("aeron submodule source missing");
         let mut found = 0;
         for line in header.lines() {
             let Some(rest) = line.trim().strip_prefix("#define ARCHIVE_ERROR_CODE_") else {
@@ -660,13 +673,18 @@ mod tests {
             assert_ne!(
                 parsed,
                 AeronArchiveErrorCode::Unknown(value),
-                "C header defines ARCHIVE_ERROR_CODE_{name} = {value} but AeronArchiveErrorCode has no variant for it"
+                "C source defines ARCHIVE_ERROR_CODE_{name} = {value} but AeronArchiveErrorCode has no variant for it"
+            );
+            assert_eq!(
+                format!("{parsed:?}").to_lowercase(),
+                name.replace('_', "").to_lowercase(),
+                "ARCHIVE_ERROR_CODE_{name} = {value} maps to the wrong AeronArchiveErrorCode variant"
             );
             found += 1;
         }
         assert!(
-            found >= 14,
-            "expected at least 14 ARCHIVE_ERROR_CODE_* defines, found {found}"
+            found >= 17,
+            "expected at least 17 ARCHIVE_ERROR_CODE_* defines, found {found}"
         );
     }
     use serial_test::serial;
@@ -1039,7 +1057,7 @@ mod tests {
 
         let aeron_version = format!("{}.{}.{}", major, minor, patch);
 
-        let cargo_version = "1.52.2";
+        let cargo_version = "1.53.3";
         assert_eq!(aeron_version, cargo_version);
     }
 
