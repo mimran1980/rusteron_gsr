@@ -8902,6 +8902,35 @@ impl AeronControlledFragmentAssembler {
             result.into()
         }
     }
+    #[inline]
+    #[doc = "Free an existing session buffer to reduce memory pressure when an image goes inactive or no more"]
+    #[doc = " large messages are expected."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `session_id` to have its buffer freed."]
+    #[doc = " \n# Return\n true if a buffer has been freed otherwise false."]
+    pub fn delete_session_buffer(&self, session_id: i32) -> bool {
+        unsafe {
+            #[cfg(feature = "log-c-bindings")]
+            log::info!(
+                "{}({})",
+                stringify!(aeron_controlled_fragment_assembler_delete_session_buffer),
+                [
+                    concat!(
+                        "assembler",
+                        ": ",
+                        stringify!(*mut aeron_controlled_fragment_assembler_t)
+                    )
+                    .to_string(),
+                    format!("{} = {:?}", "session_id", session_id)
+                ]
+                .join(", ")
+            );
+            let result = aeron_controlled_fragment_assembler_delete_session_buffer(self.get_inner(), session_id.into());
+            #[cfg(feature = "log-c-bindings")]
+            log::info!("  -> {:?}", result);
+            result.into()
+        }
+    }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_controlled_fragment_assembler_t {
         self.inner.get()
@@ -33760,6 +33789,30 @@ impl AeronFragmentAssembler {
                 buffer.len(),
                 header.get_inner(),
             );
+            #[cfg(feature = "log-c-bindings")]
+            log::info!("  -> {:?}", result);
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Free an existing session buffer to reduce memory pressure when an image goes inactive or no more"]
+    #[doc = " large messages are expected."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `session_id` to have its buffer freed."]
+    #[doc = " \n# Return\n true if a buffer has been freed otherwise false."]
+    pub fn delete_session_buffer(&self, session_id: i32) -> bool {
+        unsafe {
+            #[cfg(feature = "log-c-bindings")]
+            log::info!(
+                "{}({})",
+                stringify!(aeron_fragment_assembler_delete_session_buffer),
+                [
+                    concat!("assembler", ": ", stringify!(*mut aeron_fragment_assembler_t)).to_string(),
+                    format!("{} = {:?}", "session_id", session_id)
+                ]
+                .join(", ")
+            );
+            let result = aeron_fragment_assembler_delete_session_buffer(self.get_inner(), session_id.into());
             #[cfg(feature = "log-c-bindings")]
             log::info!("  -> {:?}", result);
             result.into()

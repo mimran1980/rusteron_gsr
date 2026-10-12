@@ -29,10 +29,14 @@ pub enum AeronArchiveErrorCode {
 }
 
 impl AeronArchiveErrorCode {
-    /// Maps the wire error code (`io.aeron.archive.client.ArchiveException`) to its
+    /// Maps an archive error code (`io.aeron.archive.client.ArchiveException`) to its
     /// variant. The `ARCHIVE_ERROR_CODE_*` defines are private to `aeron_archive_client.c`
     /// since Aeron 1.53, so the numbers are mirrored here and pinned by the
     /// `archive_error_codes_match_the_c_source` test.
+    ///
+    /// Accepts both the wire codes (0-16) and the client codes (200-216,
+    /// `AERON_ARCHIVE_ERROR_CODE_*` = wire + 200) that the C archive client's error
+    /// handler reports and embeds in its `errorCode=N` text since Aeron 1.53.3.
     pub fn from_code(code: i32) -> Self {
         match code {
             0 => Self::Generic,
@@ -52,6 +56,7 @@ impl AeronArchiveErrorCode {
             14 => Self::ReplicationConnectionFailure,
             15 => Self::EmptyRecording,
             16 => Self::InvalidPosition,
+            200..=216 => Self::from_code(code - 200),
             other => Self::Unknown(other),
         }
     }

@@ -614,6 +614,19 @@ mod tests {
             AeronArchiveError::parse("errorCode=99, ?").code,
             AeronArchiveErrorCode::Unknown(99)
         );
+        // client-mapped codes (wire + 200) as embedded by the error handler since 1.53.3
+        assert_eq!(
+            AeronArchiveError::parse("response for correlationId=7, errorCode=205, error: x").code,
+            AeronArchiveErrorCode::UnknownRecording
+        );
+        assert_eq!(
+            AeronArchiveError::parse("errorCode=216, x").code,
+            AeronArchiveErrorCode::InvalidPosition
+        );
+        assert_eq!(
+            AeronArchiveError::parse("errorCode=217, x").code,
+            AeronArchiveErrorCode::Unknown(217)
+        );
         // no code present -> Generic
         assert_eq!(
             AeronArchiveError::parse("subscription to archive is not connected").code,
@@ -1044,7 +1057,7 @@ mod tests {
 
         let aeron_version = format!("{}.{}.{}", major, minor, patch);
 
-        let cargo_version = "1.53.2";
+        let cargo_version = "1.53.3";
         assert_eq!(aeron_version, cargo_version);
     }
 

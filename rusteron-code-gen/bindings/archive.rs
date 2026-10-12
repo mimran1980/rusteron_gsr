@@ -2437,6 +2437,13 @@ unsafe extern "C" {
     );
 }
 unsafe extern "C" {
+    #[doc = " Free an existing session buffer to reduce memory pressure when an image goes inactive or no more\n large messages are expected.\n\n @param assembler holding the session buffer.\n @param session_id to have its buffer freed.\n @return true if a buffer has been freed otherwise false."]
+    pub fn aeron_fragment_assembler_delete_session_buffer(
+        assembler: *mut aeron_fragment_assembler_t,
+        session_id: i32,
+    ) -> bool;
+}
+unsafe extern "C" {
     #[doc = " Create a controlled fragment assembler for use with a subscription.\n\n @param assembler to be set when created successfully.\n @param delegate to call on completed\n @param delegate_clientd to pass to delegate handler.\n @return 0 for success and -1 for error."]
     pub fn aeron_controlled_fragment_assembler_create(
         assembler: *mut *mut aeron_controlled_fragment_assembler_t,
@@ -2458,6 +2465,13 @@ unsafe extern "C" {
         length: usize,
         header: *mut aeron_header_t,
     ) -> aeron_controlled_fragment_handler_action_t;
+}
+unsafe extern "C" {
+    #[doc = " Free an existing session buffer to reduce memory pressure when an image goes inactive or no more\n large messages are expected.\n\n @param assembler holding the session buffer.\n @param session_id to have its buffer freed.\n @return true if a buffer has been freed otherwise false."]
+    pub fn aeron_controlled_fragment_assembler_delete_session_buffer(
+        assembler: *mut aeron_controlled_fragment_assembler_t,
+        session_id: i32,
+    ) -> bool;
 }
 unsafe extern "C" {
     #[doc = " Return a pointer to the counter value.\n\n @param counter to pointer to.\n @return pointer to the counter value."]
