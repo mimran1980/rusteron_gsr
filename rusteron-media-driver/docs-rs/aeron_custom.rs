@@ -506,7 +506,7 @@ impl AeronCncMetadata {
     pub fn load_from_file(aeron_dir: &str) -> Result<Self, AeronCError> {
         let aeron_dir = std::ffi::CString::new(aeron_dir).map_err(|_| AeronCError::from_code(-1))?;
         // Shared between init and cleanup so the mapping populated by
-        // aeron_cnc_map_file_and_load_metadata stays live for aeron_unmap on drop.
+        // aeron_cnc_map_existing_file_and_load_metadata stays live for aeron_unmap on drop.
         let mapped_file = RcOrArc::new(RefCellOrMutex::new(aeron_mapped_file_t {
             addr: std::ptr::null_mut(),
             length: 0,
@@ -519,7 +519,7 @@ impl AeronCncMetadata {
                 #[cfg(feature = "multi-threaded")]
                 let mut g = mapped_file.lock().unwrap();
                 let result = unsafe {
-                    aeron_cnc_map_file_and_load_metadata(
+                    aeron_cnc_map_existing_file_and_load_metadata(
                         aeron_dir.as_ptr(),
                         &mut *g as *mut aeron_mapped_file_t,
                         ctx,
@@ -557,7 +557,7 @@ impl AeronCncMetadata {
         };
         let ctx = ManagedCResource::initialise(move |ctx| {
             let result = unsafe {
-                aeron_cnc_map_file_and_load_metadata(
+                aeron_cnc_map_existing_file_and_load_metadata(
                     aeron_dir.as_ptr(),
                     &mut mapped_file as *mut aeron_mapped_file_t,
                     ctx,

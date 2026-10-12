@@ -94,7 +94,7 @@ impl AeronAgentRunner {
             stringify!(aeron_agent_runner_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -340,7 +340,7 @@ impl From<aeron_agent_runner_t> for AeronAgentRunner {
     #[inline]
     fn from(value: aeron_agent_runner_t) -> Self {
         AeronAgentRunner {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -415,9 +415,8 @@ pub type CleanupBox<T> = Box<dyn FnMut(*mut *mut T) -> i32 + Send>;
 pub enum CResource<T> {
     OwnedOnHeap(RcOrArc<ManagedCResource<T>>),
     #[doc = " Always initialised by construction (zeroed or `new(v)`). Never store"]
-    #[doc = " `uninit()` — `Clone` and `get()` assume it's valid. `UnsafeCell` because"]
-    #[doc = " C writes through the pointer `get()` hands out from `&self`."]
-    OwnedOnStack(std::cell::UnsafeCell<std::mem::MaybeUninit<T>>),
+    #[doc = " `uninit()` — `Clone` and `get()` assume it's valid."]
+    OwnedOnStack(std::mem::MaybeUninit<T>),
     Borrowed(*mut T),
 }
 impl<T: Clone> Clone for CResource<T> {
@@ -425,9 +424,7 @@ impl<T: Clone> Clone for CResource<T> {
         unsafe {
             match self {
                 CResource::OwnedOnHeap(r) => CResource::OwnedOnHeap(r.clone()),
-                CResource::OwnedOnStack(r) => {
-                    CResource::OwnedOnStack(MaybeUninit::new((*r.get()).assume_init_ref().clone()).into())
-                }
+                CResource::OwnedOnStack(r) => CResource::OwnedOnStack(MaybeUninit::new(r.assume_init_ref().clone())),
                 CResource::Borrowed(r) => CResource::Borrowed(r.clone()),
             }
         }
@@ -438,7 +435,7 @@ impl<T> CResource<T> {
     pub fn get(&self) -> *mut T {
         match self {
             CResource::OwnedOnHeap(r) => r.get(),
-            CResource::OwnedOnStack(r) => r.get().cast(),
+            CResource::OwnedOnStack(r) => r.as_ptr() as *mut T,
             CResource::Borrowed(r) => *r,
         }
     }
@@ -535,7 +532,7 @@ impl<T> std::fmt::Debug for CResource<T> {
                 write!(f, "{name} heap({:?})", r)
             }
             CResource::OwnedOnStack(r) => {
-                write!(f, "{name} stack({:?})", r.get())
+                write!(f, "{name} stack({:?})", *r)
             }
             CResource::Borrowed(r) => {
                 write!(f, "{name} borrowed ({:?})", r)
@@ -1145,20 +1142,67 @@ impl std::fmt::Debug for AeronOfferError {
     }
 }
 impl std::error::Error for AeronOfferError {}
-#[doc = " Heap-allocated, reference-counted holder for a callback the C client keeps and"]
-#[doc = " fires later, possibly many times, from the conductor thread."]
+#[doc = " # Handler"]
+#[doc = " **Heap-allocated, reference-counted** callback holder for callbacks the C"]
+#[doc = " client **retains** (fires later, possibly many times, from the conductor thread)."]
 #[doc = ""]
-#[doc = " C is handed a pointer to the value ([`Handler::as_raw`]), so the value must outlive"]
-#[doc = " C's use of it. Methods that register a retained callback store a clone in the"]
-#[doc = " client's dependencies: a close is asynchronous, and the conductor may still fire"]
-#[doc = " the callback after the resource's handle has dropped. The clones therefore live"]
-#[doc = " until the client drops, one small `Arc` per registration."]
+#[doc = " `Handler<T>` wraps `Arc<UnsafeCell<T>>`. The callback value lives on the heap"]
+#[doc = " and is freed only when the last clone drops. The raw `clientd` pointer handed"]
+#[doc = " to C is `&T` (via [`Handler::as_raw`]); C keeps firing it for as long as it"]
+#[doc = " holds the callback, so the `Handler` must outlive that — methods that register"]
+#[doc = " a retained callback ([`AeronContext::set_error_handler`], the image lifecycle"]
+#[doc = " handlers on `async_add_subscription`, `set_on_available_image`, …) store a"]
+#[doc = " clone of the `Handler` inside the registering resource (as a dependency), so"]
+#[doc = " the value is guaranteed to outlive the C side's use of it. No manual"]
+#[doc = " `release()` is needed."]
 #[doc = ""]
-#[doc = " For callbacks C fires only during the call, prefer the `*_fn` / `*_once` methods:"]
-#[doc = " the closure stays on the stack, may borrow local state, and allocates nothing."]
+#[doc = " ## Async close: why the handler must outlive the resource, not just the call"]
 #[doc = ""]
-#[doc = " `Send` when `T` is; `Sync` only under the `multi-threaded` feature, since callbacks"]
-#[doc = " fire on the conductor thread."]
+#[doc = " The C close for a resource holding one of these handlers (e.g."]
+#[doc = " `aeron_subscription_close`) is **asynchronous** — it only requests the close;"]
+#[doc = " the conductor thread may still fire the callback (e.g. `on_available_image`)"]
+#[doc = " after `close()`/`drop` has already returned on the calling thread. Freeing the"]
+#[doc = " handler's value as soon as the Rust-side handle is dropped would therefore"]
+#[doc = " risk a use-after-free from that still-in-flight callback."]
+#[doc = ""]
+#[doc = " 0.2.x solves this by cloning the `Handler` into the *client's* dependency"]
+#[doc = " list (not just the subscription's) when the callback is registered — see the"]
+#[doc = " docs on `async_add_subscription` and friends. That keeps the value alive for"]
+#[doc = " the client's entire lifetime, independent of when any individual subscription"]
+#[doc = " or resource closes, so there is no window where the conductor thread can call"]
+#[doc = " into a freed handler. The trade-off is that handler clones accumulate on the"]
+#[doc = " client's dependency list for as long as the client lives (each is just one"]
+#[doc = " small `Arc` clone per registration, dropped in bulk when the client itself"]
+#[doc = " drops)."]
+#[doc = ""]
+#[doc = " This differs from the Aeron C++ wrapper, which instead stores the handler"]
+#[doc = " inside the `AsyncAddSubscription` object and deletes it as the *final* step"]
+#[doc = " of `on_cmd_close_subscription`, i.e. it ties the handler's lifetime to the"]
+#[doc = " close actually completing on the conductor thread, rather than to the client."]
+#[doc = " That avoids the unbounded accumulation this crate accepts, at the cost of a"]
+#[doc = " conductor-side hook. If you are migrating C++ code that assumed"]
+#[doc = " close-then-immediately-free semantics, be aware 0.2.x's handlers instead live"]
+#[doc = " until the client drops."]
+#[doc = ""]
+#[doc = " # Heap vs stack — when to reach for `Handler` vs a `*_fn` / `*_once` method"]
+#[doc = ""]
+#[doc = " | Callback kind | Where the closure lives | API |"]
+#[doc = " |---|---|---|"]
+#[doc = " | **Retained** (C stores it; fires later / repeatedly) | **heap** (`Handler`/`Arc`) | `set_error_handler(Some(Handler::new(...)))`, `async_add_subscription(.., Some(&h), ..)`, `poll(Some(&h), limit)` |"]
+#[doc = " | **Sync / call-only** (C fires it during the call, then is done) | **stack** (borrowed `FnMut`, zero allocation) | `poll_fn(\\|msg, hdr\\| ..., limit)`, the generated `*_once` variants |"]
+#[doc = ""]
+#[doc = " Prefer the stack form (`poll_fn`, `*_once`) on the hot path: it borrows the"]
+#[doc = " closure for the duration of the call only, so there is no `Arc`, no heap"]
+#[doc = " allocation, and the closure may borrow local state. Reach for `Handler`"]
+#[doc = " (heap) when the callback must survive past the registering call — image"]
+#[doc = " lifecycle handlers, error handlers, counters callbacks, anything the"]
+#[doc = " conductor invokes asynchronously."]
+#[doc = ""]
+#[doc = " The reference count is atomic (`Arc`), so a `Handler` may be moved to another"]
+#[doc = " thread; it is deliberately **not `Sync`** — callbacks fire from the conductor"]
+#[doc = " thread and must not be shared concurrently."]
+#[doc = ""]
+#[doc = " ## Example"]
 #[doc = ""]
 #[doc = " ```no_compile"]
 #[doc = " use rusteron_code_gen::Handler;"]
@@ -1603,7 +1647,7 @@ impl AeronAsyncAddCounter {
             stringify!(aeron_async_add_counter_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -1689,7 +1733,7 @@ impl From<aeron_async_add_counter_t> for AeronAsyncAddCounter {
     #[inline]
     fn from(value: aeron_async_add_counter_t) -> Self {
         AeronAsyncAddCounter {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -1789,11 +1833,7 @@ impl Aeron {
         let start = std::time::Instant::now();
         loop {
             if let Ok(poller) = AeronAsyncAddCounter::new(self, type_id, key_buffer, label_buffer) {
-                let invoker = poller.agent_invoker_client();
                 while start.elapsed() <= timeout {
-                    if let Some(aeron) = &invoker {
-                        aeron.main_do_work()?;
-                    }
                     if let Some(result) = poller.poll()? {
                         return Ok(result);
                     }
@@ -1932,12 +1972,8 @@ impl AeronAsyncAddCounter {
         if let Some(result) = self.poll()? {
             return Ok(result);
         }
-        let invoker = self.agent_invoker_client();
         let time = std::time::Instant::now();
         while time.elapsed() < timeout {
-            if let Some(aeron) = &invoker {
-                aeron.main_do_work()?;
-            }
             if let Some(result) = self.poll()? {
                 return Ok(result);
             }
@@ -1946,11 +1982,6 @@ impl AeronAsyncAddCounter {
         }
         log::error!("failed async poll for {:?}", self);
         Err(AeronErrorType::TimedOut.into())
-    }
-    #[doc = r"The client a blocking poll must drive, as nothing else runs its agent-invoker conductor."]
-    #[inline]
-    fn agent_invoker_client(&self) -> Option<Aeron> {
-        self.inner.get_dependency::<Aeron>().filter(Aeron::uses_agent_invoker)
     }
 }
 #[derive(Clone)]
@@ -2004,7 +2035,7 @@ impl AeronAsyncAddExclusivePublication {
             stringify!(aeron_async_add_exclusive_publication_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -2096,7 +2127,7 @@ impl From<aeron_async_add_exclusive_publication_t> for AeronAsyncAddExclusivePub
     #[inline]
     fn from(value: aeron_async_add_exclusive_publication_t) -> Self {
         AeronAsyncAddExclusivePublication {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -2198,11 +2229,7 @@ impl Aeron {
         let start = std::time::Instant::now();
         loop {
             if let Ok(poller) = AeronAsyncAddExclusivePublication::new(self, uri, stream_id) {
-                let invoker = poller.agent_invoker_client();
                 while start.elapsed() <= timeout {
-                    if let Some(aeron) = &invoker {
-                        aeron.main_do_work()?;
-                    }
                     if let Some(result) = poller.poll()? {
                         return Ok(result);
                     }
@@ -2338,12 +2365,8 @@ impl AeronAsyncAddExclusivePublication {
         if let Some(result) = self.poll()? {
             return Ok(result);
         }
-        let invoker = self.agent_invoker_client();
         let time = std::time::Instant::now();
         while time.elapsed() < timeout {
-            if let Some(aeron) = &invoker {
-                aeron.main_do_work()?;
-            }
             if let Some(result) = self.poll()? {
                 return Ok(result);
             }
@@ -2352,11 +2375,6 @@ impl AeronAsyncAddExclusivePublication {
         }
         log::error!("failed async poll for {:?}", self);
         Err(AeronErrorType::TimedOut.into())
-    }
-    #[doc = r"The client a blocking poll must drive, as nothing else runs its agent-invoker conductor."]
-    #[inline]
-    fn agent_invoker_client(&self) -> Option<Aeron> {
-        self.inner.get_dependency::<Aeron>().filter(Aeron::uses_agent_invoker)
     }
 }
 #[derive(Clone)]
@@ -2410,7 +2428,7 @@ impl AeronAsyncAddPublication {
             stringify!(aeron_async_add_publication_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -2497,7 +2515,7 @@ impl From<aeron_async_add_publication_t> for AeronAsyncAddPublication {
     #[inline]
     fn from(value: aeron_async_add_publication_t) -> Self {
         AeronAsyncAddPublication {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -2595,11 +2613,7 @@ impl Aeron {
         let start = std::time::Instant::now();
         loop {
             if let Ok(poller) = AeronAsyncAddPublication::new(self, uri, stream_id) {
-                let invoker = poller.agent_invoker_client();
                 while start.elapsed() <= timeout {
-                    if let Some(aeron) = &invoker {
-                        aeron.main_do_work()?;
-                    }
                     if let Some(result) = poller.poll()? {
                         return Ok(result);
                     }
@@ -2730,12 +2744,8 @@ impl AeronAsyncAddPublication {
         if let Some(result) = self.poll()? {
             return Ok(result);
         }
-        let invoker = self.agent_invoker_client();
         let time = std::time::Instant::now();
         while time.elapsed() < timeout {
-            if let Some(aeron) = &invoker {
-                aeron.main_do_work()?;
-            }
             if let Some(result) = self.poll()? {
                 return Ok(result);
             }
@@ -2744,11 +2754,6 @@ impl AeronAsyncAddPublication {
         }
         log::error!("failed async poll for {:?}", self);
         Err(AeronErrorType::TimedOut.into())
-    }
-    #[doc = r"The client a blocking poll must drive, as nothing else runs its agent-invoker conductor."]
-    #[inline]
-    fn agent_invoker_client(&self) -> Option<Aeron> {
-        self.inner.get_dependency::<Aeron>().filter(Aeron::uses_agent_invoker)
     }
 }
 #[derive(Clone)]
@@ -2802,7 +2807,7 @@ impl AeronAsyncAddSubscription {
             stringify!(aeron_async_add_subscription_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -2894,7 +2899,7 @@ impl From<aeron_async_add_subscription_t> for AeronAsyncAddSubscription {
     #[inline]
     fn from(value: aeron_async_add_subscription_t) -> Self {
         AeronAsyncAddSubscription {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -3014,11 +3019,7 @@ impl Aeron {
                 on_available_image_handler,
                 on_unavailable_image_handler,
             ) {
-                let invoker = poller.agent_invoker_client();
                 while start.elapsed() <= timeout {
-                    if let Some(aeron) = &invoker {
-                        aeron.main_do_work()?;
-                    }
                     if let Some(result) = poller.poll()? {
                         return Ok(result);
                     }
@@ -3211,12 +3212,8 @@ impl AeronAsyncAddSubscription {
         if let Some(result) = self.poll()? {
             return Ok(result);
         }
-        let invoker = self.agent_invoker_client();
         let time = std::time::Instant::now();
         while time.elapsed() < timeout {
-            if let Some(aeron) = &invoker {
-                aeron.main_do_work()?;
-            }
             if let Some(result) = self.poll()? {
                 return Ok(result);
             }
@@ -3225,11 +3222,6 @@ impl AeronAsyncAddSubscription {
         }
         log::error!("failed async poll for {:?}", self);
         Err(AeronErrorType::TimedOut.into())
-    }
-    #[doc = r"The client a blocking poll must drive, as nothing else runs its agent-invoker conductor."]
-    #[inline]
-    fn agent_invoker_client(&self) -> Option<Aeron> {
-        self.inner.get_dependency::<Aeron>().filter(Aeron::uses_agent_invoker)
     }
 }
 #[derive(Clone)]
@@ -3283,7 +3275,7 @@ impl AeronAsyncDestinationById {
             stringify!(aeron_async_destination_by_id_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline(always)]
@@ -3350,7 +3342,7 @@ impl From<aeron_async_destination_by_id_t> for AeronAsyncDestinationById {
     #[inline]
     fn from(value: aeron_async_destination_by_id_t) -> Self {
         AeronAsyncDestinationById {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -3882,7 +3874,7 @@ impl From<aeron_async_destination_t> for AeronAsyncDestination {
     #[inline]
     fn from(value: aeron_async_destination_t) -> Self {
         AeronAsyncDestination {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -3937,7 +3929,7 @@ impl AeronAsyncGetNextAvailableSessionId {
             stringify!(aeron_async_get_next_available_session_id_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -4037,7 +4029,7 @@ impl From<aeron_async_get_next_available_session_id_t> for AeronAsyncGetNextAvai
     #[inline]
     fn from(value: aeron_async_get_next_available_session_id_t) -> Self {
         AeronAsyncGetNextAvailableSessionId {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -4115,7 +4107,7 @@ impl AeronBufferClaim {
             stringify!(aeron_buffer_claim_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -4244,7 +4236,7 @@ impl From<aeron_buffer_claim_t> for AeronBufferClaim {
     #[inline]
     fn from(value: aeron_buffer_claim_t) -> Self {
         AeronBufferClaim {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -4343,7 +4335,7 @@ impl AeronClientRegisteringResource {
             stringify!(aeron_client_registering_resource_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline(always)]
@@ -4410,7 +4402,7 @@ impl From<aeron_client_registering_resource_t> for AeronClientRegisteringResourc
     #[inline]
     fn from(value: aeron_client_registering_resource_t) -> Self {
         AeronClientRegisteringResource {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -4534,7 +4526,7 @@ impl AeronCncConstants {
             stringify!(aeron_cnc_constants_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -4641,7 +4633,7 @@ impl From<aeron_cnc_constants_t> for AeronCncConstants {
     #[inline]
     fn from(value: aeron_cnc_constants_t) -> Self {
         AeronCncConstants {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -4795,7 +4787,7 @@ impl AeronCncMetadata {
             stringify!(aeron_cnc_metadata_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -4917,7 +4909,7 @@ impl From<aeron_cnc_metadata_t> for AeronCncMetadata {
     #[inline]
     fn from(value: aeron_cnc_metadata_t) -> Self {
         AeronCncMetadata {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -5010,7 +5002,7 @@ impl AeronCnc {
         #[cfg(feature = "extra-logging")]
         log::debug!("creating zeroed empty resource on stack {}", stringify!(aeron_cnc_t));
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -5044,12 +5036,9 @@ impl AeronCnc {
     #[doc = "Fetch the sets of constant values associated with this command and control file."]
     #[doc = ""]
     pub fn get_constants(&self) -> Result<AeronCncConstants, AeronCError> {
-        let mut value = std::mem::MaybeUninit::uninit();
-        let code = unsafe { aeron_cnc_constants(self.get_inner(), value.as_mut_ptr()) };
-        if code < 0 {
-            return Err(AeronCError::from_code(code));
-        }
-        Ok(AeronCncConstants::from(unsafe { value.assume_init() }))
+        let result = AeronCncConstants::new_zeroed_on_stack();
+        self.constants(&result)?;
+        Ok(result)
     }
     #[inline]
     #[doc = "Get the current file name of the cnc file."]
@@ -5387,7 +5376,7 @@ impl From<aeron_cnc_t> for AeronCnc {
     #[inline]
     fn from(value: aeron_cnc_t) -> Self {
         AeronCnc {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -6670,7 +6659,7 @@ impl From<aeron_context_t> for AeronContext {
     #[inline]
     fn from(value: aeron_context_t) -> Self {
         AeronContext {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -6701,7 +6690,6 @@ impl AeronControlledFragmentAssembler {
     pub fn new<AeronControlledFragmentHandlerHandlerImpl: AeronControlledFragmentHandlerCallback + 'static>(
         delegate: Option<&Handler<AeronControlledFragmentHandlerHandlerImpl>>,
     ) -> Result<Self, AeronCError> {
-        let __handler_delegate = delegate;
         let (delegate, delegate_clientd) = (
             {
                 let callback: aeron_controlled_fragment_handler_t = if delegate.is_none() {
@@ -6758,9 +6746,9 @@ impl AeronControlledFragmentAssembler {
         let result = Self {
             inner: CResource::OwnedOnHeap(RcOrArc::new(resource_constructor)),
         };
-        if let Some(__handler) = __handler_delegate {
+        if let Some(__handler) = delegate {
             if let Some(__inner) = result.inner.as_owned() {
-                __inner.add_dependency(Handler::clone(__handler));
+                __inner.add_dependency(__handler.clone());
             }
         }
         Ok(result)
@@ -6822,6 +6810,35 @@ impl AeronControlledFragmentAssembler {
                 buffer.len(),
                 header.get_inner(),
             );
+            #[cfg(feature = "log-c-bindings")]
+            log::info!("  -> {:?}", result);
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Free an existing session buffer to reduce memory pressure when an image goes inactive or no more"]
+    #[doc = " large messages are expected."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `session_id` to have its buffer freed."]
+    #[doc = " \n# Return\n true if a buffer has been freed otherwise false."]
+    pub fn delete_session_buffer(&self, session_id: i32) -> bool {
+        unsafe {
+            #[cfg(feature = "log-c-bindings")]
+            log::info!(
+                "{}({})",
+                stringify!(aeron_controlled_fragment_assembler_delete_session_buffer),
+                [
+                    concat!(
+                        "assembler",
+                        ": ",
+                        stringify!(*mut aeron_controlled_fragment_assembler_t)
+                    )
+                    .to_string(),
+                    format!("{} = {:?}", "session_id", session_id)
+                ]
+                .join(", ")
+            );
+            let result = aeron_controlled_fragment_assembler_delete_session_buffer(self.get_inner(), session_id.into());
             #[cfg(feature = "log-c-bindings")]
             log::info!("  -> {:?}", result);
             result.into()
@@ -6891,7 +6908,7 @@ impl From<aeron_controlled_fragment_assembler_t> for AeronControlledFragmentAsse
     #[inline]
     fn from(value: aeron_controlled_fragment_assembler_t) -> Self {
         AeronControlledFragmentAssembler {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -6971,7 +6988,7 @@ impl AeronCounterConstants {
             stringify!(aeron_counter_constants_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -7050,7 +7067,7 @@ impl From<aeron_counter_constants_t> for AeronCounterConstants {
     #[inline]
     fn from(value: aeron_counter_constants_t) -> Self {
         AeronCounterConstants {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -7187,7 +7204,7 @@ impl AeronCounterMetadataDescriptor {
             stringify!(aeron_counter_metadata_descriptor_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -7278,7 +7295,7 @@ impl From<aeron_counter_metadata_descriptor_t> for AeronCounterMetadataDescripto
     #[inline]
     fn from(value: aeron_counter_metadata_descriptor_t) -> Self {
         AeronCounterMetadataDescriptor {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -7375,7 +7392,7 @@ impl AeronCounter {
             stringify!(aeron_counter_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -7428,12 +7445,9 @@ impl AeronCounter {
     #[doc = "Fill in a structure with the constants in use by a counter."]
     #[doc = ""]
     pub fn get_constants(&self) -> Result<AeronCounterConstants, AeronCError> {
-        let mut value = std::mem::MaybeUninit::uninit();
-        let code = unsafe { aeron_counter_constants(self.get_inner(), value.as_mut_ptr()) };
-        if code < 0 {
-            return Err(AeronCError::from_code(code));
-        }
-        Ok(AeronCounterConstants::from(unsafe { value.assume_init() }))
+        let result = AeronCounterConstants::new_zeroed_on_stack();
+        self.constants(&result)?;
+        Ok(result)
     }
     #[inline]
     #[doc = "Check if the counter is closed"]
@@ -7516,7 +7530,7 @@ impl From<aeron_counter_t> for AeronCounter {
     #[inline]
     fn from(value: aeron_counter_t) -> Self {
         AeronCounter {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -7647,7 +7661,7 @@ impl AeronCounterValueDescriptor {
             stringify!(aeron_counter_value_descriptor_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -7734,7 +7748,7 @@ impl From<aeron_counter_value_descriptor_t> for AeronCounterValueDescriptor {
     #[inline]
     fn from(value: aeron_counter_value_descriptor_t) -> Self {
         AeronCounterValueDescriptor {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -7857,7 +7871,7 @@ impl AeronCountersReaderBuffers {
             stringify!(aeron_counters_reader_buffers_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -7946,7 +7960,7 @@ impl From<aeron_counters_reader_buffers_t> for AeronCountersReaderBuffers {
     #[inline]
     fn from(value: aeron_counters_reader_buffers_t) -> Self {
         AeronCountersReaderBuffers {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -8045,7 +8059,7 @@ impl AeronCountersReader {
             stringify!(aeron_counters_reader_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -8556,7 +8570,7 @@ impl From<aeron_counters_reader_t> for AeronCountersReader {
     #[inline]
     fn from(value: aeron_counters_reader_t) -> Self {
         AeronCountersReader {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -8628,7 +8642,7 @@ impl AeronDataHeaderAsLongs {
             stringify!(aeron_data_header_as_longs_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -8699,7 +8713,7 @@ impl From<aeron_data_header_as_longs_t> for AeronDataHeaderAsLongs {
     #[inline]
     fn from(value: aeron_data_header_as_longs_t) -> Self {
         AeronDataHeaderAsLongs {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -8835,7 +8849,7 @@ impl AeronDataHeader {
             stringify!(aeron_data_header_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -8926,7 +8940,7 @@ impl From<aeron_data_header_t> for AeronDataHeader {
     #[inline]
     fn from(value: aeron_data_header_t) -> Self {
         AeronDataHeader {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -8975,15 +8989,17 @@ mod aeron_data_header_t_allocation_tests {
     }
 }
 #[derive(Clone)]
-pub struct AeronError {
-    inner: CResource<aeron_error_t>,
+pub struct AeronErrorHeader {
+    inner: CResource<aeron_error_header_t>,
 }
-impl core::fmt::Debug for AeronError {
+impl core::fmt::Debug for AeronErrorHeader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.inner.get().is_null() {
-            f.debug_struct(stringify!(AeronError)).field("inner", &"null").finish()
+            f.debug_struct(stringify!(AeronErrorHeader))
+                .field("inner", &"null")
+                .finish()
         } else {
-            f.debug_struct(stringify!(AeronError))
+            f.debug_struct(stringify!(AeronErrorHeader))
                 .field("inner", &self.inner)
                 .field(stringify!(frame_header), &self.frame_header())
                 .field(stringify!(session_id), &self.session_id())
@@ -8996,7 +9012,7 @@ impl core::fmt::Debug for AeronError {
         }
     }
 }
-impl AeronError {
+impl AeronErrorHeader {
     #[inline]
     pub fn new(
         frame_header: AeronFrameHeader,
@@ -9009,7 +9025,7 @@ impl AeronError {
     ) -> Result<Self, AeronCError> {
         let r_constructor = ManagedCResource::new(
             move |ctx_field| {
-                let inst = aeron_error_t {
+                let inst = aeron_error_header_t {
                     frame_header: frame_header.into(),
                     session_id: session_id.into(),
                     stream_id: stream_id.into(),
@@ -9018,7 +9034,7 @@ impl AeronError {
                     error_code: error_code.into(),
                     error_length: error_length.into(),
                 };
-                let inner_ptr: *mut aeron_error_t = Box::into_raw(Box::new(inst));
+                let inner_ptr: *mut aeron_error_header_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -9036,9 +9052,12 @@ impl AeronError {
         let resource = ManagedCResource::new(
             move |ctx_field| {
                 #[cfg(feature = "extra-logging")]
-                log::info!("creating zeroed empty resource on heap {}", stringify!(aeron_error_t));
-                let inst: aeron_error_t = unsafe { std::mem::zeroed() };
-                let inner_ptr: *mut aeron_error_t = Box::into_raw(Box::new(inst));
+                log::info!(
+                    "creating zeroed empty resource on heap {}",
+                    stringify!(aeron_error_header_t)
+                );
+                let inst: aeron_error_header_t = unsafe { std::mem::zeroed() };
+                let inner_ptr: *mut aeron_error_header_t = Box::into_raw(Box::new(inst));
                 unsafe { *ctx_field = inner_ptr };
                 0
             },
@@ -9055,9 +9074,12 @@ impl AeronError {
     #[doc = r" _(Use with care)_"]
     pub fn new_zeroed_on_stack() -> Self {
         #[cfg(feature = "extra-logging")]
-        log::debug!("creating zeroed empty resource on stack {}", stringify!(aeron_error_t));
+        log::debug!(
+            "creating zeroed empty resource on stack {}",
+            stringify!(aeron_error_header_t)
+        );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -9088,28 +9110,8 @@ impl AeronError {
     pub fn error_length(&self) -> i32 {
         self.error_length.into()
     }
-    #[inline]
-    #[doc = "SAFETY: this is static for performance reasons, so you should not store this without copying it!!"]
-    pub fn code_str(errcode: ::std::os::raw::c_int) -> &'static str {
-        unsafe {
-            #[cfg(feature = "log-c-bindings")]
-            log::info!(
-                "{}({})",
-                stringify!(aeron_error_code_str),
-                [format!("{} = {:?}", "errcode", errcode)].join(", ")
-            );
-            let result = aeron_error_code_str(errcode.into());
-            #[cfg(feature = "log-c-bindings")]
-            log::info!("  -> {:?}", result);
-            if result.is_null() {
-                ""
-            } else {
-                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap_or("") }
-            }
-        }
-    }
     #[inline(always)]
-    pub fn get_inner(&self) -> *mut aeron_error_t {
+    pub fn get_inner(&self) -> *mut aeron_error_header_t {
         self.inner.get()
     }
     #[doc = r" Mutable access to the underlying C struct, minted from `&self`: nothing"]
@@ -9120,69 +9122,69 @@ impl AeronError {
     #[doc = r" No other reference (`&` or `&mut`) to the underlying struct may be"]
     #[doc = r" alive while the returned `&mut` is in use."]
     #[inline(always)]
-    pub unsafe fn get_inner_mut(&self) -> &mut aeron_error_t {
+    pub unsafe fn get_inner_mut(&self) -> &mut aeron_error_header_t {
         &mut *self.inner.get()
     }
     #[inline(always)]
-    pub fn get_inner_ref(&self) -> &aeron_error_t {
+    pub fn get_inner_ref(&self) -> &aeron_error_header_t {
         unsafe { &*self.inner.get() }
     }
 }
-impl std::ops::Deref for AeronError {
-    type Target = aeron_error_t;
+impl std::ops::Deref for AeronErrorHeader {
+    type Target = aeron_error_header_t;
     fn deref(&self) -> &Self::Target {
         self.get_inner_ref()
     }
 }
-impl From<*mut aeron_error_t> for AeronError {
+impl From<*mut aeron_error_header_t> for AeronErrorHeader {
     #[inline]
-    fn from(value: *mut aeron_error_t) -> Self {
-        AeronError {
+    fn from(value: *mut aeron_error_header_t) -> Self {
+        AeronErrorHeader {
             inner: CResource::Borrowed(value),
         }
     }
 }
-impl From<AeronError> for *mut aeron_error_t {
+impl From<AeronErrorHeader> for *mut aeron_error_header_t {
     #[inline]
-    fn from(value: AeronError) -> Self {
+    fn from(value: AeronErrorHeader) -> Self {
         value.get_inner()
     }
 }
-impl From<&AeronError> for *mut aeron_error_t {
+impl From<&AeronErrorHeader> for *mut aeron_error_header_t {
     #[inline]
-    fn from(value: &AeronError) -> Self {
+    fn from(value: &AeronErrorHeader) -> Self {
         value.get_inner()
     }
 }
-impl From<AeronError> for aeron_error_t {
+impl From<AeronErrorHeader> for aeron_error_header_t {
     #[inline]
-    fn from(value: AeronError) -> Self {
+    fn from(value: AeronErrorHeader) -> Self {
         unsafe { *value.get_inner().clone() }
     }
 }
-impl From<*const aeron_error_t> for AeronError {
+impl From<*const aeron_error_header_t> for AeronErrorHeader {
     #[inline]
-    fn from(value: *const aeron_error_t) -> Self {
-        AeronError {
-            inner: CResource::Borrowed(value as *mut aeron_error_t),
+    fn from(value: *const aeron_error_header_t) -> Self {
+        AeronErrorHeader {
+            inner: CResource::Borrowed(value as *mut aeron_error_header_t),
         }
     }
 }
-impl From<aeron_error_t> for AeronError {
+impl From<aeron_error_header_t> for AeronErrorHeader {
     #[inline]
-    fn from(value: aeron_error_t) -> Self {
-        AeronError {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+    fn from(value: aeron_error_header_t) -> Self {
+        AeronErrorHeader {
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
 #[doc = r" This will create an instance where the struct is zeroed, use with care"]
-impl Default for AeronError {
+impl Default for AeronErrorHeader {
     fn default() -> Self {
-        AeronError::new_zeroed_on_heap()
+        AeronErrorHeader::new_zeroed_on_heap()
     }
 }
-impl AeronError {
+impl AeronErrorHeader {
     #[doc = r" Regular clone just increases the reference count of underlying count."]
     #[doc = r" `clone_struct` shallow copies the content of the underlying struct on heap."]
     #[doc = r""]
@@ -9198,7 +9200,7 @@ impl AeronError {
     }
 }
 #[cfg(test)]
-mod aeron_error_t_allocation_tests {
+mod aeron_error_header_t_allocation_tests {
     use super::*;
     use serial_test::file_serial;
     #[test]
@@ -9206,7 +9208,7 @@ mod aeron_error_t_allocation_tests {
     fn test_new_on_stack() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..100 {
-                let _ = AeronError::new_zeroed_on_stack();
+                let _ = AeronErrorHeader::new_zeroed_on_stack();
             }
         });
     }
@@ -9215,7 +9217,7 @@ mod aeron_error_t_allocation_tests {
     fn test_default() {
         crate::test_alloc::assert_no_allocation(|| {
             for _ in 0..100 {
-                let _ = AeronError::default();
+                let _ = AeronErrorHeader::default();
             }
         });
     }
@@ -9272,7 +9274,7 @@ impl AeronExclusivePublication {
             stringify!(aeron_exclusive_publication_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -9488,12 +9490,9 @@ impl AeronExclusivePublication {
     #[doc = "Fill in a structure with the constants in use by a publication."]
     #[doc = ""]
     pub fn get_constants(&self) -> Result<AeronPublicationConstants, AeronCError> {
-        let mut value = std::mem::MaybeUninit::uninit();
-        let code = unsafe { aeron_exclusive_publication_constants(self.get_inner(), value.as_mut_ptr()) };
-        if code < 0 {
-            return Err(AeronCError::from_code(code));
-        }
-        Ok(AeronPublicationConstants::from(unsafe { value.assume_init() }))
+        let result = AeronPublicationConstants::new_zeroed_on_stack();
+        self.constants(&result)?;
+        Ok(result)
     }
     #[inline]
     #[doc = "Get the current position to which the publication has advanced for this stream."]
@@ -9742,7 +9741,7 @@ impl From<aeron_exclusive_publication_t> for AeronExclusivePublication {
     #[inline]
     fn from(value: aeron_exclusive_publication_t) -> Self {
         AeronExclusivePublication {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -9816,7 +9815,6 @@ impl AeronFragmentAssembler {
     pub fn new<AeronFragmentHandlerHandlerImpl: AeronFragmentHandlerCallback + 'static>(
         delegate: Option<&Handler<AeronFragmentHandlerHandlerImpl>>,
     ) -> Result<Self, AeronCError> {
-        let __handler_delegate = delegate;
         let (delegate, delegate_clientd) = (
             {
                 let callback: aeron_fragment_handler_t = if delegate.is_none() {
@@ -9856,9 +9854,9 @@ impl AeronFragmentAssembler {
         let result = Self {
             inner: CResource::OwnedOnHeap(RcOrArc::new(resource_constructor)),
         };
-        if let Some(__handler) = __handler_delegate {
+        if let Some(__handler) = delegate {
             if let Some(__inner) = result.inner.as_owned() {
-                __inner.add_dependency(Handler::clone(__handler));
+                __inner.add_dependency(__handler.clone());
             }
         }
         Ok(result)
@@ -9909,6 +9907,30 @@ impl AeronFragmentAssembler {
                 buffer.len(),
                 header.get_inner(),
             );
+            #[cfg(feature = "log-c-bindings")]
+            log::info!("  -> {:?}", result);
+            result.into()
+        }
+    }
+    #[inline]
+    #[doc = "Free an existing session buffer to reduce memory pressure when an image goes inactive or no more"]
+    #[doc = " large messages are expected."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `session_id` to have its buffer freed."]
+    #[doc = " \n# Return\n true if a buffer has been freed otherwise false."]
+    pub fn delete_session_buffer(&self, session_id: i32) -> bool {
+        unsafe {
+            #[cfg(feature = "log-c-bindings")]
+            log::info!(
+                "{}({})",
+                stringify!(aeron_fragment_assembler_delete_session_buffer),
+                [
+                    concat!("assembler", ": ", stringify!(*mut aeron_fragment_assembler_t)).to_string(),
+                    format!("{} = {:?}", "session_id", session_id)
+                ]
+                .join(", ")
+            );
+            let result = aeron_fragment_assembler_delete_session_buffer(self.get_inner(), session_id.into());
             #[cfg(feature = "log-c-bindings")]
             log::info!("  -> {:?}", result);
             result.into()
@@ -9978,7 +10000,7 @@ impl From<aeron_fragment_assembler_t> for AeronFragmentAssembler {
     #[inline]
     fn from(value: aeron_fragment_assembler_t) -> Self {
         AeronFragmentAssembler {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -10057,7 +10079,7 @@ impl AeronFrameHeader {
             stringify!(aeron_frame_header_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -10140,7 +10162,7 @@ impl From<aeron_frame_header_t> for AeronFrameHeader {
     #[inline]
     fn from(value: aeron_frame_header_t) -> Self {
         AeronFrameHeader {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -10232,7 +10254,7 @@ impl AeronHeader {
         #[cfg(feature = "extra-logging")]
         log::debug!("creating zeroed empty resource on stack {}", stringify!(aeron_header_t));
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -10267,12 +10289,9 @@ impl AeronHeader {
     #[doc = "Get all of the field values from the header. This will do a memcpy into the supplied header_values_t pointer."]
     #[doc = ""]
     pub fn get_values(&self) -> Result<AeronHeaderValues, AeronCError> {
-        let mut value = std::mem::MaybeUninit::uninit();
-        let code = unsafe { aeron_header_values(self.get_inner(), value.as_mut_ptr()) };
-        if code < 0 {
-            return Err(AeronCError::from_code(code));
-        }
-        Ok(AeronHeaderValues::from(unsafe { value.assume_init() }))
+        let result = AeronHeaderValues::new_zeroed_on_stack();
+        self.values(&result)?;
+        Ok(result)
     }
     #[inline]
     #[doc = "Get the current position to which the Image has advanced on reading this message."]
@@ -10411,7 +10430,7 @@ impl From<aeron_header_t> for AeronHeader {
     #[inline]
     fn from(value: aeron_header_t) -> Self {
         AeronHeader {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -10524,7 +10543,7 @@ impl AeronHeaderValuesFrame {
             stringify!(aeron_header_values_frame_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -10627,7 +10646,7 @@ impl From<aeron_header_values_frame_t> for AeronHeaderValuesFrame {
     #[inline]
     fn from(value: aeron_header_values_frame_t) -> Self {
         AeronHeaderValuesFrame {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -10754,7 +10773,7 @@ impl AeronHeaderValues {
             stringify!(aeron_header_values_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -10833,7 +10852,7 @@ impl From<aeron_header_values_t> for AeronHeaderValues {
     #[inline]
     fn from(value: aeron_header_values_t) -> Self {
         AeronHeaderValues {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -10932,7 +10951,7 @@ impl AeronIdleStrategy {
             stringify!(aeron_idle_strategy_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -11102,7 +11121,7 @@ impl From<aeron_idle_strategy_t> for AeronIdleStrategy {
     #[inline]
     fn from(value: aeron_idle_strategy_t) -> Self {
         AeronIdleStrategy {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -11207,7 +11226,7 @@ impl AeronImageConstants {
             stringify!(aeron_image_constants_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -11318,7 +11337,7 @@ impl From<aeron_image_constants_t> for AeronImageConstants {
     #[inline]
     fn from(value: aeron_image_constants_t) -> Self {
         AeronImageConstants {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -11393,7 +11412,6 @@ impl AeronImageControlledFragmentAssembler {
     pub fn new<AeronControlledFragmentHandlerHandlerImpl: AeronControlledFragmentHandlerCallback + 'static>(
         delegate: Option<&Handler<AeronControlledFragmentHandlerHandlerImpl>>,
     ) -> Result<Self, AeronCError> {
-        let __handler_delegate = delegate;
         let (delegate, delegate_clientd) = (
             {
                 let callback: aeron_controlled_fragment_handler_t = if delegate.is_none() {
@@ -11450,9 +11468,9 @@ impl AeronImageControlledFragmentAssembler {
         let result = Self {
             inner: CResource::OwnedOnHeap(RcOrArc::new(resource_constructor)),
         };
-        if let Some(__handler) = __handler_delegate {
+        if let Some(__handler) = delegate {
             if let Some(__inner) = result.inner.as_owned() {
-                __inner.add_dependency(Handler::clone(__handler));
+                __inner.add_dependency(__handler.clone());
             }
         }
         Ok(result)
@@ -11583,7 +11601,7 @@ impl From<aeron_image_controlled_fragment_assembler_t> for AeronImageControlledF
     #[inline]
     fn from(value: aeron_image_controlled_fragment_assembler_t) -> Self {
         AeronImageControlledFragmentAssembler {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -11614,7 +11632,6 @@ impl AeronImageFragmentAssembler {
     pub fn new<AeronFragmentHandlerHandlerImpl: AeronFragmentHandlerCallback + 'static>(
         delegate: Option<&Handler<AeronFragmentHandlerHandlerImpl>>,
     ) -> Result<Self, AeronCError> {
-        let __handler_delegate = delegate;
         let (delegate, delegate_clientd) = (
             {
                 let callback: aeron_fragment_handler_t = if delegate.is_none() {
@@ -11659,9 +11676,9 @@ impl AeronImageFragmentAssembler {
         let result = Self {
             inner: CResource::OwnedOnHeap(RcOrArc::new(resource_constructor)),
         };
-        if let Some(__handler) = __handler_delegate {
+        if let Some(__handler) = delegate {
             if let Some(__inner) = result.inner.as_owned() {
-                __inner.add_dependency(Handler::clone(__handler));
+                __inner.add_dependency(__handler.clone());
             }
         }
         Ok(result)
@@ -11781,7 +11798,7 @@ impl From<aeron_image_fragment_assembler_t> for AeronImageFragmentAssembler {
     #[inline]
     fn from(value: aeron_image_fragment_assembler_t) -> Self {
         AeronImageFragmentAssembler {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -11829,7 +11846,7 @@ impl AeronImage {
         #[cfg(feature = "extra-logging")]
         log::debug!("creating zeroed empty resource on stack {}", stringify!(aeron_image_t));
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -11891,12 +11908,9 @@ impl AeronImage {
     #[doc = "Fill in a structure with the constants in use by a image."]
     #[doc = ""]
     pub fn get_constants(&self) -> Result<AeronImageConstants, AeronCError> {
-        let mut value = std::mem::MaybeUninit::uninit();
-        let code = unsafe { aeron_image_constants(self.get_inner(), value.as_mut_ptr()) };
-        if code < 0 {
-            return Err(AeronCError::from_code(code));
-        }
-        Ok(AeronImageConstants::from(unsafe { value.assume_init() }))
+        let result = AeronImageConstants::new_zeroed_on_stack();
+        self.constants(&result)?;
+        Ok(result)
     }
     #[inline]
     #[doc = "The position this image has been consumed to by the subscriber."]
@@ -11914,34 +11928,6 @@ impl AeronImage {
             #[cfg(feature = "log-c-bindings")]
             log::info!("  -> {:?}", result);
             result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Set the subscriber position for this image to indicate where it has been consumed to."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `image` to set the position of."]
-    #[deprecated]
-    #[doc = " @deprecated Will be removed in <code>1.53.0</code>."]
-    pub fn set_position(&self, position: i64) -> Result<i32, AeronCError> {
-        unsafe {
-            #[cfg(feature = "log-c-bindings")]
-            log::info!(
-                "{}({})",
-                stringify!(aeron_image_set_position),
-                [
-                    concat!("image", ": ", stringify!(*mut aeron_image_t)).to_string(),
-                    format!("{} = {:?}", "position", position)
-                ]
-                .join(", ")
-            );
-            let result = aeron_image_set_position(self.get_inner(), position.into());
-            #[cfg(feature = "log-c-bindings")]
-            log::info!("  -> {:?}", result);
-            if result < 0 {
-                return Err(AeronCError::from_code(result));
-            } else {
-                return Ok(result);
-            }
         }
     }
     #[inline]
@@ -12467,121 +12453,6 @@ impl AeronImage {
         }
     }
     #[inline]
-    #[doc = "Peek for new messages in a stream by scanning forward from an initial position. If new messages are found then"]
-    #[doc = " they will be delivered to the handler up to a limited position."]
-    #[doc = " \n"]
-    #[doc = " Use a controlled fragment assembler to assemble messages which span multiple fragments. Scans must also"]
-    #[doc = " start at the beginning of a message so that the assembler is reset."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `initial_position` from which to peek forward."]
-    #[doc = " \n - `handler` to which message fragments are delivered."]
-    #[doc = " \n - `clientd` to pass to the handler."]
-    #[doc = " \n - `limit_position` up to which can be scanned."]
-    #[doc = " \n# Return\n the resulting position after the scan terminates which is a complete message or -1 for error."]
-    #[deprecated]
-    #[doc = " @deprecated Will be removed in <code>1.53.0</code>."]
-    pub fn controlled_peek<AeronControlledFragmentHandlerHandlerImpl: AeronControlledFragmentHandlerCallback>(
-        &self,
-        initial_position: i64,
-        handler: Option<&Handler<AeronControlledFragmentHandlerHandlerImpl>>,
-        limit_position: i64,
-    ) -> i64 {
-        unsafe {
-            #[cfg(feature = "log-c-bindings")]
-            log::info!(
-                "{}({})",
-                stringify!(aeron_image_controlled_peek),
-                [
-                    concat!("image", ": ", stringify!(*mut aeron_image_t)).to_string(),
-                    format!("{} = {:?}", "initial_position", initial_position),
-                    concat!("handler", ": ", stringify!(aeron_controlled_fragment_handler_t)).to_string()
-                ]
-                .join(", ")
-            );
-            let result = aeron_image_controlled_peek(
-                self.get_inner(),
-                initial_position.into(),
-                {
-                    let callback: aeron_controlled_fragment_handler_t = if handler.is_none() {
-                        None
-                    } else {
-                        Some(aeron_controlled_fragment_handler_t_callback::<AeronControlledFragmentHandlerHandlerImpl>)
-                    };
-                    callback
-                },
-                handler.map(|m| m.as_raw()).unwrap_or_else(|| std::ptr::null_mut()),
-                limit_position.into(),
-            );
-            #[cfg(feature = "log-c-bindings")]
-            log::info!("  -> {:?}", result);
-            result.into()
-        }
-    }
-    #[inline]
-    #[doc = "Peek for new messages in a stream by scanning forward from an initial position. If new messages are found then"]
-    #[doc = " they will be delivered to the handler up to a limited position."]
-    #[doc = " \n"]
-    #[doc = " Use a controlled fragment assembler to assemble messages which span multiple fragments. Scans must also"]
-    #[doc = " start at the beginning of a message so that the assembler is reset."]
-    #[doc = ""]
-    #[doc = "# Parameters\n \n - `initial_position` from which to peek forward."]
-    #[doc = " \n - `handler` to which message fragments are delivered."]
-    #[doc = " \n - `clientd` to pass to the handler."]
-    #[doc = " \n - `limit_position` up to which can be scanned."]
-    #[doc = " \n# Return\n the resulting position after the scan terminates which is a complete message or -1 for error."]
-    #[deprecated]
-    #[doc = " @deprecated Will be removed in <code>1.53.0</code>."]
-    #[doc = r""]
-    #[doc = r""]
-    #[doc = r" **Stack-borrowed closure** (`_fn` variant): the `FnMut` closure lives on the"]
-    #[doc = r" caller's stack and is borrowed for this call only — the callback fires"]
-    #[doc = r" synchronously inside the call, so nothing is heap-allocated, nothing is stored,"]
-    #[doc = r" and the closure may borrow local state. Prefer this over the retained"]
-    #[doc = r" [`Handler`]-based form on the hot path; only generated for callbacks the C"]
-    #[doc = r" client does not retain (i.e. not stored for later firing)."]
-    #[doc = r""]
-    #[doc = r" # Panics"]
-    #[doc = r""]
-    #[doc = r#" A panic inside the closure cannot unwind across the `extern "C"` callback"#]
-    #[doc = r" boundary and **aborts the process** (since Rust 1.81). Return early instead"]
-    #[doc = r" of panicking in production fragment handlers."]
-    pub fn controlled_peek_fn<
-        AeronControlledFragmentHandlerHandlerImpl: FnMut(&[u8], AeronHeader) -> aeron_controlled_fragment_handler_action_t,
-    >(
-        &self,
-        initial_position: i64,
-        mut handler: AeronControlledFragmentHandlerHandlerImpl,
-        limit_position: i64,
-    ) -> i64 {
-        unsafe {
-            #[cfg(feature = "log-c-bindings")]
-            log::info!(
-                "{}({})",
-                stringify!(aeron_image_controlled_peek),
-                [
-                    concat!("image", ": ", stringify!(*mut aeron_image_t)).to_string(),
-                    format!("{} = {:?}", "initial_position", initial_position),
-                    concat!("handler", ": ", stringify!(aeron_controlled_fragment_handler_t)).to_string()
-                ]
-                .join(", ")
-            );
-            let result = aeron_image_controlled_peek(
-                self.get_inner(),
-                initial_position.into(),
-                Some(
-                    aeron_controlled_fragment_handler_t_callback_for_once_closure::<
-                        AeronControlledFragmentHandlerHandlerImpl,
-                    >,
-                ),
-                &mut handler as *mut _ as *mut std::os::raw::c_void,
-                limit_position.into(),
-            );
-            #[cfg(feature = "log-c-bindings")]
-            log::info!("  -> {:?}", result);
-            result.into()
-        }
-    }
-    #[inline]
     #[doc = "Poll for new messages in a stream. If new messages are found beyond the last consumed position then they"]
     #[doc = " will be delivered to the handler up to a limited number of bytes."]
     #[doc = " \n"]
@@ -12796,7 +12667,7 @@ impl From<aeron_image_t> for AeronImage {
     #[inline]
     fn from(value: aeron_image_t) -> Self {
         AeronImage {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -12878,7 +12749,7 @@ impl AeronIovec {
         #[cfg(feature = "extra-logging")]
         log::debug!("creating zeroed empty resource on stack {}", stringify!(aeron_iovec_t));
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -12959,7 +12830,7 @@ impl From<aeron_iovec_t> for AeronIovec {
     #[inline]
     fn from(value: aeron_iovec_t) -> Self {
         AeronIovec {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -13089,7 +12960,7 @@ impl AeronIpcChannelParams {
             stringify!(aeron_ipc_channel_params_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -13184,7 +13055,7 @@ impl From<aeron_ipc_channel_params_t> for AeronIpcChannelParams {
     #[inline]
     fn from(value: aeron_ipc_channel_params_t) -> Self {
         AeronIpcChannelParams {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -13283,7 +13154,7 @@ impl AeronLogBuffer {
             stringify!(aeron_log_buffer_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline(always)]
@@ -13350,7 +13221,7 @@ impl From<aeron_log_buffer_t> for AeronLogBuffer {
     #[inline]
     fn from(value: aeron_log_buffer_t) -> Self {
         AeronLogBuffer {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -13567,7 +13438,7 @@ impl AeronLogbufferMetadata {
             stringify!(aeron_logbuffer_metadata_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -13794,7 +13665,7 @@ impl From<aeron_logbuffer_metadata_t> for AeronLogbufferMetadata {
     #[inline]
     fn from(value: aeron_logbuffer_metadata_t) -> Self {
         AeronLogbufferMetadata {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -13936,7 +13807,7 @@ impl AeronLossReporterEntry {
             stringify!(aeron_loss_reporter_entry_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -14027,7 +13898,7 @@ impl From<aeron_loss_reporter_entry_t> for AeronLossReporterEntry {
     #[inline]
     fn from(value: aeron_loss_reporter_entry_t) -> Self {
         AeronLossReporterEntry {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -14149,7 +14020,7 @@ impl AeronLossReporter {
             stringify!(aeron_loss_reporter_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -14435,7 +14306,7 @@ impl From<aeron_loss_reporter_t> for AeronLossReporter {
     #[inline]
     fn from(value: aeron_loss_reporter_t) -> Self {
         AeronLossReporter {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -14555,7 +14426,7 @@ impl AeronMappedBuffer {
             stringify!(aeron_mapped_buffer_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -14636,7 +14507,7 @@ impl From<aeron_mapped_buffer_t> for AeronMappedBuffer {
     #[inline]
     fn from(value: aeron_mapped_buffer_t) -> Self {
         AeronMappedBuffer {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -14756,7 +14627,7 @@ impl AeronMappedFile {
             stringify!(aeron_mapped_file_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -14768,7 +14639,12 @@ impl AeronMappedFile {
         self.length.into()
     }
     #[inline]
-    pub fn aeron_map_new_file(&self, path: &std::ffi::CStr, fill_with_zeroes: bool) -> Result<i32, AeronCError> {
+    pub fn aeron_map_new_file(
+        &self,
+        path: &std::ffi::CStr,
+        fill_with_zeroes: bool,
+        page_size: u64,
+    ) -> Result<i32, AeronCError> {
         unsafe {
             #[cfg(feature = "log-c-bindings")]
             log::info!(
@@ -14777,11 +14653,17 @@ impl AeronMappedFile {
                 [
                     concat!("mapped_file", ": ", stringify!(*mut aeron_mapped_file_t)).to_string(),
                     concat!("path", ": ", stringify!(*const ::std::os::raw::c_char)).to_string(),
-                    format!("{} = {:?}", "fill_with_zeroes", fill_with_zeroes)
+                    format!("{} = {:?}", "fill_with_zeroes", fill_with_zeroes),
+                    format!("{} = {:?}", "page_size", page_size)
                 ]
                 .join(", ")
             );
-            let result = aeron_map_new_file(self.get_inner(), path.as_ptr(), fill_with_zeroes.into());
+            let result = aeron_map_new_file(
+                self.get_inner(),
+                path.as_ptr(),
+                fill_with_zeroes.into(),
+                page_size.into(),
+            );
             #[cfg(feature = "log-c-bindings")]
             log::info!("  -> {:?}", result);
             if result < 0 {
@@ -14805,6 +14687,29 @@ impl AeronMappedFile {
                 .join(", ")
             );
             let result = aeron_map_existing_file(self.get_inner(), path.as_ptr());
+            #[cfg(feature = "log-c-bindings")]
+            log::info!("  -> {:?}", result);
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
+    pub fn aeron_map_readonly_file(&self, path: &std::ffi::CStr) -> Result<i32, AeronCError> {
+        unsafe {
+            #[cfg(feature = "log-c-bindings")]
+            log::info!(
+                "{}({})",
+                stringify!(aeron_map_readonly_file),
+                [
+                    concat!("mapped_file", ": ", stringify!(*mut aeron_mapped_file_t)).to_string(),
+                    concat!("path", ": ", stringify!(*const ::std::os::raw::c_char)).to_string()
+                ]
+                .join(", ")
+            );
+            let result = aeron_map_readonly_file(self.get_inner(), path.as_ptr());
             #[cfg(feature = "log-c-bindings")]
             log::info!("  -> {:?}", result);
             if result < 0 {
@@ -14897,7 +14802,7 @@ impl From<aeron_mapped_file_t> for AeronMappedFile {
     #[inline]
     fn from(value: aeron_mapped_file_t) -> Self {
         AeronMappedFile {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -15026,7 +14931,7 @@ impl AeronMappedRawLog {
             stringify!(aeron_mapped_raw_log_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -15190,7 +15095,7 @@ impl From<aeron_mapped_raw_log_t> for AeronMappedRawLog {
     #[inline]
     fn from(value: aeron_mapped_raw_log_t) -> Self {
         AeronMappedRawLog {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -15326,7 +15231,7 @@ impl AeronNakHeader {
             stringify!(aeron_nak_header_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -15417,7 +15322,7 @@ impl From<aeron_nak_header_t> for AeronNakHeader {
     #[inline]
     fn from(value: aeron_nak_header_t) -> Self {
         AeronNakHeader {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -15550,7 +15455,7 @@ impl AeronAvailableCounterPair {
             stringify!(aeron_on_available_counter_pair_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -15625,7 +15530,7 @@ impl From<aeron_on_available_counter_pair_t> for AeronAvailableCounterPair {
     #[inline]
     fn from(value: aeron_on_available_counter_pair_t) -> Self {
         AeronAvailableCounterPair {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -15758,7 +15663,7 @@ impl AeronCloseClientPair {
             stringify!(aeron_on_close_client_pair_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -15833,7 +15738,7 @@ impl From<aeron_on_close_client_pair_t> for AeronCloseClientPair {
     #[inline]
     fn from(value: aeron_on_close_client_pair_t) -> Self {
         AeronCloseClientPair {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -15966,7 +15871,7 @@ impl AeronUnavailableCounterPair {
             stringify!(aeron_on_unavailable_counter_pair_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -16041,7 +15946,7 @@ impl From<aeron_on_unavailable_counter_pair_t> for AeronUnavailableCounterPair {
     #[inline]
     fn from(value: aeron_on_unavailable_counter_pair_t) -> Self {
         AeronUnavailableCounterPair {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -16162,7 +16067,7 @@ impl AeronOptionHeader {
             stringify!(aeron_option_header_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -16237,7 +16142,7 @@ impl From<aeron_option_header_t> for AeronOptionHeader {
     #[inline]
     fn from(value: aeron_option_header_t) -> Self {
         AeronOptionHeader {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -16363,7 +16268,7 @@ impl AeronPerThreadError {
             stringify!(aeron_per_thread_error_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -16442,7 +16347,7 @@ impl From<aeron_per_thread_error_t> for AeronPerThreadError {
     #[inline]
     fn from(value: aeron_per_thread_error_t) -> Self {
         AeronPerThreadError {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -16606,7 +16511,7 @@ impl AeronPublicationConstants {
             stringify!(aeron_publication_constants_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -16729,7 +16634,7 @@ impl From<aeron_publication_constants_t> for AeronPublicationConstants {
     #[inline]
     fn from(value: aeron_publication_constants_t) -> Self {
         AeronPublicationConstants {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -16841,7 +16746,7 @@ impl AeronPublicationErrorValues {
             stringify!(aeron_publication_error_values_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -16973,7 +16878,7 @@ impl From<aeron_publication_error_values_t> for AeronPublicationErrorValues {
     #[inline]
     fn from(value: aeron_publication_error_values_t) -> Self {
         AeronPublicationErrorValues {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -17030,7 +16935,7 @@ impl AeronPublication {
             stringify!(aeron_publication_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -17234,12 +17139,9 @@ impl AeronPublication {
     #[doc = "Fill in a structure with the constants in use by a publication."]
     #[doc = ""]
     pub fn get_constants(&self) -> Result<AeronPublicationConstants, AeronCError> {
-        let mut value = std::mem::MaybeUninit::uninit();
-        let code = unsafe { aeron_publication_constants(self.get_inner(), value.as_mut_ptr()) };
-        if code < 0 {
-            return Err(AeronCError::from_code(code));
-        }
-        Ok(AeronPublicationConstants::from(unsafe { value.assume_init() }))
+        let result = AeronPublicationConstants::new_zeroed_on_stack();
+        self.constants(&result)?;
+        Ok(result)
     }
     #[inline]
     #[doc = "Get the current position to which the publication has advanced for this stream."]
@@ -17459,7 +17361,7 @@ impl From<aeron_publication_t> for AeronPublication {
     #[inline]
     fn from(value: aeron_publication_t) -> Self {
         AeronPublication {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -17584,7 +17486,7 @@ impl AeronResolutionHeaderIpv4 {
             stringify!(aeron_resolution_header_ipv4_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -17678,7 +17580,7 @@ impl From<aeron_resolution_header_ipv4_t> for AeronResolutionHeaderIpv4 {
     #[inline]
     fn from(value: aeron_resolution_header_ipv4_t) -> Self {
         AeronResolutionHeaderIpv4 {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -17804,7 +17706,7 @@ impl AeronResolutionHeaderIpv6 {
             stringify!(aeron_resolution_header_ipv6_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -17898,7 +17800,7 @@ impl From<aeron_resolution_header_ipv6_t> for AeronResolutionHeaderIpv6 {
     #[inline]
     fn from(value: aeron_resolution_header_ipv6_t) -> Self {
         AeronResolutionHeaderIpv6 {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -18021,7 +17923,7 @@ impl AeronResolutionHeader {
             stringify!(aeron_resolution_header_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -18104,7 +18006,7 @@ impl From<aeron_resolution_header_t> for AeronResolutionHeader {
     #[inline]
     fn from(value: aeron_resolution_header_t) -> Self {
         AeronResolutionHeader {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -18234,7 +18136,7 @@ impl AeronResponseSetupHeader {
             stringify!(aeron_response_setup_header_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -18317,7 +18219,7 @@ impl From<aeron_response_setup_header_t> for AeronResponseSetupHeader {
     #[inline]
     fn from(value: aeron_response_setup_header_t) -> Self {
         AeronResponseSetupHeader {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -18453,7 +18355,7 @@ impl AeronRttmHeader {
             stringify!(aeron_rttm_header_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -18544,7 +18446,7 @@ impl From<aeron_rttm_header_t> for AeronRttmHeader {
     #[inline]
     fn from(value: aeron_rttm_header_t) -> Self {
         AeronRttmHeader {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -18689,7 +18591,7 @@ impl AeronSetupHeader {
             stringify!(aeron_setup_header_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -18792,7 +18694,7 @@ impl From<aeron_setup_header_t> for AeronSetupHeader {
     #[inline]
     fn from(value: aeron_setup_header_t) -> Self {
         AeronSetupHeader {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -18931,7 +18833,7 @@ impl AeronStatusMessageHeader {
             stringify!(aeron_status_message_header_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -19050,7 +18952,7 @@ impl From<aeron_status_message_header_t> for AeronStatusMessageHeader {
     #[inline]
     fn from(value: aeron_status_message_header_t) -> Self {
         AeronStatusMessageHeader {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -19169,7 +19071,7 @@ impl AeronStatusMessageOptionalHeader {
             stringify!(aeron_status_message_optional_header_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -19240,7 +19142,7 @@ impl From<aeron_status_message_optional_header_t> for AeronStatusMessageOptional
     #[inline]
     fn from(value: aeron_status_message_optional_header_t) -> Self {
         AeronStatusMessageOptionalHeader {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -19363,7 +19265,7 @@ impl AeronStrToPtrHashMapKey {
             stringify!(aeron_str_to_ptr_hash_map_key_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -19446,7 +19348,7 @@ impl From<aeron_str_to_ptr_hash_map_key_t> for AeronStrToPtrHashMapKey {
     #[inline]
     fn from(value: aeron_str_to_ptr_hash_map_key_t) -> Self {
         AeronStrToPtrHashMapKey {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -19581,7 +19483,7 @@ impl AeronStrToPtrHashMap {
             stringify!(aeron_str_to_ptr_hash_map_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -19672,7 +19574,7 @@ impl From<aeron_str_to_ptr_hash_map_t> for AeronStrToPtrHashMap {
     #[inline]
     fn from(value: aeron_str_to_ptr_hash_map_t) -> Self {
         AeronStrToPtrHashMap {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -19809,7 +19711,7 @@ impl AeronSubscriptionConstants {
             stringify!(aeron_subscription_constants_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -19904,7 +19806,7 @@ impl From<aeron_subscription_constants_t> for AeronSubscriptionConstants {
     #[inline]
     fn from(value: aeron_subscription_constants_t) -> Self {
         AeronSubscriptionConstants {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -20004,7 +19906,7 @@ impl AeronSubscription {
             stringify!(aeron_subscription_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -20368,12 +20270,9 @@ impl AeronSubscription {
     #[doc = "Fill in a structure with the constants in use by a subscription."]
     #[doc = ""]
     pub fn get_constants(&self) -> Result<AeronSubscriptionConstants, AeronCError> {
-        let mut value = std::mem::MaybeUninit::uninit();
-        let code = unsafe { aeron_subscription_constants(self.get_inner(), value.as_mut_ptr()) };
-        if code < 0 {
-            return Err(AeronCError::from_code(code));
-        }
-        Ok(AeronSubscriptionConstants::from(unsafe { value.assume_init() }))
+        let result = AeronSubscriptionConstants::new_zeroed_on_stack();
+        self.constants(&result)?;
+        Ok(result)
     }
     #[inline]
     #[doc = "Count of images associated to this subscription."]
@@ -20541,11 +20440,11 @@ impl AeronSubscription {
     #[doc = "Retrieves the first local socket address for this subscription. If this is not MDS then it will be the one"]
     #[doc = " representing endpoint for this subscription."]
     #[doc = ""]
-    #[doc = " @see aeron_subscription_local_sockaddrs"]
-    #[doc = "# Parameters\n \n - `address` for the received address"]
+    #[doc = "# Parameters\n \n - `address` buffer to hold the resolved endooint."]
     #[doc = " \n - `address_len` available length for the copied address."]
     #[doc = " \n# Return\n -1 on error, 0 if address not found, 1 if address is found."]
-    pub fn resolved_endpoint(&self, address: &str) -> Result<i32, AeronCError> {
+    #[doc = " @see aeron_subscription_local_sockaddrs"]
+    pub fn resolved_endpoint(&self, address: &mut [u8]) -> Result<i32, AeronCError> {
         unsafe {
             #[cfg(feature = "log-c-bindings")]
             log::info!(
@@ -20558,7 +20457,7 @@ impl AeronSubscription {
                 .join(", ")
             );
             let result =
-                aeron_subscription_resolved_endpoint(self.get_inner(), address.as_ptr() as *const _, address.len());
+                aeron_subscription_resolved_endpoint(self.get_inner(), address.as_mut_ptr() as *mut _, address.len());
             #[cfg(feature = "log-c-bindings")]
             log::info!("  -> {:?}", result);
             if result < 0 {
@@ -20569,11 +20468,54 @@ impl AeronSubscription {
         }
     }
     #[inline]
+    #[doc = "Retrieves the first local socket address for this subscription. If this is not MDS then it will be the one"]
+    #[doc = " representing endpoint for this subscription."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `address` buffer to hold the resolved endooint."]
+    #[doc = " \n - `address_len` available length for the copied address."]
+    #[doc = " \n# Return\n -1 on error, 0 if address not found, 1 if address is found."]
+    #[doc = " @see aeron_subscription_local_sockaddrs"]
+    pub fn resolved_endpoint_as_string(&self, max_length: usize) -> Result<String, AeronCError> {
+        let mut result = String::with_capacity(max_length);
+        self.resolved_endpoint_into(&mut result)?;
+        Ok(result)
+    }
+    #[inline]
+    #[doc = "Retrieves the first local socket address for this subscription. If this is not MDS then it will be the one"]
+    #[doc = " representing endpoint for this subscription."]
+    #[doc = ""]
+    #[doc = "# Parameters\n \n - `address` buffer to hold the resolved endooint."]
+    #[doc = " \n - `address_len` available length for the copied address."]
+    #[doc = " \n# Return\n -1 on error, 0 if address not found, 1 if address is found."]
+    #[doc = " @see aeron_subscription_local_sockaddrs"]
+    #[doc = "NOTE: allocation friendly method, the string capacity must be set as it will truncate string to capacity it will never grow the string. So if you pass String::new() it will write 0 chars"]
+    pub fn resolved_endpoint_into(&self, dst_truncate_to_capacity: &mut String) -> Result<i32, AeronCError> {
+        unsafe {
+            let capacity = dst_truncate_to_capacity.capacity();
+            let vec = dst_truncate_to_capacity.as_mut_vec();
+            vec.set_len(capacity);
+            let result = self.resolved_endpoint(&mut vec[..])?;
+            let mut len = 0;
+            loop {
+                if len == capacity {
+                    break;
+                }
+                let val = vec[len];
+                if val == 0 {
+                    break;
+                }
+                len += 1;
+            }
+            vec.set_len(len);
+            Ok(result)
+        }
+    }
+    #[inline]
     #[doc = "Retrieves the channel URI for this subscription with any wildcard ports filled in. If the channel is not UDP or"]
     #[doc = " does not have a wildcard port (<code>0</code>), then it will return the original URI."]
     #[doc = ""]
-    #[doc = "# Parameters\n \n - `uri` buffer to hold the resolved uri"]
-    #[doc = " \n - `uri_len` length of the buffer"]
+    #[doc = "# Parameters\n \n - `uri` buffer to hold the resolved uri."]
+    #[doc = " \n - `uri_len` length of the buffer."]
     #[doc = " \n# Return\n -1 on failure or the number of bytes written to the buffer (excluding the NULL terminator). Writing is done"]
     #[doc = " on a per key basis, so if the buffer was truncated before writing completed, it will only include the byte count up"]
     #[doc = " to the key that overflowed. However, the invariant that if the number returned >= uri_len, then output will have been"]
@@ -20608,8 +20550,8 @@ impl AeronSubscription {
     #[doc = "Retrieves the channel URI for this subscription with any wildcard ports filled in. If the channel is not UDP or"]
     #[doc = " does not have a wildcard port (<code>0</code>), then it will return the original URI."]
     #[doc = ""]
-    #[doc = "# Parameters\n \n - `uri` buffer to hold the resolved uri"]
-    #[doc = " \n - `uri_len` length of the buffer"]
+    #[doc = "# Parameters\n \n - `uri` buffer to hold the resolved uri."]
+    #[doc = " \n - `uri_len` length of the buffer."]
     #[doc = " \n# Return\n -1 on failure or the number of bytes written to the buffer (excluding the NULL terminator). Writing is done"]
     #[doc = " on a per key basis, so if the buffer was truncated before writing completed, it will only include the byte count up"]
     #[doc = " to the key that overflowed. However, the invariant that if the number returned >= uri_len, then output will have been"]
@@ -20623,8 +20565,8 @@ impl AeronSubscription {
     #[doc = "Retrieves the channel URI for this subscription with any wildcard ports filled in. If the channel is not UDP or"]
     #[doc = " does not have a wildcard port (<code>0</code>), then it will return the original URI."]
     #[doc = ""]
-    #[doc = "# Parameters\n \n - `uri` buffer to hold the resolved uri"]
-    #[doc = " \n - `uri_len` length of the buffer"]
+    #[doc = "# Parameters\n \n - `uri` buffer to hold the resolved uri."]
+    #[doc = " \n - `uri_len` length of the buffer."]
     #[doc = " \n# Return\n -1 on failure or the number of bytes written to the buffer (excluding the NULL terminator). Writing is done"]
     #[doc = " on a per key basis, so if the buffer was truncated before writing completed, it will only include the byte count up"]
     #[doc = " to the key that overflowed. However, the invariant that if the number returned >= uri_len, then output will have been"]
@@ -20634,20 +20576,25 @@ impl AeronSubscription {
         &self,
         dst_truncate_to_capacity: &mut String,
     ) -> Result<i32, AeronCError> {
-        let capacity = dst_truncate_to_capacity.capacity();
-        let vec = unsafe { dst_truncate_to_capacity.as_mut_vec() };
-        vec.clear();
-        vec.resize(capacity, 0);
-        let result = self.try_resolve_channel_endpoint_port(&mut vec[..]);
-        let len = match result {
-            Ok(_) => {
-                let len = vec.iter().position(|&b| b == 0).unwrap_or(capacity);
-                std::str::from_utf8(&vec[..len]).map_or_else(|e| e.valid_up_to(), |s| s.len())
+        unsafe {
+            let capacity = dst_truncate_to_capacity.capacity();
+            let vec = dst_truncate_to_capacity.as_mut_vec();
+            vec.set_len(capacity);
+            let result = self.try_resolve_channel_endpoint_port(&mut vec[..])?;
+            let mut len = 0;
+            loop {
+                if len == capacity {
+                    break;
+                }
+                let val = vec[len];
+                if val == 0 {
+                    break;
+                }
+                len += 1;
             }
-            Err(_) => 0,
-        };
-        vec.truncate(len);
-        result
+            vec.set_len(len);
+            Ok(result)
+        }
     }
     #[inline(always)]
     pub fn get_inner(&self) -> *mut aeron_subscription_t {
@@ -20713,7 +20660,7 @@ impl From<aeron_subscription_t> for AeronSubscription {
     #[inline]
     fn from(value: aeron_subscription_t) -> Self {
         AeronSubscription {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -21466,11 +21413,6 @@ impl Aeron {
                 .join(", ")
             );
             let result = aeron_add_available_counter_handler(self.get_inner(), pair.get_inner());
-            if result >= 0 {
-                if let Some(__inner) = self.inner.as_owned() {
-                    __inner.add_dependency(pair.clone());
-                }
-            }
             #[cfg(feature = "log-c-bindings")]
             log::info!("  -> {:?}", result);
             if result < 0 {
@@ -21529,11 +21471,6 @@ impl Aeron {
                 .join(", ")
             );
             let result = aeron_add_unavailable_counter_handler(self.get_inner(), pair.get_inner());
-            if result >= 0 {
-                if let Some(__inner) = self.inner.as_owned() {
-                    __inner.add_dependency(pair.clone());
-                }
-            }
             #[cfg(feature = "log-c-bindings")]
             log::info!("  -> {:?}", result);
             if result < 0 {
@@ -21592,11 +21529,6 @@ impl Aeron {
                 .join(", ")
             );
             let result = aeron_add_close_handler(self.get_inner(), pair.get_inner());
-            if result >= 0 {
-                if let Some(__inner) = self.inner.as_owned() {
-                    __inner.add_dependency(pair.clone());
-                }
-            }
             #[cfg(feature = "log-c-bindings")]
             log::info!("  -> {:?}", result);
             if result < 0 {
@@ -22124,6 +22056,26 @@ impl Aeron {
             #[cfg(feature = "log-c-bindings")]
             log::info!("  -> {:?}", result);
             result.into()
+        }
+    }
+    #[inline]
+    #[doc = "SAFETY: this is static for performance reasons, so you should not store this without copying it!!"]
+    pub fn error_code_str(errcode: ::std::os::raw::c_int) -> &'static str {
+        unsafe {
+            #[cfg(feature = "log-c-bindings")]
+            log::info!(
+                "{}({})",
+                stringify!(aeron_error_code_str),
+                [format!("{} = {:?}", "errcode", errcode)].join(", ")
+            );
+            let result = aeron_error_code_str(errcode.into());
+            #[cfg(feature = "log-c-bindings")]
+            log::info!("  -> {:?}", result);
+            if result.is_null() {
+                ""
+            } else {
+                unsafe { std::ffi::CStr::from_ptr(result).to_str().unwrap_or("") }
+            }
         }
     }
     #[inline]
@@ -22747,6 +22699,25 @@ impl Aeron {
         }
     }
     #[inline]
+    pub fn thread_get_affinity(cpu_affinity: *mut u8) -> Result<i32, AeronCError> {
+        unsafe {
+            #[cfg(feature = "log-c-bindings")]
+            log::info!(
+                "{}({})",
+                stringify!(aeron_thread_get_affinity),
+                [concat!("cpu_affinity", ": ", stringify!(*mut u8)).to_string()].join(", ")
+            );
+            let result = aeron_thread_get_affinity(cpu_affinity.into());
+            #[cfg(feature = "log-c-bindings")]
+            log::info!("  -> {:?}", result);
+            if result < 0 {
+                return Err(AeronCError::from_code(result));
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+    #[inline]
     pub fn mutex_init(mutex: *mut aeron_mutex_t) -> Result<i32, AeronCError> {
         unsafe {
             #[cfg(feature = "log-c-bindings")]
@@ -22903,7 +22874,7 @@ impl From<aeron_t> for Aeron {
     #[inline]
     fn from(value: aeron_t) -> Self {
         Aeron {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
             _context: None,
         }
     }
@@ -23033,7 +23004,7 @@ impl AeronUdpChannelParams {
             stringify!(aeron_udp_channel_params_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -23160,7 +23131,7 @@ impl From<aeron_udp_channel_params_t> for AeronUdpChannelParams {
     #[inline]
     fn from(value: aeron_udp_channel_params_t) -> Self {
         AeronUdpChannelParams {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -23281,7 +23252,7 @@ impl AeronUriParam {
             stringify!(aeron_uri_param_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -23364,7 +23335,7 @@ impl From<aeron_uri_param_t> for AeronUriParam {
     #[inline]
     fn from(value: aeron_uri_param_t) -> Self {
         AeronUriParam {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -23485,7 +23456,7 @@ impl AeronUriParams {
             stringify!(aeron_uri_params_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -23764,7 +23735,7 @@ impl From<aeron_uri_params_t> for AeronUriParams {
     #[inline]
     fn from(value: aeron_uri_params_t) -> Self {
         AeronUriParams {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -23865,7 +23836,7 @@ impl AeronUriStringBuilder {
             stringify!(aeron_uri_string_builder_t)
         );
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -24003,20 +23974,25 @@ impl AeronUriStringBuilder {
     #[inline]
     #[doc = "NOTE: allocation friendly method, the string capacity must be set as it will truncate string to capacity it will never grow the string. So if you pass String::new() it will write 0 chars"]
     pub fn sprint_into(&self, dst_truncate_to_capacity: &mut String) -> Result<i32, AeronCError> {
-        let capacity = dst_truncate_to_capacity.capacity();
-        let vec = unsafe { dst_truncate_to_capacity.as_mut_vec() };
-        vec.clear();
-        vec.resize(capacity, 0);
-        let result = self.sprint(&mut vec[..]);
-        let len = match result {
-            Ok(_) => {
-                let len = vec.iter().position(|&b| b == 0).unwrap_or(capacity);
-                std::str::from_utf8(&vec[..len]).map_or_else(|e| e.valid_up_to(), |s| s.len())
+        unsafe {
+            let capacity = dst_truncate_to_capacity.capacity();
+            let vec = dst_truncate_to_capacity.as_mut_vec();
+            vec.set_len(capacity);
+            let result = self.sprint(&mut vec[..])?;
+            let mut len = 0;
+            loop {
+                if len == capacity {
+                    break;
+                }
+                let val = vec[len];
+                if val == 0 {
+                    break;
+                }
+                len += 1;
             }
-            Err(_) => 0,
-        };
-        vec.truncate(len);
-        result
+            vec.set_len(len);
+            Ok(result)
+        }
     }
     #[inline]
     pub fn set_initial_position(
@@ -24117,7 +24093,7 @@ impl From<aeron_uri_string_builder_t> for AeronUriStringBuilder {
     #[inline]
     fn from(value: aeron_uri_string_builder_t) -> Self {
         AeronUriStringBuilder {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }
@@ -24203,7 +24179,7 @@ impl AeronUri {
         #[cfg(feature = "extra-logging")]
         log::debug!("creating zeroed empty resource on stack {}", stringify!(aeron_uri_t));
         Self {
-            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
+            inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
         }
     }
     #[inline]
@@ -24370,20 +24346,25 @@ impl AeronUri {
     #[inline]
     #[doc = "NOTE: allocation friendly method, the string capacity must be set as it will truncate string to capacity it will never grow the string. So if you pass String::new() it will write 0 chars"]
     pub fn sprint_into(&self, dst_truncate_to_capacity: &mut String) -> Result<i32, AeronCError> {
-        let capacity = dst_truncate_to_capacity.capacity();
-        let vec = unsafe { dst_truncate_to_capacity.as_mut_vec() };
-        vec.clear();
-        vec.resize(capacity, 0);
-        let result = self.sprint(&mut vec[..]);
-        let len = match result {
-            Ok(_) => {
-                let len = vec.iter().position(|&b| b == 0).unwrap_or(capacity);
-                std::str::from_utf8(&vec[..len]).map_or_else(|e| e.valid_up_to(), |s| s.len())
+        unsafe {
+            let capacity = dst_truncate_to_capacity.capacity();
+            let vec = dst_truncate_to_capacity.as_mut_vec();
+            vec.set_len(capacity);
+            let result = self.sprint(&mut vec[..])?;
+            let mut len = 0;
+            loop {
+                if len == capacity {
+                    break;
+                }
+                let val = vec[len];
+                if val == 0 {
+                    break;
+                }
+                len += 1;
             }
-            Err(_) => 0,
-        };
-        vec.truncate(len);
-        result
+            vec.set_len(len);
+            Ok(result)
+        }
     }
     #[inline]
     pub fn parse_tag(tag_str: &std::ffi::CStr) -> i64 {
@@ -24464,7 +24445,7 @@ impl From<aeron_uri_t> for AeronUri {
     #[inline]
     fn from(value: aeron_uri_t) -> Self {
         AeronUri {
-            inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
+            inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
         }
     }
 }

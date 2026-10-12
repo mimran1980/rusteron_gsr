@@ -9,16 +9,13 @@ pub const AERON_CLIENT_ERROR_DRIVER_BUFFER_FULL: u32 = 1004;
 pub const AERON_CLIENT_MAX_LOCAL_ADDRESS_STR_LEN: u32 = 64;
 pub const AERON_RESPONSE_ADDRESS_TYPE_IPV4: u32 = 1;
 pub const AERON_RESPONSE_ADDRESS_TYPE_IPV6: u32 = 2;
-#[doc = " The top level Aeron directory used for communication between a Media Driver and client."]
 pub const AERON_DIR_ENV_VAR: &[u8; 10] = b"AERON_DIR\0";
 pub const AERON_DRIVER_TIMEOUT_ENV_VAR: &[u8; 21] = b"AERON_DRIVER_TIMEOUT\0";
 pub const AERON_CLIENT_RESOURCE_LINGER_DURATION_ENV_VAR: &[u8; 38] = b"AERON_CLIENT_RESOURCE_LINGER_DURATION\0";
 pub const AERON_CLIENT_IDLE_SLEEP_DURATION_ENV_VAR: &[u8; 33] = b"AERON_CLIENT_IDLE_SLEEP_DURATION\0";
 pub const AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY_ENV_VAR: &[u8; 37] = b"AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY\0";
 pub const AERON_CLIENT_NAME_ENV_VAR: &[u8; 18] = b"AERON_CLIENT_NAME\0";
-#[doc = " Function name to call on start of each agent."]
 pub const AERON_AGENT_ON_START_FUNCTION_ENV_VAR: &[u8; 30] = b"AERON_AGENT_ON_START_FUNCTION\0";
-#[doc = " Counters Reader functions and definitions"]
 pub const AERON_COUNTER_CACHE_LINE_LENGTH: u32 = 64;
 pub const AERON_COUNTER_MAX_CLIENT_NAME_LENGTH: u32 = 100;
 pub const AERON_COUNTER_RECORD_UNUSED: u32 = 0;
@@ -26,33 +23,30 @@ pub const AERON_COUNTER_RECORD_ALLOCATED: u32 = 1;
 pub const AERON_COUNTER_RECORD_RECLAIMED: i32 = -1;
 pub const AERON_COUNTER_NOT_FREE_TO_REUSE: u64 = 9223372036854775807;
 pub const AERON_NULL_COUNTER_ID: i32 = -1;
-#[doc = " The publication is not connected to a subscriber, this can be an intermittent state as subscribers come and go."]
 pub const AERON_PUBLICATION_NOT_CONNECTED: i32 = -1;
-#[doc = " The offer failed due to back pressure from the subscribers preventing further transmission."]
 pub const AERON_PUBLICATION_BACK_PRESSURED: i32 = -2;
-#[doc = " The offer failed due to an administration action and should be retried.\n The action is an operation such as log rotation which is likely to have succeeded by the next retry attempt."]
 pub const AERON_PUBLICATION_ADMIN_ACTION: i32 = -3;
-#[doc = " The publication has been closed and should no longer be used."]
 pub const AERON_PUBLICATION_CLOSED: i32 = -4;
-#[doc = " The offer failed due to reaching the maximum position of the stream given term buffer length times the total\n possible number of terms.\n <p>\n If this happens then the publication should be closed and a new one added. To make it less likely to happen then\n increase the term buffer length."]
 pub const AERON_PUBLICATION_MAX_POSITION_EXCEEDED: i32 = -5;
-#[doc = " An error has occurred. Such as a bad argument."]
 pub const AERON_PUBLICATION_ERROR: i32 = -6;
 pub const AERON_MAX_PATH: u32 = 4096;
-pub const ARCHIVE_ERROR_CODE_GENERIC: u32 = 0;
-pub const ARCHIVE_ERROR_CODE_ACTIVE_LISTING: u32 = 1;
-pub const ARCHIVE_ERROR_CODE_ACTIVE_RECORDING: u32 = 2;
-pub const ARCHIVE_ERROR_CODE_ACTIVE_SUBSCRIPTION: u32 = 3;
-pub const ARCHIVE_ERROR_CODE_UNKNOWN_SUBSCRIPTION: u32 = 4;
-pub const ARCHIVE_ERROR_CODE_UNKNOWN_RECORDING: u32 = 5;
-pub const ARCHIVE_ERROR_CODE_UNKNOWN_REPLAY: u32 = 6;
-pub const ARCHIVE_ERROR_CODE_MAX_REPLAYS: u32 = 7;
-pub const ARCHIVE_ERROR_CODE_MAX_RECORDINGS: u32 = 8;
-pub const ARCHIVE_ERROR_CODE_INVALID_EXTENSION: u32 = 9;
-pub const ARCHIVE_ERROR_CODE_AUTHENTICATION_REJECTED: u32 = 10;
-pub const ARCHIVE_ERROR_CODE_STORAGE_SPACE: u32 = 11;
-pub const ARCHIVE_ERROR_CODE_UNKNOWN_REPLICATION: u32 = 12;
-pub const ARCHIVE_ERROR_CODE_UNAUTHORISED_ACTION: u32 = 13;
+pub const AERON_ARCHIVE_ERROR_CODE_GENERIC: u32 = 200;
+pub const AERON_ARCHIVE_ERROR_CODE_ACTIVE_LISTING: u32 = 201;
+pub const AERON_ARCHIVE_ERROR_CODE_ACTIVE_RECORDING: u32 = 202;
+pub const AERON_ARCHIVE_ERROR_CODE_ACTIVE_SUBSCRIPTION: u32 = 203;
+pub const AERON_ARCHIVE_ERROR_CODE_UNKNOWN_SUBSCRIPTION: u32 = 204;
+pub const AERON_ARCHIVE_ERROR_CODE_UNKNOWN_RECORDING: u32 = 205;
+pub const AERON_ARCHIVE_ERROR_CODE_UNKNOWN_REPLAY: u32 = 206;
+pub const AERON_ARCHIVE_ERROR_CODE_MAX_REPLAYS: u32 = 207;
+pub const AERON_ARCHIVE_ERROR_CODE_MAX_RECORDINGS: u32 = 208;
+pub const AERON_ARCHIVE_ERROR_CODE_INVALID_EXTENSION: u32 = 209;
+pub const AERON_ARCHIVE_ERROR_CODE_AUTHENTICATION_REJECTED: u32 = 210;
+pub const AERON_ARCHIVE_ERROR_CODE_STORAGE_SPACE: u32 = 211;
+pub const AERON_ARCHIVE_ERROR_CODE_UNKNOWN_REPLICATION: u32 = 212;
+pub const AERON_ARCHIVE_ERROR_CODE_UNAUTHORISED_ACTION: u32 = 213;
+pub const AERON_ARCHIVE_ERROR_CODE_REPLICATION_CONNECTION_FAILURE: u32 = 214;
+pub const AERON_ARCHIVE_ERROR_CODE_EMPTY_RECORDING: u32 = 215;
+pub const AERON_ARCHIVE_ERROR_CODE_INVALID_POSITION: u32 = 216;
 pub const AERON_NULL_POSITION: i32 = -1;
 pub const AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH: u32 = 8192;
 pub const AERON_ARCHIVE_CONTROL_RESPONSE_POLLER_FRAGMENT_LIMIT_DEFAULT: u32 = 10;
@@ -130,7 +124,6 @@ pub const AERON_LOGBUFFER_TERM_MIN_LENGTH: u32 = 65536;
 pub const AERON_LOGBUFFER_TERM_MAX_LENGTH: u32 = 1073741824;
 pub const AERON_LOGBUFFER_DEFAULT_FRAME_HEADER_MAX_LENGTH: u32 = 128;
 pub const AERON_MAX_UDP_PAYLOAD_LENGTH: u32 = 65504;
-pub const AERON_LOGBUFFER_FRAME_ALIGNMENT: u32 = 32;
 pub const AERON_FILEUTIL_ERROR_ENOSPC: u32 = 28;
 pub const AERON_PUBLICATIONS_DIR: &[u8; 13] = b"publications\0";
 pub const AERON_IMAGES_DIR: &[u8; 7] = b"images\0";
@@ -343,10 +336,44 @@ pub const AERON_COUNTER_SEQUENCER_REPLAY_INDEX_MAX_SEQUENCE_INDEX_COUNTER_TYPE_I
 pub const AERON_COUNTER_SEQUENCER_REPLAY_INDEX_MAX_SEQUENCE_LOG_POSITION_COUNTER_TYPE_ID: u32 = 523;
 pub const AERON_COUNTER_SEQUENCER_REPLAY_INDEX_INITIAL_SEQUENCE_INDEX_COUNTER_TYPE_ID: u32 = 524;
 pub const AERON_COUNTER_SEQUENCER_REPLAY_INDEX_INITIAL_SEQUENCE_LOG_POSITION_COUNTER_TYPE_ID: u32 = 525;
+pub const AERON_COUNTER_SEQUENCER_APPLICATION_GREATEST_COMMITTED_MESSAGE_ID_COUNTER_TYPE_ID: u32 = 526;
+pub const AERON_COUNTER_SEQUENCER_REPLAY_SERVICE_SESSION_COUNT_TYPE_ID: u32 = 531;
+pub const AERON_COUNTER_SEQUENCER_REPLAY_SERVICE_INDEXED_TERM_COUNT_TYPE_ID: u32 = 535;
+pub const AERON_COUNTER_SEQUENCER_REPLAY_SERVICE_TOTAL_TERM_COUNT_TYPE_ID: u32 = 536;
+pub const AERON_COUNTER_SEQUENCER_REPLAY_SERVICE_REPLAY_JOB_TYPE_ID: u32 = 537;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_ACTIVE_STORE_OPERATIONS_COUNTER_TYPE_ID: u32 = 538;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_ACTIVE_LOAD_OPERATIONS_COUNTER_TYPE_ID: u32 = 539;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_REPLICATING_COUNT_TYPE_ID: u32 = 540;
+pub const AERON_COUNTER_SEQUENCER_APPLICATION_LAST_READ_TIMESTAMP_COUNTER_TYPE_ID: u32 = 541;
+pub const AERON_COUNTER_SEQUENCER_REPLAY_CLIENT_LOG_REPLAY_SEQUENCE_INDEX_TYPE_ID: u32 = 542;
+pub const AERON_COUNTER_SEQUENCER_REPLAY_SERVICE_STATE_TYPE_ID: u32 = 543;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_STATE_TYPE_ID: u32 = 544;
 pub const AERON_COUNTER_SEQUENCER_REPLAY_SERVICE_MAX_CYCLE_TIME_COUNTER_TYPE_ID: u32 = 545;
 pub const AERON_COUNTER_SEQUENCER_REPLAY_SERVICE_CYCLE_TIME_THRESHOLD_EXCEEDED_TYPE_ID: u32 = 546;
 pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_MAX_CYCLE_TIME_COUNTER_TYPE_ID: u32 = 547;
 pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_CYCLE_TIME_THRESHOLD_EXCEEDED_TYPE_ID: u32 = 548;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_ACTIVE_SESSIONS_COUNTER_TYPE_ID: u32 = 549;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_ACTIVE_ADMIN_OPERATIONS_COUNTER_TYPE_ID: u32 = 550;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_QUEUED_OPERATIONS_TYPE_ID: u32 = 551;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_STORE_ERROR_COUNT_TYPE_ID: u32 = 552;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_LOAD_ERROR_COUNT_TYPE_ID: u32 = 553;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_LIST_ERROR_COUNT_TYPE_ID: u32 = 554;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_ADMIN_ERROR_COUNT_TYPE_ID: u32 = 555;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_STORAGE_MODULE_ERROR_COUNT_TYPE_ID: u32 = 556;
+pub const AERON_COUNTER_SEQUENCER_APPLICATION_SNAPSHOT_LAST_STORED_SEQUENCE_INDEX_TYPE_ID: u32 = 557;
+pub const AERON_COUNTER_SEQUENCER_APPLICATION_SNAPSHOT_LAST_LOADED_SEQUENCE_INDEX_TYPE_ID: u32 = 558;
+pub const AERON_COUNTER_SEQUENCER_APPLICATION_SNAPSHOT_ACTIVITY_STATE_TYPE_ID: u32 = 559;
+pub const AERON_COUNTER_SEQUENCER_APPLICATION_SNAPSHOT_LOAD_ERROR_COUNT_TYPE_ID: u32 = 560;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_TOTAL_STORE_OPERATIONS_COUNTER_TYPE_ID: u32 = 561;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_TOTAL_LOAD_OPERATIONS_COUNTER_TYPE_ID: u32 = 562;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_TOTAL_LIST_OPERATIONS_COUNTER_TYPE_ID: u32 = 563;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_TOTAL_FIND_LATEST_OPERATIONS_COUNTER_TYPE_ID: u32 = 564;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_TOTAL_ADMIN_OPERATIONS_COUNTER_TYPE_ID: u32 = 565;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_ACTIVE_LIST_OPERATIONS_COUNTER_TYPE_ID: u32 = 566;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_ACTIVE_FIND_LATEST_OPERATIONS_COUNTER_TYPE_ID: u32 = 567;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_ACTIVE_DESCRIBE_OPERATIONS_COUNTER_TYPE_ID: u32 = 568;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_TOTAL_DESCRIBE_OPERATIONS_COUNTER_TYPE_ID: u32 = 569;
+pub const AERON_COUNTER_SEQUENCER_SNAPSHOT_SERVICE_DESCRIBE_ERROR_COUNT_TYPE_ID: u32 = 570;
 pub const AERON_AGENT_STATE_UNUSED: u32 = 0;
 pub const AERON_AGENT_STATE_INITED: u32 = 1;
 pub const AERON_AGENT_STATE_STARTED: u32 = 2;
@@ -2183,15 +2210,15 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[doc = " Retrieves the first local socket address for this subscription. If this is not MDS then it will be the one\n representing endpoint for this subscription.\n\n @see aeron_subscription_local_sockaddrs\n @param subscription to query\n @param address for the received address\n @param address_len available length for the copied address.\n @return -1 on error, 0 if address not found, 1 if address is found."]
+    #[doc = " Retrieves the first local socket address for this subscription. If this is not MDS then it will be the one\n representing endpoint for this subscription.\n\n @param subscription to query.\n @param address buffer to hold the resolved endooint.\n @param address_len available length for the copied address.\n @return -1 on error, 0 if address not found, 1 if address is found.\n @see aeron_subscription_local_sockaddrs"]
     pub fn aeron_subscription_resolved_endpoint(
         subscription: *mut aeron_subscription_t,
-        address: *const ::std::os::raw::c_char,
+        address: *mut ::std::os::raw::c_char,
         address_len: usize,
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[doc = " Retrieves the channel URI for this subscription with any wildcard ports filled in. If the channel is not UDP or\n does not have a wildcard port (<code>0</code>), then it will return the original URI.\n\n @param subscription to query\n @param uri buffer to hold the resolved uri\n @param uri_len length of the buffer\n @return -1 on failure or the number of bytes written to the buffer (excluding the NULL terminator). Writing is done\n on a per key basis, so if the buffer was truncated before writing completed, it will only include the byte count up\n to the key that overflowed. However, the invariant that if the number returned >= uri_len, then output will have been\n truncated."]
+    #[doc = " Retrieves the channel URI for this subscription with any wildcard ports filled in. If the channel is not UDP or\n does not have a wildcard port (<code>0</code>), then it will return the original URI.\n\n @param subscription to query.\n @param uri buffer to hold the resolved uri.\n @param uri_len length of the buffer.\n @return -1 on failure or the number of bytes written to the buffer (excluding the NULL terminator). Writing is done\n on a per key basis, so if the buffer was truncated before writing completed, it will only include the byte count up\n to the key that overflowed. However, the invariant that if the number returned >= uri_len, then output will have been\n truncated."]
     pub fn aeron_subscription_try_resolve_channel_endpoint_port(
         subscription: *mut aeron_subscription_t,
         uri: *mut ::std::os::raw::c_char,
@@ -2271,10 +2298,6 @@ unsafe extern "C" {
     pub fn aeron_image_position(image: *mut aeron_image_t) -> i64;
 }
 unsafe extern "C" {
-    #[doc = " Set the subscriber position for this image to indicate where it has been consumed to.\n\n @param image to set the position of.\n @param new_position for the consumption point.\n @deprecated Will be removed in <code>1.53.0</code>."]
-    pub fn aeron_image_set_position(image: *mut aeron_image_t, position: i64) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     #[doc = " Is the current consumed position at the end of the stream?\n\n @param image to check.\n @return true if at the end of the stream or false if not."]
     pub fn aeron_image_is_end_of_stream(image: *mut aeron_image_t) -> bool;
 }
@@ -2327,16 +2350,6 @@ unsafe extern "C" {
         limit_position: i64,
         fragment_limit: usize,
     ) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
-    #[doc = " Peek for new messages in a stream by scanning forward from an initial position. If new messages are found then\n they will be delivered to the handler up to a limited position.\n <p>\n Use a controlled fragment assembler to assemble messages which span multiple fragments. Scans must also\n start at the beginning of a message so that the assembler is reset.\n\n @param image to peek.\n @param initial_position from which to peek forward.\n @param handler to which message fragments are delivered.\n @param clientd to pass to the handler.\n @param limit_position up to which can be scanned.\n @return the resulting position after the scan terminates which is a complete message or -1 for error.\n @deprecated Will be removed in <code>1.53.0</code>."]
-    pub fn aeron_image_controlled_peek(
-        image: *mut aeron_image_t,
-        initial_position: i64,
-        handler: aeron_controlled_fragment_handler_t,
-        clientd: *mut ::std::os::raw::c_void,
-        limit_position: i64,
-    ) -> i64;
 }
 unsafe extern "C" {
     #[doc = " Poll for new messages in a stream. If new messages are found beyond the last consumed position then they\n will be delivered to the handler up to a limited number of bytes.\n <p>\n A scan will terminate if a padding frame is encountered. If first frame in a scan is padding then a block\n for the padding is notified. If the padding comes after the first frame in a scan then the scan terminates\n at the offset the padding frame begins. Padding frames are delivered singularly in a block.\n <p>\n Padding frames may be for a greater range than the limit offset but only the header needs to be valid so\n relevant length of the frame is data header length.\n\n @param image to poll.\n @param handler to which block is delivered.\n @param clientd to pass to the handler.\n @param block_length_limit up to which a block may be in length.\n @return the number of bytes that have been consumed or -1 for error."]
@@ -2424,6 +2437,13 @@ unsafe extern "C" {
     );
 }
 unsafe extern "C" {
+    #[doc = " Free an existing session buffer to reduce memory pressure when an image goes inactive or no more\n large messages are expected.\n\n @param assembler holding the session buffer.\n @param session_id to have its buffer freed.\n @return true if a buffer has been freed otherwise false."]
+    pub fn aeron_fragment_assembler_delete_session_buffer(
+        assembler: *mut aeron_fragment_assembler_t,
+        session_id: i32,
+    ) -> bool;
+}
+unsafe extern "C" {
     #[doc = " Create a controlled fragment assembler for use with a subscription.\n\n @param assembler to be set when created successfully.\n @param delegate to call on completed\n @param delegate_clientd to pass to delegate handler.\n @return 0 for success and -1 for error."]
     pub fn aeron_controlled_fragment_assembler_create(
         assembler: *mut *mut aeron_controlled_fragment_assembler_t,
@@ -2445,6 +2465,13 @@ unsafe extern "C" {
         length: usize,
         header: *mut aeron_header_t,
     ) -> aeron_controlled_fragment_handler_action_t;
+}
+unsafe extern "C" {
+    #[doc = " Free an existing session buffer to reduce memory pressure when an image goes inactive or no more\n large messages are expected.\n\n @param assembler holding the session buffer.\n @param session_id to have its buffer freed.\n @return true if a buffer has been freed otherwise false."]
+    pub fn aeron_controlled_fragment_assembler_delete_session_buffer(
+        assembler: *mut aeron_controlled_fragment_assembler_t,
+        session_id: i32,
+    ) -> bool;
 }
 unsafe extern "C" {
     #[doc = " Return a pointer to the counter value.\n\n @param counter to pointer to.\n @return pointer to the counter value."]
@@ -3366,7 +3393,7 @@ unsafe extern "C" {
     pub fn aeron_archive_get_archive_context(aeron_archive: *mut aeron_archive_t) -> *mut aeron_archive_context_t;
 }
 unsafe extern "C" {
-    #[doc = " Retrieve the underlying aeron_archive_context_t used to configure the provided aeron_archive_t.\n <p>\n Additionally, calling this function transfers ownership of the returned aeron_archive_context_t to the caller.\n i.e. it is now the the caller's responsibility to close the context.\n This is useful when wrapping the C library in other, higher level languages."]
+    #[doc = " Retrieve the underlying aeron_archive_context_t used to configure the provided aeron_archive_t.\n <p>\n Additionally, calling this function transfers ownership of the returned aeron_archive_context_t to the caller.\n i.e. it is now the caller's responsibility to close the context.\n This is useful when wrapping the C library in other, higher level languages."]
     pub fn aeron_archive_get_and_own_archive_context(
         aeron_archive: *mut aeron_archive_t,
     ) -> *mut aeron_archive_context_t;
@@ -4057,17 +4084,29 @@ unsafe extern "C" {
     ) -> *mut aeron_counter_t;
 }
 unsafe extern "C" {
-    #[doc = " Create a persistent subscription.\n <p>\n If creating a subscription succeeds, then the subscription will own the context. And closing the\n subscription, will close the context.\n <p>\n If no Aeron client is set on the context, one will be created and owned by the context,\n and will be closed when the context is closed via aeron_archive_persistent_subscription_context_close.\n\n @param persistent_subscription to set if completed successfully.\n @param context with the configuration of a persistent subscription to be created.\n @return 0 on success, -1 on error."]
+    #[doc = " Create a persistent subscription.\n <p>\n If creating a subscription succeeds, then the subscription will own the context. And closing the\n subscription, will close the context. Ownership of the context can be transferred to the caller\n via aeron_archive_persistent_subscription_get_and_own_persistent_subscription_context.\n <p>\n If no Aeron client is set on the context, one will be created and owned by the context,\n and will be closed when the context is closed via aeron_archive_persistent_subscription_context_close.\n\n @param persistent_subscription to set if completed successfully.\n @param context with the configuration of a persistent subscription to be created.\n @return 0 on success, -1 on error."]
     pub fn aeron_archive_persistent_subscription_create(
         persistent_subscription: *mut *mut aeron_archive_persistent_subscription_t,
         context: *mut aeron_archive_persistent_subscription_context_t,
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[doc = " Close a persistent subscription and dispose of all resources and memory held by it.\n\n @param persistent_subscription to close.\n @return 0 on success, -1 on error."]
+    #[doc = " Close a persistent subscription and dispose of all resources and memory held by it.\n <p>\n The context is closed as well, unless ownership of it was transferred to the caller via\n aeron_archive_persistent_subscription_get_and_own_persistent_subscription_context.\n\n @param persistent_subscription to close.\n @return 0 on success, -1 on error."]
     pub fn aeron_archive_persistent_subscription_close(
         persistent_subscription: *mut aeron_archive_persistent_subscription_t,
     ) -> ::std::os::raw::c_int;
+}
+unsafe extern "C" {
+    #[doc = " Retrieve the underlying aeron_archive_persistent_subscription_context_t used to configure the provided\n aeron_archive_persistent_subscription_t."]
+    pub fn aeron_archive_persistent_subscription_get_persistent_subscription_context(
+        persistent_subscription: *mut aeron_archive_persistent_subscription_t,
+    ) -> *mut aeron_archive_persistent_subscription_context_t;
+}
+unsafe extern "C" {
+    #[doc = " Retrieve the underlying aeron_archive_persistent_subscription_context_t used to configure the provided\n aeron_archive_persistent_subscription_t.\n <p>\n Additionally, calling this function transfers ownership of the returned aeron_archive_persistent_subscription_context_t\n to the caller. i.e. it is now the caller's responsibility to close the context, which must be done after\n the persistent subscription has been closed.\n This is useful when wrapping the C library in other, higher level languages."]
+    pub fn aeron_archive_persistent_subscription_get_and_own_persistent_subscription_context(
+        persistent_subscription: *mut aeron_archive_persistent_subscription_t,
+    ) -> *mut aeron_archive_persistent_subscription_context_t;
 }
 unsafe extern "C" {
     #[doc = " Poll a persistent subscription for available messages.\n <p>\n Delivers assembled messages to the handler, so the handler shouldn't be a fragment assembler.\n\n @param persistent_subscription to poll.\n @param handler for handling read messages.\n @param clientd to pass to the handler.\n @param fragment_limit maximum number of message fragments to read when polling.\n @return positive number if fragments have been read or the persistent subscription has done other work,\n 0 if no fragments have been read and no work has been done, negative on error."]
@@ -4112,6 +4151,12 @@ unsafe extern "C" {
         out_errcode: *mut ::std::os::raw::c_int,
         out_message: *mut *const ::std::os::raw::c_char,
     ) -> bool;
+}
+unsafe extern "C" {
+    #[doc = " Maps the existing archive's non-unique error code to a unique one for all C/C++ clients.\n\n @param error_code from the archive.\n @return a C/C++ client unique error code"]
+    pub fn aeron_archive_client_map_archive_to_client_error_code(
+        error_code: ::std::os::raw::c_int,
+    ) -> ::std::os::raw::c_int;
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -4748,6 +4793,9 @@ unsafe extern "C" {
 unsafe extern "C" {
     pub fn aeron_thread_set_affinity(name: *const ::std::os::raw::c_char, cpu_affinity_no: u8)
     -> ::std::os::raw::c_int;
+}
+unsafe extern "C" {
+    pub fn aeron_thread_get_affinity(cpu_affinity: *mut u8) -> ::std::os::raw::c_int;
 }
 pub type pthread_cond_t = __darwin_pthread_cond_t;
 pub type pthread_mutex_t = __darwin_pthread_mutex_t;
@@ -5559,7 +5607,7 @@ const _: () = {
 pub type aeron_status_message_optional_header_t = aeron_status_message_optional_header_stct;
 #[repr(C, packed(4))]
 #[derive(Debug, Default, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct aeron_error_stct {
+pub struct aeron_error_header_stct {
     pub frame_header: aeron_frame_header_t,
     pub session_id: i32,
     pub stream_id: i32,
@@ -5570,19 +5618,24 @@ pub struct aeron_error_stct {
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of aeron_error_stct"][::std::mem::size_of::<aeron_error_stct>() - 40usize];
-    ["Alignment of aeron_error_stct"][::std::mem::align_of::<aeron_error_stct>() - 4usize];
-    ["Offset of field: aeron_error_stct::frame_header"]
-        [::std::mem::offset_of!(aeron_error_stct, frame_header) - 0usize];
-    ["Offset of field: aeron_error_stct::session_id"][::std::mem::offset_of!(aeron_error_stct, session_id) - 8usize];
-    ["Offset of field: aeron_error_stct::stream_id"][::std::mem::offset_of!(aeron_error_stct, stream_id) - 12usize];
-    ["Offset of field: aeron_error_stct::receiver_id"][::std::mem::offset_of!(aeron_error_stct, receiver_id) - 16usize];
-    ["Offset of field: aeron_error_stct::group_tag"][::std::mem::offset_of!(aeron_error_stct, group_tag) - 24usize];
-    ["Offset of field: aeron_error_stct::error_code"][::std::mem::offset_of!(aeron_error_stct, error_code) - 32usize];
-    ["Offset of field: aeron_error_stct::error_length"]
-        [::std::mem::offset_of!(aeron_error_stct, error_length) - 36usize];
+    ["Size of aeron_error_header_stct"][::std::mem::size_of::<aeron_error_header_stct>() - 40usize];
+    ["Alignment of aeron_error_header_stct"][::std::mem::align_of::<aeron_error_header_stct>() - 4usize];
+    ["Offset of field: aeron_error_header_stct::frame_header"]
+        [::std::mem::offset_of!(aeron_error_header_stct, frame_header) - 0usize];
+    ["Offset of field: aeron_error_header_stct::session_id"]
+        [::std::mem::offset_of!(aeron_error_header_stct, session_id) - 8usize];
+    ["Offset of field: aeron_error_header_stct::stream_id"]
+        [::std::mem::offset_of!(aeron_error_header_stct, stream_id) - 12usize];
+    ["Offset of field: aeron_error_header_stct::receiver_id"]
+        [::std::mem::offset_of!(aeron_error_header_stct, receiver_id) - 16usize];
+    ["Offset of field: aeron_error_header_stct::group_tag"]
+        [::std::mem::offset_of!(aeron_error_header_stct, group_tag) - 24usize];
+    ["Offset of field: aeron_error_header_stct::error_code"]
+        [::std::mem::offset_of!(aeron_error_header_stct, error_code) - 32usize];
+    ["Offset of field: aeron_error_header_stct::error_length"]
+        [::std::mem::offset_of!(aeron_error_header_stct, error_length) - 36usize];
 };
-pub type aeron_error_t = aeron_error_stct;
+pub type aeron_error_header_t = aeron_error_header_stct;
 #[repr(C, packed(4))]
 #[derive(Debug, Default, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct aeron_rttm_header_stct {
@@ -5938,10 +5991,17 @@ unsafe extern "C" {
         mapped_file: *mut aeron_mapped_file_t,
         path: *const ::std::os::raw::c_char,
         fill_with_zeroes: bool,
+        page_size: u64,
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
     pub fn aeron_map_existing_file(
+        mapped_file: *mut aeron_mapped_file_t,
+        path: *const ::std::os::raw::c_char,
+    ) -> ::std::os::raw::c_int;
+}
+unsafe extern "C" {
+    pub fn aeron_map_readonly_file(
         mapped_file: *mut aeron_mapped_file_t,
         path: *const ::std::os::raw::c_char,
     ) -> ::std::os::raw::c_int;
@@ -6144,7 +6204,14 @@ unsafe extern "C" {
     pub fn aeron_cnc_version_volatile(metadata: *mut aeron_cnc_metadata_t) -> i32;
 }
 unsafe extern "C" {
-    pub fn aeron_cnc_map_file_and_load_metadata(
+    pub fn aeron_cnc_map_existing_file_and_load_metadata(
+        dir: *const ::std::os::raw::c_char,
+        mapped_file: *mut aeron_mapped_file_t,
+        metadata: *mut *mut aeron_cnc_metadata_t,
+    ) -> aeron_cnc_load_result_t;
+}
+unsafe extern "C" {
+    pub fn aeron_cnc_map_readonly_file_and_load_metadata(
         dir: *const ::std::os::raw::c_char,
         mapped_file: *mut aeron_mapped_file_t,
         metadata: *mut *mut aeron_cnc_metadata_t,

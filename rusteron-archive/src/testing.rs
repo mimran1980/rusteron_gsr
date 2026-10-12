@@ -101,12 +101,7 @@ impl EmbeddedArchiveMediaDriverProcess {
         {
             Command::new(&gradle)
                 .current_dir(dir)
-                .args([
-                    ":aeron-agent:jar",
-                    ":aeron-samples:jar",
-                    ":aeron-archive:jar",
-                    ":aeron-all:build",
-                ])
+                .args([":aeron-samples:jar", ":aeron-archive:jar", ":aeron-all:build"])
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .spawn()?

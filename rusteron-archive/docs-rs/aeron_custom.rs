@@ -506,7 +506,7 @@ impl AeronCncMetadata {
     pub fn load_from_file(aeron_dir: &str) -> Result<Self, AeronCError> {
         let aeron_dir = std::ffi::CString::new(aeron_dir).map_err(|_| AeronCError::from_code(-1))?;
         // Shared between init and cleanup so the mapping populated by
-        // aeron_cnc_map_file_and_load_metadata stays live for aeron_unmap on drop.
+        // aeron_cnc_map_existing_file_and_load_metadata stays live for aeron_unmap on drop.
         let mapped_file = RcOrArc::new(RefCellOrMutex::new(aeron_mapped_file_t {
             addr: std::ptr::null_mut(),
             length: 0,
@@ -519,7 +519,7 @@ impl AeronCncMetadata {
                 #[cfg(feature = "multi-threaded")]
                 let mut g = mapped_file.lock().unwrap();
                 let result = unsafe {
-                    aeron_cnc_map_file_and_load_metadata(
+                    aeron_cnc_map_existing_file_and_load_metadata(
                         aeron_dir.as_ptr(),
                         &mut *g as *mut aeron_mapped_file_t,
                         ctx,
@@ -557,7 +557,7 @@ impl AeronCncMetadata {
         };
         let ctx = ManagedCResource::initialise(move |ctx| {
             let result = unsafe {
-                aeron_cnc_map_file_and_load_metadata(
+                aeron_cnc_map_existing_file_and_load_metadata(
                     aeron_dir.as_ptr(),
                     &mut mapped_file as *mut aeron_mapped_file_t,
                     ctx,
@@ -2749,47 +2749,34 @@ pub enum AeronArchiveErrorCode {
 }
 
 impl AeronArchiveErrorCode {
-    /// Maps the wire error code to its variant. Codes 0–13 come straight from the
-    /// bindgen'd `ARCHIVE_ERROR_CODE_*` constants in the aeron C header, so an Aeron
-    /// upgrade that changes them is picked up automatically (and the
-    /// `archive_error_codes_match_the_c_header` test fails if new ones appear).
-    /// Codes 14–16 are defined by the Java/C++ `ArchiveException` but are not yet in
-    /// the C header; a Java archive can still send them.
+    /// Maps an archive error code (`io.aeron.archive.client.ArchiveException`) to its
+    /// variant. The `ARCHIVE_ERROR_CODE_*` defines are private to `aeron_archive_client.c`
+    /// since Aeron 1.53, so the numbers are mirrored here and pinned by the
+    /// `archive_error_codes_match_the_c_source` test.
+    ///
+    /// Accepts both the wire codes (0-16) and the client codes (200-216,
+    /// `AERON_ARCHIVE_ERROR_CODE_*` = wire + 200) that the C archive client's error
+    /// handler reports and embeds in its `errorCode=N` text since Aeron 1.53.3.
     pub fn from_code(code: i32) -> Self {
-        use crate::bindings::*;
-        const GENERIC: i32 = ARCHIVE_ERROR_CODE_GENERIC as i32;
-        const ACTIVE_LISTING: i32 = ARCHIVE_ERROR_CODE_ACTIVE_LISTING as i32;
-        const ACTIVE_RECORDING: i32 = ARCHIVE_ERROR_CODE_ACTIVE_RECORDING as i32;
-        const ACTIVE_SUBSCRIPTION: i32 = ARCHIVE_ERROR_CODE_ACTIVE_SUBSCRIPTION as i32;
-        const UNKNOWN_SUBSCRIPTION: i32 = ARCHIVE_ERROR_CODE_UNKNOWN_SUBSCRIPTION as i32;
-        const UNKNOWN_RECORDING: i32 = ARCHIVE_ERROR_CODE_UNKNOWN_RECORDING as i32;
-        const UNKNOWN_REPLAY: i32 = ARCHIVE_ERROR_CODE_UNKNOWN_REPLAY as i32;
-        const MAX_REPLAYS: i32 = ARCHIVE_ERROR_CODE_MAX_REPLAYS as i32;
-        const MAX_RECORDINGS: i32 = ARCHIVE_ERROR_CODE_MAX_RECORDINGS as i32;
-        const INVALID_EXTENSION: i32 = ARCHIVE_ERROR_CODE_INVALID_EXTENSION as i32;
-        const AUTHENTICATION_REJECTED: i32 = ARCHIVE_ERROR_CODE_AUTHENTICATION_REJECTED as i32;
-        const STORAGE_SPACE: i32 = ARCHIVE_ERROR_CODE_STORAGE_SPACE as i32;
-        const UNKNOWN_REPLICATION: i32 = ARCHIVE_ERROR_CODE_UNKNOWN_REPLICATION as i32;
-        const UNAUTHORISED_ACTION: i32 = ARCHIVE_ERROR_CODE_UNAUTHORISED_ACTION as i32;
         match code {
-            GENERIC => Self::Generic,
-            ACTIVE_LISTING => Self::ActiveListing,
-            ACTIVE_RECORDING => Self::ActiveRecording,
-            ACTIVE_SUBSCRIPTION => Self::ActiveSubscription,
-            UNKNOWN_SUBSCRIPTION => Self::UnknownSubscription,
-            UNKNOWN_RECORDING => Self::UnknownRecording,
-            UNKNOWN_REPLAY => Self::UnknownReplay,
-            MAX_REPLAYS => Self::MaxReplays,
-            MAX_RECORDINGS => Self::MaxRecordings,
-            INVALID_EXTENSION => Self::InvalidExtension,
-            AUTHENTICATION_REJECTED => Self::AuthenticationRejected,
-            STORAGE_SPACE => Self::StorageSpace,
-            UNKNOWN_REPLICATION => Self::UnknownReplication,
-            UNAUTHORISED_ACTION => Self::UnauthorisedAction,
-            // Java/C++ ArchiveException codes not yet mirrored in the C header:
+            0 => Self::Generic,
+            1 => Self::ActiveListing,
+            2 => Self::ActiveRecording,
+            3 => Self::ActiveSubscription,
+            4 => Self::UnknownSubscription,
+            5 => Self::UnknownRecording,
+            6 => Self::UnknownReplay,
+            7 => Self::MaxReplays,
+            8 => Self::MaxRecordings,
+            9 => Self::InvalidExtension,
+            10 => Self::AuthenticationRejected,
+            11 => Self::StorageSpace,
+            12 => Self::UnknownReplication,
+            13 => Self::UnauthorisedAction,
             14 => Self::ReplicationConnectionFailure,
             15 => Self::EmptyRecording,
             16 => Self::InvalidPosition,
+            200..=216 => Self::from_code(code - 200),
             other => Self::Unknown(other),
         }
     }
