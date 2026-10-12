@@ -136,6 +136,9 @@ pub fn rusteron_build_main(config: &RusteronBuildConfig) {
 
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=bindings.h");
+    // the submodule's headers aren't tracked, so an Aeron upgrade would otherwise reuse stale bindings
+    println!("cargo:rerun-if-changed=aeron/version.txt");
+    println!("cargo:rerun-if-env-changed=COPY_BINDINGS");
     println!("cargo:rerun-if-env-changed=PUBLISH_ARTIFACTS");
     println!("cargo:rerun-if-env-changed=RUSTERON_C_MARCH");
 
