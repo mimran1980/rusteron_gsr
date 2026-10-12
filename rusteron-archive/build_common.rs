@@ -115,6 +115,16 @@ fn emit_link_libs(link_type: &LinkType, config: &RusteronBuildConfig) {
 }
 
 pub fn rusteron_build_main(config: &RusteronBuildConfig) {
+    // C built outside this crate, such as a custom UDP transport, must compile against the
+    // headers of the Aeron built here. rusteron-media-driver's `links = "aeron_driver"` key
+    // hands these to its direct dependents' build scripts as DEP_AERON_DRIVER_INCLUDE,
+    // DEP_AERON_DRIVER_CLIENT_INCLUDE and DEP_AERON_DRIVER_AERON_ROOT; crates without the key
+    // ignore them.
+    let aeron_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("aeron");
+    println!("cargo:include={}", aeron_root.join(config.header_subdir).display());
+    println!("cargo:client_include={}", aeron_root.join("aeron-client/src/main/c").display());
+    println!("cargo:aeron_root={}", aeron_root.display());
+
     // Skip build script when building on docs.rs
     let docs_rs = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("docs-rs");
     if std::env::var("DOCS_RS").is_ok() {
@@ -126,6 +136,11 @@ pub fn rusteron_build_main(config: &RusteronBuildConfig) {
 
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=bindings.h");
+    // the submodule's headers aren't tracked, so an Aeron upgrade would otherwise reuse stale bindings
+    println!("cargo:rerun-if-changed=aeron/version.txt");
+    println!("cargo:rerun-if-env-changed=COPY_BINDINGS");
+    println!("cargo:rerun-if-env-changed=PUBLISH_ARTIFACTS");
+    println!("cargo:rerun-if-env-changed=RUSTERON_C_MARCH");
 
     // If precompiled artifacts exist (or can be downloaded), use them instead of cmake+java.
     #[cfg(all(any(feature = "precompile", feature = "precompile-rustls"), feature = "static"))]
@@ -153,6 +168,12 @@ pub fn rusteron_build_main(config: &RusteronBuildConfig) {
                 "Artifacts found in {}. Using published artifacts.",
                 artifacts_dir.display()
             );
+            if rusteron_code_gen::c_build::wants_linker_plugin_lto(&env::var("CARGO_ENCODED_RUSTFLAGS").unwrap_or_default()) {
+                println!(
+                    "cargo:warning=-Clinker-plugin-lto is set but the precompiled Aeron C is native code, \
+                     so it cannot be inlined into Rust; set RUSTERON_BUILD_FROM_SOURCE=1 for cross-language LTO"
+                );
+            }
 
             println!("cargo:rustc-link-arg=-Wl,-rpath,{}", artifacts_dir.display());
             println!("cargo:rustc-link-search=native={}", artifacts_dir.display());
@@ -234,6 +255,8 @@ fn build_from_source(config: &RusteronBuildConfig, docs_rs: &Path) {
         }
         if cfg!(target_os = "linux") {
             println!("cargo:rustc-link-lib=uuid");
+            // clang turns the ring buffers' packed 64-bit atomics into __atomic_* calls on aarch64
+            println!("cargo:rustc-link-lib=atomic");
         }
     }
 
@@ -244,13 +267,30 @@ fn build_from_source(config: &RusteronBuildConfig, docs_rs: &Path) {
     }
 
     let mut cmake_config = Config::new(&aeron_path);
+    let lto_flag = cross_language_lto(&mut cmake_config, &link_type);
     if std::env::var("PROFILE").unwrap() == "release" {
         cmake_config.profile("Release");
-        // No -flto: cmake uses GCC which produces GCC LTO archives; rust-lld (LLVM)
-        // cannot link GCC LTO bitcode, causing undefined symbols at link time.
-        let release_flags = "-O3 -DNDEBUG -march=native -funroll-loops";
-        cmake_config.define("CMAKE_CXX_FLAGS_RELEASE", release_flags);
-        cmake_config.define("CMAKE_C_FLAGS_RELEASE", release_flags);
+        let var = |name: &str| env::var(name).ok();
+        let release_flags = if lto_flag.is_some() {
+            let rustflags = var("CARGO_ENCODED_RUSTFLAGS").unwrap_or_default();
+            rusteron_code_gen::c_build::lto_release_c_flags(
+                &var("CARGO_CFG_TARGET_ARCH").unwrap_or_default(),
+                rusteron_code_gen::c_build::rustc_target_cpu(&rustflags),
+            )
+        } else {
+            rusteron_code_gen::c_build::release_c_flags(
+                &var("CARGO_CFG_TARGET_ARCH").unwrap_or_default(),
+                &var("CARGO_CFG_TARGET_VENDOR").unwrap_or_default(),
+                if var("PUBLISH_ARTIFACTS").is_some() {
+                    rusteron_code_gen::c_build::CpuTarget::Baseline
+                } else {
+                    rusteron_code_gen::c_build::CpuTarget::ThisCpu
+                },
+                var("RUSTERON_C_MARCH").as_deref(),
+            )
+        };
+        cmake_config.define("CMAKE_CXX_FLAGS_RELEASE", &release_flags);
+        cmake_config.define("CMAKE_C_FLAGS_RELEASE", &release_flags);
     } else {
         cmake_config.profile("Debug");
     }
@@ -333,6 +373,9 @@ fn build_from_source(config: &RusteronBuildConfig, docs_rs: &Path) {
             }
         }
     }
+    if let Some(lto_flag) = lto_flag {
+        c_flags = format!("{c_flags} {lto_flag}");
+    }
     cmake_config.define("CMAKE_C_FLAGS", &c_flags);
     if !cxx_flags.is_empty() {
         cmake_config.define("CMAKE_CXX_FLAGS", &cxx_flags);
@@ -361,7 +404,6 @@ fn build_from_source(config: &RusteronBuildConfig, docs_rs: &Path) {
         println!("cargo:rustc-link-search=native={}", base_lib_dir.join(sub).display());
     }
 
-    println!("cargo:include={}", header_path.display());
     let mut builder = bindgen::Builder::default()
         .clang_arg(format!("-I{}", header_path.display()))
         // Match the CMAKE_C_STANDARD 11 used to actually compile the Aeron C sources.
@@ -513,6 +555,70 @@ fn build_from_source(config: &RusteronBuildConfig, docs_rs: &Path) {
         let cmake_lib_dir = cmake_output;
         publish_artifacts(&cmake_lib_dir).expect("Failed to publish artifacts");
     }
+}
+
+/// When the final binary links with `-Clinker-plugin-lto`, compiles Aeron C to LLVM bitcode
+/// with a clang whose LLVM matches rustc's, so the linker can inline it into Rust callers.
+/// Returns the `-flto` flag to add to the C flags.
+#[cfg(feature = "build-from-source")]
+fn cross_language_lto(cmake_config: &mut cmake::Config, link_type: &LinkType) -> Option<&'static str> {
+    use rusteron_code_gen::c_build::{c_lto_flag, llvm_major, wants_linker_plugin_lto};
+    use std::process::Command;
+    println!("cargo:rerun-if-env-changed=RUSTERON_CLANG");
+    println!("cargo:rerun-if-env-changed=RUSTERON_C_LTO");
+
+    if !wants_linker_plugin_lto(&env::var("CARGO_ENCODED_RUSTFLAGS").unwrap_or_default()) {
+        return None;
+    }
+    if *link_type == LinkType::Dynamic {
+        println!(
+            "cargo:warning=-Clinker-plugin-lto is set but Aeron C is linked as a shared library, \
+             so it cannot be inlined into Rust; enable rusteron's `static` feature for cross-language LTO"
+        );
+        return None;
+    }
+    let lto_flag = c_lto_flag(env::var("RUSTERON_C_LTO").ok().as_deref()).unwrap_or_else(|e| panic!("{e}"));
+    let output = |program: &str, args: &[&str]| {
+        Command::new(program)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+    };
+    let rustc = env::var("RUSTC").unwrap_or_else(|_| "rustc".into());
+    let rustc_llvm = output(&rustc, &["-vV"])
+        .as_deref()
+        .and_then(llvm_major)
+        .expect("cannot read rustc's LLVM version from `rustc -vV`");
+    let clang = env::var("RUSTERON_CLANG")
+        .or_else(|_| env::var("CC"))
+        .unwrap_or_else(|_| "clang".into());
+    let fix = format!(
+        "-Clinker-plugin-lto (cross-language LTO) needs clang with LLVM {rustc_llvm}, as rustc uses: \
+         install it (Linux: apt.llvm.org `clang-{rustc_llvm} lld-{rustc_llvm} llvm-{rustc_llvm}`; \
+         macOS: `brew install llvm@{rustc_llvm}`) and set RUSTERON_CLANG to it, \
+         or remove -Clinker-plugin-lto from RUSTFLAGS"
+    );
+    let version = output(&clang, &["--version"]).unwrap_or_else(|| panic!("`{clang} --version` failed. {fix}"));
+    // Apple's clang numbers its own LLVM fork, whose bitcode rustc's LLVM cannot read
+    if version.contains("Apple clang") || llvm_major(&version) != Some(rustc_llvm) {
+        panic!("{clang} is `{}`. {fix}", version.lines().next().unwrap_or_default());
+    }
+    let tool = |name: &str| {
+        let path = output(&clang, &[&format!("-print-prog-name={name}")]).unwrap_or_default();
+        let path = path.trim();
+        if !path.contains(std::path::MAIN_SEPARATOR) {
+            panic!("{name} not found next to {clang}. {fix}");
+        }
+        path.to_string()
+    };
+    cmake_config
+        .define("CMAKE_C_COMPILER", &clang)
+        .define("CMAKE_AR", tool("llvm-ar"))
+        .define("CMAKE_RANLIB", tool("llvm-ranlib"));
+    println!("cargo:warning=cross-language LTO: Aeron C compiled to bitcode by {clang} (LLVM {rustc_llvm}) with {lto_flag}");
+    Some(lto_flag)
 }
 
 #[cfg(not(feature = "build-from-source"))]

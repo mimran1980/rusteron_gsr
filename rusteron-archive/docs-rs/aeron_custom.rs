@@ -8,27 +8,15 @@ pub static AERON_IPC_STREAM: &std::ffi::CStr = c"aeron:ipc";
 /// your own iovec array for larger gathers.
 pub const MAX_OFFER_PARTS: usize = 8;
 
-// SAFETY: these handles wrap `Rc` (via `CResource::OwnedOnHeap`) by default, so they
-// are `!Send + !Sync` in principle. `Rc` (non-atomic refcount) is kept for latency.
-// The supported usage pattern is to MOVE a handle to a single owning thread (e.g. a
-// dedicated publisher/subscriber thread) and use it exclusively there; `Send` is
-// retained unconditionally to allow that one-time hand-off even without the
-// `multi-threaded` feature.
+// Without `multi-threaded` these handles are neither `Send` nor `Sync`: they wrap `Rc`
+// (via `CResource::OwnedOnHeap`), a non-atomic refcount kept for latency, and a
+// publication, subscription or counter also holds an `Rc` clone of its `Aeron` client.
+// A handle moved to another thread would share the client's refcount with the thread
+// that created it, and dropping it there while that thread clones or drops the client
+// (as every `add_*` does) races the refcount, which can close the client early or leak
+// it. To use a handle from another thread, enable `multi-threaded`, or create the
+// client and its handles on that thread.
 //
-// `Send` over a plain `Rc` is technically unsound in the general case (cloning the
-// handle and using clones from two different threads concurrently races the
-// non-atomic refcount) — this is a deliberate, documented "accepted unsoundness"
-// trade-off for latency: callers must not clone these handles across threads or use
-// one handle from multiple threads concurrently unless `multi-threaded` (below,
-// atomic `Arc`) is enabled.
-//
-// `Sync` is intentionally NOT implemented by default: sharing `&Handle` across
-// threads would let two threads `Rc::clone` concurrently and race the refcount.
-unsafe impl Send for AeronCountersReader {}
-unsafe impl Send for AeronSubscription {}
-unsafe impl Send for AeronPublication {}
-unsafe impl Send for AeronCounter {}
-
 // SAFETY: under `multi-threaded` the refcount is atomic (`Arc`), so `Send` is sound,
 // and `Sync` is implemented (where the underlying Aeron object is documented
 // threadsafe for concurrent access) so `&Handle` can be shared across threads. The
@@ -42,6 +30,14 @@ unsafe impl Send for AeronCounter {}
 // usable concurrently from multiple threads regardless of the refcount type — it's
 // `Send`-only, matching "hand off to one other thread, don't share concurrently".
 // Enable with `features = ["multi-threaded"]` in Cargo.toml.
+#[cfg(feature = "multi-threaded")]
+unsafe impl Send for AeronCountersReader {}
+#[cfg(feature = "multi-threaded")]
+unsafe impl Send for AeronSubscription {}
+#[cfg(feature = "multi-threaded")]
+unsafe impl Send for AeronPublication {}
+#[cfg(feature = "multi-threaded")]
+unsafe impl Send for AeronCounter {}
 #[cfg(feature = "multi-threaded")]
 unsafe impl Sync for AeronCountersReader {}
 #[cfg(feature = "multi-threaded")]
@@ -207,6 +203,9 @@ impl AeronContext {
     /// Typed variant of [`Self::set_idle_strategy`]: configures the conductor's idle
     /// strategy without stringly-typed names, setting coherent default init args
     /// (override afterwards with [`Self::set_idle_strategy_init_args`] if needed).
+    ///
+    /// This is how to make the conductor busier: [`Self::set_idle_sleep_duration_ns`] does
+    /// not change its sleep once the context exists, only how often it checks timeouts.
     pub fn set_idle_strategy_kind(&self, kind: AeronIdleStrategyKind) -> Result<i32, AeronCError> {
         self.set_idle_strategy_init_args(kind.default_init_args_c())?;
         self.set_idle_strategy(kind.name_c())
@@ -231,8 +230,8 @@ impl AeronContext {
 ///
 /// **Scoped read** (zero allocation, preferred for one-shot queries):
 /// ```ignore
-/// AeronCnc::read(driver_ctx.get_dir(), |cnc| {
-///     cnc.foreach_counter_fn(|value, id, type_id, key, label| {
+/// AeronCnc::read(&cformat!("{}", driver_ctx.get_dir()), |cnc| {
+///     cnc.counters_reader().foreach_counter_fn(|value, id, _type_id, _key, label| {
 ///         println!("{id}: {label} = {value}");
 ///     });
 /// })?;
@@ -242,7 +241,7 @@ impl AeronContext {
 ///
 /// **Owned handle** (for repeated polling, e.g. a stats dashboard):
 /// ```ignore
-/// let cnc = AeronCnc::open(driver_ctx.get_dir())?;
+/// let cnc = AeronCnc::open(&cformat!("{}", driver_ctx.get_dir()))?;
 /// loop {
 ///     let heartbeat = cnc.to_driver_heartbeat();
 ///     // ... poll counters, error log, etc. ...
@@ -311,43 +310,45 @@ impl AeronHeader {
         }
     }
 
-    /// Session id of this fragment, or `None` if the underlying values lookup
-    /// failed. Collapses the `get_values().frame().session_id()` hop and never
-    /// panics on the fast path.
+    /// The fragment's data frame, read in place; `None` for a null header.
+    #[inline]
+    fn frame_values(&self) -> Option<&aeron_data_header_t> {
+        // SAFETY: `aeron_header_t` (aeron_image.h) starts with its `aeron_data_header_t *frame`,
+        // which stays valid for the handler call; rusteron-client's
+        // `aeron_claim_commit_roundtrip_is_received` test catches a layout change.
+        unsafe { self.get_inner().cast::<*const aeron_data_header_t>().as_ref()?.as_ref() }
+    }
+
+    /// Session id of this fragment, or `None` if Aeron could not read the header.
     #[inline]
     pub fn session_id(&self) -> Option<i32> {
-        self.get_values().ok().map(|v| v.frame().session_id())
+        self.frame_values().map(|f| f.session_id)
     }
 
-    /// Stream id of this fragment, or `None` if the underlying values lookup
-    /// failed. Collapses the `get_values().frame().stream_id()` hop and never
-    /// panics on the fast path.
+    /// Stream id of this fragment, or `None` if Aeron could not read the header.
     #[inline]
     pub fn stream_id(&self) -> Option<i32> {
-        self.get_values().ok().map(|v| v.frame().stream_id())
+        self.frame_values().map(|f| f.stream_id)
     }
 
-    /// Reserved value of this fragment, or `None` if the underlying values
-    /// lookup failed. A sender can stamp a timestamp here (see
-    /// [`AeronPublication::offer_timestamped`]) so the receiver can measure
-    /// end-to-end latency.
+    /// Reserved value of this fragment, or `None` if Aeron could not read the header. A
+    /// sender can stamp a timestamp here (see [`AeronClaim::set_reserved_value`]) so the
+    /// receiver can measure end-to-end latency.
     #[inline]
     pub fn reserved_value(&self) -> Option<i64> {
-        self.get_values().ok().map(|v| v.frame().reserved_value())
+        self.frame_values().map(|f| f.reserved_value)
     }
 
-    /// Term id of this fragment, or `None` if the underlying values lookup
-    /// failed.
+    /// Term id of this fragment, or `None` if Aeron could not read the header.
     #[inline]
     pub fn term_id(&self) -> Option<i32> {
-        self.get_values().ok().map(|v| v.frame().term_id())
+        self.frame_values().map(|f| f.term_id)
     }
 
-    /// Term offset of this fragment, or `None` if the underlying values lookup
-    /// failed.
+    /// Term offset of this fragment, or `None` if Aeron could not read the header.
     #[inline]
     pub fn term_offset(&self) -> Option<i32> {
-        self.get_values().ok().map(|v| v.frame().term_offset())
+        self.frame_values().map(|f| f.term_offset)
     }
 }
 
@@ -598,12 +599,17 @@ unsafe extern "C" fn rusteron_image_visitor<F: FnMut(&AeronImage)>(
 /// treating it as "still pending" and only surfacing it later as a misleading
 /// [`AeronErrorType::TimedOut`] once `timeout` elapses.
 fn poll_destination_op_to_completion<C: std::fmt::Debug>(
+    client: &Aeron,
     result: &AeronAsyncDestination,
     timeout: std::time::Duration,
     context: C,
 ) -> Result<(), AeronCError> {
+    let invoker = client.uses_agent_invoker();
     let deadline = std::time::Instant::now() + timeout;
     loop {
+        if invoker {
+            client.main_do_work()?;
+        }
         match result.aeron_subscription_async_destination_poll() {
             Ok(v) if v > 0 => {
                 let _ = result.inner.close_resource();
@@ -627,13 +633,28 @@ fn poll_destination_op_to_completion<C: std::fmt::Debug>(
     }
 }
 
+impl Aeron {
+    /// Whether this client's conductor runs only in [`Self::main_do_work`], so blocking
+    /// helpers must call it while they wait.
+    #[inline]
+    fn uses_agent_invoker(&self) -> bool {
+        self.context().get_use_conductor_agent_invoker()
+    }
+}
+
 impl AeronSubscription {
     /// A retained image handle for `index`, or `None` when no such image exists.
     ///
-    /// The C client retains the image on this call; the returned [`AeronImage`] releases it
-    /// automatically when the last clone drops (no manual `aeron_image_release`). If the
-    /// subscription is closed first, the release is skipped — the C client has already
-    /// reclaimed the image.
+    /// The returned [`AeronImage`] releases the image when its last clone drops. Until then
+    /// the image stays valid even once it becomes unavailable: [`AeronImage::is_closed`]
+    /// turns true, polling reads nothing more, and its log buffer stays mapped. Drop the
+    /// handles before calling [`Self::close`]: after it, a handle must not be used, and its
+    /// image may stay mapped until the client closes.
+    ///
+    /// The image is one publisher session: a publisher that reconnects with a new session
+    /// is a new image, so poll the subscription, or fetch the new image, to follow it. To
+    /// keep an image passed to an image callback, whose arguments are valid only during the
+    /// call, retain it here (or with [`Self::image_by_session_id`]) on your own subscription.
     pub fn image_at_index(&self, index: usize) -> Option<AeronImage> {
         let image = unsafe { aeron_subscription_image_at_index(self.get_inner(), index) };
         self.wrap_retained_image(image)
@@ -658,9 +679,10 @@ impl AeronSubscription {
             },
             Some(Box::new(move |ctx| unsafe {
                 // skip the release if the subscription was closed first — the C client
-                // reclaimed the image during the subscription close
+                // reclaimed the image during the subscription close. Unlike
+                // `aeron_subscription_image_release`, this also releases an unavailable image.
                 if !subscription.get_inner().is_null() {
-                    aeron_subscription_image_release(subscription.get_inner(), *ctx)
+                    aeron_image_release(*ctx)
                 } else {
                     0
                 }
@@ -708,7 +730,7 @@ impl AeronSubscription {
             .get_dependency::<Aeron>()
             .ok_or_else(|| AeronCError::with_message(-1, "subscription has no owning Aeron client"))?;
         let result = self.async_add_destination(&client, destination)?;
-        poll_destination_op_to_completion(&result, timeout, (destination, self))
+        poll_destination_op_to_completion(&client, &result, timeout, (destination, self))
     }
 
     /// Note: unlike [`Self::add_destination`], Aeron's C API has no `..._destination_cancel`
@@ -737,7 +759,7 @@ impl AeronSubscription {
             .get_dependency::<Aeron>()
             .ok_or_else(|| AeronCError::with_message(-1, "subscription has no owning Aeron client"))?;
         let result = self.async_remove_destination(&client, destination)?;
-        poll_destination_op_to_completion(&result, timeout, (destination, self))
+        poll_destination_op_to_completion(&client, &result, timeout, (destination, self))
     }
 
 }
@@ -763,7 +785,7 @@ impl AeronExclusivePublication {
             .get_dependency::<Aeron>()
             .ok_or_else(|| AeronCError::with_message(-1, "publication has no owning Aeron client"))?;
         let result = self.async_add_destination(&client, destination)?;
-        poll_destination_op_to_completion(&result, timeout, (destination, self))
+        poll_destination_op_to_completion(&client, &result, timeout, (destination, self))
     }
 
     /// Note: unlike [`Self::add_destination`], Aeron's C API has no `..._destination_cancel`
@@ -792,7 +814,7 @@ impl AeronExclusivePublication {
             .get_dependency::<Aeron>()
             .ok_or_else(|| AeronCError::with_message(-1, "publication has no owning Aeron client"))?;
         let result = self.async_remove_destination(&client, destination)?;
-        poll_destination_op_to_completion(&result, timeout, (destination, self))
+        poll_destination_op_to_completion(&client, &result, timeout, (destination, self))
     }
 
     /// Note: unlike [`Self::add_destination`], Aeron's C API has no `..._destination_cancel`
@@ -839,7 +861,7 @@ impl AeronExclusivePublication {
             .get_dependency::<Aeron>()
             .ok_or_else(|| AeronCError::with_message(-1, "publication has no owning Aeron client"))?;
         let result = self.async_remove_destination_by_id(&client, destination_registration_id)?;
-        poll_destination_op_to_completion(&result, timeout, (destination_registration_id, self))?;
+        poll_destination_op_to_completion(&client, &result, timeout, (destination_registration_id, self))?;
         // The driver acknowledged the command, but per the confirmed upstream bug documented
         // above, that acknowledgement does NOT mean the destination was actually removed —
         // report this honestly as an error rather than a misleading `Ok(())`, so callers
@@ -876,7 +898,7 @@ impl AeronPublication {
             .get_dependency::<Aeron>()
             .ok_or_else(|| AeronCError::with_message(-1, "publication has no owning Aeron client"))?;
         let result = self.async_add_destination(&client, destination)?;
-        poll_destination_op_to_completion(&result, timeout, (destination, self))
+        poll_destination_op_to_completion(&client, &result, timeout, (destination, self))
     }
 
     /// Note: unlike [`Self::add_destination`], Aeron's C API has no `..._destination_cancel`
@@ -905,7 +927,7 @@ impl AeronPublication {
             .get_dependency::<Aeron>()
             .ok_or_else(|| AeronCError::with_message(-1, "publication has no owning Aeron client"))?;
         let result = self.async_remove_destination(&client, destination)?;
-        poll_destination_op_to_completion(&result, timeout, (destination, self))
+        poll_destination_op_to_completion(&client, &result, timeout, (destination, self))
     }
 
     /// Note: unlike [`Self::add_destination`], Aeron's C API has no `..._destination_cancel`
@@ -946,7 +968,7 @@ impl AeronPublication {
             .get_dependency::<Aeron>()
             .ok_or_else(|| AeronCError::with_message(-1, "publication has no owning Aeron client"))?;
         let result = self.async_remove_destination_by_id(&client, destination_registration_id)?;
-        poll_destination_op_to_completion(&result, timeout, (destination_registration_id, self))?;
+        poll_destination_op_to_completion(&client, &result, timeout, (destination_registration_id, self))?;
         // The driver acknowledged the command, but per the confirmed upstream bug documented
         // above, that acknowledgement does NOT mean the destination was actually removed —
         // report this honestly as an error rather than a misleading `Ok(())`, so callers
@@ -1398,8 +1420,8 @@ impl AeronUriStringBuilder {
     ///
     /// # Example
     /// ```ignore
-    /// let builder = AeronUriStringBuilder::default();
-    /// builder.remove(std::ffi::CStr::from_bytes_until_nul(b"tags\0").unwrap())?;
+    /// let builder: AeronUriStringBuilder = "aeron:udp?endpoint=localhost:20121|tags=1,2".parse()?;
+    /// builder.remove(c"tags")?;
     /// ```
     #[inline]
     pub fn remove(&self, key: &std::ffi::CStr) -> Result<i32, AeronCError> {
@@ -1417,7 +1439,7 @@ impl AeronUriStringBuilder {
     ///
     /// # Example
     /// ```ignore
-    /// let builder = AeronUriStringBuilder::default();
+    /// let builder: AeronUriStringBuilder = "aeron:udp?endpoint=localhost:20121|tags=1,2".parse()?;
     /// builder.remove_str("tags")?;
     /// ```
     #[inline]
@@ -1475,14 +1497,24 @@ impl AeronCountersReader {
     #[inline]
     #[doc = "Get the label for a counter."]
     pub fn get_counter_label_into(&self, counter_id: i32, dst: &mut String) -> Result<(), AeronCError> {
-        unsafe {
-            let capacity = dst.capacity();
-            let vec = dst.as_mut_vec();
-            vec.set_len(capacity);
-            let written = self.counter_label(counter_id, &mut vec[..])? as usize;
-            vec.set_len(std::cmp::min(written, capacity));
+        let capacity = dst.capacity();
+        // SAFETY: nothing reads the String until it is cut to a validated UTF-8 prefix.
+        let vec = unsafe { dst.as_mut_vec() };
+        vec.clear();
+        vec.resize(capacity, 0);
+        match self.counter_label(counter_id, &mut vec[..]) {
+            Ok(written) => {
+                // Labels are raw bytes, so a short buffer can split a multibyte char.
+                let written = (written as usize).min(capacity);
+                let valid = std::str::from_utf8(&vec[..written]).map_or_else(|e| e.valid_up_to(), str::len);
+                vec.truncate(valid);
+                Ok(())
+            }
+            Err(e) => {
+                vec.clear();
+                Err(e)
+            }
         }
-        Ok(())
     }
 
     #[inline]
@@ -1672,6 +1704,13 @@ impl AeronClaim {
         self.position
     }
 
+    /// Stamp the frame's reserved value, e.g. a send timestamp, which subscribers
+    /// read with [`AeronHeader::reserved_value`]. Call before [`Self::commit`].
+    #[inline]
+    pub fn set_reserved_value(&mut self, value: i64) {
+        self.claim.frame_header_mut().reserved_value = value;
+    }
+
     /// Commit the claimed bytes, publishing them to subscribers. Consumes `self`.
     pub fn commit(mut self) -> Result<i64, AeronCError> {
         self.finalised = true;
@@ -1763,8 +1802,8 @@ macro_rules! impl_publication_methods {
             }
 
             /// Gathering (vectored) publish: offer up to [`MAX_OFFER_PARTS`] buffers as ONE
-            /// message without concatenating them — **zero allocation, zero copy** on the
-            /// caller side (the driver gathers the parts directly).
+            /// message without concatenating them first: no allocation, and the parts are
+            /// copied straight into the term buffer, as `offer` copies its one buffer.
             ///
             /// This is the header+payload send: instead of building a `Vec` per message
             /// (`vec.extend(header); vec.extend(payload); offer(&vec)`), pass the parts:
@@ -2248,7 +2287,7 @@ impl Default for AeronStatusTracker {
 /// - port not `0..=65535` or not a decimal integer
 /// - host contains characters outside the safe allowlist (alphanumeric,
 ///   `-`, `.`, `:` for IPv4, `[]` for IPv6 bracketing)
-/// - URI separator characters (`?`, `=`, `:`, `/`) appear unescaped
+/// - URI separator characters (`?`, `=`, `/`) appear in the endpoint
 ///
 /// # Example
 /// ```ignore
@@ -2759,8 +2798,9 @@ pub struct AeronArchiveError {
 }
 
 impl AeronArchiveError {
-    /// Parses the `errorCode=N` the C archive client embeds in error text (both
-    /// `poll_for_error_response` payloads and `AeronCError` `lastError` messages).
+    /// Parses the `errorCode=N` the C archive client embeds in the `aeron_errmsg` text of a
+    /// failed request (and so in `AeronCError` `lastError` messages), not in
+    /// `poll_for_error_response` payloads.
     /// Falls back to [`AeronArchiveErrorCode::Generic`] when no code is present.
     pub fn parse(message: &str) -> Self {
         let code = message
@@ -3068,8 +3108,17 @@ impl AeronArchive {
 
 impl AeronArchive {
     /// Typed variant of [`Self::poll_for_error_response_as_string`]: polls the control
-    /// response stream once and returns the parsed archive error, or `Ok(None)` when the
-    /// stream is clean.
+    /// response stream once and returns the archive error it carries, or `Ok(None)` when
+    /// the stream is clean.
+    ///
+    /// The C call copies only the archive's message text, which has no `errorCode=N`, so the
+    /// returned `code` is always [`AeronArchiveErrorCode::Generic`]. Blocking calls return the
+    /// typed code in their own `Err`.
+    ///
+    /// Do not call it, or any other request on this archive, while an `AeronArchiveReplayMerge`
+    /// on it is in progress: the merge reads the same responses, and one taken here stalls it
+    /// until its progress timeout. The merge reports archive errors itself, as `Err` from its
+    /// poll.
     pub fn poll_for_error(&self) -> Result<Option<AeronArchiveError>, AeronCError> {
         let message = self.poll_for_error_response_as_string(4096)?;
         if message.is_empty() {

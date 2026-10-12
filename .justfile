@@ -16,6 +16,7 @@ git_repository := `git config --get remote.origin.url 2>/dev/null || echo "unkno
 git_branch := `git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown"`
 build_time := `date -u '+%Y-%m-%d_%H:%M:%S'`
 build_by := `whoami`
+aeron_version := `cat rusteron-client/aeron/version.txt 2>/dev/null || echo "unknown"`
 
 # =============================================================================
 # Rust
@@ -92,10 +93,22 @@ build-docker-samples:
 bench:
   cargo bench
 
-# Generate rust docs locally
+# The hot-path bench with cross-language LTO (Linux): needs clang, lld and llvm-ar of rustc's LLVM major
+bench-lto:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  llvm=$(rustc -vV | sed -n 's/^LLVM version: \([0-9]*\).*/\1/p')
+  export CC=clang-$llvm
+  export RUSTFLAGS="-Ctarget-cpu=native -Clinker-plugin-lto -Clinker=clang-$llvm -Clink-arg=-fuse-ld=lld-$llvm -Clink-arg=-Wl,-mllvm,-locally-hot-callsite-threshold=3000"
+  cargo bench -p rusteron-client --features static --bench hot_path
+
+# Compile every documentation example, then generate the rust docs locally. The READMEs and
+# docs/ guides are include_str!'d into the crates, so their ```rust fences are doc tests;
+# a fragment compiles through hidden `# ` setup lines
 docs:
   cargo clean --doc
   cargo test  --workspace --doc
+  cargo test  -p rusteron-client --doc --features multi-threaded
   cargo doc --workspace --no-deps --open
 
 # CANNOT USE MIRI due to ffi :(
@@ -369,7 +382,7 @@ create-sym-link:
 benchmark-ipc-throughput-java:
   cd ./rusteron-client/aeron; ./gradlew :aeron-all:build; cd -
   cd ./rusteron-client/aeron; ./gradlew :aeron-samples:jar; cd -
-  java -cp ./rusteron-client/aeron/aeron-all/build/libs/aeron-all-1.48.0-SNAPSHOT.jar:./rusteron-client/aeron/aeron-samples/build/libs/aeron-samples-1.48.0-SNAPSHOT.jar \
+  java -cp ./rusteron-client/aeron/aeron-all/build/libs/aeron-all-{{aeron_version}}.jar:./rusteron-client/aeron/aeron-samples/build/libs/aeron-samples-{{aeron_version}}.jar \
     --add-opens java.base/jdk.internal.misc=ALL-UNNAMED \
     -Daeron.dir=target/aeron \
     -Daeron.term.buffer.sparse.file=false \
@@ -397,7 +410,7 @@ benchmark-ipc-throughput-rust:
   AERON_RECEIVER_IDLE_STRATEGY=noop \
   AERON_DIR=target/aeron \
   AERON_TERM_BUFFER_SPARSE_FILE=false \
-  cargo run --release --package rusteron-client --example embedded_exclusive_ipc_throughput
+  cargo run --release --package rusteron-client --features examples --example embedded_exclusive_ipc_throughput
 
 # Rust IPC throughput with perf profiling
 benchmark-ipc-throughput-rust-profiler:
@@ -417,7 +430,7 @@ benchmark-ipc-throughput-rust-profiler:
 # Java embedded ping-pong
 benchmark-embedded-ping-pong-java:
   cd ./rusteron-client/aeron; ./gradlew :aeron-samples:jar; cd -
-  java -cp ./rusteron-client/aeron/aeron-all/build/libs/aeron-all-1.48.0-SNAPSHOT.jar:./rusteron-client/aeron/aeron-samples/build/libs/aeron-samples-1.48.0-SNAPSHOT.jar \
+  java -cp ./rusteron-client/aeron/aeron-all/build/libs/aeron-all-{{aeron_version}}.jar:./rusteron-client/aeron/aeron-samples/build/libs/aeron-samples-{{aeron_version}}.jar \
     --add-opens java.base/jdk.internal.misc=ALL-UNNAMED \
     -Daeron.dir=target/aeron \
     -Daeron.term.buffer.sparse.file=false \
@@ -448,11 +461,11 @@ benchmark-embedded-ping-pong-rust:
   AERON_RECEIVER_IDLE_STRATEGY=noop \
   AERON_DIR=target/aeron \
   AERON_TERM_BUFFER_SPARSE_FILE=false \
-  cargo run --release --package rusteron-client --example embedded_ping_pong
+  cargo run --release --package rusteron-client --features examples --example embedded_ping_pong
 
 # Rust ping-pong with profiler codesign
 benchmark-embedded-ping-pong-rust-profiler:
-  cargo build --features static --release --package rusteron-client --example embedded_ping_pong
+  cargo build --features "static examples" --release --package rusteron-client --example embedded_ping_pong
   codesign -s - -vvv --entitlements instruments.plist ./target/release/examples/embedded_ping_pong
   AERON_DIR=target/aeron \
   ./target/release/examples/embedded_ping_pong

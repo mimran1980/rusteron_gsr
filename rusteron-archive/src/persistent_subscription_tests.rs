@@ -1185,7 +1185,7 @@ mod tests {
             .archive_context(&archive_context)?
             .live_channel(live_channel)?
             .live_stream_id(stream_id)?
-            .replay_channel("aeron:udp?endpoint=localhost:0")?
+            .replay_channel("aeron:udp?endpoint=127.0.0.1:0")?
             .replay_stream_id(stream_id + 1)?
             .start_position(0)?
             .recording_id(recording_id)?
@@ -1198,7 +1198,7 @@ mod tests {
         // Drive the persistent subscription: keep the live stream active by
         // publishing, and poll so it replays then joins live. Aeron types are
         // !Send, so this all happens on the test thread. `ps.poll_fn()` drives
-        // the archive client internally, so no `archive.poll_for_recording_signals()`.
+        // its own archive client.
         let mut i = 0;
         let start = Instant::now();
         while !ps.is_live() && start.elapsed() < Duration::from_secs(30) {
@@ -1232,6 +1232,172 @@ mod tests {
         );
         info!("on_live_joined fired {} time(s)", join_count);
 
+        Ok(())
+    }
+
+    /// `new_with_aeron` points the archive context at the given client from the start, so the
+    /// subscription and the context share one client.
+    #[test]
+    #[serial]
+    fn new_with_aeron_gives_the_subscription_and_context_one_client() -> Result<(), Box<dyn Error>> {
+        crate::skip_unless_java!();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().ok();
+
+        let (aeron, archive_context, _media_driver_archive, _archive_error_handler) =
+            start_aeron_archive_with_config("ps_new_with_aeron", 9796)?;
+        let other_context = AeronContext::new()?;
+        other_context.set_dir(&aeron.context().get_dir().into_c_string())?;
+        let other = Aeron::new(&other_context)?;
+        other.start()?;
+
+        let builder = PersistentSubscriptionBuilder::new_with_aeron(&archive_context, &other)?;
+        assert_eq!(archive_context.get_aeron().get_inner(), other.get_inner());
+        let ps = builder
+            .recording_id(0)?
+            .live_channel("aeron:ipc")?
+            .live_stream_id(3701)?
+            .replay_channel("aeron:udp?endpoint=127.0.0.1:0")?
+            .replay_stream_id(3702)?
+            .build()?;
+        assert_eq!(archive_context.get_aeron().get_inner(), other.get_inner());
+        ps.close()?;
+        Ok(())
+    }
+
+    /// Building a persistent subscription points its archive context at the subscription's
+    /// client, which is why the two should share one.
+    #[test]
+    #[serial]
+    fn building_points_the_archive_context_at_the_subscriptions_client() -> Result<(), Box<dyn Error>> {
+        crate::skip_unless_java!();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().ok();
+
+        let (aeron, archive_context, _media_driver_archive, _archive_error_handler) =
+            start_aeron_archive_with_config("ps_context_client", 9795)?;
+        let other_context = AeronContext::new()?;
+        other_context.set_dir(&aeron.context().get_dir().into_c_string())?;
+        let other = Aeron::new(&other_context)?;
+        other.start()?;
+        assert_eq!(archive_context.get_aeron().get_inner(), aeron.get_inner());
+
+        let ps = persistent_subscription_builder()?
+            .aeron(&other)?
+            .archive_context(&archive_context)?
+            .recording_id(0)?
+            .live_channel("aeron:ipc")?
+            .live_stream_id(3601)?
+            .replay_channel("aeron:udp?endpoint=127.0.0.1:0")?
+            .replay_stream_id(3602)?
+            .build()?;
+        assert_eq!(archive_context.get_aeron().get_inner(), other.get_inner());
+        ps.close()?;
+        Ok(())
+    }
+
+    /// Setting a counter on the builder again closes the counter it replaces.
+    #[test]
+    #[serial]
+    fn replacing_a_builder_counter_closes_the_replaced_one() -> Result<(), Box<dyn Error>> {
+        crate::skip_unless_java!();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().ok();
+
+        let (aeron, _archive_context, _media_driver_archive, _archive_error_handler) =
+            start_aeron_archive_with_config("ps_counter_replace", 9760)?;
+        let state_type = AERON_PERSISTENT_SUBSCRIPTION_STATE_TYPE_ID as i32;
+        let replaced =
+            AeronAsyncAddCounter::new(&aeron, state_type, &[], "replaced")?.poll_blocking(Duration::from_secs(5))?;
+        let kept = AeronAsyncAddCounter::new(&aeron, state_type, &[], "kept")?.poll_blocking(Duration::from_secs(5))?;
+        let builder = persistent_subscription_builder()?
+            .state_counter(&replaced)?
+            .state_counter(&kept)?;
+        drop((replaced, kept, builder));
+
+        let counters_reader = aeron.counters_reader();
+        let open = |wanted: &str| {
+            let mut found = false;
+            counters_reader.foreach_counter_fn(|_value: i64, _id: i32, _type_id: i32, _key: &[u8], label: &str| {
+                found |= label == wanted
+            });
+            found
+        };
+        let start = Instant::now();
+        while open("replaced") || open("kept") {
+            assert!(
+                start.elapsed() < Duration::from_secs(5),
+                "replaced open: {}, kept open: {}",
+                open("replaced"),
+                open("kept")
+            );
+            sleep(Duration::from_millis(10));
+        }
+        Ok(())
+    }
+
+    /// A persistent subscription keeps its archive context open, so it connects and closes
+    /// cleanly after the caller's handle to the context has gone.
+    #[test]
+    #[serial]
+    fn persistent_subscription_keeps_its_archive_context_open() -> Result<(), Box<dyn Error>> {
+        crate::skip_unless_java!();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().ok();
+
+        let (aeron, archive_context, _media_driver_archive, _archive_error_handler) =
+            start_aeron_archive_with_config("ps_context_anchor", 9790)?;
+        let ps = {
+            let context = AeronArchiveContext::new()?;
+            context.set_aeron(&aeron)?;
+            context.set_control_request_channel(&archive_context.get_control_request_channel().into_c_string())?;
+            context.set_control_response_channel(&archive_context.get_control_response_channel().into_c_string())?;
+            persistent_subscription_builder()?
+                .aeron(&aeron)?
+                .archive_context(&context)?
+                .recording_id(0)?
+                .live_channel("aeron:ipc")?
+                .live_stream_id(3501)?
+                .replay_channel("aeron:udp?endpoint=127.0.0.1:0")?
+                .replay_stream_id(3502)?
+                .build()?
+        };
+        // polling connects the subscription's archive client through the context
+        for _ in 0..100 {
+            let _ = ps.poll_fn(|_, _| {}, 10);
+            sleep(Duration::from_millis(1));
+        }
+        ps.close()?;
+        Ok(())
+    }
+
+    /// A persistent subscription keeps its Aeron client open, so it closes cleanly after
+    /// the caller's last handle to the client has gone.
+    #[test]
+    #[serial]
+    fn persistent_subscription_keeps_its_aeron_client_open() -> Result<(), Box<dyn Error>> {
+        crate::skip_unless_java!();
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().ok();
+
+        let (aeron, archive_context, _media_driver_archive, _archive_error_handler) =
+            start_aeron_archive_with_config("ps_aeron_anchor", 9750)?;
+        let ps = persistent_subscription_builder()?
+            .aeron(&aeron)?
+            .archive_context(&archive_context)?
+            .recording_id(0)?
+            .live_channel("aeron:ipc")?
+            .live_stream_id(3401)?
+            .replay_channel("aeron:udp?endpoint=127.0.0.1:0")?
+            .replay_stream_id(3402)?
+            .build()?;
+        drop(aeron);
+        ps.close()?;
         Ok(())
     }
 
@@ -1311,7 +1477,7 @@ mod tests {
             .archive_context(&archive_context)?
             .live_channel(live_channel)?
             .live_stream_id(stream_id)?
-            .replay_channel("aeron:udp?endpoint=localhost:0")?
+            .replay_channel("aeron:udp?endpoint=127.0.0.1:0")?
             .replay_stream_id(stream_id + 1)?
             .start_from_beginning()?
             .recording_id(recording_id)?
@@ -1337,7 +1503,8 @@ mod tests {
         assert!(joined.load(Ordering::SeqCst) >= 1, "never went live initially");
 
         // Phase 2: tear down the exclusive publication -> live image is lost ->
-        // PS falls back to replay (on_live_left fires, is_replaying() becomes true).
+        // on_live_left fires and the PS re-reads the recording, replaying anything
+        // recorded past its position before it waits for live again.
         drop(publication);
         let deadline = Instant::now() + Duration::from_secs(30);
         while ps.is_live() && Instant::now() < deadline {

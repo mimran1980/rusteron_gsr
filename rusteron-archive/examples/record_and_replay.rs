@@ -15,7 +15,9 @@
 //! See the archive README and the upstream sample
 //! <https://github.com/aeron-io/aeron/tree/main/aeron-samples/src/main/java/io/aeron/samples/archive>.
 
-use rusteron_archive::testing::{EmbeddedArchiveMediaDriverProcess, find_unused_udp_port};
+use rusteron_archive::testing::{
+    EmbeddedArchiveMediaDriverProcess, find_counter_id_by_session_blocking, find_unused_udp_port,
+};
 use rusteron_archive::*;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
@@ -50,7 +52,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let req_port = find_unused_udp_port(9000).expect("no free port");
     let resp_port = find_unused_udp_port(req_port + 1).expect("no free port");
     let events_port = find_unused_udp_port(resp_port + 1).expect("no free port");
-    let _process = EmbeddedArchiveMediaDriverProcess::build_and_start(
+    let process = EmbeddedArchiveMediaDriverProcess::build_and_start(
         &aeron_dir,
         &archive_dir,
         &format!("aeron:udp?endpoint=localhost:{req_port}"),
@@ -58,17 +60,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &format!("aeron:udp?endpoint=localhost:{events_port}"),
     )?;
 
-    // 2. Connect a client + archive context. The error logger surfaces async client errors.
+    // 2. Connect a client + archive context. Without an error handler the C client's default
+    // handler exits the process on any async error, so install one.
     // `cformat!` = format + CString in one named step (the one heap allocation stays visible).
     let aeron_context = AeronContext::new()?;
     aeron_context.set_dir(&cformat!("{aeron_dir}"))?;
+    aeron_context.set_error_handler(Some(|code: i32, msg: &str| eprintln!("[client error] {code}: {msg}")))?;
     let aeron = Aeron::new(&aeron_context)?;
     aeron.start()?;
-    let archive_context = AeronArchiveContext::new()?;
-    archive_context.set_aeron(&aeron)?;
-    archive_context.set_control_request_channel(&cformat!("aeron:udp?endpoint=localhost:{req_port}"))?;
-    archive_context.set_control_response_channel(&cformat!("aeron:udp?endpoint=localhost:{resp_port}"))?;
-    archive_context.set_recording_events_channel(&cformat!("aeron:udp?endpoint=localhost:{events_port}"))?;
+    // the archive's control request, control response and recording events channels
+    let archive_context = process.archive_context(&aeron)?;
     let archive = retry_transient(Instant::now() + Duration::from_secs(20), || {
         AeronArchiveAsyncConnect::new_with_aeron(&archive_context, &aeron)?.poll_blocking(Duration::from_secs(5))
     })?;
@@ -106,7 +107,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 4. Resolve the recording id (wait for the recorder to flush what we published).
     let session_id = publication.session_id();
     let counters = aeron.counters_reader();
-    let counter_id = RecordingPos::find_counter_id_by_session(&counters, session_id);
+    // The recorder allocates the counter asynchronously after the image appears.
+    let counter_id = find_counter_id_by_session_blocking(&counters, session_id, Duration::from_secs(5))?;
     let recording_id = RecordingPos::get_recording_id_block(&counters, counter_id, Duration::from_secs(5))?;
     let published_position = publication.position();
     let deadline = Instant::now() + Duration::from_secs(5);

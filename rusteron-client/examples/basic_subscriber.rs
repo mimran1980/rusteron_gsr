@@ -44,7 +44,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let subscription = aeron
         .async_add_subscription(CHANNEL, STREAM_ID, Some(&on_avail), Some(&on_unavail))?
         .poll_blocking(Duration::from_secs(5))?;
-    println!("subscribing to {} on stream id {STREAM_ID}", CHANNEL.to_str().unwrap());
+    println!("subscribing to {} on stream id {STREAM_ID}", CHANNEL.to_str()?);
 
     while running.load(Ordering::SeqCst) {
         // poll_fn: zero-allocation closure poll for non-fragmented messages.

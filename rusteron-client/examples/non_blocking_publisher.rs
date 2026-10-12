@@ -57,7 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // other subscriptions, timers, a duty cycle, telemetry, etc. — instead of blocking.
         do_other_work();
     };
-    println!("publishing to {} on stream id {STREAM_ID}", CHANNEL.to_str().unwrap());
+    println!("publishing to {} on stream id {STREAM_ID}", CHANNEL.to_str()?);
 
     // ── Publication duty cycle ──────────────────────────────────────────────
     let mut count: u64 = 0;

@@ -713,15 +713,31 @@ impl CWrapper {
 
 
 
-                let register_handlers = if uses_self && !retained_handler_registrations.is_empty() {
+                let mut register_handlers = if uses_self && !retained_handler_registrations.is_empty() {
                     quote! { #(#retained_handler_registrations)* }
                 } else {
                     quote! {}
                 };
+                // C copies the pair's handler and clientd and may fire them until the client
+                // closes (close handlers fire inside that close), so the client keeps the pair
+                // and, through it, its Handler. Remove cannot release it: dependencies only grow.
+                if matches!(
+                    method.fn_name.as_str(),
+                    "aeron_add_available_counter_handler"
+                        | "aeron_add_unavailable_counter_handler"
+                        | "aeron_add_close_handler"
+                ) {
+                    register_handlers.extend(quote! {
+                        if result >= 0 {
+                            if let Some(__inner) = self.inner.as_owned() {
+                                __inner.add_dependency(pair.clone());
+                            }
+                        }
+                    });
+                }
 
                 let mut additional_methods = vec![];
                 let set_closed = quote! {};
-
                 Self::add_mut_string_methods_if_applicable(method, &fn_name, uses_self, &method_docs, &mut additional_methods);
 
                 // getter methods
@@ -954,6 +970,7 @@ impl CWrapper {
             let rt = ReturnType::new(method.arguments[1].clone(), wrappers.clone());
             let return_type = rt.get_new_return_type(false, false);
             let getter_method = format_ident!("get_{}", fn_name);
+            let c_fn = format_ident!("{}", method.fn_name);
             let method_docs = method_docs
                 .iter()
                 .cloned()
@@ -963,9 +980,14 @@ impl CWrapper {
                 #[inline]
                 #(#method_docs)*
                 pub fn #getter_method #where_clause(#possible_self) -> Result<#return_type, AeronCError> {
-                    let result = #return_type::new_zeroed_on_stack();
-                    self.#fn_name(&result)?;
-                    Ok(result)
+                    let mut value = std::mem::MaybeUninit::uninit();
+                    // SAFETY: Aeron's constants/values functions fill every field when they
+                    // return 0 and write nothing otherwise, so no zeroing is needed
+                    let code = unsafe { #c_fn(self.get_inner(), value.as_mut_ptr()) };
+                    if code < 0 {
+                        return Err(AeronCError::from_code(code));
+                    }
+                    Ok(#return_type::from(unsafe { value.assume_init() }))
                 }
             });
             debug_fields.push(quote! {
@@ -1005,25 +1027,23 @@ impl CWrapper {
         &self,
         dst_truncate_to_capacity: &mut String,
     ) -> Result<i32, AeronCError> {
-        unsafe {
-            let capacity = dst_truncate_to_capacity.capacity();
-            let vec = dst_truncate_to_capacity.as_mut_vec();
-            vec.set_len(capacity);
-            let result = self.#fn_name(&mut vec[..])?;
-            let mut len = 0;
-            loop {
-                if len == capacity {
-                    break;
-                }
-                let val = vec[len];
-                if val == 0 {
-                    break;
-                }
-                len += 1;
+        let capacity = dst_truncate_to_capacity.capacity();
+        // SAFETY: the bytes are zeros (valid UTF-8) until truncated to a checked UTF-8 prefix.
+        let vec = unsafe { dst_truncate_to_capacity.as_mut_vec() };
+        // Zeroed so C never leaves uninitialised bytes behind, including when it fails without writing.
+        vec.clear();
+        vec.resize(capacity, 0);
+        let result = self.#fn_name(&mut vec[..]);
+        let len = match result {
+            Ok(_) => {
+                let len = vec.iter().position(|&b| b == 0).unwrap_or(capacity);
+                // C truncation can split a multi-byte character.
+                std::str::from_utf8(&vec[..len]).map_or_else(|e| e.valid_up_to(), |s| s.len())
             }
-            vec.set_len(len);
-            Ok(result)
-        }
+            Err(_) => 0,
+        };
+        vec.truncate(len);
+        result
     }
                         });
             }
@@ -1224,8 +1244,27 @@ impl CWrapper {
                     // The C struct created here stores every callback/clientd pair it is
                     // given (e.g. fragment assemblers keep their delegate), so clone each
                     // Handler into the new resource's dependencies to keep it alive until
-                    // the C resource is closed.
-                    let handler_deps: Vec<TokenStream> = Self::handler_dependency_registrations(&method.arguments);
+                    // the C resource is closed. `lets` shadows each Handler argument with
+                    // its C callback pointer, so take the Handler under a fresh name first.
+                    let (handler_keeps, handler_deps): (Vec<TokenStream>, Vec<TokenStream>) = method
+                        .arguments
+                        .iter()
+                        .filter(|arg| matches!(arg.processing, ArgProcessing::Handler(_)) && !arg.is_mut_pointer())
+                        .map(|arg| {
+                            let name = arg.as_ident();
+                            let keep = format_ident!("__handler_{}", arg.name);
+                            (
+                                quote! { let #keep = #name; },
+                                quote! {
+                                    if let Some(__handler) = #keep {
+                                        if let Some(__inner) = result.inner.as_owned() {
+                                            __inner.add_dependency(Handler::clone(__handler));
+                                        }
+                                    }
+                                },
+                            )
+                        })
+                        .unzip();
 
                     // Generate logging expression token stream (will be evaluated in closure)
                     let init_log_expr_tokens = Self::generate_arg_logging(&method.arguments, &init_args);
@@ -1261,6 +1300,7 @@ impl CWrapper {
                         #[inline]
                         #(#method_docs)*
                         pub fn #fn_name #where_clause(#(#new_args),*) -> Result<Self, AeronCError> {
+                            #(#handler_keeps)*
                             #(#lets)*
                             // new by using constructor
                             let resource_constructor = ManagedCResource::new(
@@ -1323,7 +1363,7 @@ impl CWrapper {
                     log::debug!("creating zeroed empty resource on stack {}", stringify!(#type_name));
 
                     Self {
-                        inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed()),
+                        inner: CResource::OwnedOnStack(std::mem::MaybeUninit::zeroed().into()),
                     }
                 }
             };
@@ -1729,7 +1769,7 @@ mod parse_custom_methods_tests {
     #[test]
     #[should_panic(expected = "failed to parse aeron_custom.rs")]
     fn panics_loudly_on_malformed_input() {
-        // Previously this returned an empty map → duplicate-method emission.
+        // An empty skip-list would let the generator emit duplicate methods.
         let _ = parse_custom_methods("impl { not valid rust }}}");
     }
 
@@ -2363,6 +2403,24 @@ pub fn generate_rust_code(
                     .replace(&format!("{}_", client_class.without_name), "")
                     .replace("async_", "")
             );
+            // A context owner (archive connect) holds the client in C, set through
+            // `set_aeron`, rather than as a Rust dependency of the poller.
+            let owner_client_fallback = if client_class
+                .methods
+                .iter()
+                .any(|m| m.fn_name == format!("{}_get_aeron", client_class.without_name))
+            {
+                quote! {
+                    .or_else(|| {
+                        self.inner
+                            .get_dependency::<#client_type>()
+                            .map(|owner| owner.get_aeron())
+                            .filter(|aeron| !aeron.get_inner().is_null())
+                    })
+                }
+            } else {
+                quote! {}
+            };
 
             let init_args: Vec<TokenStream> = poll_method
                 .arguments
@@ -2707,7 +2765,11 @@ pub fn generate_rust_code(
                             let start = std::time::Instant::now();
                             loop {
                                 if let Ok(poller) = #async_class_name::new(self, #(#async_new_args_name_only),*) {
+                                    let invoker = poller.agent_invoker_client();
                                     while start.elapsed() <= timeout  {
+                                      if let Some(aeron) = &invoker {
+                                          aeron.main_do_work()?;
+                                      }
                                       if let Some(result) = poller.poll()? {
                                           return Ok(result);
                                       }
@@ -2821,8 +2883,12 @@ pub fn generate_rust_code(
                                 return Ok(result);
                             }
 
+                            let invoker = self.agent_invoker_client();
                             let time = std::time::Instant::now();
                             while time.elapsed() < timeout {
+                                if let Some(aeron) = &invoker {
+                                    aeron.main_do_work()?;
+                                }
                                 if let Some(result) = self.poll()? {
                                     return Ok(result);
                                 }
@@ -2831,6 +2897,15 @@ pub fn generate_rust_code(
                             }
                             log::error!("failed async poll for {:?}", self);
                             Err(AeronErrorType::TimedOut.into())
+                        }
+
+                        #[doc = r"The client a blocking poll must drive, as nothing else runs its agent-invoker conductor."]
+                        #[inline]
+                        fn agent_invoker_client(&self) -> Option<Aeron> {
+                            self.inner
+                                .get_dependency::<Aeron>()
+                                #owner_client_fallback
+                                .filter(Aeron::uses_agent_invoker)
                         }
                     }
                                 }
@@ -3164,7 +3239,7 @@ pub fn generate_rust_code(
             #[inline]
             fn from(value: #type_name) -> Self {
                 #class_name {
-                    inner: CResource::OwnedOnStack(MaybeUninit::new(value)),
+                    inner: CResource::OwnedOnStack(MaybeUninit::new(value).into()),
                     #(#new_ref_set_none)*
                 }
             }

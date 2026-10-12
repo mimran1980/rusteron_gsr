@@ -1,0 +1,28 @@
+# AERON_DIR on an emptyDir of medium HugePages-2Mi; the harness and driver come from the host
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hugepages-2mi
+spec:
+  restartPolicy: Never
+  containers:
+    - name: bench
+      image: debian:trixie-slim
+      command: ["/lab/k8s-run.sh"]
+      env:
+        - {name: AERON_TERM_BUFFER_SPARSE_FILE, value: "false"}
+        - {name: AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY, value: "true"}
+        - {name: AERON_FILE_PAGE_SIZE, value: "2097152"}
+        # kubelet mounts hugetlbfs without size=, so Aeron would see no usable space
+        - {name: AERON_PERFORM_STORAGE_CHECKS, value: "false"}
+      resources:
+        requests: {cpu: "3", memory: 3Gi, hugepages-2Mi: 1Gi}
+        limits: {cpu: "4", memory: 3Gi, hugepages-2Mi: 1Gi}
+      volumeMounts:
+        - {name: aeron, mountPath: /aeron}
+        - {name: lab, mountPath: /lab}
+  volumes:
+    - name: aeron
+      emptyDir: {medium: HugePages-2Mi}
+    - name: lab
+      hostPath: {path: /srv/x86lab/k8s, type: Directory}

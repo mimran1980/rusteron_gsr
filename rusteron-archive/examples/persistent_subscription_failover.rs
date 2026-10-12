@@ -4,10 +4,12 @@
 //! rides through the loss of the live stream:
 //!
 //! 1. replay + join live (`on_live_joined`);
-//! 2. the live publication dies → the subscription **falls back to replay**
-//!    (`on_live_left`, `is_replaying()`), losing nothing — the archive keeps recording
-//!    history it already has;
-//! 3. the live stream comes back → it **rejoins live** (`on_live_joined` again).
+//! 2. the live publication dies → `on_live_left`: the subscription re-reads the recording,
+//!    replays anything recorded past its position (nothing here, as the stream stopped)
+//!    and waits for live again;
+//! 3. the live stream comes back, resumed where it stopped → it **rejoins live**
+//!    (`on_live_joined` again). Aeron refuses a live stream that restarts behind what the
+//!    subscription has seen.
 //!
 //! Requires `java` on PATH (an embedded Java Archive is started for you).
 //!
@@ -31,7 +33,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let req_port = find_unused_udp_port(9300).expect("no free port");
     let resp_port = find_unused_udp_port(req_port + 1).expect("no free port");
     let events_port = find_unused_udp_port(resp_port + 1).expect("no free port");
-    let _process = EmbeddedArchiveMediaDriverProcess::build_and_start(
+    let process = EmbeddedArchiveMediaDriverProcess::build_and_start(
         &aeron_dir,
         &archive_dir,
         &format!("aeron:udp?endpoint=localhost:{req_port}"),
@@ -45,11 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let aeron = Aeron::new(&aeron_context)?;
     aeron.start()?;
 
-    let archive_context = AeronArchiveContext::new()?;
-    archive_context.set_aeron(&aeron)?;
-    archive_context.set_control_request_channel(&cformat!("aeron:udp?endpoint=localhost:{req_port}"))?;
-    archive_context.set_control_response_channel(&cformat!("aeron:udp?endpoint=localhost:{resp_port}"))?;
-    archive_context.set_recording_events_channel(&cformat!("aeron:udp?endpoint=localhost:{events_port}"))?;
+    let archive_context = process.archive_context(&aeron)?;
     let archive =
         AeronArchiveAsyncConnect::new_with_aeron(&archive_context, &aeron)?.poll_blocking(Duration::from_secs(20))?;
     println!("connected to archive");
@@ -66,10 +64,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     while !publication.is_connected() && start.elapsed() < Duration::from_secs(5) {
         sleep(Duration::from_millis(10));
     }
+    let seed_deadline = Instant::now() + Duration::from_secs(5);
     for i in 0..10 {
         let m = format!("Seed-{i}");
-        while publication.offer(m.as_bytes()).is_err() {
-            sleep(Duration::from_millis(1));
+        loop {
+            match publication.offer(m.as_bytes()) {
+                Ok(_) => break,
+                Err(e) if e.is_retryable() && Instant::now() < seed_deadline => sleep(Duration::from_millis(1)),
+                Err(e) => return Err(e.into()),
+            }
         }
     }
     let session_id = publication.get_constants()?.session_id;
@@ -93,7 +96,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         fn on_live_left(&self) {
             self.left.fetch_add(1, Ordering::SeqCst);
-            println!("[listener] on_live_left — falling back to replay");
+            println!("[listener] on_live_left — live stream lost");
         }
         fn on_error(&self, code: i32, msg: &str) {
             eprintln!("[listener] error {code}: {msg}");
@@ -104,9 +107,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let left = Arc::new(AtomicUsize::new(0));
     let errors: Arc<Mutex<Vec<(i32, String)>>> = Arc::new(Mutex::new(Vec::new()));
 
-    let ps = persistent_subscription_builder()?
-        .aeron(&aeron)?
-        .archive_context(&archive_context)?
+    // one client for the subscription and its archive context
+    let ps = PersistentSubscriptionBuilder::new_with_aeron(&archive_context, &aeron)?
         .live_channel(live_channel)?
         .live_stream_id(stream_id)?
         .replay_channel("aeron:udp?endpoint=localhost:0")?
@@ -136,6 +138,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ── Phase 2: the live stream dies ────────────────────────────────────
     println!("phase 2: dropping the live publication (upstream service dies)...");
+    // where the stream stopped, so the restarted publisher can resume it there
+    let constants = publication.get_constants()?;
+    let stopped_at = publication.position();
     drop(publication);
     let deadline = Instant::now() + Duration::from_secs(30);
     while ps.is_live() && Instant::now() < deadline {
@@ -147,12 +152,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         sleep(Duration::from_millis(10));
     }
     assert!(left.load(Ordering::SeqCst) >= 1, "never detected loss of live stream");
-    println!("now replaying from the archive (is_replaying = {})", ps.is_replaying());
+    println!(
+        "live stream lost; waiting to rejoin (is_replaying = {})",
+        ps.is_replaying()
+    );
 
     // ── Phase 3: the live stream comes back — rejoin ─────────────────────
-    println!("phase 3: restoring the live publication...");
+    // Aeron refuses a live stream behind what the subscription has already seen, so a
+    // restarted publisher resumes the same session where it stopped.
+    println!("phase 3: resuming the live publication where it stopped...");
+    let resumed = live_channel.parse::<AeronUriStringBuilder>()?;
+    resumed.session_id(&constants.session_id().to_string())?;
+    resumed.set_initial_position(
+        stopped_at,
+        constants.initial_term_id(),
+        constants.term_buffer_length() as i32,
+    )?;
+    let resumed = resumed.build(bindings::AERON_URI_MAX_LENGTH as usize)?;
     publication = aeron
-        .async_add_exclusive_publication(&cformat!("{live_channel}"), stream_id)?
+        .async_add_exclusive_publication(&cformat!("{resumed}"), stream_id)?
         .poll_blocking(Duration::from_secs(5))?;
     let deadline = Instant::now() + Duration::from_secs(30);
     while joined.load(Ordering::SeqCst) < 2 && Instant::now() < deadline {
@@ -173,7 +191,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         errors.lock().unwrap().clone()
     );
     println!(
-        "failover complete: joined live {joined_count} time(s), fell back {} time(s)",
+        "failover complete: joined live {joined_count} time(s), lost it {} time(s)",
         left.load(Ordering::SeqCst)
     );
     Ok(())

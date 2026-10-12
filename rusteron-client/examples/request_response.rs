@@ -3,9 +3,9 @@
 //! Port of Aeron's `response_server.c` + `response_client.c` samples (response channels,
 //! aeron 1.44+): a client subscribes on a `control-mode=response` channel and stamps its
 //! subscription registration id onto the request publication (`response-correlation-id=`);
-//! the server answers each connected client on a per-image response publication keyed by
-//! the request image's correlation id. No addressing logic in user code — the driver wires
-//! responses back to the right requester.
+//! the server reads each client's requests from that client's own image and answers on a
+//! response publication keyed by the image's correlation id. No addressing logic in user
+//! code — the driver wires responses back to the right requester.
 //!
 //! ```bash
 //! cargo run --release --features "static precompile" --example request_response
@@ -52,11 +52,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let aeron = Aeron::new(&ctx)?;
             aeron.start()?;
 
-            let pending_clients: Arc<Mutex<Vec<i64>>> = Arc::new(Mutex::new(Vec::new()));
-            let on_image_clients = pending_clients.clone();
+            // the image callback runs on the client conductor thread, so it only queues the new client
+            let new_clients: Arc<Mutex<Vec<(i32, i64)>>> = Arc::default();
+            let on_image_clients = new_clients.clone();
             let image_handler = Handler::new(move |_subscription: AeronSubscription, image: AeronImage| {
                 if let Ok(constants) = image.get_constants() {
-                    on_image_clients.lock().unwrap().push(constants.correlation_id());
+                    on_image_clients
+                        .lock()
+                        .unwrap()
+                        .push((constants.session_id(), constants.correlation_id()));
                 }
             });
             let server_subscription = aeron
@@ -68,41 +72,69 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )?
                 .poll_blocking(Duration::from_secs(5))?;
 
-            let mut responders: Vec<AeronPublication> = Vec::new();
-            let mut inbox: Vec<Vec<u8>> = Vec::new();
+            // declared after the subscription, so the retained images drop before it closes
+            let mut clients: Vec<Client> = Vec::new();
+            let mut reply = Vec::new();
             while running.load(Ordering::Acquire) {
-                // connect a response publication for each newly-arrived client image
-                for correlation_id in pending_clients.lock().unwrap().drain(..) {
+                let arrived = std::mem::take(&mut *new_clients.lock().unwrap());
+                for (session_id, correlation_id) in arrived {
+                    // `None` when the client has already gone away
+                    let Some(image) = server_subscription.image_by_session_id(session_id) else {
+                        continue;
+                    };
                     let channel = AeronUriStringBuilder::udp_control(&response_control, ControlMode::Response)?
                         .response_correlation_id(correlation_id)?
                         .build(256)?;
-                    let publication = aeron
-                        .async_add_publication(&cformat!("{channel}"), RESPONSE_STREAM_ID)?
-                        .poll_blocking(Duration::from_secs(5))?;
-                    println!("[server] response publication ready for client image {correlation_id}");
-                    responders.push(publication);
+                    let pending = aeron.async_add_publication(&cformat!("{channel}"), RESPONSE_STREAM_ID)?;
+                    clients.push(Client {
+                        image,
+                        pending: Some(pending),
+                        publication: None,
+                    });
                 }
-                server_subscription.poll_fn(|buf, _hdr| inbox.push(buf.to_vec()), 16)?;
-                for request in inbox.drain(..) {
-                    let reply = String::from_utf8_lossy(&request).to_uppercase();
-                    println!(
-                        "[server] request {:?} -> reply {:?}",
-                        String::from_utf8_lossy(&request),
-                        reply
-                    );
-                    for publication in &responders {
-                        let deadline = Instant::now() + Duration::from_secs(5);
-                        loop {
-                            match publication.offer(reply.as_bytes()) {
-                                Ok(_) => break,
-                                Err(e) if e.is_retryable() && Instant::now() < deadline => {
-                                    sleep(Duration::from_millis(1))
-                                }
-                                Err(e) => return Err(format!("server reply failed: {e}").into()),
-                            }
+
+                for client in &mut clients {
+                    if let Some(pending) = &client.pending {
+                        client.publication = pending.poll()?;
+                        if client.publication.is_none() {
+                            continue;
                         }
+                        client.pending = None;
+                        println!(
+                            "[server] response publication ready for session {session_id}",
+                            session_id = client.image.get_constants()?.session_id()
+                        );
+                    }
+                    let Some(publication) = &client.publication else {
+                        continue;
+                    };
+                    // requests wait in the client's image until its reply can be delivered
+                    if !publication.is_connected() {
+                        continue;
+                    }
+                    // the poll callback cannot return an error, so it parks the first one here
+                    let mut failure = None;
+                    client.image.poll_fn(
+                        |request, _header| {
+                            if failure.is_some() {
+                                return;
+                            }
+                            reply.clear();
+                            reply.extend(request.iter().map(u8::to_ascii_uppercase));
+                            println!(
+                                "[server] request {:?} -> reply {:?}",
+                                String::from_utf8_lossy(request),
+                                String::from_utf8_lossy(&reply)
+                            );
+                            failure = offer_reply(publication, &reply).err();
+                        },
+                        16,
+                    )?;
+                    if let Some(e) = failure {
+                        return Err(format!("server reply failed: {e}").into());
                     }
                 }
+                clients.retain(|client| !client.image.is_closed());
                 sleep(Duration::from_millis(1));
             }
             Ok(())
@@ -145,19 +177,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // 4. await the response
-    let reply: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
-    let reply_sink = reply.clone();
+    let mut reply = None;
     let deadline = Instant::now() + Duration::from_secs(10);
-    while reply.lock().unwrap().is_none() && Instant::now() < deadline {
-        response_subscription.poll_fn(
-            |buf, _hdr| {
-                *reply_sink.lock().unwrap() = Some(String::from_utf8_lossy(buf).to_string());
-            },
-            16,
-        )?;
+    while reply.is_none() && Instant::now() < deadline {
+        response_subscription.poll_fn(|buf, _hdr| reply = Some(String::from_utf8_lossy(buf).into_owned()), 16)?;
         sleep(Duration::from_millis(1));
     }
-    let reply = reply.lock().unwrap().clone().ok_or("no response received")?;
+    let reply = reply.ok_or("no response received")?;
     println!("[client] got response {reply:?}");
     assert_eq!(reply, "HELLO RESPONSE CHANNELS");
 
@@ -168,4 +194,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|e| e.to_string())?;
     println!("request/response roundtrip complete");
     Ok(())
+}
+
+/// A connected requester: its request image, and the response publication keyed by the
+/// image's correlation id, added without blocking the server loop.
+struct Client {
+    image: AeronImage,
+    pending: Option<AeronAsyncAddPublication>,
+    publication: Option<AeronPublication>,
+}
+
+fn offer_reply(publication: &AeronPublication, reply: &[u8]) -> Result<i64, AeronOfferError> {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        match publication.offer(reply) {
+            Err(e) if e.is_retryable() && Instant::now() < deadline => sleep(Duration::from_millis(1)),
+            result => return result,
+        }
+    }
 }

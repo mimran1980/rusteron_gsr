@@ -31,8 +31,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let resp_port = find_unused_udp_port(req_port + 1).expect("no free port");
     let events_port = find_unused_udp_port(resp_port + 1).expect("no free port");
 
-    // Keep `_process` in scope so the Java Archive lives for the whole example.
-    let _process = EmbeddedArchiveMediaDriverProcess::build_and_start(
+    // Keep `process` in scope so the Java Archive lives for the whole example.
+    let process = EmbeddedArchiveMediaDriverProcess::build_and_start(
         &aeron_dir,
         &archive_dir,
         &format!("aeron:udp?endpoint=localhost:{req_port}"),
@@ -40,20 +40,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &format!("aeron:udp?endpoint=localhost:{events_port}"),
     )?;
 
-    // Aeron client + archive context. The archive context is reused by the
-    // persistent subscription below, so we build it explicitly rather than via
-    // `archive_connect()` (which hides it).
+    // An Aeron client and an archive context on it: the persistent subscription below
+    // takes both (new_with_aeron), which the testing helper `process.archive_connect()`
+    // does not return.
     let aeron_context = AeronContext::new()?;
     aeron_context.set_dir(&cformat!("{aeron_dir}"))?;
     aeron_context.set_client_name(&cformat!("ps-example-{id}"))?;
     let aeron = Aeron::new(&aeron_context)?;
     aeron.start()?;
 
-    let archive_context = AeronArchiveContext::new()?;
-    archive_context.set_aeron(&aeron)?;
-    archive_context.set_control_request_channel(&cformat!("aeron:udp?endpoint=localhost:{req_port}"))?;
-    archive_context.set_control_response_channel(&cformat!("aeron:udp?endpoint=localhost:{resp_port}"))?;
-    archive_context.set_recording_events_channel(&cformat!("aeron:udp?endpoint=localhost:{events_port}"))?;
+    let archive_context = process.archive_context(&aeron)?;
 
     let archive =
         AeronArchiveAsyncConnect::new_with_aeron(&archive_context, &aeron)?.poll_blocking(Duration::from_secs(20))?;
@@ -72,8 +68,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     for i in 0..10 {
         let msg = format!("History-{i}");
-        while publication.offer(msg.as_bytes()).is_err() {
-            sleep(Duration::from_millis(1));
+        loop {
+            match publication.offer(msg.as_bytes()) {
+                Ok(_) => break,
+                Err(e) if e.is_retryable() => sleep(Duration::from_millis(1)),
+                Err(e) => return Err(e.into()),
+            }
         }
     }
     println!("seeded 10 historical messages");
@@ -113,9 +113,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 4. Build the persistent subscription. start_from_beginning replays from the
     //    start; use start_from_live() to skip straight to the live stream.
-    let ps = persistent_subscription_builder()?
-        .aeron(&aeron)?
-        .archive_context(&archive_context)?
+    // one client for the subscription and its archive context
+    let ps = PersistentSubscriptionBuilder::new_with_aeron(&archive_context, &aeron)?
         .live_channel(live_channel.to_str()?)?
         .live_stream_id(stream_id)?
         .replay_channel("aeron:udp?endpoint=localhost:0")? // ephemeral scratch channel
@@ -130,9 +129,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("persistent subscription created, replaying then joining live...");
 
     // 5. Drive it: keep publishing so the live image stays active; poll until live.
-    //    `ps.poll_fn()` runs the PS state machine (and drives the archive async client)
-    //    internally, so — unlike a manual replay loop — there is no need to call
-    //    `archive.poll_for_recording_signals()` here. Abort if the PS fails terminally.
+    //    `ps.poll_fn()` runs the PS state machine and drives its own archive client, so it
+    //    needs nothing from `archive` (whose `do_work()` a control loop would call each
+    //    cycle). Abort if the PS fails terminally.
     //
     //    Each live message carries a send timestamp in the frame's reserved-value field:
     //    Aeron invokes the supplier synchronously inside `offer`, handing it the whole
@@ -149,7 +148,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         live_sent += 1;
         let msg = format!("Live-{live_sent}");
         let _ = publication.offer_with_reserved_value(msg.as_bytes(), Some(&send_timestamp_supplier));
-        let fragments = ps.poll_fn(|buf, _hdr| println!("  fragment ({} bytes)", buf.len()), 100)?;
+        let fragments = ps.poll_fn(
+            |buf, hdr| match hdr.reserved_value().filter(|&sent| sent > 0) {
+                // read in place from the frame header; history was published without a stamp
+                Some(sent) => println!(
+                    "  fragment ({} bytes), {} ns after send",
+                    buf.len(),
+                    Aeron::nano_clock() - sent
+                ),
+                None => println!("  fragment ({} bytes)", buf.len()),
+            },
+            100,
+        )?;
         if fragments == 0 {
             sleep(Duration::from_millis(1));
         }
@@ -159,5 +169,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("joined live {joined_count} time(s); sent {live_sent} live messages; done");
 
     assert!(joined_count >= 1, "did not join live; errors: {:?}", errors);
+    ps.close()?;
     Ok(())
 }

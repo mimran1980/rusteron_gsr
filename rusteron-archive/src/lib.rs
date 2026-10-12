@@ -66,8 +66,27 @@ impl RecordingPos {
         unsafe { aeron_archive_recording_pos_find_counter_id_by_recording_id(counter_reader.get_inner(), recording_id) }
     }
 
-    /// Return the recordingId embedded in the key of the given counter
-    /// if it is indeed a "recording position" counter. Otherwise return -1.
+    /// Whether `counter_id` is still the position counter of `recording_id`. It turns false
+    /// once the recording stops: its counter is freed, and the id may later be reused. Check
+    /// it while waiting for a recording to reach a position, which a stopped one never does.
+    ///
+    /// # Errors
+    ///
+    /// Aeron could not read the counter.
+    pub fn is_active(
+        counters_reader: &AeronCountersReader,
+        counter_id: i32,
+        recording_id: i64,
+    ) -> Result<bool, AeronCError> {
+        counters_reader.aeron_archive_recording_pos_is_active(counter_id, recording_id)
+    }
+
+    /// The recording id in the key of `counter_id`, a recording position counter, retried
+    /// until `wait` elapses.
+    ///
+    /// # Errors
+    ///
+    /// The counter is not an allocated recording position counter within `wait`.
     pub fn get_recording_id_block(
         counters_reader: &AeronCountersReader,
         counter_id: i32,
@@ -85,8 +104,11 @@ impl RecordingPos {
         return result;
     }
 
-    /// Return the recordingId embedded in the key of the given counter
-    /// if it is indeed a "recording position" counter. Otherwise return -1.
+    /// The recording id in the key of `counter_id`, a recording position counter.
+    ///
+    /// # Errors
+    ///
+    /// The counter is not an allocated recording position counter.
     pub fn get_recording_id(counters_reader: &AeronCountersReader, counter_id: i32) -> Result<i64, AeronCError> {
         /// The type id for an Aeron Archive recording position counter.
         /// In Aeron Java, this is AeronCounters.ARCHIVE_RECORDING_POSITION_TYPE_ID (which is typically 100).
@@ -135,9 +157,48 @@ impl RecordingPos {
     }
 }
 
+/// # Exclusive use of the archive client
+///
+/// The merge reads its replay and recording-position responses from the archive client's
+/// shared control response stream. Until it has merged or failed, poll only the merge and use
+/// that archive client for nothing else: `do_work`, `poll_for_error`, signal polls, blocking
+/// calls such as `get_max_recorded_position` or `start_replay` all read the same stream and
+/// skip responses that are not theirs, stalling the merge until its progress timeout. Archive errors reach the caller as `Err` from the merge's
+/// own poll, and [`Self::has_failed`] reports a failed merge.
+impl AeronArchiveReplayMerge {}
+
 impl AeronArchive {
     pub fn aeron(&self) -> Aeron {
         self.get_archive_context().get_aeron()
+    }
+
+    /// One duty-cycle step for this archive and its Aeron client: runs the client's
+    /// conductor when it uses the agent invoker, then hands one recording signal to the
+    /// context's consumer, or one archive error to its error handler. Call it once a cycle,
+    /// and poll each persistent subscription on its own. Do not call it while an
+    /// [`AeronArchiveReplayMerge`] on this archive is in progress: the merge reads the same
+    /// responses, and one taken here stalls it until its progress timeout.
+    ///
+    /// Every persistent subscription poll also runs an agent-invoker client's conductor,
+    /// so with many persistent subscriptions on one client, give it its conductor thread.
+    ///
+    /// Client conductor faults go only to the client's error handler, and a lost archive
+    /// is not reported here: [`Self::get_control_response_subscription`] stops being
+    /// connected instead.
+    ///
+    /// # Errors
+    ///
+    /// The archive returned an error and the context has no error handler, or a control
+    /// response could not be read.
+    #[inline]
+    pub fn do_work(&self) -> Result<i32, AeronCError> {
+        let aeron = self.aeron();
+        let conductor = if aeron.context().get_use_conductor_agent_invoker() {
+            aeron.main_do_work()?
+        } else {
+            0
+        };
+        Ok(conductor + self.poll_for_recording_signals()?)
     }
 
     /// Find the latest recording matching a predicate.
@@ -217,10 +278,28 @@ impl AeronArchiveAsyncConnect {
     #[inline]
     /// recommend using this method instead of standard `new` as it will link the archive to aeron so if a drop occurs archive is dropped before aeron
     pub fn new_with_aeron(ctx: &AeronArchiveContext, aeron: &Aeron) -> Result<Self, AeronCError> {
-        let resource_async = Self::new(ctx)?;
-        resource_async.inner.add_dependency(aeron.clone());
-        Ok(resource_async)
+        // SAFETY: a terminal poll frees the connect and marks it released, so the cleanup
+        // deletes only an abandoned one. The held client outlives it, which keeps cancelling
+        // its adds safe.
+        let resource_async = ManagedCResource::new(
+            |connect| unsafe { aeron_archive_async_connect(connect, ctx.into()) },
+            Some(Box::new(|connect| unsafe {
+                aeron_archive_async_connect_delete(*connect)
+            })),
+            false,
+        )?;
+        let result = Self {
+            inner: CResource::OwnedOnHeap(RcOrArc::new(resource_async)),
+        };
+        result.inner.add_dependency(ctx.clone());
+        result.inner.add_dependency(aeron.clone());
+        Ok(result)
     }
+}
+
+unsafe extern "C" {
+    // Exported by the archive client; declared only in Aeron's internal headers.
+    fn aeron_archive_async_connect_delete(connect: *mut aeron_archive_async_connect_t) -> c_int;
 }
 
 macro_rules! impl_archive_position_methods {
@@ -228,6 +307,10 @@ macro_rules! impl_archive_position_methods {
         impl $pub_type {
             /// Retrieves the current active live archive position using the Aeron counters.
             /// Returns an error if not found.
+            ///
+            /// Each call scans every counter for this session's recording position. In a loop,
+            /// find the counter id once with [`RecordingPos::find_counter_id_by_session`] and read
+            /// it with [`AeronCountersReader::get_counter_value`].
             pub fn get_archive_position(&self) -> Result<i64, AeronCError> {
                 if let Some(aeron) = self.inner.get_dependency::<Aeron>() {
                     let counter_reader = &aeron.counters_reader();
@@ -254,6 +337,13 @@ macro_rules! impl_archive_position_methods {
 
             /// Checks if the publication's current position is within a specified inclusive length
             /// of the archive position.
+            ///
+            /// Scans every counter on each call, as [`Self::get_archive_position`] does, and reads
+            /// any error as `false`, so a wait on it spins forever once the recording stops. To wait
+            /// in a loop, find the counter once with [`RecordingPos::find_counter_id_by_session`],
+            /// then wait while [`AeronCountersReader::get_counter_value`] is below
+            /// [`Self::position`], checking [`RecordingPos::is_active`] each time, as
+            /// `examples/replay_merge.rs` does.
             pub fn is_archive_position_with(&self, length_inclusive: usize) -> bool {
                 let archive_position = self.get_archive_position().unwrap_or(-1);
                 if archive_position < 0 {
@@ -336,7 +426,10 @@ impl AeronArchivePersistentSubscription {
     ///
     /// The context is consumed and owned by the subscription from this point on —
     /// it will be closed when the subscription is closed, so it must not be used
-    /// afterwards.
+    /// afterwards. The context's Aeron client and archive context must outlive the
+    /// subscription; [`PersistentSubscriptionBuilder::build`] keeps them open. Creating it
+    /// points the archive context at that client; without one, it makes its own and closes
+    /// it when it closes, after which the archive context must not be used again.
     pub fn create(
         ctx: AeronArchivePersistentSubscriptionContext,
         listener: Option<Box<dyn PersistentSubscriptionListener>>,
@@ -454,7 +547,10 @@ pub fn persistent_subscription_builder() -> Result<PersistentSubscriptionBuilder
 /// In the poll loop, prefer the state queries `is_live()` / `is_replaying()` /
 /// `has_failed()` for control flow and treat this listener as observational
 /// (logging/metrics). See Aeron's `PersistentSubscriptionListener`.
-pub trait PersistentSubscriptionListener: Send + 'static {
+///
+/// Callbacks run on the thread that polls the subscription, so a listener may hold
+/// thread-local state such as `Rc`.
+pub trait PersistentSubscriptionListener: 'static {
     /// Called when the persistent subscription transitions to consuming from the
     /// live stream. Can fire more than once: if the live image is lost the
     /// subscription falls back to replay and this fires again on rejoin.
@@ -476,9 +572,44 @@ pub trait PersistentSubscriptionListener: Send + 'static {
 /// Builder for configuring and creating a persistent subscription.
 /// This provides a fluent interface for setting up a persistent subscription
 /// with proper CString handling.
+///
+/// The subscription keeps the Aeron client and archive context given here open until it
+/// closes. Building also points the archive context at the subscription's client, so
+/// build with [`Self::new_with_aeron`], which sets one client on both, as below. Without
+/// a client, the subscription makes its own and closes it when it closes, after which the
+/// context must not be used to connect again.
+///
+/// # Examples
+///
+/// ```no_run
+/// use rusteron_archive::*;
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let context = AeronContext::new()?;
+/// let aeron = Aeron::new(&context)?;
+/// aeron.start()?;
+/// let archive_context = AeronArchiveContext::new()?;
+///
+/// let subscription = PersistentSubscriptionBuilder::new_with_aeron(&archive_context, &aeron)?
+///     .recording_id(0)?
+///     .live_channel("aeron:ipc")?
+///     .live_stream_id(1001)?
+///     .replay_channel("aeron:udp?endpoint=localhost:0")?
+///     .replay_stream_id(1002)?
+///     .build()?;
+/// while !subscription.is_live() && !subscription.has_failed() {
+///     subscription.poll_fn(|message, _header| println!("{} bytes", message.len()), 10)?;
+/// }
+///
+/// subscription.close()?;
+/// # Ok(())
+/// # }
+/// ```
 pub struct PersistentSubscriptionBuilder {
     ctx: AeronArchivePersistentSubscriptionContext,
     listener: Option<Box<dyn PersistentSubscriptionListener>>,
+    aeron: Option<Aeron>,
+    archive_context: Option<AeronArchiveContext>,
 }
 
 impl PersistentSubscriptionBuilder {
@@ -487,18 +618,42 @@ impl PersistentSubscriptionBuilder {
         Ok(Self {
             ctx: AeronArchivePersistentSubscriptionContext::new()?,
             listener: None,
+            aeron: None,
+            archive_context: None,
         })
     }
 
+    /// A builder whose subscription and `archive_context` both use `aeron`, which it sets on
+    /// the context too, so neither is left pointing at another client. The built
+    /// subscription keeps both open until it closes.
+    ///
+    /// # Errors
+    ///
+    /// Returns the Aeron error if the context cannot be created or either setter fails.
+    pub fn new_with_aeron(archive_context: &AeronArchiveContext, aeron: &Aeron) -> Result<Self, AeronCError> {
+        archive_context.set_aeron(aeron)?;
+        Self::new()?.aeron(aeron)?.archive_context(archive_context)
+    }
+
     /// Set the Aeron client to use.
-    pub fn aeron(self, aeron: &Aeron) -> Result<Self, AeronCError> {
+    ///
+    /// # Errors
+    ///
+    /// Returns the Aeron error if the context rejects the client.
+    pub fn aeron(mut self, aeron: &Aeron) -> Result<Self, AeronCError> {
         self.ctx.set_aeron(aeron)?;
+        self.aeron = Some(aeron.clone());
         Ok(self)
     }
 
     /// Set the archive context to use.
-    pub fn archive_context(self, ctx: &AeronArchiveContext) -> Result<Self, AeronCError> {
+    ///
+    /// # Errors
+    ///
+    /// Returns the Aeron error if the context rejects the archive context.
+    pub fn archive_context(mut self, ctx: &AeronArchiveContext) -> Result<Self, AeronCError> {
         self.ctx.set_archive_context(ctx)?;
+        self.archive_context = Some(ctx.clone());
         Ok(self)
     }
 
@@ -558,35 +713,72 @@ impl PersistentSubscriptionBuilder {
 
     /// Pre-allocate the state counter so an external observer can read the PS state-machine
     /// state. If unset the PS allocates one itself. Maps to Aeron's `Context.stateCounter`.
+    /// The subscription takes the counter over: it closes it, as does setting the slot again.
+    /// Keep the counter's client open until then.
     pub fn state_counter(self, counter: &AeronCounter) -> Result<Self, AeronCError> {
+        let previous = self.ctx.get_state_counter().get_inner();
         self.ctx.set_state_counter(counter)?;
+        hand_over(previous, counter);
         Ok(self)
     }
 
     /// Counter holding the byte gap between replay and live when the live image is added.
-    /// Maps to Aeron's `Context.joinDifferenceCounter`.
+    /// Maps to Aeron's `Context.joinDifferenceCounter`. Taken over as in [`Self::state_counter`].
     pub fn join_difference_counter(self, counter: &AeronCounter) -> Result<Self, AeronCError> {
+        let previous = self.ctx.get_join_difference_counter().get_inner();
         self.ctx.set_join_difference_counter(counter)?;
+        hand_over(previous, counter);
         Ok(self)
     }
 
     /// Counter holding the number of times the PS has dropped off the live stream.
-    /// Maps to Aeron's `Context.liveLeftCounter`.
+    /// Maps to Aeron's `Context.liveLeftCounter`. Taken over as in [`Self::state_counter`].
     pub fn live_left_counter(self, counter: &AeronCounter) -> Result<Self, AeronCError> {
+        let previous = self.ctx.get_live_left_counter().get_inner();
         self.ctx.set_live_left_counter(counter)?;
+        hand_over(previous, counter);
         Ok(self)
     }
 
     /// Counter holding the number of times the PS has switched to the live stream.
-    /// Maps to Aeron's `Context.liveJoinedCounter`.
+    /// Maps to Aeron's `Context.liveJoinedCounter`. Taken over as in [`Self::state_counter`].
     pub fn live_joined_counter(self, counter: &AeronCounter) -> Result<Self, AeronCError> {
+        let previous = self.ctx.get_live_joined_counter().get_inner();
         self.ctx.set_live_joined_counter(counter)?;
+        hand_over(previous, counter);
         Ok(self)
     }
 
-    /// Build the persistent subscription.
+    /// Build the persistent subscription, which keeps its Aeron client and archive context
+    /// open until it closes.
     pub fn build(mut self) -> Result<AeronArchivePersistentSubscription, AeronCError> {
-        AeronArchivePersistentSubscription::create(self.ctx, self.listener.take())
+        let subscription = AeronArchivePersistentSubscription::create(self.ctx, self.listener.take())?;
+        // the subscription uses both until its C close, and they drop after it in this order
+        if let Some(inner) = subscription.inner.as_owned() {
+            if let Some(context) = self.archive_context.take() {
+                inner.add_dependency(context);
+            }
+            if let Some(aeron) = self.aeron.take() {
+                inner.add_dependency(aeron);
+            }
+        }
+        Ok(subscription)
+    }
+}
+
+/// Leaves `counter` to the persistent subscription context, which closes every counter it
+/// holds, so the Rust handle does not close it a second time. The context no longer holds
+/// `previous`, the counter `counter` replaces, so that one is closed here.
+fn hand_over(previous: *mut aeron_counter_t, counter: &AeronCounter) {
+    if !previous.is_null() && previous != counter.get_inner() {
+        // SAFETY: the context held `previous`, so it is open, and nothing else closes it.
+        unsafe { aeron_counter_close(previous, None, std::ptr::null_mut()) };
+    }
+    if let Some(inner) = counter.inner.as_owned() {
+        #[cfg(feature = "multi-threaded")]
+        inner.close_already_called.store(true, Ordering::SeqCst);
+        #[cfg(not(feature = "multi-threaded"))]
+        inner.close_already_called.set(true);
     }
 }
 
@@ -804,7 +996,7 @@ mod tests {
         info!("connected to archive, adding publication");
         assert!(!aeron.is_closed());
 
-        let (session_id, publisher_thread) = reply_merge_publisher(&archive, aeron.clone(), running.clone())?;
+        let (session_id, publisher_thread) = reply_merge_publisher(&archive, &aeron_dir, running.clone())?;
 
         {
             let context = AeronContext::new()?;
@@ -847,46 +1039,51 @@ mod tests {
         Ok(())
     }
 
+    /// Publishes on its own thread and client (without `multi-threaded` a publication stays
+    /// on the thread whose client created it), recorded by `archive` once the thread has
+    /// sent its session id.
     fn reply_merge_publisher(
         archive: &AeronArchive,
-        aeron: Aeron,
+        aeron_dir: &str,
         running: Arc<AtomicBool>,
     ) -> Result<(i32, JoinHandle<()>), AeronCError> {
-        let publication = aeron.add_publication(
-            // &format!("aeron:udp?control={CONTROL_ENDPOINT}|control-mode=dynamic|term-length=65536|fc=tagged,g:99901/1,t:5s"),
-            &format!("aeron:udp?control={CONTROL_ENDPOINT}|control-mode=dynamic|term-length=65536").into_c_string(),
-            STREAM_ID,
-            Duration::from_secs(5),
-        )?;
-
-        info!(
-            "publication {} [status={:?}]",
-            publication.channel(),
-            publication.channel_status()
-        );
-        assert_eq!(1, publication.channel_status());
-
-        let session_id = publication.session_id();
-        let recording_channel = format!(
-            // "aeron:udp?endpoint={RECORDING_ENDPOINT}|control={CONTROL_ENDPOINT}|session-id={session_id}|gtag=99901"
-            "aeron:udp?endpoint={RECORDING_ENDPOINT}|control={CONTROL_ENDPOINT}|session-id={session_id}"
-        );
-        info!("recording channel {}", recording_channel);
-        archive.start_recording(
-            &recording_channel.into_c_string(),
-            STREAM_ID,
-            SOURCE_LOCATION_REMOTE,
-            true,
-        )?;
-
-        info!("waiting for publisher to be connected");
-        while !publication.is_connected() {
-            thread::sleep(Duration::from_millis(100));
-        }
-        info!("publisher to be connected");
-        let counters_reader = aeron.counters_reader();
-        let mut caught_up_count = 0;
+        let (session_tx, session_rx) = std::sync::mpsc::channel();
+        let aeron_dir = aeron_dir.to_string();
         let publisher_thread = thread::spawn(move || {
+            let aeron = Aeron::connect_dir(&aeron_dir).expect("publisher client");
+            let publication = aeron
+                .add_publication(
+                    &format!("aeron:udp?control={CONTROL_ENDPOINT}|control-mode=dynamic|term-length=65536")
+                        .into_c_string(),
+                    STREAM_ID,
+                    Duration::from_secs(5),
+                )
+                .expect("publication");
+            info!(
+                "publication {} [status={:?}]",
+                publication.channel(),
+                publication.channel_status()
+            );
+            assert_eq!(1, publication.channel_status());
+            let session_id = publication.session_id();
+            session_tx.send(session_id).expect("session id");
+
+            info!("waiting for publisher to be connected");
+            while !publication.is_connected() && running.load(Ordering::Acquire) {
+                thread::sleep(Duration::from_millis(100));
+            }
+            info!("publisher to be connected");
+            let counters_reader = aeron.counters_reader();
+            let counter_id = crate::testing::find_counter_id_by_session_blocking(
+                &counters_reader,
+                session_id,
+                Duration::from_secs(10),
+            )
+            .expect("recording counter");
+            let recording_id =
+                RecordingPos::get_recording_id_block(&counters_reader, counter_id, Duration::from_secs(5))
+                    .expect("recording id");
+            let mut caught_up_count = 0;
             let mut message_count = 0;
 
             while running.load(Ordering::Acquire) {
@@ -905,7 +1102,11 @@ mod tests {
                 // slow down publishing so can catch up
                 if message_count > 10_000 {
                     // ensure archiver is caught up
-                    while !publication.is_archive_position_with(0) {
+                    while counters_reader.get_counter_value(counter_id) < publication.position() {
+                        assert!(
+                            RecordingPos::is_active(&counters_reader, counter_id, recording_id).unwrap_or(false),
+                            "the recording stopped"
+                        );
                         thread::sleep(Duration::from_micros(300));
                     }
                     caught_up_count += 1;
@@ -917,6 +1118,19 @@ mod tests {
             }
             info!("Publisher thread terminated");
         });
+
+        let session_id = session_rx
+            .recv_timeout(Duration::from_secs(10))
+            .map_err(|_| AeronCError::with_message(-1, "the publisher thread sent no session id"))?;
+        let recording_channel =
+            format!("aeron:udp?endpoint={RECORDING_ENDPOINT}|control={CONTROL_ENDPOINT}|session-id={session_id}");
+        info!("recording channel {}", recording_channel);
+        archive.start_recording(
+            &recording_channel.into_c_string(),
+            STREAM_ID,
+            SOURCE_LOCATION_REMOTE,
+            true,
+        )?;
         Ok((session_id, publisher_thread))
     }
 
@@ -983,6 +1197,11 @@ mod tests {
             Duration::from_secs(5),
         )?;
 
+        info!(
+            "about to start_replay [maxRecordPosition={:?}]",
+            archive.get_max_recorded_position(recording_id)
+        );
+
         let replay_merge = AeronArchiveReplayMerge::new(
             &subscription,
             &archive,
@@ -1010,11 +1229,6 @@ mod tests {
         // }
         // info!("Subscription connected");
 
-        info!(
-            "about to start_replay [maxRecordPosition={:?}]",
-            archive.get_max_recorded_position(recording_id)
-        );
-
         let mut reply_count = 0;
         while !replay_merge.is_merged() {
             assert!(!replay_merge.has_failed());
@@ -1033,10 +1247,6 @@ mod tests {
                 100,
             )? == 0
             {
-                let err = archive.poll_for_error_response_as_string(4096)?;
-                if !err.is_empty() {
-                    panic!("{}", err);
-                }
                 if Aeron::errmsg().len() > 0 && "no error" != Aeron::errmsg() {
                     panic!("{}", Aeron::errmsg());
                 }
@@ -1154,6 +1364,189 @@ mod tests {
             archive.stop_recording_subscription(subscription_id)?;
 
             assert!(archive.close().is_ok());
+            Ok(())
+        })();
+
+        drop(aeron);
+        drop(archive_context);
+        drop(media_driver);
+        drop(pub_error_frame_handler);
+        drop(error_handler);
+        test_result
+    }
+
+    /// A listener may hold thread-local state: its callbacks run on the polling thread.
+    #[test]
+    fn persistent_subscription_listener_may_hold_rc_state() -> Result<(), AeronCError> {
+        struct Joins(std::rc::Rc<Cell<u32>>);
+        impl PersistentSubscriptionListener for Joins {
+            fn on_live_joined(&self) {
+                self.0.set(self.0.get() + 1);
+            }
+        }
+        let joins = std::rc::Rc::new(Cell::new(0));
+        PersistentSubscriptionBuilder::new()?.listener(Joins(std::rc::Rc::clone(&joins)))?;
+        assert_eq!(
+            std::rc::Rc::strong_count(&joins),
+            1,
+            "the unbuilt builder drops its listener"
+        );
+        Ok(())
+    }
+
+    /// `do_work` runs an agent-invoker client's conductor and hands the archive's recording
+    /// signals to the context's consumer, and needs nothing from a client with its own
+    /// conductor thread.
+    #[test]
+    #[serial]
+    pub fn do_work_drives_the_client_conductor_and_recording_signals() -> Result<(), Box<dyn error::Error>> {
+        use std::sync::atomic::AtomicUsize;
+
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().expect("failed to kill all java processes");
+        let (aeron, archive_context, media_driver, pub_error_frame_handler, error_handler) = start_aeron_archive()?;
+
+        let test_result: Result<(), Box<dyn error::Error>> = (|| {
+            let threaded = AeronArchiveAsyncConnect::new_with_aeron(&archive_context.clone(), &aeron)?
+                .poll_blocking(Duration::from_secs(30))
+                .expect("failed to connect to aeron archive media driver");
+            threaded.do_work()?;
+
+            let client_context = AeronContext::new()?;
+            client_context.set_dir(&aeron.context().get_dir().into_c_string())?;
+            client_context.set_use_conductor_agent_invoker(true)?;
+            let client = Aeron::new(&client_context)?;
+            client.start()?;
+            let signals = Arc::new(AtomicUsize::new(0));
+            let counted = Arc::clone(&signals);
+            let context = AeronArchiveContext::new()?;
+            context.set_aeron(&client)?;
+            context.set_control_request_channel(&archive_context.get_control_request_channel().into_c_string())?;
+            context.set_control_response_channel(&archive_context.get_control_response_channel().into_c_string())?;
+            context.set_recording_signal_consumer(Some(move |_signal: AeronArchiveRecordingSignal| {
+                counted.fetch_add(1, Ordering::SeqCst);
+            }))?;
+            // the blocking connect drives the client's conductor itself
+            let archive =
+                AeronArchiveAsyncConnect::new_with_aeron(&context, &client)?.poll_blocking(Duration::from_secs(30))?;
+            archive.start_recording(AERON_IPC_STREAM, 7401, SOURCE_LOCATION_LOCAL, true)?;
+
+            // nothing else runs this client's conductor, so the publication arrives through do_work
+            let adding = client.async_add_exclusive_publication(AERON_IPC_STREAM, 7401)?;
+            let start = Instant::now();
+            let publication = loop {
+                archive.do_work()?;
+                if let Some(publication) = adding.poll()? {
+                    break publication;
+                }
+                assert!(
+                    start.elapsed() < Duration::from_secs(10),
+                    "the publication never arrived"
+                );
+                thread::yield_now();
+            };
+            let start = Instant::now();
+            while signals.load(Ordering::SeqCst) == 0 {
+                archive.do_work()?;
+                let _ = publication.offer(b"do-work");
+                assert!(start.elapsed() < Duration::from_secs(10), "no recording signal arrived");
+                thread::yield_now();
+            }
+            Ok(())
+        })();
+
+        drop(aeron);
+        drop(archive_context);
+        drop(media_driver);
+        drop(pub_error_frame_handler);
+        drop(error_handler);
+        test_result
+    }
+
+    /// The context's blocking connects drive an agent-invoker client given only through
+    /// `set_aeron`, as nothing else runs its conductor.
+    #[test]
+    #[serial]
+    pub fn context_connect_drives_an_agent_invoker_client() -> Result<(), Box<dyn error::Error>> {
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().expect("failed to kill all java processes");
+        let (aeron, archive_context, media_driver, pub_error_frame_handler, error_handler) = start_aeron_archive()?;
+
+        let test_result: Result<(), Box<dyn error::Error>> = (|| {
+            let client_context = AeronContext::new()?;
+            client_context.set_dir(&aeron.context().get_dir().into_c_string())?;
+            client_context.set_use_conductor_agent_invoker(true)?;
+            let client = Aeron::new(&client_context)?;
+            client.start()?;
+            let context = AeronArchiveContext::new()?;
+            context.set_aeron(&client)?;
+            context.set_control_request_channel(&archive_context.get_control_request_channel().into_c_string())?;
+            context.set_control_response_channel(&archive_context.get_control_response_channel().into_c_string())?;
+
+            let connected = context.aeron_archive_connect(Duration::from_secs(10))?;
+            let polled = AeronArchiveAsyncConnect::new(&context)?.poll_blocking(Duration::from_secs(10))?;
+            drop(polled);
+            drop(connected);
+            Ok(())
+        })();
+
+        drop(aeron);
+        drop(archive_context);
+        drop(media_driver);
+        drop(pub_error_frame_handler);
+        drop(error_handler);
+        test_result
+    }
+
+    /// Dropping a connect before it completes releases its control subscription and
+    /// publication, as Aeron's own terminal outcomes do.
+    #[test]
+    #[serial]
+    pub fn abandoned_async_connect_releases_its_subscription() -> Result<(), Box<dyn error::Error>> {
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes().expect("failed to kill all java processes");
+        let (aeron, archive_context, media_driver, pub_error_frame_handler, error_handler) = start_aeron_archive()?;
+
+        let test_result: Result<(), Box<dyn error::Error>> = (|| {
+            let request_port = find_unused_udp_port(9000).expect("Could not find port");
+            let response_port = find_unused_udp_port(request_port + 1).expect("Could not find port");
+            let context = AeronArchiveContext::new()?;
+            context.set_aeron(&aeron)?;
+            context
+                .set_control_request_channel(&format!("aeron:udp?endpoint=127.0.0.1:{request_port}").into_c_string())?;
+            context.set_control_response_channel(
+                &format!("aeron:udp?endpoint=127.0.0.1:{response_port}").into_c_string(),
+            )?;
+            let endpoint = format!("endpoint=127.0.0.1:{response_port}|");
+            let receivers = || {
+                let mut count = 0;
+                aeron.counters_reader().foreach_counter_fn(|_, _, _, _, label: &str| {
+                    if label.starts_with("rcv-channel:") && label.contains(&endpoint) {
+                        count += 1;
+                    }
+                });
+                count
+            };
+
+            let connect = AeronArchiveAsyncConnect::new_with_aeron(&context, &aeron)?;
+            let start = Instant::now();
+            while receivers() == 0 {
+                assert!(
+                    start.elapsed() < Duration::from_secs(10),
+                    "the subscription never arrived"
+                );
+                thread::sleep(Duration::from_millis(10));
+            }
+            drop(connect);
+
+            let start = Instant::now();
+            while receivers() != 0 {
+                assert!(
+                    start.elapsed() < Duration::from_secs(10),
+                    "the abandoned connect kept its subscription"
+                );
+                thread::sleep(Duration::from_millis(10));
+            }
             Ok(())
         })();
 

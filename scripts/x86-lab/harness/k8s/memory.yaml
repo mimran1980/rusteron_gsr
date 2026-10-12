@@ -1,0 +1,26 @@
+# AERON_DIR on an emptyDir of medium Memory; the harness and driver come from the host
+apiVersion: v1
+kind: Pod
+metadata:
+  name: memory
+spec:
+  restartPolicy: Never
+  containers:
+    - name: bench
+      image: debian:trixie-slim
+      command: ["/lab/k8s-run.sh"]
+      env:
+        - {name: AERON_TERM_BUFFER_SPARSE_FILE, value: "false"}
+        - {name: AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY, value: "true"}
+
+      resources:
+        requests: {cpu: "3", memory: 3Gi}
+        limits: {cpu: "4", memory: 3Gi}
+      volumeMounts:
+        - {name: aeron, mountPath: /aeron}
+        - {name: lab, mountPath: /lab}
+  volumes:
+    - name: aeron
+      emptyDir: {medium: Memory}
+    - name: lab
+      hostPath: {path: /srv/x86lab/k8s, type: Directory}

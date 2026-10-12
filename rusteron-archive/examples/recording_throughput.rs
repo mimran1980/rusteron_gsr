@@ -11,7 +11,9 @@
 //! cargo run --release --features "static precompile" --example recording_throughput
 //! ```
 
-use rusteron_archive::testing::{EmbeddedArchiveMediaDriverProcess, find_unused_udp_port};
+use rusteron_archive::testing::{
+    EmbeddedArchiveMediaDriverProcess, find_counter_id_by_session_blocking, find_unused_udp_port,
+};
 use rusteron_archive::*;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
@@ -29,7 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let req_port = find_unused_udp_port(9500).expect("no free port");
     let resp_port = find_unused_udp_port(req_port + 1).expect("no free port");
     let events_port = find_unused_udp_port(resp_port + 1).expect("no free port");
-    let _process = EmbeddedArchiveMediaDriverProcess::build_and_start(
+    let process = EmbeddedArchiveMediaDriverProcess::build_and_start(
         &aeron_dir,
         &archive_dir,
         &format!("aeron:udp?endpoint=localhost:{req_port}"),
@@ -43,11 +45,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let aeron = Aeron::new(&aeron_context)?;
     aeron.start()?;
 
-    let archive_context = AeronArchiveContext::new()?;
-    archive_context.set_aeron(&aeron)?;
-    archive_context.set_control_request_channel(&cformat!("aeron:udp?endpoint=localhost:{req_port}"))?;
-    archive_context.set_control_response_channel(&cformat!("aeron:udp?endpoint=localhost:{resp_port}"))?;
-    archive_context.set_recording_events_channel(&cformat!("aeron:udp?endpoint=localhost:{events_port}"))?;
+    let archive_context = process.archive_context(&aeron)?;
     let archive =
         AeronArchiveAsyncConnect::new_with_aeron(&archive_context, &aeron)?.poll_blocking(Duration::from_secs(20))?;
     println!("connected to archive");
@@ -87,7 +85,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ── how long until the archiver has everything on disk? ──────────────
     let session_id = publication.get_constants()?.session_id;
     let counters = aeron.counters_reader();
-    let counter_id = RecordingPos::find_counter_id_by_session(&counters, session_id);
+    let counter_id = find_counter_id_by_session_blocking(&counters, session_id, Duration::from_secs(5))?;
     let recording_id = RecordingPos::get_recording_id_block(&counters, counter_id, Duration::from_secs(5))?;
     let target = publication.position();
     let catchup_start = Instant::now();

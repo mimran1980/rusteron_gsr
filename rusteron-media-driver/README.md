@@ -42,7 +42,7 @@ rusteron-media-driver = { version = "0.2", features = ["static"] }
 </details>
 
 <details>
-<summary>Static with precompiled C libs (macOS only)</summary>
+<summary>Static with precompiled C libs (macOS / Linux)</summary>
 
 ```toml
 [dependencies]
@@ -65,19 +65,19 @@ Ensure the Aeron C libraries are properly installed and available on your system
 <details>
 <summary>Standard Media Driver</summary>
 
-```rust
-// Launches a standalone Aeron Media Driver
+```rust,no_run
+// A standalone media driver; `cargo run -p rusteron-media-driver --bin media_driver` ships the same.
 use rusteron_media_driver::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let aeron_context = AeronDriverContext::new()?;
-    aeron_context.set_dir(c"target/test")?;
-
-    let aeron_driver = AeronDriver::new(&aeron_context)?;
-    aeron_driver.start(false)?;
-    println!("Aeron Media Driver started");
-
-    Ok(())
+    let context = AeronDriverContext::new()?;
+    context.set_dir(c"target/aeron")?;
+    let driver = AeronDriver::new(&context)?;
+    driver.start(true)?; // run the conductor duty cycle on this thread
+    println!("media driver running in {}", context.get_dir());
+    loop {
+        driver.main_idle_strategy(driver.main_do_work()?);
+    }
 }
 ```
 
@@ -87,32 +87,59 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 <summary>Embedded Media Driver</summary>
 
 ```rust
-// Embeds the media driver directly into the current process
-use rusteron_media_driver::*;
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
-use std::thread;
-use std::time::Duration;
+// Embeds the media driver in this process: unique directory, stopped and joined on drop.
+use rusteron_media_driver::testing::EmbeddedDriver;
+use rusteron_media_driver::Aeron;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let media_driver_ctx = AeronDriverContext::new()?;
-    let (stop, driver_handle) = AeronDriver::launch_embedded(media_driver_ctx.clone(), false);
-
-    let ctx = AeronContext::new()?;
-    ctx.set_dir(&cformat!("{}", media_driver_ctx.get_dir()))?;
-
-    thread::sleep(Duration::from_secs(3)); // Simulated workload
-
-    stop.store(true, Ordering::SeqCst);
-    driver_handle.join().expect("Failed to join driver thread");
-    println!("Embedded Aeron Media Driver stopped");
-
+    let driver = EmbeddedDriver::launch()?; // or EmbeddedDriver::launch_with(|ctx| { /* tune ctx */ Ok(()) })
+    // Applications usually connect with rusteron_client::Aeron::connect_dir(driver.dir()).
+    let aeron = Aeron::connect_dir(driver.dir())?;
+    // add publications / subscriptions on `aeron` ...
+    drop(aeron); // close the client before the driver stops
     Ok(())
 }
 ```
 
+For a caller-built `AeronDriverContext`, `AeronDriver::launch_embedded_guard(ctx, false)` is the RAII form (stops and joins on drop).
+
 </details>
 
 ---
+
+## Building C against Aeron's headers
+
+Some driver extensions are C compiled against Aeron's own headers. The main one is a custom
+UDP transport, such as kernel bypass with DPDK or ef_vi: it fills in Aeron's
+`aeron_udp_channel_transport_bindings_t` and is installed with
+`AeronDriverContext::set_udp_channel_transport_bindings`. That C must see the headers of the
+Aeron this crate builds, or the structs it fills in will not match the driver's, and those
+headers exist only in this crate's vendored Aeron sources. So the crate declares
+`links = "aeron_driver"`, and Cargo hands their paths to the build script of every crate that
+depends on it directly:
+
+| Variable | Directory |
+|---|---|
+| `DEP_AERON_DRIVER_INCLUDE` | the media driver's headers |
+| `DEP_AERON_DRIVER_CLIENT_INCLUDE` | the client headers they include |
+| `DEP_AERON_DRIVER_AERON_ROOT` | the Aeron source tree |
+
+```rust,no_run
+// build.rs of a crate that depends on rusteron-media-driver
+fn main() {
+    let dep = |key: &str| std::env::var(format!("DEP_AERON_DRIVER_{key}")).unwrap();
+    cc::Build::new()
+        .file("transport.c")
+        .include(dep("INCLUDE"))
+        .include(dep("CLIENT_INCLUDE"))
+        .compile("my_transport");
+}
+```
+
+The key has one cost: Cargo allows a single package per `links` name in a build, so two
+semver-incompatible versions of `rusteron-media-driver` cannot share a dependency graph. The
+workspace crate [`links-test`](./links-test) compiles a C file against these paths, so the
+export cannot break unnoticed.
 
 ## Contributing & License
 
