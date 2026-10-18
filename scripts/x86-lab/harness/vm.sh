@@ -323,7 +323,7 @@ run_sample() {
     local group=$1 label=$2 kind=$3 out=$res/sample-last.out top pid row pinned=yes skip=4
     shift 3
     local jars=$lab/rusteron/rusteron-archive/aeron
-    local java=(java -cp "$jars/aeron-all/build/libs/aeron-all-1.52.2.jar:$jars/aeron-samples/build/libs/aeron-samples-1.52.2.jar"
+    local java=(java -cp "$jars/aeron-all/build/libs/aeron-all-1.53.3.jar:$jars/aeron-samples/build/libs/aeron-samples-1.53.3.jar"
         --add-opens java.base/jdk.internal.misc=ALL-UNNAMED -Dagrona.disable.bounds.checks=true
         -Daeron.dir.delete.on.start=true -Daeron.dir.delete.on.shutdown=true -Daeron.term.buffer.sparse.file=false
         -Daeron.pre.touch.mapped.memory=true -Daeron.sample.messageLength=32
@@ -1026,7 +1026,7 @@ loss_count() {
 aeron_stat() {
     local jars=$lab/rusteron/rusteron-archive/aeron
     timeout 4 java --add-opens java.base/jdk.internal.misc=ALL-UNNAMED -Daeron.dir="$1" \
-        -cp "$jars/aeron-samples/build/libs/aeron-samples-1.52.2.jar:$jars/aeron-all/build/libs/aeron-all-1.52.2.jar" \
+        -cp "$jars/aeron-samples/build/libs/aeron-samples-1.53.3.jar:$jars/aeron-all/build/libs/aeron-all-1.53.3.jar" \
         io.aeron.samples.AeronStat 2>/dev/null |
         awk -F' - ' '{ split($1, a, ":"); v = a[2]; gsub(/[ ,]/, "", v); c[$2] = v }
             END { printf "%d,%d,%d,%d", c["NAKs sent"], c["NAKs received"], c["Retransmits sent"], c["Loss gap fills"] }' ||
@@ -1100,7 +1100,7 @@ xnet8() {
 # A Java ArchivingMediaDriver, with AERON_DIR and the archive on tmpfs so that disk speed
 # does not hide the CPUs. archive_start <jvm cpus|-> [java option...]
 archive_start() {
-    local mask=$1 jar=$lab/rusteron/rusteron-archive/aeron/aeron-all/build/libs/aeron-all-1.52.2.jar
+    local mask=$1 jar=$lab/rusteron/rusteron-archive/aeron/aeron-all/build/libs/aeron-all-1.53.3.jar
     shift
     [[ $mask == - ]] && mask=$all8
     runs=$((runs + 1))
@@ -1132,7 +1132,7 @@ archive_stop() {
 # thread dump of the archive saved if it is still going after 45 s; it stops at 90 s
 archive_rtt() {
     local out=$res/archive-rtt.out pid watcher samples
-    samples=$lab/rusteron/rusteron-archive/aeron/aeron-samples/build/libs/aeron-samples-1.52.2.jar
+    samples=$lab/rusteron/rusteron-archive/aeron/aeron-samples/build/libs/aeron-samples-1.53.3.jar
     env AERON_DIR="$run_dir" LABEL="a-ipc" taskset -c "$hk8" timeout 90 "$bin/impr/rtt" ipc "$IPC_N" "$IPC_W" "$ping8" "$pong8" \
         >"$out" 2>>"$res/client-errors.log" &
     pid=$!
@@ -1141,7 +1141,7 @@ archive_rtt() {
         if kill -0 "$pid" 2>/dev/null; then
             {
                 echo "stalled: $1"
-                local cp="$samples:$lab/rusteron/rusteron-archive/aeron/aeron-all/build/libs/aeron-all-1.52.2.jar"
+                local cp="$samples:$lab/rusteron/rusteron-archive/aeron/aeron-all/build/libs/aeron-all-1.53.3.jar"
                 timeout 5 java --add-opens java.base/jdk.internal.misc=ALL-UNNAMED -cp "$cp" -Daeron.dir="$run_dir" \
                     io.aeron.samples.AeronStat
                 timeout 10 java --add-opens java.base/jdk.internal.misc=ALL-UNNAMED -cp "$cp" -Daeron.dir="$run_dir" \
@@ -1540,7 +1540,7 @@ PY
 # arcd_start <nvme|pv2> <file sync level> [archive threading mode] [control host]
 arcd_start() {
     local kind=$1 sync=$2 mode=${3:-DEDICATED} ctl=${4:-} jar net=()
-    jar=$lab/rusteron/rusteron-archive/aeron/aeron-all/build/libs/aeron-all-1.52.2.jar
+    jar=$lab/rusteron/rusteron-archive/aeron/aeron-all/build/libs/aeron-all-1.53.3.jar
     topo8
     runs=$((runs + 1))
     arc_dir=$shm/x86lab-arcd-$runs archive_dir=/mnt/$kind/archive-$runs

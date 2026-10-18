@@ -93,9 +93,9 @@ fn client_context(dir: &str) -> Result<AeronContext, AeronCError> {
     let context = AeronContext::new()?;
     context.set_dir(&cformat!("{dir}"))?;
     context.set_error_handler(Some(|code: i32, msg: &str| eprintln!("aeron error {code}: {msg}")))?;
-    // fault the log buffers in when they are mapped, not on the first measured messages; only
-    // where Aeron pre-touches through the OS, as elsewhere 1.52.2 overwrites live frames
-    context.set_pre_touch_mapped_memory(cfg!(any(target_os = "linux", target_os = "windows")))?;
+    // fault the log buffers in when they are mapped, not on the first measured messages.
+    // Safe on every platform on Aeron 1.53.2 or later, which is what rusteron builds.
+    context.set_pre_touch_mapped_memory(true)?;
     Ok(context)
 }
 
