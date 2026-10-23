@@ -86,19 +86,25 @@ pub fn llvm_major(version_output: &str) -> Option<u32> {
     })
 }
 
-/// The `-flto` flag for `RUSTERON_C_LTO` (`full`, the default, or `thin`).
-pub fn c_lto_flag(kind: Option<&str>) -> Result<&'static str, String> {
-    match kind.filter(|k| !k.is_empty()) {
-        None | Some("full") => Ok("-flto"),
-        Some("thin") => Ok("-flto=thin"),
-        Some(other) => Err(format!("RUSTERON_C_LTO={other} is not one of `full` or `thin`")),
-    }
+/// The `CMAKE_C_FLAGS` for cross-language LTO: `-flto` for `RUSTERON_C_LTO` (`full`, the
+/// default, or `thin`), and `--target` set to rustc's `target` (cargo's `TARGET`). Without
+/// it clang tags the bitcode with its own default triple (`x86_64-pc-linux-gnu` on Debian
+/// and Ubuntu), and lld warns on every C module linked into Rust's `x86_64-unknown-linux-gnu`.
+/// The cmake crate would pass `--target` itself, but skips its compiler flags once
+/// `CMAKE_C_FLAGS` is defined.
+pub fn c_lto_flags(kind: Option<&str>, target: &str) -> Result<String, String> {
+    let lto = match kind.filter(|k| !k.is_empty()) {
+        None | Some("full") => "-flto",
+        Some("thin") => "-flto=thin",
+        Some(other) => return Err(format!("RUSTERON_C_LTO={other} is not one of `full` or `thin`")),
+    };
+    Ok(format!("{lto} --target={target}"))
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        CpuTarget, c_lto_flag, llvm_major, lto_release_c_flags, release_c_flags, rustc_target_cpu,
+        CpuTarget, c_lto_flags, llvm_major, lto_release_c_flags, release_c_flags, rustc_target_cpu,
         wants_linker_plugin_lto,
     };
 
@@ -144,10 +150,17 @@ mod tests {
     }
 
     #[test]
-    fn lto_kind() {
-        assert_eq!(c_lto_flag(None), Ok("-flto"));
-        assert_eq!(c_lto_flag(Some("thin")), Ok("-flto=thin"));
-        assert!(c_lto_flag(Some("fat")).is_err());
+    fn lto_flags_carry_kind_and_rustc_target() {
+        let target = "x86_64-unknown-linux-gnu";
+        assert_eq!(
+            c_lto_flags(None, target),
+            Ok("-flto --target=x86_64-unknown-linux-gnu".into())
+        );
+        assert_eq!(
+            c_lto_flags(Some("thin"), target),
+            Ok("-flto=thin --target=x86_64-unknown-linux-gnu".into())
+        );
+        assert!(c_lto_flags(Some("fat"), target).is_err());
     }
 
     #[test]

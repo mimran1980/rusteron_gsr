@@ -559,10 +559,10 @@ fn build_from_source(config: &RusteronBuildConfig, docs_rs: &Path) {
 
 /// When the final binary links with `-Clinker-plugin-lto`, compiles Aeron C to LLVM bitcode
 /// with a clang whose LLVM matches rustc's, so the linker can inline it into Rust callers.
-/// Returns the `-flto` flag to add to the C flags.
+/// Returns the flags (`-flto`, `--target`) to add to the C flags.
 #[cfg(feature = "build-from-source")]
-fn cross_language_lto(cmake_config: &mut cmake::Config, link_type: &LinkType) -> Option<&'static str> {
-    use rusteron_code_gen::c_build::{c_lto_flag, llvm_major, wants_linker_plugin_lto};
+fn cross_language_lto(cmake_config: &mut cmake::Config, link_type: &LinkType) -> Option<String> {
+    use rusteron_code_gen::c_build::{c_lto_flags, llvm_major, wants_linker_plugin_lto};
     use std::process::Command;
     println!("cargo:rerun-if-env-changed=RUSTERON_CLANG");
     println!("cargo:rerun-if-env-changed=RUSTERON_C_LTO");
@@ -577,7 +577,11 @@ fn cross_language_lto(cmake_config: &mut cmake::Config, link_type: &LinkType) ->
         );
         return None;
     }
-    let lto_flag = c_lto_flag(env::var("RUSTERON_C_LTO").ok().as_deref()).unwrap_or_else(|e| panic!("{e}"));
+    let lto_flag = c_lto_flags(
+        env::var("RUSTERON_C_LTO").ok().as_deref(),
+        &env::var("TARGET").expect("cargo sets TARGET for build scripts"),
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
     let output = |program: &str, args: &[&str]| {
         Command::new(program)
             .args(args)
