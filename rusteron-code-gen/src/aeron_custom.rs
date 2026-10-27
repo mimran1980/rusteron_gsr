@@ -67,7 +67,7 @@ impl AeronStatus {
     /// Derive a status from an `offer` / `try_claim` error when it corresponds
     /// to a known transition (`BackPressured` / `Closed`). Returns `None` for
     /// errors that are not status-like (e.g. `MaxPositionExceeded`).
-    pub fn from_error(error: &AeronOfferError) -> Option<Self> {
+    pub const fn from_error(error: &AeronOfferError) -> Option<Self> {
         match error {
             AeronOfferError::BackPressured => Some(Self::BackPressured),
             AeronOfferError::Closed => Some(Self::Closed),
@@ -587,7 +587,8 @@ unsafe extern "C" fn rusteron_image_visitor<F: FnMut(&AeronImage)>(
     let image = AeronImage {
         inner: CResource::Borrowed(image),
     };
-    f(&image);
+    // caught so C can release the image list refcount, then raised by for_each_image
+    catch_panic((), || f(&image));
 }
 
 /// Shared polling loop for the `add_destination`/`remove_destination[_by_id]` blocking
@@ -705,6 +706,7 @@ impl AeronSubscription {
                 &mut f as *mut _ as *mut ::std::os::raw::c_void,
             )
         }
+        resume_caught_panic();
     }
 
     pub fn async_add_destination(
@@ -1025,6 +1027,7 @@ impl AeronCError {
     /// Call at the error site when the error will be stored, logged later, or sent
     /// across threads — otherwise `Display` reads the live buffer, which a later
     /// error can overwrite.
+    #[cold]
     pub fn capture_errmsg(mut self) -> Self {
         if self.msg.is_none() {
             self.msg = Some(Aeron::errmsg().into());
@@ -1516,14 +1519,13 @@ impl AeronCountersReader {
         }
     }
 
-    /// Length of every counter's key region: C's `AERON_COUNTER_MAX_KEY_LENGTH` (a `sizeof`,
-    /// which bindgen skips), Java's `CountersReader.MAX_KEY_LENGTH`.
+    /// Size of a counter key in bytes (112), same as Java's `CountersReader.MAX_KEY_LENGTH`
     pub const MAX_KEY_LENGTH: usize = unsafe { std::mem::zeroed::<aeron_counter_metadata_descriptor_t>() }.key.len();
 
-    /// Get the key for a counter: its whole key region, [`Self::MAX_KEY_LENGTH`] (112) bytes.
+    /// Get a counter's key: all [`Self::MAX_KEY_LENGTH`] bytes, zero padded
     ///
-    /// Keys are binary and their layout is type-specific (see `aeron_counters.h`), so zero bytes
-    /// can sit anywhere in one. Bytes past what the counter's type defines are zero.
+    /// This also succeeds for a freed counter. To check a counter is live, also check
+    /// [`Self::counter_state`] and [`Self::counter_type_id`]
     #[inline]
     pub fn get_counter_key(&self, counter_id: i32) -> Result<Vec<u8>, AeronCError> {
         let mut dst = Vec::with_capacity(Self::MAX_KEY_LENGTH);
@@ -1535,14 +1537,36 @@ impl AeronCountersReader {
     #[inline]
     pub fn get_counter_key_into(&self, counter_id: i32, dst: &mut Vec<u8>) -> Result<(), AeronCError> {
         dst.clear();
+        // SAFETY: copied out straight away
+        dst.extend_from_slice(unsafe { self.counter_key_bytes(counter_id)? });
+        Ok(())
+    }
+
+    /// Get a text key: the bytes up to the first zero, or all of them if there is none.
+    /// For keys set from a string, not binary keys like a recording id
+    pub fn get_counter_key_str(&self, counter_id: i32) -> Result<String, AeronCError> {
+        // SAFETY: copied into the returned `String` before returning
+        let key = unsafe { self.counter_key_bytes(counter_id)? };
+        let text = std::ffi::CStr::from_bytes_until_nul(key).map_or(key, std::ffi::CStr::to_bytes);
+        std::str::from_utf8(text)
+            .map(str::to_owned)
+            .map_err(|_| AeronCError::from_code(PARSE_CSTR_ERROR_CODE))
+    }
+
+    /// Borrow a counter's key in place, with no copy: all [`Self::MAX_KEY_LENGTH`] bytes
+    ///
+    /// # Safety
+    /// The slice points into driver memory. If the counter is freed while you hold it, the
+    /// driver can reuse the slot and change these bytes. Only use it while the counter stays
+    /// allocated, otherwise use [`Self::get_counter_key`]
+    pub unsafe fn counter_key_bytes(&self, counter_id: i32) -> Result<&[u8], AeronCError> {
         let mut key_ptr: *mut u8 = std::ptr::null_mut();
         unsafe {
             let result = bindings::aeron_counters_reader_metadata_key(self.get_inner(), counter_id, &mut key_ptr);
             if result < 0 || key_ptr.is_null() {
                 return Err(AeronCError::from_code(result));
             }
-            dst.extend_from_slice(std::slice::from_raw_parts(key_ptr, Self::MAX_KEY_LENGTH));
-            Ok(())
+            Ok(std::slice::from_raw_parts(key_ptr, Self::MAX_KEY_LENGTH))
         }
     }
 
@@ -1570,7 +1594,10 @@ impl Aeron {
     }
 }
 
+// The delegate's panic is caught so the assembler state stays valid; the poll raises it on return
 impl AeronFragmentHandlerCallback for AeronFragmentAssembler {
+    const RESUMES_CAUGHT_PANIC: bool = true;
+
     fn handle_aeron_fragment_handler(&mut self, buffer: &[u8], header: AeronHeader) -> () {
         unsafe {
             aeron_fragment_assembler_handler(
@@ -1584,6 +1611,8 @@ impl AeronFragmentHandlerCallback for AeronFragmentAssembler {
 }
 
 impl AeronControlledFragmentHandlerCallback for AeronControlledFragmentAssembler {
+    const RESUMES_CAUGHT_PANIC: bool = true;
+
     fn handle_aeron_controlled_fragment_handler(
         &mut self,
         buffer: &[u8],
@@ -1699,7 +1728,7 @@ impl AeronClaim {
 
     /// Stream position Aeron assigned to this claim.
     #[inline]
-    pub fn position(&self) -> i64 {
+    pub const fn position(&self) -> i64 {
         self.position
     }
 
@@ -1752,7 +1781,7 @@ macro_rules! impl_publication_methods {
                 buffer: &[u8],
                 reserved_value_supplier: Option<&Handler<H>>,
             ) -> i64 {
-                unsafe {
+                let position = unsafe {
                     $offer(
                         self.get_inner(),
                         buffer.as_ptr() as *mut _,
@@ -1761,7 +1790,7 @@ macro_rules! impl_publication_methods {
                             let callback: aeron_reserved_value_supplier_t = if reserved_value_supplier.is_none() {
                                 None
                             } else {
-                                Some(aeron_reserved_value_supplier_t_callback::<H>)
+                                Some(aeron_reserved_value_supplier_t_callback_catch::<H>)
                             };
                             callback
                         },
@@ -1769,7 +1798,11 @@ macro_rules! impl_publication_methods {
                             .map(|m| m.as_raw())
                             .unwrap_or_else(|| std::ptr::null_mut()),
                     )
+                };
+                if reserved_value_supplier.is_some() {
+                    resume_caught_panic();
                 }
+                position
             }
 
             /// Raw, branch-free variant of [`Self::try_claim`]: position or negative sentinel.
@@ -1960,12 +1993,22 @@ impl AeronImage {
 /// only behind `--features log-c-bindings`-style debugging).
 pub struct AeronErrorLogger;
 impl AeronErrorHandlerCallback for AeronErrorLogger {
+    #[cold]
     fn handle_aeron_error_handler(&mut self, error_code: std::ffi::c_int, msg: &str) -> () {
         log::error!("aeron error {}: {}", error_code, msg);
     }
 }
 unsafe impl Send for AeronErrorLogger {}
 unsafe impl Sync for AeronErrorLogger {}
+
+/// Runs the closure when dropped, so cleanup also happens when a panic unwinds
+struct OnDrop<F: FnMut()>(F);
+
+impl<F: FnMut()> Drop for OnDrop<F> {
+    fn drop(&mut self) {
+        (self.0)()
+    }
+}
 
 pub struct FnMutMessageHandler {
     func: fn(*mut (), &[u8], AeronHeader),
@@ -1979,7 +2022,7 @@ impl AeronFragmentHandlerCallback for FnMutMessageHandler {
 }
 
 impl FnMutMessageHandler {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             func: Self::noop,
             ctx: std::ptr::null_mut(),
@@ -2013,7 +2056,7 @@ impl FnMutMessageHandler {
     /// [`AeronFragmentClosureAssembler::poll`] calls this before returning so the
     /// raw pointer never outlives the borrow it was created from.
     #[inline]
-    pub fn clear(&mut self) {
+    pub const fn clear(&mut self) {
         self.func = Self::noop;
         self.ctx = std::ptr::null_mut();
     }
@@ -2078,11 +2121,10 @@ impl AeronFragmentClosureAssembler {
         unsafe {
             self.handler.get_mut().set(ctx, func);
         }
-        let result = pollable.poll_with_assembler(Some(&self.assembler), fragment_limit);
-        unsafe {
-            self.handler.get_mut().clear();
-        }
-        result
+        // clear `ctx` on return and on unwind, so no dangling pointer is left behind
+        let handler = &self.handler;
+        let _clear = OnDrop(|| unsafe { handler.get_mut().clear() });
+        pollable.poll_with_assembler(Some(&self.assembler), fragment_limit)
     }
 }
 
@@ -2092,7 +2134,7 @@ pub struct FnMutControlledMessageHandler {
 }
 
 impl FnMutControlledMessageHandler {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             func: Self::noop,
             ctx: std::ptr::null_mut(),
@@ -2126,7 +2168,7 @@ impl FnMutControlledMessageHandler {
     /// Drop the borrowed `ctx` (cf. [`FnMutMessageHandler::clear`]) so a later stray
     /// [`call`](Self::call) returns `CONTINUE` instead of dereferencing a stale pointer.
     #[inline]
-    pub fn clear(&mut self) {
+    pub const fn clear(&mut self) {
         self.func = Self::noop;
         self.ctx = std::ptr::null_mut();
     }
@@ -2199,11 +2241,10 @@ impl AeronControlledFragmentClosureAssembler {
         unsafe {
             self.handler.get_mut().set(ctx, func);
         }
-        let result = pollable.controlled_poll_with_assembler(Some(&self.assembler), fragment_limit);
-        unsafe {
-            self.handler.get_mut().clear();
-        }
-        result
+        // clear `ctx` on return and on unwind, so no dangling pointer is left behind
+        let handler = &self.handler;
+        let _clear = OnDrop(|| unsafe { handler.get_mut().clear() });
+        pollable.controlled_poll_with_assembler(Some(&self.assembler), fragment_limit)
     }
 }
 
@@ -2250,7 +2291,7 @@ impl AeronStatusTracker {
 
     /// Reset the tracker, causing the next call to [`observe`](Self::observe)
     /// to emit even if the status matches the previously-observed value.
-    pub fn reset(&mut self) {
+    pub const fn reset(&mut self) {
         self.last_status = None;
     }
 

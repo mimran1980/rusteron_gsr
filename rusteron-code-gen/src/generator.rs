@@ -62,6 +62,30 @@ const SYNC_HANDLER_TYPES: &[&str] = &[
     "aeron_archive_recording_subscription_descriptor_consumer_func_t",
 ];
 
+/// Handler types declared `extern "C-unwind"`: the handler types [`UNWIND_POLL_FNS`] take.
+/// Needed before parsing, as bindgen sets the ABI; a test checks it matches the bindings
+pub const UNWIND_HANDLER_TYPES: &[&str] = &[
+    "aeron_fragment_handler_t",
+    "aeron_controlled_fragment_handler_t",
+    "aeron_block_handler_t",
+];
+
+/// C functions a handler panic may pass through, checked by reading the Aeron C source:
+/// they save the position only after the handler returns, so the next poll redelivers from
+/// the last saved position. Not derivable from the headers. Any other C function gets
+/// trampolines that catch the panic, so a missing entry is safe, just not zero cost
+pub const UNWIND_POLL_FNS: &[&str] = &[
+    "aeron_subscription_poll",
+    "aeron_subscription_controlled_poll",
+    "aeron_subscription_block_poll",
+    "aeron_image_poll",
+    "aeron_image_controlled_poll",
+    "aeron_image_bounded_poll",
+    "aeron_image_bounded_controlled_poll",
+    "aeron_image_block_poll",
+    "aeron_archive_replay_merge_poll",
+];
+
 pub fn is_sync_handler_type(c_type: &str) -> bool {
     SYNC_HANDLER_TYPES.iter().any(|t| c_type.contains(t))
 }
@@ -373,7 +397,14 @@ impl ReturnType {
                 let handler_name = handler.as_ident();
                 let handler_type = handler.as_type();
                 let clientd_name = handler_client.get(1).unwrap().as_ident();
-                let method_name = format_ident!("{}_callback", handler.c_type);
+                // constructors keep the handler: an assembler delegate is caught and raised by
+                // the poll above, anything else C fires later is logged (as in arg_classifier)
+                let suffix = if UNWIND_HANDLER_TYPES.contains(&handler.c_type.as_str()) {
+                    "_catch"
+                } else {
+                    ""
+                };
+                let method_name = format_ident!("{}_callback{}", handler.c_type, suffix);
                 let new_type =
                     parse_str::<Type>(&format!("{}HandlerImpl", snake_to_pascal_case(&self.original.c_type)))
                         .expect("Invalid class name in wrapper");
@@ -647,6 +678,8 @@ impl CWrapper {
                 let fn_arguments: Vec<TokenStream> = classified.signatures();
                 let mut arg_names: Vec<TokenStream> = classified.calls();
                 let retained_handler_registrations: Vec<TokenStream> = classified.registrations();
+                let preludes: Vec<TokenStream> = classified.preludes();
+                let resumes: Vec<TokenStream> = classified.resumes();
 
                 let mut converter = return_type_helper.handle_c_to_rs_return(quote! { result }, true, false);
 
@@ -761,7 +794,23 @@ impl CWrapper {
                     };
                     let once_args = classified.once_signatures();
                     let once_calls = classified.once_calls();
+                    let once_resumes = classified.once_resumes();
                     let once_log_expr = Self::generate_arg_logging(&method.arguments, &once_calls);
+                    let panics_doc = if UNWIND_POLL_FNS.contains(&method.fn_name.as_str()) {
+                        quote! {
+                            /// # Panics
+                            ///
+                            /// A panic in the closure is passed to the caller. Fragments since the poll
+                            /// started (or the last `COMMIT`) are delivered again on the next poll
+                        }
+                    } else {
+                        quote! {
+                            /// # Panics
+                            ///
+                            /// A panic in the closure is caught so the C call can finish, then passed to
+                            /// the caller once it returns
+                        }
+                    };
                     additional_methods.push(quote! {
                         #[inline]
                         #(#method_docs)*
@@ -774,11 +823,7 @@ impl CWrapper {
                         /// [`Handler`]-based form on the hot path; only generated for callbacks the C
                         /// client does not retain (i.e. not stored for later firing).
                         ///
-                        /// # Panics
-                        ///
-                        /// A panic inside the closure cannot unwind across the `extern "C"` callback
-                        /// boundary and **aborts the process** (since Rust 1.81). Return early instead
-                        /// of panicking in production fragment handlers.
+                        #panics_doc
                         pub fn #once_fn_name #once_where(#possible_self #(#once_args),*) -> #return_type {
                             #set_closed
                             unsafe {
@@ -790,6 +835,7 @@ impl CWrapper {
                                 );
 
                                 let result = #ffi_call(#(#once_calls),*);
+                                #(#once_resumes)*
 
                                 #[cfg(feature = "log-c-bindings")]
                                 log::info!("  -> {:?}", result);
@@ -855,6 +901,7 @@ impl CWrapper {
                         #(#method_docs)*
                         pub fn #fn_name #where_clause(#possible_self #(#fn_arguments),*) -> #return_type {
                             #set_closed
+                            #(#preludes)*
                             unsafe {
                                 let mut mut_result: #rt = Default::default();
 
@@ -867,6 +914,7 @@ impl CWrapper {
 
                                 let err_code = #ffi_call(#(#arg_names),*);
                                 #register_handlers
+                                #(#resumes)*
 
                                 #[cfg(feature = "log-c-bindings")]
                                 log::info!("  -> err_code = {:?}, result = {:?}", err_code, mut_result);
@@ -887,6 +935,7 @@ impl CWrapper {
                         #(#method_docs)*
                         pub fn #fn_name #where_clause(#possible_self #(#fn_arguments),*) -> #return_type {
                             #set_closed
+                            #(#preludes)*
                             #handler_prelude
                             unsafe {
                                 #[cfg(feature = "log-c-bindings")]
@@ -898,6 +947,7 @@ impl CWrapper {
 
                                 let result = #ffi_call(#(#arg_names),*);
                                 #register_handlers
+                                #(#resumes)*
 
                                 #[cfg(feature = "log-c-bindings")]
                                 log::info!("  -> {:?}", result);
@@ -2221,12 +2271,112 @@ pub fn generate_handlers(handler: &mut CHandler, bindings: &CBinding) -> TokenSt
         .filter(|t| !t.is_empty())
         .collect();
 
+    // Trampolines per handler, picked by arg_classifier:
+    // - plain name: logs a panic and carries on (callbacks retained by C, e.g. on the conductor thread)
+    // - `_catch`: stores the panic for the Rust wrapper to raise once C returns
+    // - `_unwind` (UNWIND_HANDLER_TYPES only): a plain call that lets the panic through at no cost
+    // Both catching kinds return `fallback` to C after a panic
+    let unwind = UNWIND_HANDLER_TYPES.contains(&handler.type_name.as_str());
+    let abi = if unwind {
+        quote! { "C-unwind" }
+    } else {
+        quote! { "C" }
+    };
+    let return_type_str = closure_return_type.to_token_stream().to_string();
+    let fallback = match return_type_str.as_str() {
+        "()" => quote! { () },
+        "aeron_controlled_fragment_handler_action_t" => {
+            quote! { aeron_controlled_fragment_handler_action_t::AERON_ACTION_ABORT }
+        }
+        "aeron_rb_read_action_t" => quote! { aeron_rb_read_action_t::AERON_RB_ABORT },
+        s if s.starts_with("* mut") => quote! { std::ptr::null_mut() },
+        s if s.starts_with("* const") => quote! { std::ptr::null() },
+        // ints and bools; a new enum return type fails to compile here and needs its own arm
+        _ => quote! { Default::default() },
+    };
+    #[derive(Clone, Copy)]
+    enum OnPanic {
+        Log,
+        Catch,
+        Unwind,
+    }
+    let trampoline = |name: &Ident, bound: TokenStream, call: TokenStream, on_panic: OnPanic| {
+        let body = match on_panic {
+            OnPanic::Log => quote! { log_panic(stringify!(#name), #fallback, || #call) },
+            OnPanic::Catch => quote! { catch_panic(#fallback, || #call) },
+            OnPanic::Unwind => quote! { #call },
+        };
+        quote! {
+            #[allow(dead_code)]
+            #(#doc_comments)*
+            unsafe extern #abi fn #name<F: #bound>(
+                #(#args),*
+            ) -> #closure_return_type
+            {
+                #[cfg(debug_assertions)]
+                if #closure_name.is_null() {
+                    unimplemented!("closure should not be null")
+                }
+                #[cfg(feature = "extra-logging")]
+                {
+                    log::debug!("calling {}", stringify!(#name));
+                }
+                #[cfg(feature = "log-c-bindings")]
+                log::debug!(
+                    "{}({}\n)",
+                    stringify!(#name),
+                    [#(#arg_names_for_logging),*].join(", ")
+                );
+                let closure: &mut F = unsafe { &mut *(#closure_name as *mut F) };
+                #body
+            }
+        }
+    };
+    let handle_call = quote! { closure.#handle_method_name(#(#converted_args),*) };
+    let once_call = quote! { closure(#(#converted_args),*) };
+    let once_bound = quote! { FnMut(#(#fn_mut_args),*) -> #closure_return_type };
+    let handle_bound = quote! { #closure_type_name };
+    let mut trampolines = vec![trampoline(
+        &fn_name,
+        handle_bound.clone(),
+        handle_call.clone(),
+        OnPanic::Log,
+    )];
+    let mut kinds = vec![("_catch", OnPanic::Catch)];
+    if unwind {
+        kinds.push(("_unwind", OnPanic::Unwind));
+    }
+    for (suffix, on_panic) in kinds {
+        let name = format_ident!("{}{}", fn_name, suffix);
+        let once_name = format_ident!("{}{}", closure_fn_name, suffix);
+        trampolines.push(trampoline(&name, handle_bound.clone(), handle_call.clone(), on_panic));
+        trampolines.push(trampoline(&once_name, once_bound.clone(), once_call.clone(), on_panic));
+    }
+    let trampolines = quote! { #(#trampolines)* };
+
+    // Lets a poll wrapper raise a panic its handler caught one level down (the fragment
+    // assemblers catch their delegate's panic), at no cost to handlers that leave it false
+    let resume_const = if unwind {
+        quote! {
+            #[doc(hidden)]
+            const RESUMES_CAUGHT_PANIC: bool = false;
+        }
+    } else {
+        quote! {}
+    };
+    let resume_const_forward = if unwind {
+        quote! { const RESUMES_CAUGHT_PANIC: bool = T::RESUMES_CAUGHT_PANIC; }
+    } else {
+        quote! {}
+    };
+
     quote! {
         #(#doc_comments)*
         ///
         ///
         /// _(note you must copy any arguments that you use afterwards even those with static lifetimes)_
         pub trait #closure_type_name {
+            #resume_const
             fn #handle_method_name(&mut self, #(#closure_args),*) -> #closure_return_type;
         }
 
@@ -2256,6 +2406,7 @@ pub fn generate_handlers(handler: &mut CHandler, bindings: &CBinding) -> TokenSt
         /// Pass an existing [`Handler`] clone anywhere a callback value is expected, e.g.
         /// to share one callback instance across several registrations.
         impl<T: #closure_type_name> #closure_type_name for Handler<T> {
+            #resume_const_forward
             #[inline]
             fn #handle_method_name(&mut self, #(#closure_args),*) -> #closure_return_type {
                 let inner = unsafe { &mut *self.inner.get() };
@@ -2273,56 +2424,7 @@ pub fn generate_handlers(handler: &mut CHandler, bindings: &CBinding) -> TokenSt
             }
         }
 
-        // #[no_mangle]
-        #[allow(dead_code)]
-        #(#doc_comments)*
-        unsafe extern "C" fn #fn_name<F: #closure_type_name>(
-            #(#args),*
-        ) -> #closure_return_type
-        {
-            #[cfg(debug_assertions)]
-            if #closure_name.is_null() {
-                unimplemented!("closure should not be null")
-            }
-            #[cfg(feature = "extra-logging")]
-            {
-                log::debug!("calling {}", stringify!(#handle_method_name));
-            }
-            #[cfg(feature = "log-c-bindings")]
-            log::debug!(
-                "{}({}\n)",
-                stringify!(#fn_name),
-                [#(#arg_names_for_logging),*].join(", ")
-            );
-            let closure: &mut F = unsafe { &mut *(#closure_name as *mut F) };
-            closure.#handle_method_name(#(#converted_args),*)
-        }
-
-        // #[no_mangle]
-        #[allow(dead_code)]
-        #(#doc_comments)*
-        unsafe extern "C" fn #closure_fn_name<F: FnMut(#(#fn_mut_args),*) -> #closure_return_type>(
-            #(#args),*
-        ) -> #closure_return_type
-        {
-            #[cfg(debug_assertions)]
-            if #closure_name.is_null() {
-                unimplemented!("closure should not be null")
-            }
-            #[cfg(feature = "extra-logging")]
-            {
-                log::debug!("calling {}", stringify!(#closure_fn_name));
-            }
-            #[cfg(feature = "log-c-bindings")]
-            log::debug!(
-                "{}({}\n)",
-                stringify!(#closure_fn_name),
-                [#(#arg_names_for_logging),*].join(", ")
-            );
-            let closure: &mut F = unsafe { &mut *(#closure_name as *mut F) };
-            closure(#(#converted_args),*)
-        }
-
+        #trampolines
     }
 }
 

@@ -275,24 +275,12 @@ mod tests {
         t.pass(file)
     }
 
-    /// Regenerate `aeron.rs` exactly as `build.rs` does (single rustfmt pass over
-    /// the whole stream, test-modules disabled) and assert it byte-matches the
-    /// committed `docs-rs/aeron.rs`. Catches "forgot to rebuild with
-    /// `COPY_BINDINGS=true`" drift as a CI failure instead of a stale docs.rs.
-    fn assert_aeron_rs_snapshot_matches(
-        bindings_file: &str,
-        snapshot_rel_path: &str,
-        skip_filter: fn(&str) -> bool,
-        extra_custom_code: &[&str],
-    ) {
-        if running_under_valgrind() {
-            return;
-        }
-
+    /// Generates `aeron.rs` the way build.rs does, from the bindings snapshot packaged with
+    /// this crate, so tests that use it still run from the published crate
+    fn generate_aeron_rs(bindings_file: &str, skip_filter: fn(&str) -> bool, extra_custom_code: &[&str]) -> String {
         let bindings_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("bindings")
             .join(bindings_file);
-        let snapshot_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(snapshot_rel_path);
 
         let mut bindings = crate::parse_bindings_with_custom(&bindings_path, extra_custom_code);
         // First pass: populate FnMut(...) names required by generate_rust_code.
@@ -325,8 +313,26 @@ mod tests {
             stream.extend(code);
         }
 
-        let generated = format_with_rustfmt(&stream.to_string())
-            .unwrap_or_else(|_| panic!("rustfmt failed on regenerated {bindings_file}"));
+        format_with_rustfmt(&stream.to_string())
+            .unwrap_or_else(|_| panic!("rustfmt failed on regenerated {bindings_file}"))
+    }
+
+    /// Regenerate `aeron.rs` exactly as `build.rs` does (single rustfmt pass over
+    /// the whole stream, test-modules disabled) and assert it byte-matches the
+    /// committed `docs-rs/aeron.rs`. Catches "forgot to rebuild with
+    /// `COPY_BINDINGS=true`" drift as a CI failure instead of a stale docs.rs.
+    fn assert_aeron_rs_snapshot_matches(
+        bindings_file: &str,
+        snapshot_rel_path: &str,
+        skip_filter: fn(&str) -> bool,
+        extra_custom_code: &[&str],
+    ) {
+        if running_under_valgrind() {
+            return;
+        }
+
+        let snapshot_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(snapshot_rel_path);
+        let generated = generate_aeron_rs(bindings_file, skip_filter, extra_custom_code);
         let committed = fs::read_to_string(&snapshot_path)
             .unwrap_or_else(|_| panic!("missing committed snapshot: {}", snapshot_path.display()));
 
@@ -401,6 +407,124 @@ mod tests {
             |t| !t.contains("pthread") && !t.contains("_t_"),
             &[],
         );
+    }
+
+    /// `_unwind` trampolines are a plain call, `_catch` ones store the panic, plain ones log it.
+    /// None of them abort
+    #[test]
+    #[cfg(not(target_os = "windows"))]
+    fn trampolines_unwind_catch_or_log() {
+        if running_under_valgrind() {
+            return;
+        }
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("bindings")
+            .join("client.rs");
+        let mut bindings = parse_bindings(&path);
+        // first pass populates the FnMut signatures, as in the snapshot test
+        let bindings_copy = bindings.clone();
+        for handler in bindings.handlers.iter_mut() {
+            let _ = crate::generate_handlers(handler, &bindings_copy);
+        }
+        let bindings_copy = bindings.clone();
+        let mut stream = TokenStream::new();
+        for handler in bindings.handlers.iter_mut() {
+            stream.extend(crate::generate_handlers(handler, &bindings_copy));
+        }
+        let file: syn::File = syn::parse2(stream).expect("generated handlers parse");
+        // (abi, body tokens) of the generated fn with this exact name
+        let trampoline = |name: &str| {
+            file.items
+                .iter()
+                .find_map(|item| match item {
+                    syn::Item::Fn(f) if f.sig.ident == name => {
+                        let abi = f.sig.abi.as_ref().and_then(|a| a.name.as_ref()).map(|n| n.value());
+                        let block = &f.block;
+                        Some((abi, quote::quote!(#block).to_string()))
+                    }
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("missing {name}"))
+        };
+        for handler in crate::UNWIND_HANDLER_TYPES {
+            for suffix in ["_callback", "_callback_for_once_closure"] {
+                let (abi, body) = trampoline(&format!("{handler}{suffix}_unwind"));
+                assert_eq!(abi.as_deref(), Some("C-unwind"));
+                assert!(!body.contains("_panic") && !body.contains("catch_unwind"), "{body}");
+                let (abi, body) = trampoline(&format!("{handler}{suffix}_catch"));
+                assert_eq!(abi.as_deref(), Some("C-unwind"));
+                assert!(body.contains("catch_panic"), "{body}");
+            }
+        }
+        let (_, body) = trampoline("aeron_controlled_fragment_handler_t_callback_catch");
+        assert!(body.contains("AERON_ACTION_ABORT"), "{body}");
+        let (abi, body) = trampoline("aeron_error_handler_t_callback");
+        assert_eq!(abi.as_deref(), Some("C"));
+        assert!(body.contains("log_panic"), "{body}");
+        let (_, body) = trampoline("aeron_reserved_value_supplier_t_callback_catch");
+        assert!(body.contains("catch_panic (Default :: default ()"), "{body}");
+    }
+
+    /// Precompiled builds reuse the committed bindings on every platform, so a macOS
+    /// `link_name` (`\u{1}_aeron_...`) would leave Linux with undefined symbols
+    #[test]
+    fn snapshots_have_no_platform_link_names() {
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        for file in ["client.rs", "archive.rs", "media-driver.rs"] {
+            let path = root.join("bindings").join(file);
+            let bindings = std::fs::read_to_string(&path).unwrap();
+            assert!(!bindings.contains("#[link_name"), "{} has a link_name", path.display());
+        }
+    }
+
+    /// The descriptor pollers' `reset`/`poll` are hand-written in `aeron_custom_archive.rs`,
+    /// so the generator must skip them, `reset_fn` included
+    #[test]
+    #[cfg(not(target_os = "windows"))]
+    fn descriptor_poller_reset_and_poll_are_hand_written() {
+        let generated = generate_aeron_rs("archive.rs", |t| t.starts_with("aeron_"), &[crate::CUSTOM_ARCHIVE_CODE]);
+        let custom = crate::CUSTOM_ARCHIVE_CODE;
+        for poller in [
+            "recording_descriptor_poller",
+            "recording_subscription_descriptor_poller",
+        ] {
+            assert!(
+                generated.contains(&format!("aeron_archive_{poller}_t")),
+                "{poller} not generated"
+            );
+            for op in ["reset", "poll"] {
+                let call = format!("aeron_archive_{poller}_{op}(");
+                assert!(!generated.contains(&call), "generated {call}");
+                assert!(custom.contains(&call), "missing hand-written {call}");
+            }
+        }
+    }
+
+    /// Constructors take a separate code path from methods: assembler delegates must be
+    /// caught (the poll raises them), not logged
+    #[test]
+    #[cfg(not(target_os = "windows"))]
+    fn assembler_constructors_catch_delegate_panics() {
+        let generated = generate_aeron_rs("client.rs", |t| t.starts_with("aeron_"), &[]);
+        for (class, shim) in [
+            ("AeronFragmentAssembler", "aeron_fragment_handler_t_callback_catch"),
+            (
+                "AeronControlledFragmentAssembler",
+                "aeron_controlled_fragment_handler_t_callback_catch",
+            ),
+            ("AeronImageFragmentAssembler", "aeron_fragment_handler_t_callback_catch"),
+            (
+                "AeronImageControlledFragmentAssembler",
+                "aeron_controlled_fragment_handler_t_callback_catch",
+            ),
+        ] {
+            let start = generated
+                .find(&format!("\nimpl {class} {{"))
+                .unwrap_or_else(|| panic!("missing impl {class}"));
+            let block = &generated[start + 1..];
+            let block = &block[..block.find("\nimpl ").unwrap_or(block.len())];
+            assert!(block.contains(&format!("{shim}::<")), "{class}::new must use {shim}");
+        }
     }
 
     /// `aeron_custom.rs` is a verbatim copy (not generated) into each crate's

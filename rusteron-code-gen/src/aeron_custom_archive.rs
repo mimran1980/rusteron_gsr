@@ -37,7 +37,7 @@ impl AeronArchiveErrorCode {
     /// Accepts both the wire codes (0-16) and the client codes (200-216,
     /// `AERON_ARCHIVE_ERROR_CODE_*` = wire + 200) that the C archive client's error
     /// handler reports and embeds in its `errorCode=N` text since Aeron 1.53.3.
-    pub fn from_code(code: i32) -> Self {
+    pub const fn from_code(code: i32) -> Self {
         match code {
             0 => Self::Generic,
             1 => Self::ActiveListing,
@@ -64,7 +64,7 @@ impl AeronArchiveErrorCode {
     /// Resource-exhaustion codes — the operation can succeed later once capacity frees up
     /// (a replay/recording slot or storage). Everything else is a state/identity error:
     /// fix the request, don't retry it blindly.
-    pub fn is_resource_exhausted(&self) -> bool {
+    pub const fn is_resource_exhausted(&self) -> bool {
         matches!(self, Self::MaxReplays | Self::MaxRecordings | Self::StorageSpace)
     }
 }
@@ -82,6 +82,7 @@ impl AeronArchiveError {
     /// failed request (and so in `AeronCError` `lastError` messages), not in
     /// `poll_for_error_response` payloads.
     /// Falls back to [`AeronArchiveErrorCode::Generic`] when no code is present.
+    #[cold]
     pub fn parse(message: &str) -> Self {
         let code = message
             .split("errorCode=")
@@ -106,6 +107,7 @@ impl AeronArchiveError {
     /// it has to, the typed code only exists inside the message. Archive control
     /// operations are request/response calls, not hot-path loops, so the copy is
     /// acceptable there.
+    #[cold]
     pub fn from_code(code: i32) -> Self {
         let message = Aeron::errmsg();
         if message.contains("errorCode=") {
@@ -159,7 +161,7 @@ pub struct AeronArchiveReplayParamsBuilder {
 }
 
 impl AeronArchiveReplayParams {
-    pub fn builder() -> AeronArchiveReplayParamsBuilder {
+    pub const fn builder() -> AeronArchiveReplayParamsBuilder {
         AeronArchiveReplayParamsBuilder {
             bounding_limit_counter_id: AERON_NULL_VALUE,
             file_io_max_length: AERON_NULL_VALUE,
@@ -173,43 +175,43 @@ impl AeronArchiveReplayParams {
 
 impl AeronArchiveReplayParamsBuilder {
     /// Start the replay from this position (default: the recording's start).
-    pub fn position(mut self, position: i64) -> Self {
+    pub const fn position(mut self, position: i64) -> Self {
         self.position = position;
         self
     }
 
     /// Replay this many bytes (default: to the recording's end).
-    pub fn length(mut self, length: i64) -> Self {
+    pub const fn length(mut self, length: i64) -> Self {
         self.length = length;
         self
     }
 
     /// Follow a live recording after the recorded portion (`length = i64::MAX`).
-    pub fn follow_live(mut self) -> Self {
+    pub const fn follow_live(mut self) -> Self {
         self.length = i64::MAX;
         self
     }
 
     /// Bound the replay by this counter (triggers a bounded replay request).
-    pub fn bounded_by(mut self, counter_id: i32) -> Self {
+    pub const fn bounded_by(mut self, counter_id: i32) -> Self {
         self.bounding_limit_counter_id = counter_id;
         self
     }
 
     /// Maximum size of an archive file IO operation during the replay.
-    pub fn file_io_max_length(mut self, length: i32) -> Self {
+    pub const fn file_io_max_length(mut self, length: i32) -> Self {
         self.file_io_max_length = length;
         self
     }
 
     /// Token for replays where the initiating image did not create the archive session.
-    pub fn replay_token(mut self, token: i64) -> Self {
+    pub const fn replay_token(mut self, token: i64) -> Self {
         self.replay_token = token;
         self
     }
 
     /// Subscription registration id for response-channel replays on an existing channel.
-    pub fn subscription_registration_id(mut self, registration_id: i64) -> Self {
+    pub const fn subscription_registration_id(mut self, registration_id: i64) -> Self {
         self.subscription_registration_id = registration_id;
         self
     }
@@ -455,5 +457,129 @@ impl ControlledFragmentAssemblable for AeronArchivePersistentSubscription {
         fragment_limit: usize,
     ) -> Result<i32, AeronCError> {
         self.controlled_poll(assembler, fragment_limit)
+    }
+}
+
+// Recording descriptor pollers: written by hand, not generated
+//
+// `reset` stores the consumer and a later `poll` calls it. The generator only looks at the
+// callback type, and everywhere else this type is called during the call itself. So it would
+// generate a `reset_fn` whose closure is gone by the time `poll` runs, and a panic check that
+// runs too early. The generator skips methods defined in this file, so we write them here:
+// - `reset` takes a `Handler`, which the poller keeps alive, and uses the `_catch` trampoline so
+//   a panic never crosses C. A borrowed poller cannot keep it, so `reset` returns an error
+// - `poll` raises the caught panic after C returns
+
+impl AeronArchiveRecordingDescriptorPoller {
+    /// Sets up the poller for the next `poll`, which calls `recording_descriptor_consumer` for
+    /// each descriptor received. The poller keeps the handler alive, so a borrowed poller (as
+    /// returned by `AeronArchive`) returns an error and C is not changed
+    #[inline]
+    pub fn reset<H: AeronArchiveRecordingDescriptorConsumerFuncCallback + 'static>(
+        &self,
+        correlation_id: i64,
+        record_count: i32,
+        recording_descriptor_consumer: Option<&Handler<H>>,
+    ) -> Result<(), AeronCError> {
+        // C keeps a pointer to the handler, so the poller must keep it alive. Pollers from
+        // `AeronArchive` are borrowed and cannot, so refuse before C is changed
+        let Some(inner) = self.inner.as_owned() else {
+            return Err(AeronCError::with_message(
+                -1,
+                "aeron_archive_recording_descriptor_poller_reset: this poller is borrowed, so it cannot keep the consumer alive",
+            ));
+        };
+        #[cfg(feature = "log-c-bindings")]
+        log::info!("aeron_archive_recording_descriptor_poller_reset({correlation_id}, {record_count})");
+        let callback: aeron_archive_recording_descriptor_consumer_func_t = recording_descriptor_consumer
+            .map(|_| aeron_archive_recording_descriptor_consumer_func_t_callback_catch::<H> as _);
+        let clientd = recording_descriptor_consumer.map_or(std::ptr::null_mut(), |h| h.as_raw());
+        unsafe {
+            aeron_archive_recording_descriptor_poller_reset(
+                self.get_inner(),
+                correlation_id,
+                record_count,
+                callback,
+                clientd,
+            )
+        };
+        if let Some(handler) = recording_descriptor_consumer {
+            inner.add_dependency(handler.clone());
+        }
+        Ok(())
+    }
+
+    /// Polls for descriptors, calling the consumer given to `reset`. A panic in the consumer is
+    /// raised here once C returns
+    #[inline]
+    pub fn poll(&self) -> Result<i32, AeronCError> {
+        let result = unsafe { aeron_archive_recording_descriptor_poller_poll(self.get_inner()) };
+        #[cfg(feature = "log-c-bindings")]
+        log::info!("aeron_archive_recording_descriptor_poller_poll() -> {result}");
+        resume_caught_panic();
+        if result < 0 {
+            Err(AeronCError::from_code(result))
+        } else {
+            Ok(result)
+        }
+    }
+}
+
+impl AeronArchiveRecordingSubscriptionDescriptorPoller {
+    /// Sets up the poller for the next `poll`, which calls
+    /// `recording_subscription_descriptor_consumer` for each descriptor received. The poller
+    /// keeps the handler alive, so a borrowed poller (as returned by `AeronArchive`) returns
+    /// an error and C is not changed
+    #[inline]
+    pub fn reset<H: AeronArchiveRecordingSubscriptionDescriptorConsumerFuncCallback + 'static>(
+        &self,
+        correlation_id: i64,
+        subscription_count: i32,
+        recording_subscription_descriptor_consumer: Option<&Handler<H>>,
+    ) -> Result<(), AeronCError> {
+        // C keeps a pointer to the handler, so the poller must keep it alive. Pollers from
+        // `AeronArchive` are borrowed and cannot, so refuse before C is changed
+        let Some(inner) = self.inner.as_owned() else {
+            return Err(AeronCError::with_message(
+                -1,
+                "aeron_archive_recording_subscription_descriptor_poller_reset: this poller is borrowed, so it cannot keep the consumer alive",
+            ));
+        };
+        #[cfg(feature = "log-c-bindings")]
+        log::info!(
+            "aeron_archive_recording_subscription_descriptor_poller_reset({correlation_id}, {subscription_count})"
+        );
+        let callback: aeron_archive_recording_subscription_descriptor_consumer_func_t =
+            recording_subscription_descriptor_consumer
+                .map(|_| aeron_archive_recording_subscription_descriptor_consumer_func_t_callback_catch::<H> as _);
+        let clientd = recording_subscription_descriptor_consumer.map_or(std::ptr::null_mut(), |h| h.as_raw());
+        unsafe {
+            aeron_archive_recording_subscription_descriptor_poller_reset(
+                self.get_inner(),
+                correlation_id,
+                subscription_count,
+                callback,
+                clientd,
+            )
+        };
+        if let Some(handler) = recording_subscription_descriptor_consumer {
+            inner.add_dependency(handler.clone());
+        }
+        Ok(())
+    }
+
+    /// Polls for descriptors, calling the consumer given to `reset`. A panic in the consumer is
+    /// raised here once C returns
+    #[inline]
+    pub fn poll(&self) -> Result<i32, AeronCError> {
+        let result = unsafe { aeron_archive_recording_subscription_descriptor_poller_poll(self.get_inner()) };
+        #[cfg(feature = "log-c-bindings")]
+        log::info!("aeron_archive_recording_subscription_descriptor_poller_poll() -> {result}");
+        resume_caught_panic();
+        if result < 0 {
+            Err(AeronCError::from_code(result))
+        } else {
+            Ok(result)
+        }
     }
 }

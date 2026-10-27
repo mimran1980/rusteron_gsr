@@ -303,8 +303,10 @@ fn build_from_source(config: &RusteronBuildConfig, docs_rs: &Path) {
     // Sanitizer support — the `sanitize-address` feature is the discoverable way to turn
     // this on; RUSTERON_SANITIZE remains for other sanitizers (thread, undefined, ...).
     // This injects -fsanitize=* flags into the C/C++ compilation via cmake.
+    // -fexceptions lets a Rust panic pass safely through the Aeron poll functions
+    // (UNWIND_POLL_FNS). Without it that is undefined behaviour
     #[allow(unused_mut)]
-    let mut c_flags = "-fcommon".to_string();
+    let mut c_flags = "-fcommon -fexceptions".to_string();
     let mut cxx_flags = String::new();
     println!("cargo:rerun-if-env-changed=RUSTERON_SANITIZE");
     let san_env = std::env::var("RUSTERON_SANITIZE").ok().filter(|s| !s.is_empty());
@@ -431,13 +433,26 @@ fn build_from_source(config: &RusteronBuildConfig, docs_rs: &Path) {
         .derive_eq(true)
         .derive_default(true)
         .derive_hash(true)
-        .derive_partialeq(true);
+        .derive_partialeq(true)
+        // Aeron is plain C, so there is no mangling to trust. Without this bindgen emits a
+        // macOS `#[link_name = "\u{1}_aeron_..."]` for every non-`C` ABI (the `C-unwind`
+        // overrides below), and the committed snapshots then fail to link on Linux
+        .trust_clang_mangling(false);
     if let Some(include) = config.extra_clang_include {
         // We need to include some of the headers from `aeron c client`, so update the include path here
         builder = builder.clang_arg(format!("-I{}", aeron_path.join(include).display()));
     }
     for var in config.extra_allowlist_vars {
         builder = builder.allowlist_var(*var);
+    }
+    // Only UNWIND_POLL_FNS let a panic through, so only they and their handler types are
+    // `C-unwind`. Every other handler catches its panic before returning to C. Names are
+    // anchored (^...$) for exact matches
+    for name in rusteron_code_gen::UNWIND_HANDLER_TYPES
+        .iter()
+        .chain(rusteron_code_gen::UNWIND_POLL_FNS)
+    {
+        builder = builder.override_abi(bindgen::Abi::CUnwind, format!("^{name}$"));
     }
     let bindings = builder.generate().expect("Unable to generate aeron bindings");
 

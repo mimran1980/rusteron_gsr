@@ -27,7 +27,7 @@ use std::cell::Cell;
 use std::os::raw::c_int;
 #[cfg(feature = "multi-threaded")]
 use std::sync::atomic::Ordering;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 /// Result codes returned by `AeronPublication::offer` / `try_claim` (Aeron `aeronc.h`). A positive
 /// value is the resulting log position; the negatives classify the failure.
@@ -384,22 +384,25 @@ struct ListenerHolder {
 }
 
 // Hand-written trampolines: the code generator only wires single-callback args,
-// but this listener has 3 callbacks sharing one clientd.
+// but this listener has 3 callbacks sharing one clientd. They fire inside the persistent
+// poll, so a panic is caught (unwinding through C would break its state) and the poll
+// raises it on return
 unsafe extern "C" fn persistent_subscription_on_live_joined(clientd: *mut std::ffi::c_void) {
     if !clientd.is_null() {
         // SAFETY: clientd is the ListenerHolder kept alive as a dependency of the subscription.
         let holder = &*(clientd as *const ListenerHolder);
-        holder.listener.on_live_joined();
+        catch_panic((), || holder.listener.on_live_joined());
     }
 }
 
 unsafe extern "C" fn persistent_subscription_on_live_left(clientd: *mut std::ffi::c_void) {
     if !clientd.is_null() {
         let holder = &*(clientd as *const ListenerHolder);
-        holder.listener.on_live_left();
+        catch_panic((), || holder.listener.on_live_left());
     }
 }
 
+#[cold]
 unsafe extern "C" fn persistent_subscription_on_error(
     clientd: *mut std::ffi::c_void,
     error_code: c_int,
@@ -412,7 +415,7 @@ unsafe extern "C" fn persistent_subscription_on_error(
         } else {
             std::borrow::Cow::Borrowed("")
         };
-        holder.listener.on_error(error_code, &msg);
+        catch_panic((), || holder.listener.on_error(error_code, &msg));
     }
 }
 
@@ -1487,6 +1490,154 @@ mod tests {
             let polled = AeronArchiveAsyncConnect::new(&context)?.poll_blocking(Duration::from_secs(10))?;
             drop(polled);
             drop(connected);
+            Ok(())
+        })();
+
+        drop(aeron);
+        drop(archive_context);
+        drop(media_driver);
+        drop(pub_error_frame_handler);
+        drop(error_handler);
+        test_result
+    }
+
+    /// A borrowed context (e.g. from `get_archive_context()`) cannot keep a client alive, so
+    /// `set_aeron` on it is refused before C is changed, rather than leaving C a pointer the
+    /// caller may free. The owning context still accepts it
+    #[test]
+    #[serial]
+    pub fn set_aeron_on_borrowed_context_is_rejected() -> Result<(), Box<dyn error::Error>> {
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes()?;
+        let (aeron, archive_context, media_driver, pub_error_frame_handler, error_handler) = start_aeron_archive()?;
+
+        let test_result: Result<(), Box<dyn error::Error>> = (|| {
+            let other_context = AeronContext::new()?;
+            other_context.set_dir(&aeron.context().get_dir().into_c_string())?;
+            let other = Aeron::new(&other_context)?;
+            other.start()?;
+
+            let owned = AeronArchiveContext::new()?;
+            owned.set_aeron(&aeron)?;
+            let borrowed = AeronArchiveContext::from(owned.get_inner());
+
+            let Err(err) = borrowed.set_aeron(&other) else {
+                return Err("a borrowed context must refuse set_aeron".into());
+            };
+            assert!(err.message().is_some_and(|m| m.contains("borrowed")), "{err:?}");
+            // C was not changed: the owner still has its own client
+            assert_eq!(owned.get_aeron().get_inner(), aeron.get_inner());
+
+            // the owner can still change it, and keeps the new client alive
+            owned.set_aeron(&other)?;
+            drop(other);
+            assert!(!owned.get_aeron().is_closed());
+            Ok(())
+        })();
+
+        drop(aeron);
+        drop(archive_context);
+        drop(media_driver);
+        drop(pub_error_frame_handler);
+        drop(error_handler);
+        test_result
+    }
+
+    /// The archive's descriptor pollers are borrowed, so they cannot keep a consumer alive and
+    /// `reset` must refuse before C stores a pointer the caller may free
+    #[test]
+    #[serial]
+    pub fn reset_on_archive_descriptor_pollers_is_rejected() -> Result<(), Box<dyn error::Error>> {
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes()?;
+        let (aeron, archive_context, media_driver, pub_error_frame_handler, error_handler) = start_aeron_archive()?;
+
+        let test_result: Result<(), Box<dyn error::Error>> = (|| {
+            let archive = AeronArchiveAsyncConnect::new_with_aeron(&archive_context.clone(), &aeron)?
+                .poll_blocking(Duration::from_secs(30))?;
+
+            let poller = archive.recording_descriptor_poller();
+            let (correlation_id, clientd) = (poller.correlation_id(), poller.recording_descriptor_consumer_clientd());
+            let consumer = Handler::new(AeronArchiveRecordingDescriptorConsumerFuncLogger);
+            let Err(err) = poller.reset(correlation_id + 1, 1, Some(&consumer)) else {
+                return Err("a borrowed recording descriptor poller must refuse reset".into());
+            };
+            assert!(err.message().is_some_and(|m| m.contains("borrowed")), "{err:?}");
+            assert_eq!(poller.correlation_id(), correlation_id);
+            assert_eq!(poller.recording_descriptor_consumer_clientd(), clientd);
+
+            let poller = archive.recording_subscription_descriptor_poller();
+            let (correlation_id, clientd) = (
+                poller.correlation_id(),
+                poller.recording_subscription_descriptor_consumer_clientd(),
+            );
+            let consumer = Handler::new(AeronArchiveRecordingSubscriptionDescriptorConsumerFuncLogger);
+            let Err(err) = poller.reset(correlation_id + 1, 1, Some(&consumer)) else {
+                return Err("a borrowed recording subscription descriptor poller must refuse reset".into());
+            };
+            assert!(err.message().is_some_and(|m| m.contains("borrowed")), "{err:?}");
+            assert_eq!(poller.correlation_id(), correlation_id);
+            assert_eq!(poller.recording_subscription_descriptor_consumer_clientd(), clientd);
+
+            archive.close()?;
+            Ok(())
+        })();
+
+        drop(aeron);
+        drop(archive_context);
+        drop(media_driver);
+        drop(pub_error_frame_handler);
+        drop(error_handler);
+        test_result
+    }
+
+    /// The context keeps every client passed to `set_aeron` alive, even after the caller drops
+    /// theirs or a later call replaces it
+    #[test]
+    #[serial]
+    pub fn set_aeron_keeps_clients_alive_after_caller_drops_them() -> Result<(), Box<dyn error::Error>> {
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes()?;
+        let (aeron, archive_context, media_driver, pub_error_frame_handler, error_handler) = start_aeron_archive()?;
+
+        let test_result: Result<(), Box<dyn error::Error>> = (|| {
+            let new_client = || -> Result<Aeron, Box<dyn error::Error>> {
+                let ctx = AeronContext::new()?;
+                ctx.set_dir(&aeron.context().get_dir().into_c_string())?;
+                let client = Aeron::new(&ctx)?;
+                client.start()?;
+                Ok(client)
+            };
+            let context = AeronArchiveContext::new()?;
+            let (first, second) = (new_client()?, new_client()?);
+            let (first_id, second_id) = (first.client_id(), second.client_id());
+            context.set_aeron(&first)?;
+            context.set_aeron(&second)?;
+            drop(first);
+            drop(second);
+
+            // the replaced client stays alive, as objects made from it may still use it
+            let replaced = context.inner.get_dependency::<Aeron>().ok_or("first client not kept")?;
+            assert_eq!(replaced.client_id(), first_id);
+            assert!(!replaced.is_closed());
+
+            // without the fix these would use a freed client
+            let client = context.get_aeron();
+            assert_eq!(client.client_id(), second_id);
+            // the harness does not wait for the Java driver, which can take seconds to start on CI
+            let timeout = Duration::from_secs(30);
+            let subscription =
+                client.add_subscription(AERON_IPC_STREAM, 7001, Handlers::NONE, Handlers::NONE, timeout)?;
+            let publication = client.add_publication(AERON_IPC_STREAM, 7001, timeout)?;
+            let start = Instant::now();
+            let mut received = 0;
+            while received == 0 {
+                assert!(start.elapsed() < timeout, "no message through the context's client");
+                let _ = publication.offer(b"alive");
+                subscription.poll_fn(|_, _| received += 1, 10)?;
+                sleep(Duration::from_millis(1));
+            }
+            // publication and subscription drop before the context that keeps their client
             Ok(())
         })();
 
