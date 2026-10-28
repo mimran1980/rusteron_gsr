@@ -4,7 +4,7 @@ Main changes, newest first, grouped by published crate version. Release-only
 commits, build logs, and changes later reverted or superseded are omitted.
 Early history predating the available release tags is grouped separately.
 
-## Unreleased
+## 0.2.16
 
 - Added `AeronArchiveRecordingDescriptorPoller::new` and `AeronArchiveRecordingSubscriptionDescriptorPoller::new`, so recordings can be listed without blocking. The archive's own pollers are borrowed and refuse `reset`.
 

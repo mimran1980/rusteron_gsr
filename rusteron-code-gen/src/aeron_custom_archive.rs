@@ -540,7 +540,6 @@ impl ControlledFragmentAssemblable for AeronArchivePersistentSubscription {
 //
 // The archive's own pollers are borrowed, so `reset` refuses them. `new` makes a poller that we
 // own, so `reset` works. It keeps the archive alive and closes the C poller on drop.
-
 impl AeronArchiveRecordingDescriptorPoller {
     /// A poller you own, for listing recordings without blocking. Send the request with
     /// [`AeronArchive::archive_proxy`], call [`Self::reset`] with the same correlation id, then
