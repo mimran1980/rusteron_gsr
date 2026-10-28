@@ -57,7 +57,7 @@ When using the default dynamic configuration, you must ensure Aeron C libraries 
 
 - **`new()` Initialization**: Automatically calls the corresponding `*_init` method.
 - **One-liner connect**: `Aeron::connect(Some(dir))?` builds the context, client, and starts the conductor; build the `AeronContext` yourself for tuned setups. (`AeronArchive::connect(...)` in rusteron-archive.)
-- **Retained images auto-release**: `subscription.image_at_index(i)` / `image_by_session_id(id)` return `Option<AeronImage>` that releases back to the subscription on drop; `for_each_image(|img| …)` borrows without bookkeeping. Drop these handles before calling `subscription.close()`: a handle must not be used after it, and its image may stay mapped until the client closes. See [`examples/retained_images.rs`](./examples/retained_images.rs).
+- **Retained images auto-release**: `subscription.image_at_index(i)` / `image_by_session_id(id)` return `Option<AeronImage>` that releases back to the subscription on drop; `for_each_image(|img| …)` borrows without bookkeeping. Drop these handles before calling `subscription.close()`: a handle must not be used after it, and its image may stay mapped until the client closes. See [`examples/retained_images.rs`](https://github.com/gsrxyz/rusteron/blob/main/rusteron-client/examples/retained_images.rs).
 - **Automatic Cleanup (Partial)**: When possible, `Drop` will invoke the appropriate `*_close` or `*_destroy` methods.
 - **Manual Resource Responsibility**: For methods like `set_aeron()` or where lifetimes aren't managed internally, users are responsible for safety.
 - **Handlers Are Reference-Counted**: Wrap callbacks with `Handler::new(...)`. Methods that register a callback the C client retains keep a clone alive inside the registering resource, so the value is freed automatically — no manual `release()`.
@@ -310,31 +310,31 @@ Breaking changes, made because the old design allowed double frees and use-after
 | `Handlers::no_xxx_handler()` per callback | `Handlers::NONE` for any callback parameter |
 
 The full old → new table (destinations, fragment assembler, C strings, driver guard) lives
-in the [root README's migration guide](../README.md#migrating-from-01168-to-02).
+in the [migration guide](https://github.com/gsrxyz/rusteron/blob/main/docs/migrating_0.1.168_to_0.2.md).
 
 ## Examples
 
-- [`examples/basic_publisher.rs`](./examples/basic_publisher.rs) — typed-offer retry loop (port of `basic_publisher.c`)
-- [`examples/basic_subscriber.rs`](./examples/basic_subscriber.rs) — image lifecycle handlers and the zero-allocation `poll_fn` (port of `basic_subscriber.c`)
-- [`examples/non_blocking_publisher.rs`](./examples/non_blocking_publisher.rs) — drives `async_add_publication(..).poll()` from its own loop instead of `poll_blocking`
-- [`examples/basic_pub_sub.rs`](./examples/basic_pub_sub.rs) — minimal pub/sub with fragment assembly
-- [`examples/streaming_rate.rs`](./examples/streaming_rate.rs) — streaming publisher + rate-reporting subscriber (port of `streaming_publisher.c` + `rate_subscriber.c`)
-- [`examples/multi_destination_subscription.rs`](./examples/multi_destination_subscription.rs) — MDS: one manual-control subscription aggregating several endpoints (port of `basic_mds_subscriber.c`)
-- [`examples/driver_stats.rs`](./examples/driver_stats.rs) — CnC tooling: counters, distinct error log, loss report (ports of `aeron_stat.c` / `error_stat.c` / `loss_stat.c`)
-- [`examples/embedded_ping_pong.rs`](./examples/embedded_ping_pong.rs) — RTT ping/pong with `try_claim` (port of `cping`/`cpong`); starts its own driver unless `AERON_DIR` is set
-- [`examples/embedded_exclusive_ipc_throughput.rs`](./examples/embedded_exclusive_ipc_throughput.rs) — exclusive-publication IPC throughput; starts its own driver unless `AERON_DIR` is set
-- [`examples/request_response.rs`](./examples/request_response.rs) — response channels (aeron 1.44+): request/response wiring via `control-mode=response` + `response-correlation-id` (port of `response_server.c`/`response_client.c`)
-- [`examples/file_transfer.rs`](./examples/file_transfer.rs) — chunked file transfer with fragment reassembly and verification (port of `FileSender`/`FileReceiver`)
-- [`examples/zero_copy_claim.rs`](./examples/zero_copy_claim.rs) — zero-copy publish with `try_claim_owned` (commit, abort on drop), a send timestamp in `set_reserved_value`, and header reads on the subscriber
-- [`examples/retained_images.rs`](./examples/retained_images.rs) — retained image lifecycle: `for_each_image`, `image_by_session_id`, polling the image directly, `is_closed()` once the publisher goes, and dropping the handle before `subscription.close()`
+- [`examples/basic_publisher.rs`](https://github.com/gsrxyz/rusteron/blob/main/rusteron-client/examples/basic_publisher.rs) — typed-offer retry loop (port of `basic_publisher.c`)
+- [`examples/basic_subscriber.rs`](https://github.com/gsrxyz/rusteron/blob/main/rusteron-client/examples/basic_subscriber.rs) — image lifecycle handlers and the zero-allocation `poll_fn` (port of `basic_subscriber.c`)
+- [`examples/non_blocking_publisher.rs`](https://github.com/gsrxyz/rusteron/blob/main/rusteron-client/examples/non_blocking_publisher.rs) — drives `async_add_publication(..).poll()` from its own loop instead of `poll_blocking`
+- [`examples/basic_pub_sub.rs`](https://github.com/gsrxyz/rusteron/blob/main/rusteron-client/examples/basic_pub_sub.rs) — minimal pub/sub with fragment assembly
+- [`examples/streaming_rate.rs`](https://github.com/gsrxyz/rusteron/blob/main/rusteron-client/examples/streaming_rate.rs) — streaming publisher + rate-reporting subscriber (port of `streaming_publisher.c` + `rate_subscriber.c`)
+- [`examples/multi_destination_subscription.rs`](https://github.com/gsrxyz/rusteron/blob/main/rusteron-client/examples/multi_destination_subscription.rs) — MDS: one manual-control subscription aggregating several endpoints (port of `basic_mds_subscriber.c`)
+- [`examples/driver_stats.rs`](https://github.com/gsrxyz/rusteron/blob/main/rusteron-client/examples/driver_stats.rs) — CnC tooling: counters, distinct error log, loss report (ports of `aeron_stat.c` / `error_stat.c` / `loss_stat.c`)
+- [`examples/embedded_ping_pong.rs`](https://github.com/gsrxyz/rusteron/blob/main/rusteron-client/examples/embedded_ping_pong.rs) — RTT ping/pong with `try_claim` (port of `cping`/`cpong`); starts its own driver unless `AERON_DIR` is set
+- [`examples/embedded_exclusive_ipc_throughput.rs`](https://github.com/gsrxyz/rusteron/blob/main/rusteron-client/examples/embedded_exclusive_ipc_throughput.rs) — exclusive-publication IPC throughput; starts its own driver unless `AERON_DIR` is set
+- [`examples/request_response.rs`](https://github.com/gsrxyz/rusteron/blob/main/rusteron-client/examples/request_response.rs) — response channels (aeron 1.44+): request/response wiring via `control-mode=response` + `response-correlation-id` (port of `response_server.c`/`response_client.c`)
+- [`examples/file_transfer.rs`](https://github.com/gsrxyz/rusteron/blob/main/rusteron-client/examples/file_transfer.rs) — chunked file transfer with fragment reassembly and verification (port of `FileSender`/`FileReceiver`)
+- [`examples/zero_copy_claim.rs`](https://github.com/gsrxyz/rusteron/blob/main/rusteron-client/examples/zero_copy_claim.rs) — zero-copy publish with `try_claim_owned` (commit, abort on drop), a send timestamp in `set_reserved_value`, and header reads on the subscriber
+- [`examples/retained_images.rs`](https://github.com/gsrxyz/rusteron/blob/main/rusteron-client/examples/retained_images.rs) — retained image lifecycle: `for_each_image`, `image_by_session_id`, polling the image directly, `is_closed()` once the publisher goes, and dropping the handle before `subscription.close()`
 
 ---
 
 ## Documentation & Guides
 
 For detailed guides and code snippets on Aeron features in Rust, see:
-- [Multi-Destination Subscription (MDC / MDS) Guide](../docs/mdc_mds_guide.md)
-- [Media Driver Configuration & Back-pressure Guide](../docs/media_driver_configuration_and_backpressure_guide.md)
+- [Multi-Destination Subscription (MDC / MDS) Guide](https://github.com/gsrxyz/rusteron/blob/main/docs/mdc_mds_guide.md)
+- [Media Driver Configuration & Back-pressure Guide](https://github.com/gsrxyz/rusteron/blob/main/docs/media_driver_configuration_and_backpressure_guide.md)
 
 ---
 
@@ -402,7 +402,7 @@ The conductor's own idle strategy is configured on the context — use the typed
 init args) — and likewise the media driver's per-agent strategies
 (`set_conductor_idle_strategy_kind` etc. on `AeronDriverContext`).
 
-For recording, replay, and **persistent subscriptions** (replay history, then seamlessly join a live stream), see [`rusteron-archive`](../rusteron-archive/README.md#persistent-subscriptions).
+For recording, replay, and **persistent subscriptions** (replay history, then seamlessly join a live stream), see [`rusteron-archive`](https://github.com/gsrxyz/rusteron/blob/main/rusteron-archive/README.md#persistent-subscriptions).
 
 ---
 

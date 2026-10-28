@@ -138,7 +138,7 @@ fn main() {
 
 The key has one cost: Cargo allows a single package per `links` name in a build, so two
 semver-incompatible versions of `rusteron-media-driver` cannot share a dependency graph. The
-workspace crate [`links-test`](./links-test) compiles a C file against these paths, so the
+workspace crate [`links-test`](https://github.com/gsrxyz/rusteron/blob/main/rusteron-media-driver/links-test) compiles a C file against these paths, so the
 export cannot break unnoticed.
 
 ## Contributing & License

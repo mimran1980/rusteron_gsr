@@ -398,7 +398,7 @@ The Kubernetes behaviour relied on here is documented in:
 - [Manage HugePages](https://kubernetes.io/docs/tasks/manage-hugepages/scheduling-hugepages/): pages are allocated on the node first, requests equal limits, and an `emptyDir` with `medium: HugePages-2Mi` is capped at the pod's request.
 - [Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/): the baseline profile forbids `hostNetwork`, `hostIPC` and `hostPath`.
 
-The host settings' sources are listed under [Tuning on x86-64 Linux](./README.md#tuning-on-x86-64-linux) in the README.
+The host settings' sources are listed under [Tuning on x86-64 Linux](https://github.com/gsrxyz/rusteron/blob/main/docs/tuning_x86_64_linux.md) in the README.
 
 **The node**
 

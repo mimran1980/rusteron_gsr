@@ -22,7 +22,7 @@ env:
 
 jobs:
   release:
-    timeout-minutes: 120
+    timeout-minutes: 180
     runs-on: ubuntu-latest
 
     steps:
@@ -51,7 +51,7 @@ jobs:
             // successful run is wrong: its artifacts may have expired
             // (short retention) and it may not even reflect this code.
             const sha = '${{ steps.pre_release_sha.outputs.sha }}';
-            const maxAttempts = 40; // ~40 * 90s = 60 minutes of waiting
+            const maxAttempts = 80; // ~80 * 90s = 120 minutes of waiting
             const delayMs = 90000;
 
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -83,7 +83,7 @@ jobs:
               await new Promise(r => setTimeout(r, delayMs));
             }
 
-            core.setFailed(`Timed out after ~60 minutes waiting for the CI run of commit ${sha} to complete.`);
+            core.setFailed(`Timed out after ~120 minutes waiting for the CI run of commit ${sha} to complete.`);
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable

@@ -30,7 +30,7 @@ This project builds on a fork of [`libaeron-sys`](https://github.com/bspeice/lib
 
 **Why generated bindings**: the main advantage of generating the bindings from the Aeron C headers is that the API is always complete and matches the Aeron documentation. Every C function and setting is available under a predictable name, with no wrapper lagging behind an Aeron release. Hand-written bindings can look nicer, but they are hard to maintain, and when something breaks you cannot tell whether the fault is in the wrapper or in Aeron itself. Because the generated code is a thin pass-through to the C API, a problem can be reproduced against Aeron directly, and Aeron's own docs, samples and issue tracker apply as-is. Aeron is specialised, and rusteron is aimed mainly at people who already know low-latency development and want the real Aeron API rather than an abstraction over it. As with any low-level API, that power cuts both ways: rusteron guards against the common mistakes, but it is still possible to shoot yourself in the foot if the API is misused, so it pays to know how Aeron expects each call to be used.
 
-**Lifecycle**: since 0.2, closing or dropping owned handles in any order is safe. `aeron.close()` is deferred while any publication, subscription, counter or clone is alive, and those handles stay usable until the last one drops (see [Resource Lifecycle](./rusteron-client/README.md#resource-lifecycle--close)). The remaining sharp edges:
+**Lifecycle**: since 0.2, closing or dropping owned handles in any order is safe. `aeron.close()` is deferred while any publication, subscription, counter or clone is alive, and those handles stay usable until the last one drops (see [Resource Lifecycle](https://github.com/gsrxyz/rusteron/blob/main/rusteron-client/README.md#resource-lifecycle--close)). The remaining sharp edges:
 - `unsafe close_now()` frees children immediately.
 - Borrowed handles do not keep their owner alive. For example, an `Aeron` from `archive_context.get_aeron()` or a descriptor poller from `AeronArchive` must not outlive the context or archive it came from.
 - A buffer claim (`try_claim` / `try_claim_owned`) must be committed or aborted before its publication closes.
@@ -118,7 +118,7 @@ rusteron-client = { version = "0.2", features = ["static", "precompile-rustls"] 
 
 Replace `rusteron-client` with `rusteron-archive` or `rusteron-media-driver` as needed.
 
-For full build instructions, see [BUILD.md](./BUILD.md).
+For full build instructions, see [BUILD.md](https://github.com/gsrxyz/rusteron/blob/main/BUILD.md).
 
 ### CPU target
 
@@ -126,7 +126,7 @@ A release build from source compiles the Aeron C code for the build machine's CP
 (`-march=native`). Set `RUSTERON_C_MARCH` (e.g. `x86-64-v3`) when binaries run on
 machines other than the one that built them. The precompiled libraries (`precompile`)
 target the architecture's baseline (`x86-64`, `armv8-a`), so they run on any CPU. On the
-x86-64 VMs in [Tuning on x86-64 Linux](#tuning-on-x86-64-linux), `-march=native` for the
+x86-64 VMs in [Tuning on x86-64 Linux](https://github.com/gsrxyz/rusteron/blob/main/docs/tuning_x86_64_linux.md), `-march=native` for the
 client's C code showed no consistent gain over `x86-64` or `x86-64-v3` on IPC; the driver's
 build and UDP were not varied.
 
@@ -239,8 +239,12 @@ std::thread::scope(|s| -> Result<(), AeronOfferError> {
 ## Documentation & Guides
 
 For detailed guides and code snippets on Aeron features in Rust, see:
-- [Multi-Destination Subscription (MDC / MDS) Guide](./docs/mdc_mds_guide.md)
-- [Media Driver Configuration & Back-pressure Guide](./docs/media_driver_configuration_and_backpressure_guide.md)
+- [Multi-Destination Subscription (MDC / MDS) Guide](https://github.com/gsrxyz/rusteron/blob/main/docs/mdc_mds_guide.md)
+- [Media Driver Configuration & Back-pressure Guide](https://github.com/gsrxyz/rusteron/blob/main/docs/media_driver_configuration_and_backpressure_guide.md)
+- [What's new in 0.2](https://github.com/gsrxyz/rusteron/blob/main/docs/whats_new_0.2.md)
+- [Migrating from 0.1.168 to 0.2](https://github.com/gsrxyz/rusteron/blob/main/docs/migrating_0.1.168_to_0.2.md)
+- [Tuning on x86-64 Linux](https://github.com/gsrxyz/rusteron/blob/main/docs/tuning_x86_64_linux.md)
+- [Benchmarks](https://github.com/gsrxyz/rusteron/blob/main/BENCHMARKS.md)
 
 ---
 
@@ -365,186 +369,23 @@ for _ in 0..reconnect_attempts {
 
 ## What's new in 0.2
 
-0.2 is a breaking release (deeper write-up in the [rusteron-client README](./rusteron-client/README.md#general-patterns)):
-
-- **Deferred close.** `aeron.close()` no longer frees child resources immediately (the 0.1.x behaviour was a use-after-free). Close is deferred until the last reference drops; drop order is arbitrary. `unsafe close_now()` forces immediate teardown.
-- **Reference-counted handlers.** `Handler::leak()`/`release()` are gone; `Handler::new()` is `Arc`-backed and freed when the last clone drops. Retained-callback setters take the value (closure or trait impl) and return the `Handler`. `Handlers::NONE` covers "no callback".
-- **Typed errors.** `offer`/`try_claim` return `Result<i64, AeronOfferError>` with `is_retryable()`. `AeronCError` construction is allocation-free (never reads `aeron_errmsg()`); `capture_errmsg()` opts into attaching the message. Archive control ops return `Result<_, AeronArchiveError>` (`From` keeps `?` working).
-- **Hot path.** `offer_parts(&[&header, &payload])` publishes several buffers as one message with no intermediate Vec; C-string args follow the `c""`/`cformat!`/reuse pattern above.
-- **After 0.2.13, callback panics no longer abort.** Poll handler panics unwind to the caller of `poll`; other callbacks catch the panic and raise it once C returns, or log it if C fires them later (see [Panics in callbacks](#panics-in-callbacks)). The fragment, controlled and block handler typedefs and the 9 subscription, image and replay-merge poll functions are `extern "C-unwind"`; a raw handler passed to them must be declared `unsafe extern "C-unwind" fn` (the compiler rejects `extern "C"`). Setters that store another wrapper, such as `AeronArchiveContext::set_aeron()`, now keep it alive.
-- **After 0.2.10, handles are `Send` only under `multi-threaded`.** Up to 0.2.10, publication, subscription, counter and counters-reader handles were `Send` without it, which was unsound: each shares its client's `Rc` reference count. Code that moves one to another thread now gives that thread its own client (`Aeron::connect_dir`) or enables `multi-threaded`.
-- **Convenience.** `Aeron::connect_dir`, `AeronDriver::launch_embedded_guard` (RAII), `ChannelUri::add_session_id`, `AeronUriStringBuilder::ipc()/udp()`, retained-image accessors, direct constant getters, and ported samples (basic_publisher/subscriber, ping/pong, file transfer, MDS, request/response).
+0.2 is a breaking release: deferred close, reference-counted handlers, typed errors and more. See [What's new in 0.2](https://github.com/gsrxyz/rusteron/blob/main/docs/whats_new_0.2.md).
 
 ## Migrating from 0.1.168 to 0.2
 
-Old → new for every renamed/changed API
-
-| 0.1.168 | 0.2 | Notes |
-|---|---|---|
-| `Handler::leak(h)` + manual `handler.release()` | `Handler::new(h)` | Freed automatically when the last clone drops; registering resources keep clones. |
-| `ctx.set_error_handler(Some(&handler))` (borrowed) | `ctx.set_error_handler(Some(handler_or_closure))` | Retained setters take the value; closures work directly; returns the `Handler`. |
-| `aeron.close()` — freed children immediately | deferred close | Frees when the last reference drops; `unsafe close_now()` forces immediate. |
-| `Handler` was `Sync` | `Send` only | The conductor thread invokes callbacks; sharing `&Handler` across threads raced. |
-| `AeronPublication` / `AeronSubscription` / … were `Send` and `Sync` | Neither by default; `Send` only under `multi-threaded`, and `Sync` only there and only for types Aeron C documents as thread-safe | Handles use `Rc` (single-thread ownership), and a handle shares its client's refcount, so moving one to another thread raced it. Give each thread its own client, or enable the `multi-threaded` feature (`Rc` → `Arc`): the handles become `Send`, and `AeronPublication`/`AeronCounter`/`Aeron` also `Sync` (share `&Handle` across threads for `offer` / `try_claim` / `position` / `is_connected`). `AeronSubscription` and `AeronExclusivePublication` are documented by Aeron as not safe to share and stay `Send`-only (never `Sync`). |
-| `publication.offer(buf, supplier)` → raw `i64` | `publication.offer_raw(buf, supplier)` | Same branch-free sentinel return, renamed to make "raw" explicit. |
-| `publication.offer_result(buf, supplier)` → `Result<_, AeronCError>` | `publication.offer_with_reserved_value(buf, supplier)` → `Result<_, AeronOfferError>` | Typed offer errors with `is_retryable()`. |
-| `publication.offer_result_simple(buf)` | `publication.offer(buf)` | The common no-supplier case is now the flagship name. |
-| `try_claim_result(len, claim)` / `try_claim_owned` → `AeronCError` | `try_claim(len, claim)` / `try_claim_owned` → `AeronOfferError` | Same RAII `AeronClaim`; typed error. |
-| `subscription.poll_once(f, limit)` | `subscription.poll_fn(f, limit)` | Renamed (`_once` read as "one fragment"); same on `AeronImage` / `AeronArchiveReplayMerge`. |
-| `subscription.for_each_fragment(limit, f)` | `subscription.poll_fn(f, limit)` | Removed (alias with the arguments in the opposite order). |
-| `sub.poll(assembler.process(&mut ctx, f), limit)` | `assembler.poll(&sub, &mut ctx, f, limit)` | `process()` leaked a raw ctx pointer past the borrow (UAF hazard); the new form scopes it. |
-| `Handlers::no_available_image_handler()`, `no_unavailable_image_handler()`, … | `Handlers::NONE` | One constant, any callback parameter, full inference. Old helpers removed. |
-| `pub.add_destination(&aeron, dest, timeout)` (`&mut self`) | `pub.add_destination(dest, timeout)` (`&self`) | Owning `Aeron` comes from the handle's dependency graph. Same for subscriptions / exclusive publications. |
-| `AeronCnc::new(dir)` | `AeronCnc::open(&CStr)` or `AeronCnc::read(&CStr, \|cnc\| { … })` | `new_on_heap`/`read_on_partial_stack` renamed; now accept `&CStr` (not `&str`/`&CString`). `read` = scoped (zero-alloc, preferred for one-shot), `open` = owned handle (for repeated polling). |
-| `&"aeron:ipc".into_c_string()` (allocates at runtime) | `c"aeron:ipc"` | See "C strings without hidden allocations" above; `cformat!` for dynamic URIs. |
-| `wrapper.get_inner_mut()` / `ManagedCResource::get_mut()` (safe) | `unsafe …()` | `&mut` from `&self`; the caller must now promise exclusive access. The only internal caller (`clone_struct`) is wrapped in `unsafe` already. |
-| `AeronUriStringBuilder::put_string(&CStr, &str)` / `put_strings(&str, &str)` | `AeronUriStringBuilder::put_str(&CStr, &str)` | Single name, single key type (`&CStr` — pair with `c"media"` or `CStr::from_bytes_until_nul`); `put_strings` removed (no external callers). |
-| `archive.start_replay(...)`, `start_recording(...)`, … → `Result<_, AeronCError>` | `Result<_, AeronArchiveError>` | Control ops on `AeronArchive` return the typed error (parseable code + message). Constructors, async-connect, and context setters still return `AeronCError`; `From<AeronArchiveError> for AeronCError` keeps `?` working across the boundary. |
-| `async_add_exclusive_publication.poll(...).get_registration_id()` on the deprecated `exclusive_exclusive` alias | only `aeron_async_add_exclusive_publication_get_registration_id` is exposed | The deprecated `aeron_async_add_exclusive_exclusive_publication_get_registration_id` C alias is dropped (it collided with the canonical name); use the canonical `get_registration_id()`. |
-| `DarwinPthread*`, `OpaquePthread*` wrapper structs in the generated API | removed | Bindgen pthread internals are no longer emitted as wrapper types; socket types the driver wrappers reference (`sockaddr_storage`, `iovec`, …) are retained. |
-| `recording_descriptor_poller().reset(...)` / `recording_subscription_descriptor_poller().reset(...)` → `()` | `→ Result<(), AeronCError>` | C keeps a pointer to the consumer, so the poller must keep it alive. Pollers returned by `AeronArchive` are borrowed and cannot, so `reset` returns an error before C is changed. Use `list_recordings` / `list_recording_subscriptions` instead. |
-
-Behavioural notes:
-- Handler panics: see [Panics in callbacks](#panics-in-callbacks). Poll handlers unwind
-  with redelivery, other callbacks are caught and raised, or logged when C fires them later.
-- `AeronCError` construction never reads or copies `aeron_errmsg()` — retry loops
-  (e.g. polling that keeps returning `-1`) stay allocation-free. `Display` /
-  `get_last_err_message()` read the live buffer; call `err.capture_errmsg()` at the
-  error site to pin the text to the error when you store it or log it later.
-
-For recording, replay, and **persistent subscriptions** (replay history, then seamlessly join a
-live stream), see [`rusteron-archive`](./rusteron-archive/README.md#persistent-subscriptions).
+Old → new for every renamed/changed API: [Migrating from 0.1.168 to 0.2](https://github.com/gsrxyz/rusteron/blob/main/docs/migrating_0.1.168_to_0.2.md).
 
 ---
 
 ## Tuning on x86-64 Linux
 
-Measured on 2026-10-09 between two Azure `Standard_D8s_v6` VMs (Intel Xeon Platinum 8573C) in one proximity placement group, on Debian 13 with Linux 7.2.6: UDP round trips and throughput between the two hosts, and IPC on each host, with 32-byte messages. Each figure is a median of 5 interleaved runs. Other NICs and clouds will differ. Tables, method and open issues are in [BENCHMARKS.md](./BENCHMARKS.md#intel-d8s_v6-pair-on-azure-2026-10-09).
-
-These were used in every run, and earlier runs on smaller VMs showed each to help:
-- `AERON_TERM_BUFFER_SPARSE_FILE=false` (driver) and `AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true` (clients). Without them a new publication page-faults its way through its log.
-- `AERON_DIR` on 2 MiB `hugetlbfs` with `AERON_FILE_PAGE_SIZE=2097152`.
-- `noop` idle for the driver's sender and receiver.
-- Every busy-spinning thread pinned to its own core, and everything else (interrupts, the driver's conductor, the clients' other threads) on a housekeeping CPU.
-
-| Setting | Measured effect | Cost |
-|---|---|---|
-| Socket buffers and receiver window: `AERON_SOCKET_SO_SNDBUF`, `AERON_SOCKET_SO_RCVBUF` and `AERON_RCV_INITIAL_WINDOW_LENGTH` at 2 MiB, with `net.core.rmem_max`/`wmem_max` raised to allow them | UDP throughput between the hosts 1.9 → 13 M msgs/s. No effect on round-trip latency with one message in flight. | Memory per socket. |
-| MTU 9000 inside the VNet and `AERON_MTU_LENGTH=8192` | UDP throughput 13 → 28.5 M msgs/s. | Azure allows it only inside a VNet and directly peered VNets; keep the default route at 1500 so traffic leaving the VNet still fits. |
-| CPU isolation: `isolcpus=nohz,domain,managed_irq,<hot CPUs> nohz_full=<same> rcu_nocbs=<same> irqaffinity=<housekeeping>` | IPC p99.99 2.5 → 0.8–1.0 µs, and most runs' max 20–67 → 4–7 µs. UDP: no change on its own. | Isolated CPUs take no unpinned work, which then all crowds onto the housekeeping CPUs, so every busy thread must be pinned. |
-| Socket busy reads, `net.core.busy_read=50`, with `napi_defer_hard_irqs=2` and `gro_flush_timeout=200000` on the NIC's VF, on isolated CPUs | UDP round trip p50 38.6 → 31 µs, p99.99 157 → 44–50 µs. `net.core.busy_poll` does nothing for Aeron's receiver, which calls `recvmmsg` directly. | The receiver's core polls the NIC queue itself. |
-| The NIC's queue IRQs on the receiver's core, on isolated CPUs | UDP p99.99 157 → 49–57 µs; with the tuned kernel below, max 74 µs (62–84). | Re-pin them whenever Azure re-adds the VF (host servicing), which spreads them over all CPUs again. |
-| The client's other threads (its conductor) off the busy-spinning CPUs | IPC p99.99 3.1–3.6 → 0.7–1.0 µs on isolated CPUs. | A CPU for them, or the conductor agent invoker. |
-| A tuned kernel on top of isolation: `nosmt idle=poll rcu_nocb_poll nowatchdog nmi_watchdog=0 nosoftlockup skew_tick=1 transparent_hugepage=never audit=0`, all IRQs and workqueues on the housekeeping CPU, background services stopped | UDP p50 38.6 → 34.9 µs. IPC unchanged. | SMT off halves the CPUs; `idle=poll` keeps every idle CPU busy. |
-| `mitigations=off` | UDP p50 34.9 → 33.9 µs and p99.99 156 → 121 µs. IPC unchanged. | Turns off the kernel's protection against CPU side-channel attacks. |
-| Driver threading | Dedicated (pinned `noop` sender and receiver), SHARED_NETWORK and SHARED were within about 2 µs of each other at UDP p50. A SHARED driver costs IPC: p50 0.31 → 0.36–0.42 µs and half the throughput. | Dedicated spins two cores. |
-| Across regions, socket buffers and initial window sized to the round trip: 16 MiB for 53 ms between West US 3 and North Central US, over 64 MiB terms, with `net.core.rmem_max`/`wmem_max` raised to match and kept in `/etc/sysctl.d` | Throughput 18 → 119 MB/s on a clean link. At 0.1% loss both carried 10–13 MB/s. | Memory per socket. If `rmem_max` resets (a reboot undoes `sysctl -w`), the driver refuses to start, as the window exceeds the receive buffer. |
-| In Kubernetes: kubelet's static CPU manager and Guaranteed pods requesting whole CPUs | Each container gets its CPUs to itself, with no CFS quota. Under the default policy, containers limited to exactly their spinning threads' CPUs were throttled (23–55% of 100 ms periods for a 1-CPU driver); one CPU of headroom or no CPU limit avoided it. | See [BENCHMARKS.md](./BENCHMARKS.md#recommended-settings-for-kubernetes) for the kubelet and pod settings. |
-
-Where these settings are recommended:
-- **Aeron's settings:**
-  - Aeron's [Best Practices Guide](https://github.com/aeron-io/aeron/wiki/Best-Practices-Guide) gives:
-    - socket receive buffers of 2–4 MB and a receiver window of 2 MB or more for throughput;
-    - DEDICATED threading when there are cores to spare, else SHARED_NETWORK or SHARED;
-    - the low-latency driver's busy-spin conductor with `noop` sender and receiver.
-  - Its [Configuration Options](https://github.com/aeron-io/aeron/wiki/Configuration-Options) explain sparse term files ("can cause latency pauses"), pre-touch ("to avoid soft page faults"), the file page size for huge pages, and the C driver's CPU affinity and cpuset options.
-- **CPU isolation, thread pinning and IRQ affinity:** Erik Rigtorp's [Low Latency Tuning Guide](https://rigtorp.se/low-latency-guide/) covers these, along with SMT off (`nosmt`), transparent huge pages off with explicit huge pages, and `mitigations=off`.
-- **The tuned kernel command line:** SUSE's [kernel arguments for low latency and high performance](https://documentation.suse.com/suse-edge/3.1/html/edge/atip-features.html) include `isolcpus=domain,nohz,managed_irq`, `nohz_full`, `rcu_nocbs`, `rcu_nocb_poll`, `irqaffinity`, `idle=poll`, `skew_tick=1`, `nosoftlockup`, `nowatchdog` and `nmi_watchdog=0`. The [Linux kernel parameters](https://docs.kernel.org/admin-guide/kernel-parameters.html) document every one.
-- **Busy reads:** `net.core.busy_read` and the socket buffer limits are in the [kernel's net sysctls](https://docs.kernel.org/admin-guide/sysctl/net.html). The kernel's [NAPI documentation](https://docs.kernel.org/networking/napi.html) recommends setting `napi_defer_hard_irqs` and `gro_flush_timeout` together.
-- **Jumbo frames on Azure:** Microsoft's [Configure MTU for virtual machines in Azure](https://learn.microsoft.com/en-us/azure/virtual-network/how-to-virtual-machine-mtu) gives MTU 9000 on the MANA NIC, but only within a VNet and directly peered VNets in the same region. Gateways, global peering and the internet stay at 1500.
-- **Kubernetes:** [Control CPU Management Policies on the Node](https://kubernetes.io/docs/tasks/administer-cluster/cpu-management-policies/) and [Manage HugePages](https://kubernetes.io/docs/tasks/manage-hugepages/scheduling-hugepages/).
-- **On AWS (not measured here):**
-  - AWS's [Improve network latency for Linux based EC2 instances](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ena-improve-network-latency-linux.html) recommends:
-    - a cluster placement group;
-    - `net.core.busy_read=50`, as here. Its `net.core.busy_poll=50` does nothing for Aeron, whose receiver calls `recvmmsg` directly;
-    - limiting deeper C-states;
-    - turning off the ENA NIC's interrupt moderation: `sudo ethtool -C <interface> adaptive-rx off rx-usecs 0 tx-usecs 0`.
-  - [Processor state control](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/processor_state_control.html) lists the instance types whose guests may limit C-states, and the fewer that may also set P-states. Support varies by type.
-  - The [Amazon Linux 2 guide](https://docs.aws.amazon.com/linux/al2/ug/processor_state_control.html) keeps idle cores in C1 with the kernel options `intel_idle.max_cstate=1 processor.max_cstate=1`. For the steadiest frequency it turns off Turbo Boost with `echo 1 | sudo tee /sys/devices/system/cpu/intel_pstate/no_turbo`.
-  - `idle=poll`, as in the tuned kernel above, goes further: idle CPUs never enter a C-state at all. Use one or the other.
-  - On these Azure VMs the C-state options do nothing: the guest has no cpuidle driver, so there are no C-states to limit. Frequency control was not checked.
-
-Recommended elsewhere, and not yet measured here (the lab's `tune8x` state and `ded-threads-msgs2` variant test the kernel and send-batch items):
-- **Aeron's low-latency C driver script:**
-  - [`low-latency-c-media-driver`](https://github.com/aeron-io/aeron/blob/master/aeron-samples/scripts/low-latency-c-media-driver) also sets `AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND=2` (the default is 4).
-  - It also sets `AERON_CONDUCTOR_IDLE_STRATEGY=spin`, which spins a whole core.
-- **Messages within the MTU:** Aeron's [Java Programming Guide](https://github.com/aeron-io/aeron/wiki/Java-Programming-Guide) says "For the lowest latency, keep messages within the MTU size."
-- **Stalls and loss, watched:**
-  - Lower `AERON_DRIVER_CONDUCTOR_CYCLE_THRESHOLD`, `AERON_DRIVER_SENDER_CYCLE_THRESHOLD` and `AERON_DRIVER_RECEIVER_CYCLE_THRESHOLD`. The default is 100 ms; Aeron's benchmark driver uses 1 ms.
-  - Then watch AeronStat's "work cycle exceeded threshold count" counters, and the NAK counters and `loss-report.dat` ([Monitoring and Debugging](https://github.com/aeron-io/aeron/wiki/Monitoring-and-Debugging)).
-  - On the host, watch `nstat -az UdpRcvbufErrors UdpInErrors`, the drops in `/proc/net/softnet_stat` and `ethtool -S` ([Red Hat's network tuning](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/monitoring_and_managing_system_status_and_performance/tuning-the-network-performance_monitoring-and-managing-system-status-and-performance)).
-- **RCU, timers and kernel threads:**
-  - tuned's [`network-latency` profile](https://github.com/redhat-performance/tuned/blob/master/profiles/network-latency/tuned.conf) adds `rcupdate.rcu_normal_after_boot=1`, `rcutree.nohz_full_patience_delay=1000` and `kernel.timer_migration=0`.
-  - Its [`cpu-partitioning` profile](https://github.com/redhat-performance/tuned/blob/master/profiles/cpu-partitioning/tuned.conf) also moves the writeback workqueue (`/sys/bus/workqueue/devices/writeback/cpumask`) to the housekeeping CPUs.
-  - The kernel's [NO_HZ documentation](https://docs.kernel.org/timers/no_hz.html) leaves pinning RCU's `rcuo` kthreads to userspace.
-  - The kernel's [CPU isolation guide](https://docs.kernel.org/admin-guide/cpu-isolation.html) prefers cpuset isolated partitions, which can be changed at run time, to `isolcpus`.
-- **Connection tracking:** if any firewall rule loads conntrack, a `notrack` rule at raw priority keeps Aeron's packets out of it ([nftables wiki](https://wiki.nftables.org/wiki-nftables/index.php/Setting_packet_connection_tracking_metainformation)).
-- **AWS's ENA driver:**
-  - Its [best practices guide](https://github.com/amzn/amzn-drivers/blob/master/kernel/linux/ena/ENA_Linux_Best_Practices.rst) suggests `busy_read` and `busy_poll` of 70.
-  - It suggests keeping irqbalance but banning the hot CPUs (`IRQBALANCE_BANNED_CPUS`), and running the application on the vCPU that takes its queue's IRQ.
-  - [ENA Express](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ena-express.html) can add "tens of microseconds" to median latency, so leave it off for latency.
-- **Azure placement:** after host maintenance, check `az ppg show --include-colocation-status` ([co-location](https://learn.microsoft.com/en-us/azure/virtual-machines/co-location)). A VM moved out of alignment needs a full deallocate and start.
-
-Packet loss costs far more than its share:
-- 0.1% UDP loss cut same-zone throughput by a third, and 1% by 91%. Every lost packet was still retransmitted.
-- In request/response traffic, a lost message waits for the sender's next heartbeat, 100 ms in the C driver.
-- Find and fix the loss before tuning anything else ([details](./BENCHMARKS.md#packet-loss-and-distance-west-us-3-and-north-central-us-2026-10-10)).
-
-```bash
-# C media driver (a Java driver reads -D system properties instead)
-export AERON_TERM_BUFFER_SPARSE_FILE=false
-export AERON_SENDER_IDLE_STRATEGY=noop AERON_RECEIVER_IDLE_STRATEGY=noop
-export AERON_CONDUCTOR_CPU_AFFINITY=0 AERON_SENDER_CPU_AFFINITY=4 AERON_RECEIVER_CPU_AFFINITY=6
-export AERON_SOCKET_SO_SNDBUF=2m AERON_SOCKET_SO_RCVBUF=2m AERON_RCV_INITIAL_WINDOW_LENGTH=2m
-export AERON_FILE_PAGE_SIZE=2097152 AERON_DIR=/mnt/huge/aeron
-# every client
-export AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY=true
-# the host
-sudo sysctl -w net.core.rmem_max=16777216 net.core.wmem_max=16777216 net.core.busy_read=50
-# the NIC's VF (its netdev has eth0 as master), as measured with busy_read
-vf=
-for i in /sys/class/net/*; do [ "$(basename "$(readlink "$i/master")")" = eth0 ] && vf=$(basename "$i"); done
-if [ -n "$vf" ]; then
-  echo 2 | sudo tee /sys/class/net/$vf/napi_defer_hard_irqs
-  echo 200000 | sudo tee /sys/class/net/$vf/gro_flush_timeout
-else
-  echo "no VF has eth0 as master: is accelerated networking on?" >&2
-fi
-sudo sysctl -w vm.nr_hugepages=1536
-sudo mkdir -p /mnt/huge && sudo mount -t hugetlbfs -o pagesize=2M,size=2G,uid="$(id -u)" none /mnt/huge
-```
-
-### Archive disks
-
-Measured on 2026-10-10 with a Java Archive on two Azure `Standard_D8ds_v6`, recording 1 KiB messages from up to 16 streams ([details](./BENCHMARKS.md#java-archive-on-disk-under-load-two-d8ds_v6-2026-10-10)).
-
-- **Size the disk for sustained throughput, not IOPS.**
-  - At file sync level 0 (the default) the archive writes into the page cache. RAM takes the bursts, so the disk only needs the average write rate plus replay reads.
-  - Cloud disks share one budget between reads and writes.
-  - Recordings are sequential, so the 3,000 IOPS a disk includes is plenty.
-- **A durable network disk is enough.** On Azure that is Premium SSD v2: 125 MB/s included, more bought separately. AWS gp3 is priced the same way but wasn't measured here.
-  - The VM caps its disks as well: 424 MB/s in total on a D8ds_v6.
-  - New Premium SSD v2 disks, freshly formatted with a full-device discard (plain `mkfs.xfs`), ran well below their provisioned rate for their first 25 minutes or more. Test a fresh disk before relying on it.
-- **Let the page cache hold larger bursts:** `sudo sysctl -w vm.dirty_bytes=17179869184 vm.dirty_background_bytes=536870912`. That allows 16 GiB of unwritten data, half of the 32 GiB VM, so scale it to your RAM.
-  - With these, a 125 MB/s disk took 30 s bursts of 400 MB/s at full rate; with Linux's defaults it throttled after 15 s.
-  - Data still in memory is lost if the host fails, which level 0 already accepts.
-  - A full 16 GiB takes over 2 minutes to write out at 125 MB/s, at shutdown too.
-- **Leave headroom for replays.** While recording ran flat out at the disk's limit, replays from that disk slowed from about 1 GB/s to 67–246 MB/s on local NVMe.
-- **Local NVMe was the fastest and costs nothing extra:** 545 MB/s sustained, 1 GB/s of replays, and `fdatasync` in 0.03 ms against 0.8 ms on Premium SSD v2. Its data is gone when the VM stops or its host fails, though, so use it only for an archive that is replicated elsewhere.
-- **File sync level 1 or 2** makes every write wait for the disk. That cost nothing sustained on local NVMe. On Premium SSD v2 it was measured only while the new disks were still slow, at 56–220 MB/s, so its cost at full speed is unknown.
-
-Sources:
-- **Aeron's [Archive guide](https://github.com/aeron-io/aeron/wiki/Aeron-Archive)** defines the file sync levels: 0 writes to the page cache, 1 forces data to disk, 2 forces data and metadata. It also notes that the archive's "major limitation is the performance of the storage for the recordings".
-- **Disk performance models:**
-  - Microsoft's [disk types](https://learn.microsoft.com/en-us/azure/virtual-machines/disks-types#premium-ssd-v2): Premium SSD v2 includes 3,000 IOPS and 125 MB/s, with more throughput bought at 0.25 MB/s per IOPS. It is designed to deliver what was provisioned 99.9% of the time, and needs a zonal VM in most regions.
-  - AWS's [gp3 volumes](https://docs.aws.amazon.com/ebs/latest/userguide/general-purpose.html#gp3-ebs-volume-type) work the same way: 3,000 IOPS and 125 MiB/s included, up to 2,000 MiB/s.
-- **The kernel's [vm sysctls](https://docs.kernel.org/admin-guide/sysctl/vm.html)** describe `dirty_bytes` and `dirty_background_bytes`. Setting one clears its `dirty_*ratio` counterpart.
+Measured settings for latency and throughput on x86-64 Linux (socket buffers, MTU, CPU isolation, busy reads, huge pages, archive disks): [Tuning on x86-64 Linux](https://github.com/gsrxyz/rusteron/blob/main/docs/tuning_x86_64_linux.md).
 
 ---
 
 ## Benchmarks
 
-For latency and throughput benchmarks, refer to [BENCHMARKS.md](./BENCHMARKS.md).
+For latency and throughput benchmarks, refer to [BENCHMARKS.md](https://github.com/gsrxyz/rusteron/blob/main/BENCHMARKS.md).
 
 ---
 

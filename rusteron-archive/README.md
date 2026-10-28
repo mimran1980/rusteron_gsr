@@ -106,9 +106,9 @@ subscription.poll_fn(|buf: &[u8], header: AeronHeader| println!("{} bytes", buf.
 `Handlers::NONE` fits any optional callback slot.
 
 For comprehensive details on how handler registration, callbacks, error checking, and idle strategies work in the `rusteron` ecosystem (which are fully applicable here as well), please refer to the corresponding sections in the **rusteron-client** documentation:
-- [rusteron-client: Handlers and Callbacks](../rusteron-client/README.md#handlers-and-callbacks)
-- [rusteron-client: Errors & Offer Results](../rusteron-client/README.md#errors--offer-results)
-- [rusteron-client: Idle Strategies](../rusteron-client/README.md#idle-strategies)
+- [rusteron-client: Handlers and Callbacks](https://github.com/gsrxyz/rusteron/blob/main/rusteron-client/README.md#handlers-and-callbacks)
+- [rusteron-client: Errors & Offer Results](https://github.com/gsrxyz/rusteron/blob/main/rusteron-client/README.md#errors--offer-results)
+- [rusteron-client: Idle Strategies](https://github.com/gsrxyz/rusteron/blob/main/rusteron-client/README.md#idle-strategies)
 
 Archive control operations (`start_recording`, `start_replay`, `stop_recording_subscription`, …) return
 `Result<_, AeronArchiveError>` — a typed code (`AeronArchiveErrorCode`) plus the archive's
@@ -120,8 +120,12 @@ message. Constructors, async-connect, and context setters return `AeronCError`;
 ## Documentation & Guides
 
 For detailed guides and code snippets on Aeron features in Rust, see:
-- [Multi-Destination Subscription (MDC / MDS) Guide](../docs/mdc_mds_guide.md)
-- [Media Driver Configuration & Back-pressure Guide](../docs/media_driver_configuration_and_backpressure_guide.md)
+- [Multi-Destination Subscription (MDC / MDS) Guide](https://github.com/gsrxyz/rusteron/blob/main/docs/mdc_mds_guide.md)
+- [Media Driver Configuration & Back-pressure Guide](https://github.com/gsrxyz/rusteron/blob/main/docs/media_driver_configuration_and_backpressure_guide.md)
+- [What's new in 0.2](https://github.com/gsrxyz/rusteron/blob/main/docs/whats_new_0.2.md)
+- [Migrating from 0.1.168 to 0.2](https://github.com/gsrxyz/rusteron/blob/main/docs/migrating_0.1.168_to_0.2.md)
+- [Tuning on x86-64 Linux](https://github.com/gsrxyz/rusteron/blob/main/docs/tuning_x86_64_linux.md)
+- [Benchmarks](https://github.com/gsrxyz/rusteron/blob/main/BENCHMARKS.md)
 
 ---
 
@@ -130,8 +134,8 @@ For detailed guides and code snippets on Aeron features in Rust, see:
 1. **Aeron Lifetime** – Connect with `AeronArchiveAsyncConnect::new_with_aeron(&archive_context, &aeron)`: the archive then keeps the client alive, and the two close in any order. `set_aeron()` also keeps the client alive, so `AeronArchiveAsyncConnect::new()` and `aeron_archive_connect()` are safe after the caller drops its `Aeron`. A client obtained with `get_aeron()` is borrowed: publications and subscriptions made from it must drop before the context.
 2. **Persistent Subscription Lifetime** – A persistent subscription keeps the `Aeron` client and archive context given to its builder open until it closes. Building it also points the archive context at the subscription's client, so build with `PersistentSubscriptionBuilder::new_with_aeron(&archive_context, &aeron)`, which sets one client on both. Without a client the subscription makes its own and closes it, and the archive context must not be used again afterwards.
 3. **Deferred Close** – `archive.close()` is deferred while a clone is alive and does not close the `Aeron` client. `unsafe close_now()` frees it immediately, so any surviving handle then dangles.
-4. **Automatic Handler Cleanup** – Handlers are reference-counted; registered callbacks live as long as the resource that registered them and are freed automatically. A panic in a `ReplayMerge` poll handler unwinds to the caller and the fragments are delivered again on the next poll. A panic in a persistent subscription handler or listener is caught and raised by its `poll`. A panic in an archive callback fired later (recording signals, credentials, errors) is logged and the client continues. See [Panics in callbacks](../README.md#panics-in-callbacks).
-5. **Thread Safety** – Handles use `Rc` and stay on the thread that created them, unless the `multi-threaded` feature is enabled (see the [root README](../README.md#multi-threaded-send-and-sync-handles)).
+4. **Automatic Handler Cleanup** – Handlers are reference-counted; registered callbacks live as long as the resource that registered them and are freed automatically. A panic in a `ReplayMerge` poll handler unwinds to the caller and the fragments are delivered again on the next poll. A panic in a persistent subscription handler or listener is caught and raised by its `poll`. A panic in an archive callback fired later (recording signals, credentials, errors) is logged and the client continues. See [Panics in callbacks](https://github.com/gsrxyz/rusteron/blob/main/README.md#panics-in-callbacks).
+5. **Thread Safety** – Handles use `Rc` and stay on the thread that created them, unless the `multi-threaded` feature is enabled (see the [root README](https://github.com/gsrxyz/rusteron/blob/main/README.md#multi-threaded-send-and-sync-handles)).
 
 ---
 
@@ -145,7 +149,7 @@ For detailed guides and code snippets on Aeron features in Rust, see:
 6. **Replay Setup**: Configure replay target/channel.
 7. **Subscribe and Receive** replayed messages.
 
-See [`examples/record_and_replay.rs`](./examples/record_and_replay.rs) for this workflow end to end (`cargo run --release --features "static precompile" --example record_and_replay`).
+See [`examples/record_and_replay.rs`](https://github.com/gsrxyz/rusteron/blob/main/rusteron-archive/examples/record_and_replay.rs) for this workflow end to end (`cargo run --release --features "static precompile" --example record_and_replay`).
 
 ---
 
@@ -266,13 +270,13 @@ loop {
 ```
 
 For a fully runnable version, see the example and integration tests:
-- [`examples/record_and_replay.rs`](./examples/record_and_replay.rs) — the Typical Workflow end to end: record a stream, find the recording and replay it
-- [`examples/persistent_subscription.rs`](./examples/persistent_subscription.rs) — standalone demo (run with `cargo run --release --features "static precompile" --example persistent_subscription`)
-- [`examples/archive_error_handling.rs`](./examples/archive_error_handling.rs) — error handlers on both contexts, recording signals, typed control-session errors (blocking calls return `AeronArchiveError` with `e.code`; `archive.poll_for_error()` drains unsolicited ones, always with `Generic` code), and reconnecting after the archive goes down
-- [`examples/persistent_subscription_failover.rs`](./examples/persistent_subscription_failover.rs) — failure modes: the live stream dies (`on_live_left`), and the subscription rejoins it (`on_live_joined`) once the publisher resumes the same session where it stopped
-- [`examples/replay_merge.rs`](./examples/replay_merge.rs) — late-joiner catch-up: replay recorded history, then merge seamlessly onto the live MDC stream (`AeronArchiveReplayMerge`)
-- [`examples/recording_throughput.rs`](./examples/recording_throughput.rs) — recording throughput measurement (publish rate vs archiver catch-up) and `list_recordings` descriptor enumeration
-- [`examples/recording_replication.rs`](./examples/recording_replication.rs) — archive-to-archive replication (`archive.replicate`): a destination archive pulls a finished recording from a source archive and the copy is verified (port of `RecordingReplicator`)
+- [`examples/record_and_replay.rs`](https://github.com/gsrxyz/rusteron/blob/main/rusteron-archive/examples/record_and_replay.rs) — the Typical Workflow end to end: record a stream, find the recording and replay it
+- [`examples/persistent_subscription.rs`](https://github.com/gsrxyz/rusteron/blob/main/rusteron-archive/examples/persistent_subscription.rs) — standalone demo (run with `cargo run --release --features "static precompile" --example persistent_subscription`)
+- [`examples/archive_error_handling.rs`](https://github.com/gsrxyz/rusteron/blob/main/rusteron-archive/examples/archive_error_handling.rs) — error handlers on both contexts, recording signals, typed control-session errors (blocking calls return `AeronArchiveError` with `e.code`; `archive.poll_for_error()` drains unsolicited ones, always with `Generic` code), and reconnecting after the archive goes down
+- [`examples/persistent_subscription_failover.rs`](https://github.com/gsrxyz/rusteron/blob/main/rusteron-archive/examples/persistent_subscription_failover.rs) — failure modes: the live stream dies (`on_live_left`), and the subscription rejoins it (`on_live_joined`) once the publisher resumes the same session where it stopped
+- [`examples/replay_merge.rs`](https://github.com/gsrxyz/rusteron/blob/main/rusteron-archive/examples/replay_merge.rs) — late-joiner catch-up: replay recorded history, then merge seamlessly onto the live MDC stream (`AeronArchiveReplayMerge`)
+- [`examples/recording_throughput.rs`](https://github.com/gsrxyz/rusteron/blob/main/rusteron-archive/examples/recording_throughput.rs) — recording throughput measurement (publish rate vs archiver catch-up) and `list_recordings` descriptor enumeration
+- [`examples/recording_replication.rs`](https://github.com/gsrxyz/rusteron/blob/main/rusteron-archive/examples/recording_replication.rs) — archive-to-archive replication (`archive.replicate`): a destination archive pulls a finished recording from a source archive and the copy is verified (port of `RecordingReplicator`)
 - `persistent_subscription_tests::test_persistent_subscription_listener_live_joined` (callback wiring)
 - `persistent_subscription_integration::test_end_to_end_persistent_subscription` (record → replay → live)
 
@@ -280,7 +284,7 @@ For a fully runnable version, see the example and integration tests:
 
 ## Benchmarks
 
-For latency and throughput benchmarks, refer to [BENCHMARKS.md](./BENCHMARKS.md).
+For latency and throughput benchmarks, refer to [BENCHMARKS.md](https://github.com/gsrxyz/rusteron/blob/main/BENCHMARKS.md).
 
 ---
 
