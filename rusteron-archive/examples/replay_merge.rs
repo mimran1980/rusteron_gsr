@@ -155,7 +155,7 @@ fn publish_live(
     (counter_id, recording_id): (i32, i64),
     published: &mut u64,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    if counters.get_counter_value(counter_id) < publication.position() {
+    if counters.get_counter_value(counter_id)? < publication.position() {
         // a stopped recording never catches up, and its counter id may be reused
         if !RecordingPos::is_active(counters, counter_id, recording_id)? {
             return Err(format!("recording {recording_id} stopped").into());

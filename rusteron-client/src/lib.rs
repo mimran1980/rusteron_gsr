@@ -3571,6 +3571,109 @@ mod tests {
         let _ = driver_handle.join();
     }
 
+    /// Issue #70: `get_counter_value(-1)` read through a null pointer and aborted. Ids that are not
+    /// counters must give an error, and a real counter must still read
+    #[test]
+    #[serial]
+    fn get_counter_value_rejects_ids_that_are_not_counters() {
+        let (aeron, driver, error_handler) = setup_aeron_for_uaf_test();
+        let counters = aeron.counters_reader();
+        let max = counters.max_counter_id();
+
+        for bad in [-1, i32::MIN, max + 1, i32::MAX] {
+            assert!(
+                counters.get_counter_value(bad).is_err(),
+                "counter id {bad} must be an error"
+            );
+        }
+        // the driver's first system counter (bytes sent) always exists
+        assert!(counters.get_counter_value(0).unwrap() >= 0);
+        assert!(counters.get_counter_value(max).is_ok(), "the last counter id is valid");
+
+        drop(aeron);
+        drop(driver);
+        drop(error_handler);
+    }
+
+    /// Labels and keys of ids that are not counters are errors too
+    #[test]
+    #[serial]
+    fn counter_label_and_key_reject_ids_that_are_not_counters() {
+        let (aeron, driver, error_handler) = setup_aeron_for_uaf_test();
+        let counters = aeron.counters_reader();
+        let max = counters.max_counter_id();
+
+        for bad in [-1, max + 1] {
+            assert!(counters.get_counter_label(bad, 64).is_err(), "label of {bad}");
+            assert!(counters.get_counter_key(bad).is_err(), "key of {bad}");
+        }
+        assert!(!counters.get_counter_label(0, 64).unwrap().is_empty());
+
+        drop(aeron);
+        drop(driver);
+        drop(error_handler);
+    }
+
+    /// A claim with no buffer (zeroed) gives an empty slice and no header, not a null pointer
+    #[test]
+    fn a_buffer_claim_with_no_buffer_has_no_data_and_no_header() {
+        let mut claim = AeronBufferClaim::new_zeroed_on_heap();
+        assert!(claim.data_mut().is_empty());
+        assert!(claim.frame_header_mut().is_none());
+    }
+
+    /// A reserved value set on a claim reaches the subscriber
+    #[test]
+    #[serial]
+    fn a_claims_reserved_value_reaches_the_subscriber() {
+        let (aeron, driver, error_handler) = setup_aeron_for_uaf_test();
+        let publication = aeron
+            .add_publication(AERON_IPC_STREAM, 1952, Duration::from_secs(5))
+            .unwrap();
+        let subscription = aeron
+            .add_subscription(
+                AERON_IPC_STREAM,
+                1952,
+                Handlers::NONE,
+                Handlers::NONE,
+                Duration::from_secs(5),
+            )
+            .unwrap();
+        let start = Instant::now();
+        while !publication.is_connected() {
+            assert!(start.elapsed() < Duration::from_secs(5), "never connected");
+            sleep(Duration::from_millis(10));
+        }
+
+        let start = Instant::now();
+        loop {
+            assert!(start.elapsed() < Duration::from_secs(5), "the claim never succeeded");
+            if let Ok(mut claim) = publication.try_claim_owned(8) {
+                claim.data().copy_from_slice(&7u64.to_le_bytes());
+                claim.set_reserved_value(42);
+                claim.commit().unwrap();
+                break;
+            }
+            sleep(Duration::from_millis(1));
+        }
+
+        let mut seen = None;
+        let start = Instant::now();
+        while seen.is_none() {
+            assert!(start.elapsed() < Duration::from_secs(5), "nothing received");
+            subscription
+                .poll_fn(|_, header| seen = header.reserved_value(), 1)
+                .unwrap();
+        }
+        assert_eq!(seen, Some(42));
+
+        drop(subscription);
+        drop(publication);
+        drop(aeron);
+        drop(driver);
+        drop(error_handler);
+    }
+
     /// Typed counter navigation: publisher-limit and subscriber-position counters are
     /// found by (type id, registration id), mirroring Java's CountersReader lookups.
     #[test]
@@ -3601,15 +3704,19 @@ mod tests {
             .find_by_type_and_registration_id(AERON_COUNTER_PUBLISHER_LIMIT_TYPE_ID as i32, pub_registration_id)
             .expect("publisher limit counter");
         assert!(
-            counters.get_counter_value(limit_counter) > 0,
+            counters.get_counter_value(limit_counter).unwrap() > 0,
             "publisher limit should be positive once connected"
         );
+        // ids that are not counters are errors, not a read through a bad pointer
+        assert!(counters.get_counter_value(-1).is_err());
+        assert!(counters.get_counter_value(counters.max_counter_id() + 1).is_err());
+        assert!(counters.get_counter_value(i32::MAX).is_err());
 
         let sub_registration_id = subscription.get_constants().unwrap().registration_id();
         let position_counter = counters
             .find_by_type_and_registration_id(AERON_COUNTER_SUBSCRIPTION_POSITION_TYPE_ID as i32, sub_registration_id)
             .expect("subscriber position counter");
-        assert!(counters.get_counter_value(position_counter) >= 0);
+        assert!(counters.get_counter_value(position_counter).unwrap() >= 0);
 
         assert!(
             counters

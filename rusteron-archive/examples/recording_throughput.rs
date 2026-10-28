@@ -89,7 +89,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let recording_id = RecordingPos::get_recording_id_block(&counters, counter_id, Duration::from_secs(5))?;
     let target = publication.position();
     let catchup_start = Instant::now();
-    while counters.get_counter_value(counter_id) < target {
+    while counters.get_counter_value(counter_id)? < target {
         if catchup_start.elapsed() > Duration::from_secs(30) {
             return Err("archiver did not catch up".into());
         }

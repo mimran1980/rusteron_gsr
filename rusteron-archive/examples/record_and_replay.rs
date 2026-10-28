@@ -112,7 +112,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let recording_id = RecordingPos::get_recording_id_block(&counters, counter_id, Duration::from_secs(5))?;
     let published_position = publication.position();
     let deadline = Instant::now() + Duration::from_secs(5);
-    while counters.get_counter_value(counter_id) < published_position && Instant::now() < deadline {
+    while counters.get_counter_value(counter_id)? < published_position && Instant::now() < deadline {
         sleep(Duration::from_millis(10));
     }
 
