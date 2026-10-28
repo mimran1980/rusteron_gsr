@@ -212,7 +212,7 @@ mod tests {
         let recording_id = RecordingPos::get_recording_id_block(&counters_reader, counter_id, Duration::from_secs(5))?;
         let published_position = publication.position();
         let start = Instant::now();
-        while counters_reader.get_counter_value(counter_id) < published_position
+        while counters_reader.get_counter_value(counter_id)? < published_position
             && start.elapsed() < Duration::from_secs(10)
         {
             sleep(Duration::from_millis(10));
@@ -991,12 +991,12 @@ mod tests {
         let published_position = publication.position();
         info!("Resolved recording_id={recording_id}, position={published_position}");
         let deadline = Instant::now() + valgrind_timeout(5);
-        while counters.get_counter_value(counter_id) < published_position && Instant::now() < deadline {
+        while counters.get_counter_value(counter_id)? < published_position && Instant::now() < deadline {
             sleep(Duration::from_millis(10));
         }
         info!(
             "Recording flushed to position={}",
-            counters.get_counter_value(counter_id)
+            counters.get_counter_value(counter_id)?
         );
 
         // Truncate/purge operate on a *stopped* recording. Stop recording, close the stream,
@@ -1174,7 +1174,7 @@ mod tests {
         let recording_id = RecordingPos::get_recording_id_block(&counters, counter_id, Duration::from_secs(5))?;
         let published_position = publication.position();
         let wait = Instant::now() + Duration::from_secs(5);
-        while counters.get_counter_value(counter_id) < published_position && Instant::now() < wait {
+        while counters.get_counter_value(counter_id)? < published_position && Instant::now() < wait {
             sleep(Duration::from_millis(10));
         }
 
@@ -1269,7 +1269,7 @@ mod tests {
         let recording_id = RecordingPos::get_recording_id_block(&counters, counter_id, Duration::from_secs(5))?;
         let published_position = publication.position();
         let wait = Instant::now() + Duration::from_secs(5);
-        while counters.get_counter_value(counter_id) < published_position && Instant::now() < wait {
+        while counters.get_counter_value(counter_id)? < published_position && Instant::now() < wait {
             sleep(Duration::from_millis(10));
         }
 

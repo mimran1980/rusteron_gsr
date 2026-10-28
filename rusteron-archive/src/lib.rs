@@ -386,7 +386,7 @@ macro_rules! impl_archive_position_methods {
                 if counter_id < 0 {
                     return Err(AeronCError::from_code(counter_id));
                 }
-                let position = counters.get_counter_value(counter_id);
+                let position = counters.get_counter_value(counter_id)?;
                 if position < 0 {
                     return Err(AeronCError::from_code(position as i32));
                 }
@@ -1315,7 +1315,7 @@ mod tests {
                 // slow down publishing so can catch up
                 if message_count > 10_000 {
                     // ensure archiver is caught up
-                    while counters_reader.get_counter_value(counter_id) < publication.position() {
+                    while counters_reader.get_counter_value(counter_id).unwrap() < publication.position() {
                         assert!(
                             RecordingPos::is_active(&counters_reader, counter_id, recording_id).unwrap_or(false),
                             "the recording stopped"
@@ -1372,7 +1372,7 @@ mod tests {
         info!(
             "counter id {} position={:?}",
             counter_id,
-            counters_reader.get_counter_value(counter_id)
+            counters_reader.get_counter_value(counter_id)?
         );
 
         // let recording_id = Cell::new(-1);
@@ -2100,16 +2100,16 @@ mod tests {
             assert!(counter_id >= 0);
 
             info!("counter id {counter_id}, session id {session_id}");
-            while counters_reader.get_counter_value(counter_id) < stop_position {
+            while counters_reader.get_counter_value(counter_id)? < stop_position {
                 info!(
                     "current archive publication stop position {}",
-                    counters_reader.get_counter_value(counter_id)
+                    counters_reader.get_counter_value(counter_id)?
                 );
                 sleep(Duration::from_millis(50));
             }
             info!(
                 "found archive publication stop position {}",
-                counters_reader.get_counter_value(counter_id)
+                counters_reader.get_counter_value(counter_id)?
             );
 
             archive.stop_recording_channel_and_stream(channel, stream_id)?;
