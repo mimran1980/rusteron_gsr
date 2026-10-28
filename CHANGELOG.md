@@ -4,6 +4,10 @@ Main changes, newest first, grouped by published crate version. Release-only
 commits, build logs, and changes later reverted or superseded are omitted.
 Early history predating the available release tags is grouped separately.
 
+## Unreleased
+
+- Added `AeronArchiveRecordingDescriptorPoller::new` and `AeronArchiveRecordingSubscriptionDescriptorPoller::new`, so recordings can be listed without blocking. The archive's own pollers are borrowed and refuse `reset`.
+
 ## 0.2.15
 
 - Updated Aeron to 1.54.0, including new errors, APIs, and regenerated bindings.

@@ -536,6 +536,78 @@ impl ControlledFragmentAssemblable for AeronArchivePersistentSubscription {
 //   a panic never crosses C. A borrowed poller cannot keep it, so `reset` returns an error
 // - `poll` raises the caught panic after C returns
 
+// Owned descriptor pollers
+//
+// The archive's own pollers are borrowed, so `reset` refuses them. `new` makes a poller that we
+// own, so `reset` works. It keeps the archive alive and closes the C poller on drop.
+
+impl AeronArchiveRecordingDescriptorPoller {
+    /// A poller you own, for listing recordings without blocking. Send the request with
+    /// [`AeronArchive::archive_proxy`], call [`Self::reset`] with the same correlation id, then
+    /// call [`Self::poll`] until [`Self::is_dispatch_complete`].
+    ///
+    /// It reads the archive's control responses, so don't poll it while a blocking archive call
+    /// is running.
+    pub fn new(archive: &AeronArchive, fragment_limit: i32) -> Result<Self, AeronCError> {
+        let ctx = archive.get_archive_context().get_inner();
+        let subscription = archive.get_control_response_subscription().get_inner();
+        let control_session_id = archive.control_session_id();
+        let resource = ManagedCResource::new(
+            move |poller| unsafe {
+                aeron_archive_recording_descriptor_poller_create(
+                    poller,
+                    ctx,
+                    subscription,
+                    control_session_id,
+                    fragment_limit,
+                )
+            },
+            Some(Box::new(move |poller| unsafe {
+                aeron_archive_recording_descriptor_poller_close(*poller)
+            })),
+            false,
+        )?;
+        let poller = Self {
+            inner: CResource::OwnedOnHeap(RcOrArc::new(resource)),
+        };
+        poller.inner.add_dependency(archive.clone());
+        Ok(poller)
+    }
+}
+
+impl AeronArchiveRecordingSubscriptionDescriptorPoller {
+    /// A poller you own, for listing recording subscriptions without blocking. Used the same way
+    /// as [`AeronArchiveRecordingDescriptorPoller::new`].
+    ///
+    /// It reads the archive's control responses, so don't poll it while a blocking archive call
+    /// is running.
+    pub fn new(archive: &AeronArchive, fragment_limit: i32) -> Result<Self, AeronCError> {
+        let ctx = archive.get_archive_context().get_inner();
+        let subscription = archive.get_control_response_subscription().get_inner();
+        let control_session_id = archive.control_session_id();
+        let resource = ManagedCResource::new(
+            move |poller| unsafe {
+                aeron_archive_recording_subscription_descriptor_poller_create(
+                    poller,
+                    ctx,
+                    subscription,
+                    control_session_id,
+                    fragment_limit,
+                )
+            },
+            Some(Box::new(move |poller| unsafe {
+                aeron_archive_recording_subscription_descriptor_poller_close(*poller)
+            })),
+            false,
+        )?;
+        let poller = Self {
+            inner: CResource::OwnedOnHeap(RcOrArc::new(resource)),
+        };
+        poller.inner.add_dependency(archive.clone());
+        Ok(poller)
+    }
+}
+
 impl AeronArchiveRecordingDescriptorPoller {
     /// Sets up the poller for the next `poll`, which calls `recording_descriptor_consumer` for
     /// each descriptor received. The poller keeps the handler alive, so a borrowed poller (as
