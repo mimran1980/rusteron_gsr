@@ -7,6 +7,7 @@ Early history predating the available release tags is grouped separately.
 ## 0.2.16
 
 - Added `AeronArchiveRecordingDescriptorPoller::new` and `AeronArchiveRecordingSubscriptionDescriptorPoller::new`, so recordings can be listed without blocking. The archive's own pollers are borrowed and refuse `reset`.
+- get_counter_value(-1) returns Err
 
 ## 0.2.15
 
