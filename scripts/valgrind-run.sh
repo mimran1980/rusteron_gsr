@@ -19,6 +19,9 @@ if command -v cargo >/dev/null 2>&1; then
   export CARGO="$(command -v cargo)"
 fi
 export RUSTERON_VALGRIND=1
+for agent in CONDUCTOR SENDER RECEIVER SHAREDNETWORK SHARED; do
+  export "AERON_${agent}_IDLE_STRATEGY=yield"
+done
 unset CARGO_BUILD_TARGET || true
 unset CARGO_ENCODED_RUSTFLAGS || true
 export RUSTFLAGS="-C target-cpu=x86-64"
@@ -61,6 +64,7 @@ for BIN in $BINARIES; do
     # Output suppression stanzas for every error found — redirect to append to valgrind.supp
     valgrind \
       --tool=memcheck \
+      --fair-sched=yes \
       --track-origins=yes \
       --leak-check=full \
       --show-leak-kinds=all \
@@ -81,12 +85,16 @@ for BIN in $BINARIES; do
     # deterministically by the manual_close_required Drop warning in
     # ManagedCResource (common.rs), which fires per-resource on every platform
     # including macOS, not just under valgrind on Linux.
+    # --fair-sched=yes: valgrind runs one thread at a time and its default lock is
+    # unfair, so busy-polling driver/client threads can starve the thread they wait
+    # on, turning ms handshakes into minutes of timeouts (see panic_tests).
     # Output is streamed via tee (so hangs are visible live) and kept in a file
     # for the error scan below. timeout turns a hung test binary into a failure.
     OUT_FILE=$(mktemp)
     set +e
     timeout --kill-after=60 "${VALGRIND_BIN_TIMEOUT:-25m}" valgrind \
       --tool=memcheck \
+      --fair-sched=yes \
       --error-exitcode=1 \
       --track-origins=yes \
       --leak-check=full \
