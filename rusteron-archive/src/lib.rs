@@ -386,7 +386,7 @@ macro_rules! impl_archive_position_methods {
                 if counter_id < 0 {
                     return Err(AeronCError::from_code(counter_id));
                 }
-                let position = counters.get_counter_value(counter_id);
+                let position = counters.get_counter_value(counter_id)?;
                 if position < 0 {
                     return Err(AeronCError::from_code(position as i32));
                 }
@@ -1096,6 +1096,7 @@ mod tests {
     use std::error;
     use std::error::Error;
     use std::os::raw::c_int;
+    use std::rc::Rc;
     use std::str::FromStr;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -1314,7 +1315,7 @@ mod tests {
                 // slow down publishing so can catch up
                 if message_count > 10_000 {
                     // ensure archiver is caught up
-                    while counters_reader.get_counter_value(counter_id) < publication.position() {
+                    while counters_reader.get_counter_value(counter_id).unwrap() < publication.position() {
                         assert!(
                             RecordingPos::is_active(&counters_reader, counter_id, recording_id).unwrap_or(false),
                             "the recording stopped"
@@ -1371,7 +1372,7 @@ mod tests {
         info!(
             "counter id {} position={:?}",
             counter_id,
-            counters_reader.get_counter_value(counter_id)
+            counters_reader.get_counter_value(counter_id)?
         );
 
         // let recording_id = Cell::new(-1);
@@ -1752,6 +1753,119 @@ mod tests {
         test_result
     }
 
+    /// An owned poller lists recordings without blocking
+    #[test]
+    #[serial]
+    pub fn owned_descriptor_poller_lists_recordings_without_blocking() -> Result<(), Box<dyn error::Error>> {
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes()?;
+        let (aeron, archive_context, media_driver, pub_error_frame_handler, error_handler) = start_aeron_archive()?;
+
+        let test_result: Result<(), Box<dyn error::Error>> = (|| {
+            const STREAM_ID: i32 = 7411;
+            let archive = AeronArchiveAsyncConnect::new_with_aeron(&archive_context.clone(), &aeron)?
+                .poll_blocking(Duration::from_secs(30))?;
+            let subscription_id = archive.start_recording(AERON_IPC_STREAM, STREAM_ID, SOURCE_LOCATION_LOCAL, true)?;
+            let publication = aeron
+                .async_add_exclusive_publication(AERON_IPC_STREAM, STREAM_ID)?
+                .poll_blocking(Duration::from_secs(5))?;
+            let start = Instant::now();
+            while publication.offer(b"listed").is_err() {
+                assert!(
+                    start.elapsed() < Duration::from_secs(10),
+                    "the publication never took a message"
+                );
+                thread::yield_now();
+            }
+
+            let found = Rc::new(Cell::new(-1));
+            let seen = Rc::clone(&found);
+            let consumer = Handler::new(move |d: AeronArchiveRecordingDescriptor| {
+                if d.stream_id == STREAM_ID {
+                    seen.set(d.recording_id);
+                }
+            });
+            let poller = AeronArchiveRecordingDescriptorPoller::new(&archive, 10)?;
+            let proxy = archive.archive_proxy();
+            let start = Instant::now();
+            while found.get() == -1 {
+                assert!(
+                    start.elapsed() < Duration::from_secs(10),
+                    "the recording was never listed"
+                );
+                let correlation_id = archive.next_correlation_id();
+                poller.reset(correlation_id, i32::MAX, Some(&consumer))?;
+                assert!(proxy.list_recordings_for_uri(correlation_id, 0, i32::MAX, c"aeron:ipc", STREAM_ID));
+                while !poller.is_dispatch_complete() {
+                    assert!(start.elapsed() < Duration::from_secs(10), "the listing never completed");
+                    poller.poll()?;
+                    thread::yield_now();
+                }
+            }
+            assert!(found.get() >= 0);
+
+            // the poller keeps the archive alive, so it still works after the archive is dropped
+            drop(proxy);
+            drop(archive);
+            let _ = poller.poll()?;
+            drop(poller);
+            drop(publication);
+            let _ = subscription_id;
+            Ok(())
+        })();
+
+        drop(aeron);
+        drop(archive_context);
+        drop(media_driver);
+        drop(pub_error_frame_handler);
+        drop(error_handler);
+        test_result
+    }
+
+    /// An owned poller lists recording subscriptions without blocking
+    #[test]
+    #[serial]
+    pub fn owned_subscription_descriptor_poller_lists_without_blocking() -> Result<(), Box<dyn error::Error>> {
+        rusteron_code_gen::test_logger::init(log::LevelFilter::Info);
+        EmbeddedArchiveMediaDriverProcess::kill_all_java_processes()?;
+        let (aeron, archive_context, media_driver, pub_error_frame_handler, error_handler) = start_aeron_archive()?;
+
+        let test_result: Result<(), Box<dyn error::Error>> = (|| {
+            const STREAM_ID: i32 = 7412;
+            let archive = AeronArchiveAsyncConnect::new_with_aeron(&archive_context.clone(), &aeron)?
+                .poll_blocking(Duration::from_secs(30))?;
+            let subscription_id = archive.start_recording(AERON_IPC_STREAM, STREAM_ID, SOURCE_LOCATION_LOCAL, true)?;
+
+            let found = Rc::new(Cell::new(-1));
+            let seen = Rc::clone(&found);
+            let consumer = Handler::new(move |d: AeronArchiveRecordingSubscriptionDescriptor| {
+                if d.stream_id == STREAM_ID {
+                    seen.set(d.subscription_id());
+                }
+            });
+            let poller = AeronArchiveRecordingSubscriptionDescriptorPoller::new(&archive, 10)?;
+            let proxy = archive.archive_proxy();
+            let correlation_id = archive.next_correlation_id();
+            poller.reset(correlation_id, i32::MAX, Some(&consumer))?;
+            assert!(proxy.list_recording_subscriptions(correlation_id, 0, i32::MAX, c"aeron:ipc", STREAM_ID, true));
+            let start = Instant::now();
+            while !poller.is_dispatch_complete() {
+                assert!(start.elapsed() < Duration::from_secs(10), "the listing never completed");
+                poller.poll()?;
+                thread::yield_now();
+            }
+            assert_eq!(found.get(), subscription_id);
+            Ok(())
+        })();
+
+        drop(aeron);
+        drop(archive_context);
+        drop(media_driver);
+        drop(pub_error_frame_handler);
+        drop(error_handler);
+        test_result
+    }
+
     /// The archive's descriptor pollers are borrowed, so they cannot keep a consumer alive and
     /// `reset` must refuse before C stores a pointer the caller may free
     #[test]
@@ -1986,16 +2100,16 @@ mod tests {
             assert!(counter_id >= 0);
 
             info!("counter id {counter_id}, session id {session_id}");
-            while counters_reader.get_counter_value(counter_id) < stop_position {
+            while counters_reader.get_counter_value(counter_id)? < stop_position {
                 info!(
                     "current archive publication stop position {}",
-                    counters_reader.get_counter_value(counter_id)
+                    counters_reader.get_counter_value(counter_id)?
                 );
                 sleep(Duration::from_millis(50));
             }
             info!(
                 "found archive publication stop position {}",
-                counters_reader.get_counter_value(counter_id)
+                counters_reader.get_counter_value(counter_id)?
             );
 
             archive.stop_recording_channel_and_stream(channel, stream_id)?;

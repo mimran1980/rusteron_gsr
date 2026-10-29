@@ -290,7 +290,7 @@ mod tests {
         let recording_id = RecordingPos::get_recording_id(&counters_reader, counter_id)?;
         let published_position = publication.position();
         let start = Instant::now();
-        while counters_reader.get_counter_value(counter_id) < published_position
+        while counters_reader.get_counter_value(counter_id)? < published_position
             && start.elapsed() < Duration::from_secs(10)
         {
             sleep(Duration::from_millis(10));
@@ -727,7 +727,7 @@ mod tests {
         // otherwise the replay only sees a partial recording.
         let published_position = publication.position();
         let start = Instant::now();
-        while counters_reader.get_counter_value(counter_id) < published_position
+        while counters_reader.get_counter_value(counter_id)? < published_position
             && start.elapsed() < Duration::from_secs(10)
         {
             sleep(Duration::from_millis(10));
@@ -937,11 +937,11 @@ mod tests {
         let counters_reader = aeron_archive.counters_reader();
         let counter_id =
             crate::testing::find_counter_id_by_session_blocking(&counters_reader, session_id, Duration::from_secs(5))?;
-        let mut recording_position = counters_reader.get_counter_value(counter_id);
+        let mut recording_position = counters_reader.get_counter_value(counter_id)?;
         let start = Instant::now();
         while recording_position <= 0 && start.elapsed() < Duration::from_secs(5) {
             sleep(Duration::from_millis(10));
-            recording_position = counters_reader.get_counter_value(counter_id);
+            recording_position = counters_reader.get_counter_value(counter_id)?;
         }
 
         info!("Recording position: {}", recording_position);
@@ -1150,7 +1150,7 @@ mod tests {
         let recording_id = RecordingPos::get_recording_id_block(&counters_reader, counter_id, Duration::from_secs(5))?;
         let published_position = publication.position();
         let start = Instant::now();
-        while counters_reader.get_counter_value(counter_id) < published_position
+        while counters_reader.get_counter_value(counter_id)? < published_position
             && start.elapsed() < Duration::from_secs(10)
         {
             sleep(Duration::from_millis(10));

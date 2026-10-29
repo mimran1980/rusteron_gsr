@@ -72,7 +72,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     let published = start.elapsed();
     let target = publication.position();
-    while counters.get_counter_value(counter_id) < target {
+    while counters.get_counter_value(counter_id)? < target {
         assert!(
             RecordingPos::is_active(&counters, counter_id, recording_id)?,
             "the recording stopped"

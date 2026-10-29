@@ -4,6 +4,12 @@ Main changes, newest first, grouped by published crate version. Release-only
 commits, build logs, and changes later reverted or superseded are omitted.
 Early history predating the available release tags is grouped separately.
 
+## 0.2.16
+
+- Added `AeronArchiveRecordingDescriptorPoller::new` and `AeronArchiveRecordingSubscriptionDescriptorPoller::new`, so recordings can be listed without blocking. The archive's own pollers are borrowed and refuse `reset`.
+- Breaking: `AeronCountersReader::get_counter_value` returns `Result<i64, AeronCError>`. An id that is not a counter (`-1`, or above `max_counter_id`) is an error, instead of a crash or a read past the counters buffer. The value is read atomically (#70).
+- Breaking: `AeronBufferClaim::data_mut` and `frame_header_mut` take `&mut self`. A claim with no buffer gives an empty slice and `None`, instead of a null pointer.
+
 ## 0.2.15
 
 - Updated Aeron to 1.54.0, including new errors, APIs, and regenerated bindings.

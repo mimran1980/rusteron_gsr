@@ -1524,9 +1524,26 @@ impl AeronCountersReader {
         }
     }
 
+    /// The current value of a counter. An error if `counter_id` is not a counter id, for
+    /// example `-1` from a lookup that found nothing
     #[inline]
-    pub fn get_counter_value(&self, counter_id: i32) -> i64 {
-        unsafe { *self.addr(counter_id) }
+    pub fn get_counter_value(&self, counter_id: i32) -> Result<i64, AeronCError> {
+        // C checks only `counter_id < 0`; past `max_counter_id` it would point outside the buffer
+        if counter_id < 0 || counter_id > self.max_counter_id() {
+            return Err(AeronCError::with_message(
+                -1,
+                format!("get_counter_value: {counter_id} is not a counter id"),
+            ));
+        }
+        let value = unsafe { bindings::aeron_counters_reader_addr(self.get_inner(), counter_id) };
+        if value.is_null() {
+            return Err(AeronCError::with_message(
+                -1,
+                format!("get_counter_value: no address for counter {counter_id}"),
+            ));
+        }
+        // the driver writes counters while we read them, so read atomically
+        Ok(unsafe { std::sync::atomic::AtomicI64::from_ptr(value) }.load(std::sync::atomic::Ordering::Acquire))
     }
 }
 
@@ -1621,24 +1638,23 @@ impl<T: AeronControlledFragmentHandlerCallback + 'static> Handler<T> {
 }
 
 impl AeronBufferClaim {
-    /// Writable view over the claimed term-buffer region.
-    ///
-    /// # Safety contract ( upheld by construction )
-    /// Only sound on a **genuinely claimed** buffer (produced by a successful
-    /// `try_claim`). `length` and `data` come straight from the Aeron C claim
-    /// and are trusted; a default-constructed/null claim would be unsound to
-    /// dereference — the `debug_assert` guards that in debug builds only (no
-    /// release-build cost on this hot path).
+    /// The claimed bytes, to write into. Empty if the claim holds no buffer, for example one
+    /// from `new_zeroed_on_heap` or before a successful `try_claim`
     #[inline]
-    pub fn data_mut(&self) -> &mut [u8] {
-        debug_assert!(!self.data.is_null());
+    pub fn data_mut(&mut self) -> &mut [u8] {
+        if self.data.is_null() {
+            return &mut [];
+        }
         unsafe { std::slice::from_raw_parts_mut(self.data, self.length) }
     }
 
+    /// The frame header of the claim, or `None` if the claim holds no buffer
     #[inline]
-    pub fn frame_header_mut(&self) -> &mut aeron_header_values_frame_t {
-        debug_assert!(!self.frame_header.is_null());
-        unsafe { &mut *self.frame_header.cast::<aeron_header_values_frame_t>() }
+    pub fn frame_header_mut(&mut self) -> Option<&mut aeron_header_values_frame_t> {
+        if self.frame_header.is_null() {
+            return None;
+        }
+        Some(unsafe { &mut *self.frame_header.cast::<aeron_header_values_frame_t>() })
     }
 }
 
@@ -1690,7 +1706,10 @@ impl AeronClaim {
     /// read with [`AeronHeader::reserved_value`]. Call before [`Self::commit`].
     #[inline]
     pub fn set_reserved_value(&mut self, value: i64) {
-        self.claim.frame_header_mut().reserved_value = value;
+        // an AeronClaim always holds a claimed buffer, so the header is there
+        if let Some(header) = self.claim.frame_header_mut() {
+            header.reserved_value = value;
+        }
     }
 
     /// Commit the claimed bytes, publishing them to subscribers. Consumes `self`.
