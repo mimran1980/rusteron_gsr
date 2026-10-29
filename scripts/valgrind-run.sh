@@ -81,7 +81,11 @@ for BIN in $BINARIES; do
     # deterministically by the manual_close_required Drop warning in
     # ManagedCResource (common.rs), which fires per-resource on every platform
     # including macOS, not just under valgrind on Linux.
-    VALGRIND_OUTPUT=$(valgrind \
+    # Output is streamed via tee (so hangs are visible live) and kept in a file
+    # for the error scan below. timeout turns a hung test binary into a failure.
+    OUT_FILE=$(mktemp)
+    set +e
+    timeout --kill-after=60 "${VALGRIND_BIN_TIMEOUT:-25m}" valgrind \
       --tool=memcheck \
       --error-exitcode=1 \
       --track-origins=yes \
@@ -92,10 +96,17 @@ for BIN in $BINARIES; do
       -s \
       --gen-suppressions=all \
       --suppressions="$SUPP_FILE" \
-      "$BIN" --test-threads=1 --nocapture 2>&1) || VALGRIND_EXIT=$?
+      "$BIN" --test-threads=1 --nocapture 2>&1 | tee "$OUT_FILE"
+    VALGRIND_EXIT=${PIPESTATUS[0]}
+    set -e
+    VALGRIND_OUTPUT=$(cat "$OUT_FILE")
+    rm -f "$OUT_FILE"
 
-    # Always print the output for visibility
-    echo "$VALGRIND_OUTPUT"
+    if [[ $VALGRIND_EXIT -eq 124 || $VALGRIND_EXIT -eq 137 ]]; then
+      echo "FAIL: $BIN_NAME - timed out after ${VALGRIND_BIN_TIMEOUT:-25m} (hung test?)" >&2
+      OVERALL_EXIT=1
+      continue
+    fi
 
     # Check for actual (non-suppressed) errors in the output
     # "ERROR SUMMARY: N errors from M contexts" - we care about N (actual errors)

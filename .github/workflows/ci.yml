@@ -55,7 +55,7 @@ jobs:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
     name: Memory Check (Valgrind)
     runs-on: ubuntu-22.04
-    timeout-minutes: 120
+    timeout-minutes: 75
 
     steps:
       - name: Checkout
