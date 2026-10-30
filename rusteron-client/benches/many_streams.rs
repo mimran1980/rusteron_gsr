@@ -14,6 +14,9 @@
 //!   polls: the driver's share of the cost of N streams.
 //! - `client`: one active stream each way plus N-1 quiet IPC subscriptions each side polls:
 //!   the client's share.
+//! - `ready`: as `plain`, with the driver's readiness interceptor installed; each side polls
+//!   only the subscriptions whose readiness bit is set ([`AeronReadiness`]).
+//! - `mark`: the interceptor's cost per data datagram, without a driver.
 //!
 //! One driver serves both ping and pong, so in the traffic arms it holds 2N publications and
 //! 2N images. Other settings: `MANY_STREAMS_IDLE_N`, `MANY_STREAMS_TRAFFIC_N`,
@@ -32,6 +35,7 @@ use rusteron_media_driver::bindings::{
     aeron_driver_conductor_do_work, aeron_driver_native_resource_agent_do_work, aeron_driver_receiver_do_work,
     aeron_driver_sender_do_work, aeron_driver_t, aeron_threading_mode_enum,
 };
+use rusteron_media_driver::readiness::mark_ready;
 use rusteron_media_driver::{AeronDriver, AeronDriverContext};
 use std::error::Error;
 use std::ffi::{CString, c_void};
@@ -39,7 +43,7 @@ use std::fmt::Write as _;
 use std::hint::black_box;
 use std::io::Write as _;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::thread::{self, JoinHandle, sleep};
 use std::time::{Duration, Instant};
 
@@ -54,7 +58,10 @@ const STALL_NS: u64 = 100_000;
 const PING_PORT: u16 = 20_000;
 const PONG_PORT: u16 = 22_000;
 const PING_STREAM: i32 = 1_000;
-const PONG_STREAM: i32 = 3_000;
+/// Ping streams map to bits 232..=255 and 0..=103 of 256, pong streams to 104..=231, so in the
+/// `ready` arm the two sides of the one driver never share a readiness bit.
+const PONG_STREAM: i32 = PING_STREAM + 128 + 256 * 7;
+const READINESS_WORDS: usize = 4;
 const IPC_PING_STREAM: i32 = 5_000;
 const IPC_PONG_STREAM: i32 = 7_000;
 
@@ -68,6 +75,12 @@ fn main() -> Res<()> {
     let mut summary = String::from(
         "arm\tn\trole\tcount\tp50_ns\tp99_ns\tp999_ns\tmax_ns\tover_1us\tvcsw\tnvcsw\tminflt\tmajflt\tmax_at_ms\tmax_work\n",
     );
+    if cfg.mark {
+        for row in mark_cost(&cfg, &clock) {
+            println!("{}", row.line());
+            summary.push_str(&row.tsv());
+        }
+    }
     for arm in &cfg.arms {
         let ns = if *arm == Arm::Idle { &cfg.idle_n } else { &cfg.traffic_n };
         for &n in ns {
@@ -89,6 +102,9 @@ enum Arm {
     Mux,
     Driver,
     Client,
+    Ready,
+    /// Not a stream arm: labels the `mark` timings.
+    Mark,
 }
 
 impl Arm {
@@ -99,11 +115,15 @@ impl Arm {
             Arm::Mux => "mux",
             Arm::Driver => "driver",
             Arm::Client => "client",
+            Arm::Ready => "ready",
+            Arm::Mark => "mark",
         }
     }
 }
 
 struct Config {
+    /// Time the readiness interceptor's mark per datagram (arm `mark`).
+    mark: bool,
     arms: Vec<Arm>,
     idle_n: Vec<usize>,
     traffic_n: Vec<usize>,
@@ -117,14 +137,18 @@ impl Config {
     fn from_env() -> Res<Self> {
         let var = |k: &str, d: &str| std::env::var(k).unwrap_or_else(|_| d.to_string());
         let list = |s: String| -> Res<Vec<usize>> { s.split(',').map(|v| Ok(v.trim().parse()?)).collect() };
-        let arms = var("MANY_STREAMS_ARMS", "idle,plain,mux,driver,client")
+        let arm_list = var("MANY_STREAMS_ARMS", "mark,idle,plain,mux,driver,client,ready");
+        let mark = arm_list.split(',').any(|a| a.trim() == "mark");
+        let arms = arm_list
             .split(',')
+            .filter(|a| a.trim() != "mark")
             .map(|a| match a.trim() {
                 "idle" => Ok(Arm::Idle),
                 "plain" => Ok(Arm::Plain),
                 "mux" => Ok(Arm::Mux),
                 "driver" => Ok(Arm::Driver),
                 "client" => Ok(Arm::Client),
+                "ready" => Ok(Arm::Ready),
                 other => Err(format!("unknown arm {other}").into()),
             })
             .collect::<Res<Vec<_>>>()?;
@@ -133,6 +157,7 @@ impl Config {
             return Err("MANY_STREAMS_CPUS needs 5 cpus: housekeeping+conductor,sender,receiver,ping,pong".into());
         }
         Ok(Self {
+            mark,
             arms,
             idle_n: list(var("MANY_STREAMS_IDLE_N", "1,4,16,64,128,256"))?,
             traffic_n: list(var("MANY_STREAMS_TRAFFIC_N", "1,32,128"))?,
@@ -436,7 +461,7 @@ struct Driver {
 }
 
 impl Driver {
-    fn launch(cfg: &Config, clock: &Arc<Clock>, tag: &str) -> Res<Self> {
+    fn launch(cfg: &Config, clock: &Arc<Clock>, tag: &str, readiness: bool) -> Res<Self> {
         let context = AeronDriverContext::new()?;
         let dir = format!("{}-many-streams-{tag}-{}", context.get_dir(), std::process::id());
         context.set_dir(&CString::new(dir.clone())?)?;
@@ -449,6 +474,9 @@ impl Driver {
         context.set_conductor_cycle_threshold_ns(CYCLE_THRESHOLD_NS);
         context.set_sender_cycle_threshold_ns(CYCLE_THRESHOLD_NS);
         context.set_receiver_cycle_threshold_ns(CYCLE_THRESHOLD_NS);
+        if readiness {
+            context.set_readiness_interceptor(READINESS_WORDS)?;
+        }
         let driver = AeronDriver::new(&context)?;
         driver.start(true)?;
         let ptr = DriverPtr(driver.get_inner());
@@ -666,6 +694,77 @@ impl Quiet {
     }
 }
 
+/// Which subscriptions a pass polls: all of them, or in the `ready` arm only those whose
+/// readiness bit the driver set, each until it is empty.
+enum Selector {
+    All,
+    Ready {
+        readiness: AeronReadiness,
+        /// Per word, the bits of this side's streams.
+        mask: Vec<u64>,
+        /// Per bit, the subscriptions whose stream maps to it.
+        buckets: Vec<Vec<usize>>,
+    },
+}
+
+impl Selector {
+    /// For `n` subscriptions on streams from `stream`.
+    fn new(aeron: &Aeron, arm: Arm, stream: i32, n: usize) -> Res<Self> {
+        if arm != Arm::Ready {
+            return Ok(Self::All);
+        }
+        let readiness = AeronReadiness::find(aeron).ok_or("driver keeps no readiness words")?;
+        let mut mask = vec![0u64; readiness.bits() / 64];
+        let mut buckets = vec![Vec::new(); readiness.bits()];
+        for i in 0..n {
+            let (word, bit) = readiness.bit_of(stream + i as i32);
+            mask[word] |= 1 << bit;
+            buckets[word * 64 + bit as usize].push(i);
+        }
+        Ok(Self::Ready {
+            readiness,
+            mask,
+            buckets,
+        })
+    }
+
+    /// Polls `subs`, calling `f` with the subscription's index and each message.
+    #[inline]
+    fn pass(&self, subs: &[AeronSubscription], mut f: impl FnMut(usize, &[u8])) -> Res<i32> {
+        let mut fragments = 0;
+        match self {
+            Self::All => {
+                for (i, sub) in subs.iter().enumerate() {
+                    fragments += black_box(sub).poll_fn(|m, _| f(i, m), FRAGMENT_LIMIT)?;
+                }
+            }
+            Self::Ready {
+                readiness,
+                mask,
+                buckets,
+            } => {
+                for (word, &word_mask) in mask.iter().enumerate() {
+                    let mut ready = readiness.take(word, word_mask);
+                    while ready != 0 {
+                        let bit = ready.trailing_zeros() as usize;
+                        ready &= ready - 1;
+                        for &i in &buckets[word * 64 + bit] {
+                            loop {
+                                let polled = black_box(&subs[i]).poll_fn(|m, _| f(i, m), FRAGMENT_LIMIT)?;
+                                fragments += polled;
+                                if polled < FRAGMENT_LIMIT as i32 {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(fragments)
+    }
+}
+
 fn offer(publication: &AeronExclusivePublication, buffer: &[u8]) -> Res<()> {
     loop {
         match publication.offer(buffer) {
@@ -737,7 +836,7 @@ fn run_arm(cfg: &Config, clock: &Clock, arm: Arm, n: usize) -> Res<Vec<Row>> {
         epoch: clock.epoch,
     });
     let tag = format!("{}-{n}", arm.name());
-    let mut driver = Driver::launch(cfg, &clock, &tag)?;
+    let mut driver = Driver::launch(cfg, &clock, &tag, arm == Arm::Ready)?;
     let rows = match arm {
         Arm::Idle => idle(cfg, &clock, &mut driver, n),
         _ => traffic(cfg, &clock, &mut driver, arm, n),
@@ -833,23 +932,18 @@ fn traffic(cfg: &Config, clock: &Arc<Clock>, driver: &mut Driver, arm: Arm, n: u
                 IPC_PONG_STREAM,
                 extra_ipc,
             )?;
+            let selector = Selector::new(&pong, arm, PING_STREAM, active)?;
             pin(cfg.cpus[4]);
             // the warm-up echoes are timed too: they come before ping has checked every stream
             let mut rec = Recorder::new("pong", clock);
             let mut failure = None;
             while running.load(Ordering::Relaxed) {
                 let start = ticks();
-                let mut fragments = 0;
-                for (i, sub) in ping_subs.iter().enumerate() {
-                    fragments += black_box(sub).poll_fn(
-                        |m, _| {
-                            if let Err(e) = offer(&pong_pubs[i], m) {
-                                failure.get_or_insert(e);
-                            }
-                        },
-                        FRAGMENT_LIMIT,
-                    )?;
-                }
+                let fragments = selector.pass(&ping_subs, |i, m| {
+                    if let Err(e) = offer(&pong_pubs[i], m) {
+                        failure.get_or_insert(e);
+                    }
+                })?;
                 quiet.poll()?;
                 rec.record(clock, start, ticks(), fragments as i64);
                 if let Some(e) = failure.take() {
@@ -876,6 +970,7 @@ fn traffic(cfg: &Config, clock: &Arc<Clock>, driver: &mut Driver, arm: Arm, n: u
             wait_connected(&quiet.udp_pubs, &quiet.udp_subs)?;
             wait_connected(&quiet.ipc_pubs, &quiet.ipc_subs)?;
             check_all_streams(&ping_pubs, &pong_subs, n)?;
+            let selector = Selector::new(&ping, arm, PONG_STREAM, active)?;
             sleep(Duration::from_millis(200));
             pin(cfg.cpus[3]);
             let exceeded = driver.restart_timing(&ping.counters_reader());
@@ -900,24 +995,18 @@ fn traffic(cfg: &Config, clock: &Arc<Clock>, driver: &mut Driver, arm: Arm, n: u
                     }
                 }
                 let start = ticks();
-                let mut fragments = 0;
-                for (s, sub) in pong_subs.iter().enumerate() {
-                    fragments += black_box(sub).poll_fn(
-                        |m, _| {
-                            let at = ticks();
-                            let logical = logical_of(m);
-                            if pong_subs.len() > 1 && logical != s {
-                                failure.get_or_insert(format!("echo of stream {logical} on stream {s}").into());
-                            }
-                            if field(m, 8) % n as u64 != logical as u64 {
-                                failure.get_or_insert("echo carries the wrong logical stream".into());
-                            }
-                            rtt.record(clock, field(m, 0), at, logical as i64);
-                            received += 1;
-                        },
-                        FRAGMENT_LIMIT,
-                    )?;
-                }
+                let fragments = selector.pass(&pong_subs, |s, m| {
+                    let at = ticks();
+                    let logical = logical_of(m);
+                    if pong_subs.len() > 1 && logical != s {
+                        failure.get_or_insert(format!("echo of stream {logical} on stream {s}").into());
+                    }
+                    if field(m, 8) % n as u64 != logical as u64 {
+                        failure.get_or_insert("echo carries the wrong logical stream".into());
+                    }
+                    rtt.record(clock, field(m, 0), at, logical as i64);
+                    received += 1;
+                })?;
                 quiet.poll()?;
                 pass.record(clock, start, ticks(), fragments as i64);
                 if let Some(e) = failure.take() {
@@ -954,6 +1043,59 @@ fn traffic(cfg: &Config, clock: &Arc<Clock>, driver: &mut Driver, arm: Arm, n: u
         rows_n,
     ));
     Ok(rows)
+}
+
+/// What the readiness interceptor adds per data datagram: `mark_ready` when the stream's bit
+/// is already set (a busy stream) and when it is clear (an atomic OR as well). Rows carry the
+/// mean in `p50`; the clear case includes one plain store that clears the bit again.
+fn mark_cost(cfg: &Config, clock: &Clock) -> Vec<Row> {
+    const CALLS: u64 = 20_000_000;
+    let words: Vec<AtomicI64> = (0..READINESS_WORDS).map(|_| AtomicI64::new(0)).collect();
+    let refs: Vec<&AtomicI64> = words.iter().collect();
+    let mut frame = [0u8; 64];
+    frame[0..4].copy_from_slice(&64i32.to_le_bytes());
+    frame[6..8].copy_from_slice(&1i16.to_le_bytes());
+    frame[16..20].copy_from_slice(&5i32.to_le_bytes());
+    mark_ready(&refs, &frame);
+    assert_eq!(
+        1 << 5,
+        words[0].load(Ordering::Relaxed),
+        "mark_ready did not set the bit"
+    );
+    thread::scope(|s| {
+        s.spawn(|| {
+            pin(cfg.cpus[3]);
+            let time = |clear: bool| {
+                let start = ticks();
+                for _ in 0..CALLS {
+                    if clear {
+                        words[0].store(0, Ordering::Relaxed);
+                    }
+                    mark_ready(black_box(&refs), black_box(&frame));
+                }
+                clock.ns(ticks() - start) as f64 / CALLS as f64
+            };
+            [("mark-set", time(false)), ("mark-clear", time(true))]
+                .into_iter()
+                .map(|(role, mean)| Row {
+                    arm: Arm::Mark,
+                    n: 0,
+                    role,
+                    count: CALLS,
+                    p50: mean.round() as u64,
+                    p99: 0,
+                    p999: 0,
+                    max: 0,
+                    over_1us: 0,
+                    stats: ThreadStats::default(),
+                    max_at_ms: 0.0,
+                    max_work: 0,
+                })
+                .collect()
+        })
+        .join()
+        .expect("mark thread panicked")
+    })
 }
 
 /// Aeron's own cycle-time-max and over-threshold counters since `exceeded_at_start` was
