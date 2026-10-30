@@ -82,7 +82,11 @@ fn main() -> Res<()> {
         }
     }
     for arm in &cfg.arms {
-        let ns = if *arm == Arm::Idle { &cfg.idle_n } else { &cfg.traffic_n };
+        let ns = if matches!(arm, Arm::Idle(_)) {
+            &cfg.idle_n
+        } else {
+            &cfg.traffic_n
+        };
         for &n in ns {
             let rows = run_arm(&cfg, &clock, *arm, n)?;
             for row in rows {
@@ -92,32 +96,118 @@ fn main() -> Res<()> {
         }
     }
     std::fs::write(format!("{}/summary.tsv", cfg.out), summary)?;
+    let memory = MEMORY.lock().map_err(|_| "memory rows")?;
+    std::fs::write(
+        format!("{}/memory.tsv", cfg.out),
+        format!(
+            "arm\tn\tlog_files\tlog_apparent_bytes\tlog_allocated_bytes\trss\trss_anon\trss_file\trss_shmem\n{memory}"
+        ),
+    )?;
     Ok(())
+}
+
+/// How N Aeron streams map to channels: a port each and a stream id each (`PerPort`), one
+/// port and a stream id each (`SamePort`), or a port each and one stream id (`SameStream`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Layout {
+    PerPort,
+    SamePort,
+    SameStream,
+}
+
+impl Layout {
+    fn port(self, base: u16, i: usize) -> u16 {
+        if self == Layout::SamePort {
+            base
+        } else {
+            base + i as u16
+        }
+    }
+
+    fn stream(self, base: i32, i: usize) -> i32 {
+        if self == Layout::SameStream {
+            base
+        } else {
+            base + i as i32
+        }
+    }
+
+    fn suffix(self) -> &'static str {
+        match self {
+            Layout::PerPort => "",
+            Layout::SamePort => "sameport",
+            Layout::SameStream => "samestream",
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Arm {
-    Idle,
-    Plain,
-    Mux,
+    Idle(Layout),
+    Plain(Layout),
+    /// N logical streams keyed in the message over this many Aeron streams on one port.
+    Mux(usize),
     Driver,
     Client,
     Ready,
+    /// N per-port streams split evenly over this many drivers, ping and pong on one thread;
+    /// `shared` runs each driver's sender and receiver on one thread.
+    Shard {
+        drivers: usize,
+        shared: bool,
+    },
     /// Not a stream arm: labels the `mark` timings.
     Mark,
 }
 
 impl Arm {
-    fn name(self) -> &'static str {
+    fn name(self) -> String {
         match self {
-            Arm::Idle => "idle",
-            Arm::Plain => "plain",
-            Arm::Mux => "mux",
-            Arm::Driver => "driver",
-            Arm::Client => "client",
-            Arm::Ready => "ready",
-            Arm::Mark => "mark",
+            Arm::Idle(Layout::PerPort) => "idle".into(),
+            Arm::Idle(l) => format!("idle-{}", l.suffix()),
+            Arm::Plain(Layout::PerPort) => "plain".into(),
+            Arm::Plain(l) => l.suffix().into(),
+            Arm::Mux(1) => "mux".into(),
+            Arm::Mux(k) => format!("mux{k}"),
+            Arm::Driver => "driver".into(),
+            Arm::Client => "client".into(),
+            Arm::Ready => "ready".into(),
+            Arm::Shard { drivers, shared: false } => format!("shard{drivers}"),
+            Arm::Shard { drivers, shared: true } => format!("snshard{drivers}"),
+            Arm::Mark => "mark".into(),
         }
+    }
+
+    fn parse(name: &str) -> Res<Self> {
+        Ok(match name {
+            "idle" => Arm::Idle(Layout::PerPort),
+            "idle-sameport" => Arm::Idle(Layout::SamePort),
+            "idle-samestream" => Arm::Idle(Layout::SameStream),
+            "plain" => Arm::Plain(Layout::PerPort),
+            "sameport" => Arm::Plain(Layout::SamePort),
+            "samestream" => Arm::Plain(Layout::SameStream),
+            "mux" => Arm::Mux(1),
+            "driver" => Arm::Driver,
+            "client" => Arm::Client,
+            "ready" => Arm::Ready,
+            other => {
+                let number = |prefix: &str| {
+                    other
+                        .strip_prefix(prefix)
+                        .and_then(|k| k.parse::<usize>().ok())
+                        .filter(|&k| k > 0)
+                };
+                if let Some(k) = number("mux") {
+                    Arm::Mux(k)
+                } else if let Some(drivers) = number("snshard") {
+                    Arm::Shard { drivers, shared: true }
+                } else if let Some(drivers) = number("shard") {
+                    Arm::Shard { drivers, shared: false }
+                } else {
+                    return Err(format!("unknown arm {other}").into());
+                }
+            }
+        })
     }
 }
 
@@ -142,15 +232,7 @@ impl Config {
         let arms = arm_list
             .split(',')
             .filter(|a| a.trim() != "mark")
-            .map(|a| match a.trim() {
-                "idle" => Ok(Arm::Idle),
-                "plain" => Ok(Arm::Plain),
-                "mux" => Ok(Arm::Mux),
-                "driver" => Ok(Arm::Driver),
-                "client" => Ok(Arm::Client),
-                "ready" => Ok(Arm::Ready),
-                other => Err(format!("unknown arm {other}").into()),
-            })
+            .map(|a| Arm::parse(a.trim()))
             .collect::<Res<Vec<_>>>()?;
         let cpus = list(var("MANY_STREAMS_CPUS", "0,1,2,3,4"))?;
         if cpus.len() != 5 {
@@ -166,6 +248,7 @@ impl Config {
             cpus,
             out: var("MANY_STREAMS_OUT", "target/many-streams"),
         })
+        .inspect(|_| CONCURRENT.store(var("MANY_STREAMS_CONCURRENT", "0") == "1", Ordering::Relaxed))
     }
 }
 
@@ -449,6 +532,21 @@ struct DriverPtr(*mut aeron_driver_t);
 // SAFETY: each agent touches only its own part of the driver, as under dedicated threading
 unsafe impl Send for DriverPtr {}
 
+/// Where a driver's agents run: the conductor (yielding, on the housekeeping cpu) and the
+/// sender and receiver on a cpu each or together; `name` suffixes the agents' roles.
+#[derive(Clone, Copy)]
+struct Placement {
+    conductor: usize,
+    net: Net,
+    name: &'static str,
+}
+
+#[derive(Clone, Copy)]
+enum Net {
+    Dedicated(usize, usize),
+    Shared(usize),
+}
+
 /// A media driver whose conductor, sender and receiver each run on a pinned thread of ours.
 struct Driver {
     dir: String,
@@ -462,6 +560,15 @@ struct Driver {
 
 impl Driver {
     fn launch(cfg: &Config, clock: &Arc<Clock>, tag: &str, readiness: bool) -> Res<Self> {
+        let placement = Placement {
+            conductor: cfg.cpus[0],
+            net: Net::Dedicated(cfg.cpus[1], cfg.cpus[2]),
+            name: "",
+        };
+        Self::launch_placed(clock, tag, readiness, placement)
+    }
+
+    fn launch_placed(clock: &Arc<Clock>, tag: &str, readiness: bool, placement: Placement) -> Res<Self> {
         let context = AeronDriverContext::new()?;
         let dir = format!("{}-many-streams-{tag}-{}", context.get_dir(), std::process::id());
         context.set_dir(&CString::new(dir.clone())?)?;
@@ -482,15 +589,22 @@ impl Driver {
         let ptr = DriverPtr(driver.get_inner());
         let running = Arc::new(AtomicBool::new(true));
         let generation = Arc::new(AtomicU64::new(0));
-        let spawn = |role: &'static str, cpu: usize, yields: bool, work: fn(DriverPtr) -> i32| {
+        let spawn = |role: &str, cpu: usize, yields: bool, work: fn(DriverPtr) -> i32| {
+            // roles name rows and files, which outlive this driver
+            let role: &'static str = Box::leak(format!("{role}{}", placement.name).into_boxed_str());
             let (running, generation, clock) = (Arc::clone(&running), Arc::clone(&generation), Arc::clone(clock));
             thread::Builder::new()
                 .name(role.into())
                 .spawn(move || -> Res<Recorder> {
                     pin(cpu);
+                    // lets a syscall trace of the run be split by agent
+                    #[cfg(target_os = "linux")]
+                    println!("agent {role} tid {}", unsafe { libc::gettid() });
                     let mut seen = generation.load(Ordering::Acquire);
                     let mut rec = Recorder::new(role, &clock);
+                    let mut cycles = 0u64;
                     while running.load(Ordering::Relaxed) {
+                        cycles += 1;
                         let start = ticks();
                         let w = work(ptr);
                         rec.record(&clock, start, ticks(), w as i64);
@@ -504,24 +618,31 @@ impl Driver {
                             thread::yield_now();
                         }
                     }
+                    #[cfg(target_os = "linux")]
+                    println!("agent {role} tid {} cycles {cycles}", unsafe { libc::gettid() });
                     Ok(rec.close())
                 })
         };
-        // SAFETY (all three): the driver is started and stays open until these threads join
-        let agents = vec![
-            spawn("conductor", cfg.cpus[0], true, |p| unsafe {
-                aeron_driver_conductor_do_work((&raw mut (*p.0).conductor).cast::<c_void>())
-                    + aeron_driver_native_resource_agent_do_work(
-                        (&raw mut (*p.0).native_resource_agent).cast::<c_void>(),
-                    )
-            })?,
-            spawn("sender", cfg.cpus[1], false, |p| unsafe {
+        // SAFETY (all): the driver is started and stays open until these threads join
+        let mut agents = vec![spawn("conductor", placement.conductor, true, |p| unsafe {
+            aeron_driver_conductor_do_work((&raw mut (*p.0).conductor).cast::<c_void>())
+                + aeron_driver_native_resource_agent_do_work((&raw mut (*p.0).native_resource_agent).cast::<c_void>())
+        })?];
+        match placement.net {
+            Net::Dedicated(sender, receiver) => {
+                agents.push(spawn("sender", sender, false, |p| unsafe {
+                    aeron_driver_sender_do_work((&raw mut (*p.0).sender).cast::<c_void>())
+                })?);
+                agents.push(spawn("receiver", receiver, false, |p| unsafe {
+                    aeron_driver_receiver_do_work((&raw mut (*p.0).receiver).cast::<c_void>())
+                })?);
+            }
+            // as SHARED_NETWORK threading: one thread runs the sender, then the receiver
+            Net::Shared(cpu) => agents.push(spawn("net", cpu, false, |p| unsafe {
                 aeron_driver_sender_do_work((&raw mut (*p.0).sender).cast::<c_void>())
-            })?,
-            spawn("receiver", cfg.cpus[2], false, |p| unsafe {
-                aeron_driver_receiver_do_work((&raw mut (*p.0).receiver).cast::<c_void>())
-            })?,
-        ];
+                    + aeron_driver_receiver_do_work((&raw mut (*p.0).receiver).cast::<c_void>())
+            })?),
+        }
         Ok(Self {
             dir,
             running,
@@ -588,14 +709,90 @@ fn channel(port: u16) -> Res<CString> {
     Ok(CString::new(format!("aeron:udp?endpoint=127.0.0.1:{port}"))?)
 }
 
-/// Subscriptions to `n` channels from `port`, one stream each from `stream`.
-fn add_subscriptions(aeron: &Aeron, port: u16, stream: i32, n: usize) -> Res<Vec<AeronSubscription>> {
+/// A publication's channel: as `channel`, with `term-length` from `MANY_STREAMS_TERM_LENGTH`
+/// when set (else the driver default this bench sets, 64 KiB).
+fn publication_channel(port: u16) -> Res<CString> {
+    let term = std::env::var("MANY_STREAMS_TERM_LENGTH").map_or(String::new(), |t| format!("|term-length={t}"));
+    Ok(CString::new(format!("aeron:udp?endpoint=127.0.0.1:{port}{term}"))?)
+}
+
+/// Memory rows (`memory.tsv`), one per arm and N, taken once timing ends.
+static MEMORY: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+
+/// Records the log files in `dirs` (apparent and allocated bytes) and this process's RSS,
+/// which holds the driver(s) and every client.
+fn record_memory(arm: Arm, n: usize, dirs: &[String]) {
+    use std::os::unix::fs::MetadataExt;
+    fn walk(dir: &std::path::Path, apparent: &mut u64, allocated: &mut u64, files: &mut u64) {
+        for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            let Ok(meta) = entry.metadata() else { continue };
+            if meta.is_dir() {
+                walk(&entry.path(), apparent, allocated, files);
+            } else if entry.path().extension().is_some_and(|e| e == "logbuffer") {
+                *apparent += meta.len();
+                *allocated += meta.blocks() * 512;
+                *files += 1;
+            }
+        }
+    }
+    let (mut apparent, mut allocated, mut files) = (0, 0, 0);
+    for dir in dirs {
+        walk(std::path::Path::new(dir), &mut apparent, &mut allocated, &mut files);
+    }
+    let status = std::fs::read_to_string("/proc/self/status").unwrap_or_default();
+    let kib = |key: &str| -> u64 {
+        status
+            .lines()
+            .find_map(|l| l.strip_prefix(key))
+            .and_then(|v| v.split_whitespace().next()?.parse().ok())
+            .unwrap_or(0)
+    };
+    let row = format!(
+        "{}\t{n}\t{files}\t{apparent}\t{allocated}\t{}\t{}\t{}\t{}\n",
+        arm.name(),
+        kib("VmRSS:") * 1024,
+        kib("RssAnon:") * 1024,
+        kib("RssFile:") * 1024,
+        kib("RssShmem:") * 1024
+    );
+    print!("memory {row}");
+    MEMORY.lock().expect("memory rows").push_str(&row);
+}
+
+/// Publications are concurrent rather than exclusive (`MANY_STREAMS_CONCURRENT=1`).
+static CONCURRENT: AtomicBool = AtomicBool::new(false);
+
+/// An exclusive or a concurrent publication.
+enum Pub {
+    Exclusive(AeronExclusivePublication),
+    Concurrent(AeronPublication),
+}
+
+impl Pub {
+    #[inline]
+    fn offer(&self, buffer: &[u8]) -> Result<i64, AeronOfferError> {
+        match self {
+            Pub::Exclusive(p) => p.offer(buffer),
+            Pub::Concurrent(p) => p.offer(buffer),
+        }
+    }
+
+    fn is_connected(&self) -> bool {
+        match self {
+            Pub::Exclusive(p) => p.is_connected(),
+            Pub::Concurrent(p) => p.is_connected(),
+        }
+    }
+}
+
+/// Subscriptions to `n` streams laid out by `layout` from `port` and `stream`.
+fn add_subscriptions(aeron: &Aeron, layout: Layout, port: u16, stream: i32, n: usize) -> Res<Vec<AeronSubscription>> {
     (0..n)
         .map(|i| {
             Ok(aeron
                 .async_add_subscription(
-                    &channel(port + i as u16)?,
-                    stream + i as i32,
+                    &channel(layout.port(port, i))?,
+                    layout.stream(stream, i),
                     Handlers::NONE,
                     Handlers::NONE,
                 )?
@@ -604,18 +801,29 @@ fn add_subscriptions(aeron: &Aeron, port: u16, stream: i32, n: usize) -> Res<Vec
         .collect()
 }
 
-/// Publications to `n` channels from `port`, one stream each from `stream`.
-fn add_publications(aeron: &Aeron, port: u16, stream: i32, n: usize) -> Res<Vec<AeronExclusivePublication>> {
+/// Publications to `n` streams laid out by `layout` from `port` and `stream`.
+fn add_publications(aeron: &Aeron, layout: Layout, port: u16, stream: i32, n: usize) -> Res<Vec<Pub>> {
     (0..n)
         .map(|i| {
-            Ok(aeron
-                .async_add_exclusive_publication(&channel(port + i as u16)?, stream + i as i32)?
-                .poll_blocking(Duration::from_secs(10))?)
+            let (ch, id) = (publication_channel(layout.port(port, i))?, layout.stream(stream, i));
+            Ok(if CONCURRENT.load(Ordering::Relaxed) {
+                Pub::Concurrent(
+                    aeron
+                        .async_add_publication(&ch, id)?
+                        .poll_blocking(Duration::from_secs(10))?,
+                )
+            } else {
+                Pub::Exclusive(
+                    aeron
+                        .async_add_exclusive_publication(&ch, id)?
+                        .poll_blocking(Duration::from_secs(10))?,
+                )
+            })
         })
         .collect()
 }
 
-fn wait_connected(publications: &[AeronExclusivePublication], subscriptions: &[AeronSubscription]) -> Res<()> {
+fn wait_connected(publications: &[Pub], subscriptions: &[AeronSubscription]) -> Res<()> {
     let deadline = Instant::now() + Duration::from_secs(30);
     while !publications.iter().all(|p| p.is_connected()) || !subscriptions.iter().all(|s| s.is_connected()) {
         if Instant::now() > deadline {
@@ -630,9 +838,9 @@ fn wait_connected(publications: &[AeronExclusivePublication], subscriptions: &[A
 /// client polls. Both ends of the IPC ones are on this client.
 struct Quiet {
     udp_subs: Vec<AeronSubscription>,
-    udp_pubs: Vec<AeronExclusivePublication>,
+    udp_pubs: Vec<Pub>,
     ipc_subs: Vec<AeronSubscription>,
-    ipc_pubs: Vec<AeronExclusivePublication>,
+    ipc_pubs: Vec<Pub>,
 }
 
 impl Quiet {
@@ -663,14 +871,16 @@ impl Quiet {
             .collect::<Res<_>>()?;
         let ipc_pubs = (0..ipc)
             .map(|i| {
-                Ok(aeron
-                    .async_add_exclusive_publication(AERON_IPC_STREAM, ipc_stream + i as i32)?
-                    .poll_blocking(Duration::from_secs(10))?)
+                Ok(Pub::Exclusive(
+                    aeron
+                        .async_add_exclusive_publication(AERON_IPC_STREAM, ipc_stream + i as i32)?
+                        .poll_blocking(Duration::from_secs(10))?,
+                ))
             })
             .collect::<Res<_>>()?;
         Ok(Self {
-            udp_subs: add_subscriptions(aeron, at(sub_port), stream(sub_stream), udp)?,
-            udp_pubs: add_publications(aeron, at(pub_port), stream(pub_stream), udp)?,
+            udp_subs: add_subscriptions(aeron, Layout::PerPort, at(sub_port), stream(sub_stream), udp)?,
+            udp_pubs: add_publications(aeron, Layout::PerPort, at(pub_port), stream(pub_stream), udp)?,
             ipc_subs,
             ipc_pubs,
         })
@@ -765,7 +975,7 @@ impl Selector {
     }
 }
 
-fn offer(publication: &AeronExclusivePublication, buffer: &[u8]) -> Res<()> {
+fn offer(publication: &Pub, buffer: &[u8]) -> Res<()> {
     loop {
         match publication.offer(buffer) {
             Ok(_) => return Ok(()),
@@ -792,11 +1002,7 @@ fn logical_of(m: &[u8]) -> usize {
 }
 
 /// Sends one message on every logical stream and checks each comes back on its own stream.
-fn check_all_streams(
-    publications: &[AeronExclusivePublication],
-    subscriptions: &[AeronSubscription],
-    n: usize,
-) -> Res<()> {
+fn check_all_streams(publications: &[Pub], subscriptions: &[AeronSubscription], n: usize) -> Res<()> {
     let mut seen = vec![0u32; n];
     for i in 0..n {
         offer(&publications[i % publications.len()], &message(0, i as u64, i as u32))?;
@@ -809,7 +1015,8 @@ fn check_all_streams(
                     let logical = logical_of(m);
                     // one subscription per logical stream unless multiplexed
                     if subscriptions.len() > 1 {
-                        assert_eq!(s, logical, "echo for stream {logical} arrived on stream {s}");
+                        let expected = logical % subscriptions.len();
+                        assert_eq!(s, expected, "echo for stream {logical} arrived on stream {s}");
                     }
                     seen[logical] += 1;
                 },
@@ -836,9 +1043,12 @@ fn run_arm(cfg: &Config, clock: &Clock, arm: Arm, n: usize) -> Res<Vec<Row>> {
         epoch: clock.epoch,
     });
     let tag = format!("{}-{n}", arm.name());
+    if let Arm::Shard { drivers, shared } = arm {
+        return sharded(cfg, &clock, arm, n, drivers, shared);
+    }
     let mut driver = Driver::launch(cfg, &clock, &tag, arm == Arm::Ready)?;
     let rows = match arm {
-        Arm::Idle => idle(cfg, &clock, &mut driver, n),
+        Arm::Idle(layout) => idle(cfg, &clock, &mut driver, n, layout, arm),
         _ => traffic(cfg, &clock, &mut driver, arm, n),
     };
     let rows = rows?;
@@ -848,15 +1058,15 @@ fn run_arm(cfg: &Config, clock: &Clock, arm: Arm, n: usize) -> Res<Vec<Row>> {
 }
 
 /// Polls `n` connected but quiet subscriptions in a loop, timing each pass.
-fn idle(cfg: &Config, clock: &Arc<Clock>, driver: &mut Driver, n: usize) -> Res<Vec<Row>> {
+fn idle(cfg: &Config, clock: &Arc<Clock>, driver: &mut Driver, n: usize, layout: Layout, arm: Arm) -> Res<Vec<Row>> {
     let dir = driver.dir.clone();
     let (rec, exceeded) = thread::scope(|s| {
         s.spawn(|| -> Res<(Recorder, [i64; 3])> {
             // handles are not Send, so this thread makes its own
             let publisher = client(&dir)?;
             let subscriber = client(&dir)?;
-            let subscriptions = add_subscriptions(&subscriber, PING_PORT, PING_STREAM, n)?;
-            let publications = add_publications(&publisher, PING_PORT, PING_STREAM, n)?;
+            let subscriptions = add_subscriptions(&subscriber, layout, PING_PORT, PING_STREAM, n)?;
+            let publications = add_publications(&publisher, layout, PING_PORT, PING_STREAM, n)?;
             wait_connected(&publications, &subscriptions)?;
             // every subscription has its image and is empty again before timing starts
             check_all_streams(&publications, &subscriptions, n)?;
@@ -885,19 +1095,20 @@ fn idle(cfg: &Config, clock: &Arc<Clock>, driver: &mut Driver, n: usize) -> Res<
                 }
                 passes += 1;
             }
+            record_memory(arm, n, std::slice::from_ref(&dir));
             Ok((rec.close(), exceeded))
         })
         .join()
         .map_err(|_| "client thread panicked")?
     })?;
-    let mut rows = vec![rec.finish(clock, cfg, Arm::Idle, n)?];
+    let mut rows = vec![rec.finish(clock, cfg, arm, n)?];
     for agent in driver.stop()? {
-        rows.push(agent.finish(clock, cfg, Arm::Idle, n)?);
+        rows.push(agent.finish(clock, cfg, arm, n)?);
     }
     rows.extend(aeron_cycle_rows(
         &client(&driver.dir)?.counters_reader(),
         exceeded,
-        Arm::Idle,
+        arm,
         n,
     ));
     Ok(rows)
@@ -908,11 +1119,12 @@ fn idle(cfg: &Config, clock: &Arc<Clock>, driver: &mut Driver, n: usize) -> Res<
 fn traffic(cfg: &Config, clock: &Arc<Clock>, driver: &mut Driver, arm: Arm, n: usize) -> Res<Vec<Row>> {
     // active Aeron streams each way, logical streams, quiet UDP streams each way that only
     // the driver sees, quiet IPC subscriptions each side polls
-    let (active, logical_n, extra_udp, extra_ipc) = match arm {
-        Arm::Mux => (1, n, 0, 0),
-        Arm::Driver => (1, 1, n - 1, 0),
-        Arm::Client => (1, 1, 0, n - 1),
-        _ => (n, n, 0, 0),
+    let (active, logical_n, extra_udp, extra_ipc, layout) = match arm {
+        Arm::Mux(k) => (k.min(n), n, 0, 0, Layout::SamePort),
+        Arm::Driver => (1, 1, n - 1, 0, Layout::PerPort),
+        Arm::Client => (1, 1, 0, n - 1, Layout::PerPort),
+        Arm::Plain(layout) => (n, n, 0, 0, layout),
+        _ => (n, n, 0, 0, Layout::PerPort),
     };
     let rows_n = n;
     let n = logical_n;
@@ -921,8 +1133,8 @@ fn traffic(cfg: &Config, clock: &Arc<Clock>, driver: &mut Driver, arm: Arm, n: u
     let (pass, pong_rec, rtt, exceeded) = thread::scope(|s| -> Res<(Recorder, Recorder, Recorder, [i64; 3])> {
         let pong_thread = s.spawn(|| -> Res<Recorder> {
             let pong = client(&dir)?;
-            let ping_subs = add_subscriptions(&pong, PING_PORT, PING_STREAM, active)?;
-            let pong_pubs = add_publications(&pong, PONG_PORT, PONG_STREAM, active)?;
+            let ping_subs = add_subscriptions(&pong, layout, PING_PORT, PING_STREAM, active)?;
+            let pong_pubs = add_publications(&pong, layout, PONG_PORT, PONG_STREAM, active)?;
             let quiet = Quiet::add(
                 &pong,
                 PING_PORT,
@@ -955,8 +1167,8 @@ fn traffic(cfg: &Config, clock: &Arc<Clock>, driver: &mut Driver, arm: Arm, n: u
 
         let ping_thread = s.spawn(|| -> Res<(Recorder, Recorder, [i64; 3])> {
             let ping = client(&dir)?;
-            let pong_subs = add_subscriptions(&ping, PONG_PORT, PONG_STREAM, active)?;
-            let ping_pubs = add_publications(&ping, PING_PORT, PING_STREAM, active)?;
+            let pong_subs = add_subscriptions(&ping, layout, PONG_PORT, PONG_STREAM, active)?;
+            let ping_pubs = add_publications(&ping, layout, PING_PORT, PING_STREAM, active)?;
             let quiet = Quiet::add(
                 &ping,
                 PONG_PORT,
@@ -998,7 +1210,7 @@ fn traffic(cfg: &Config, clock: &Arc<Clock>, driver: &mut Driver, arm: Arm, n: u
                 let fragments = selector.pass(&pong_subs, |s, m| {
                     let at = ticks();
                     let logical = logical_of(m);
-                    if pong_subs.len() > 1 && logical != s {
+                    if logical % pong_subs.len() != s {
                         failure.get_or_insert(format!("echo of stream {logical} on stream {s}").into());
                     }
                     if field(m, 8) % n as u64 != logical as u64 {
@@ -1020,6 +1232,7 @@ fn traffic(cfg: &Config, clock: &Arc<Clock>, driver: &mut Driver, arm: Arm, n: u
                 return Err(format!("sent {sent}, {received} echoes came back").into());
             }
             println!("{} n={rows_n}: sent {sent}, received {received}", arm.name());
+            record_memory(arm, rows_n, std::slice::from_ref(&dir));
             Ok((pass.close(), rtt.close(), exceeded))
         });
         let ping_result = ping_thread.join().map_err(|_| "ping thread panicked")?;
@@ -1042,6 +1255,172 @@ fn traffic(cfg: &Config, clock: &Arc<Clock>, driver: &mut Driver, arm: Arm, n: u
         arm,
         rows_n,
     ));
+    Ok(rows)
+}
+
+/// `n` per-port streams each way split evenly over `k` drivers. One thread (on the pong cpu)
+/// both sends pings and echoes them, so the client side is the same for every `k`.
+///
+/// CPUs, from `MANY_STREAMS_SHARD_CPUS` (default `1,2,3,5`): conductors yield on the
+/// housekeeping cpu; with `shared` driver d's sender and receiver share cpu d; otherwise
+/// driver d uses cpus 2d and 2d+1 of the list, so at most two dedicated drivers fit.
+fn sharded(cfg: &Config, clock: &Arc<Clock>, arm: Arm, n: usize, k: usize, shared: bool) -> Res<Vec<Row>> {
+    let cpus: Vec<usize> = std::env::var("MANY_STREAMS_SHARD_CPUS")
+        .unwrap_or_else(|_| "1,2,3,5".into())
+        .split(',')
+        .map(|c| c.trim().parse())
+        .collect::<Result<_, _>>()?;
+    if !n.is_multiple_of(k) || (shared && k > cpus.len()) || (!shared && 2 * k > cpus.len()) {
+        return Err(format!("{n} streams over {k} drivers do not fit cpus {cpus:?}").into());
+    }
+    let names = ["-a", "-b", "-c", "-d", "-e", "-f", "-g", "-h"];
+    let mut drivers = (0..k)
+        .map(|d| {
+            let net = if shared {
+                Net::Shared(cpus[d])
+            } else {
+                Net::Dedicated(cpus[2 * d], cpus[2 * d + 1])
+            };
+            let placement = Placement {
+                conductor: cfg.cpus[0],
+                net,
+                name: names[d],
+            };
+            Driver::launch_placed(clock, &format!("{}-{n}{}", arm.name(), names[d]), false, placement)
+        })
+        .collect::<Res<Vec<_>>>()?;
+    let dirs: Vec<String> = drivers.iter().map(|d| d.dir.clone()).collect();
+    let per = n / k;
+    let (pass, rtt) = thread::scope(|s| {
+        s.spawn(|| -> Res<(Recorder, Recorder)> {
+            let clients = dirs.iter().map(|d| client(d)).collect::<Res<Vec<_>>>()?;
+            let (mut ping_pubs, mut ping_subs, mut pong_pubs, mut pong_subs) = (vec![], vec![], vec![], vec![]);
+            for (d, c) in clients.iter().enumerate() {
+                let (port, stream) = ((d * per) as u16, (d * per) as i32);
+                ping_subs.extend(add_subscriptions(
+                    c,
+                    Layout::PerPort,
+                    PING_PORT + port,
+                    PING_STREAM + stream,
+                    per,
+                )?);
+                pong_subs.extend(add_subscriptions(
+                    c,
+                    Layout::PerPort,
+                    PONG_PORT + port,
+                    PONG_STREAM + stream,
+                    per,
+                )?);
+                ping_pubs.extend(add_publications(
+                    c,
+                    Layout::PerPort,
+                    PING_PORT + port,
+                    PING_STREAM + stream,
+                    per,
+                )?);
+                pong_pubs.extend(add_publications(
+                    c,
+                    Layout::PerPort,
+                    PONG_PORT + port,
+                    PONG_STREAM + stream,
+                    per,
+                )?);
+            }
+            wait_connected(&ping_pubs, &ping_subs)?;
+            wait_connected(&pong_pubs, &pong_subs)?;
+
+            // echoes pings and hands each echo, with its stream, to `on_echo`
+            let pass = |on_echo: &mut dyn FnMut(usize, &[u8])| -> Res<i32> {
+                let mut failure = None;
+                let mut fragments = 0;
+                for (i, sub) in ping_subs.iter().enumerate() {
+                    fragments += black_box(sub).poll_fn(
+                        |m, _| {
+                            if let Err(e) = offer(&pong_pubs[i], m) {
+                                failure.get_or_insert(e);
+                            }
+                        },
+                        FRAGMENT_LIMIT,
+                    )?;
+                }
+                for (i, sub) in pong_subs.iter().enumerate() {
+                    fragments += black_box(sub).poll_fn(|m, _| on_echo(i, m), FRAGMENT_LIMIT)?;
+                }
+                failure.map_or(Ok(fragments), Err)
+            };
+
+            // every stream echoes once, on its own stream, before timing starts
+            for (i, p) in ping_pubs.iter().enumerate() {
+                offer(p, &message(0, i as u64, i as u32))?;
+            }
+            let mut seen = vec![0u32; n];
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while seen.contains(&0) {
+                pass(&mut |i, m| {
+                    assert_eq!(i, logical_of(m), "echo on the wrong stream");
+                    seen[i] += 1;
+                })?;
+                if Instant::now() > deadline {
+                    return Err("not every stream echoed".into());
+                }
+            }
+            sleep(Duration::from_millis(200));
+            pin(cfg.cpus[4]);
+            for (driver, c) in drivers.iter().zip(&clients) {
+                driver.restart_timing(&c.counters_reader());
+            }
+
+            let mut pass_rec = Recorder::new("client", clock);
+            let mut rtt = Recorder::new("rtt", clock);
+            let interval = clock.ticks_for(1_000_000_000 / cfg.rate);
+            let total = cfg.rate * cfg.secs;
+            let (mut sent, mut received) = (0u64, 0u64);
+            let mut next_send = ticks();
+            let mut all_sent_at: Option<Instant> = None;
+            let mut wrong = None;
+            loop {
+                if sent < total && ticks() >= next_send {
+                    let logical = (sent % n as u64) as u32;
+                    offer(&ping_pubs[logical as usize], &message(ticks(), sent, logical))?;
+                    sent += 1;
+                    next_send += interval;
+                    if sent == total {
+                        all_sent_at = Some(Instant::now());
+                    }
+                }
+                let start = ticks();
+                let fragments = pass(&mut |i, m| {
+                    let at = ticks();
+                    if logical_of(m) != i {
+                        wrong = Some(i);
+                    }
+                    rtt.record(clock, field(m, 0), at, i as i64);
+                    received += 1;
+                })?;
+                pass_rec.record(clock, start, ticks(), fragments as i64);
+                if let Some(i) = wrong {
+                    return Err(format!("echo on the wrong stream {i}").into());
+                }
+                if received == total || all_sent_at.is_some_and(|t| t.elapsed() > Duration::from_millis(500)) {
+                    break;
+                }
+            }
+            if received != sent {
+                return Err(format!("sent {sent}, {received} echoes came back").into());
+            }
+            println!("{} n={n}: sent {sent}, received {received}", arm.name());
+            record_memory(arm, n, &dirs);
+            Ok((pass_rec.close(), rtt.close()))
+        })
+        .join()
+        .map_err(|_| "client thread panicked")?
+    })?;
+    let mut rows = vec![rtt.finish(clock, cfg, arm, n)?, pass.finish(clock, cfg, arm, n)?];
+    for driver in &mut drivers {
+        for agent in driver.stop()? {
+            rows.push(agent.finish(clock, cfg, arm, n)?);
+        }
+    }
     Ok(rows)
 }
 
