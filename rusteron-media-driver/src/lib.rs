@@ -82,6 +82,7 @@ impl Drop for EmbeddedMediaDriver {
     }
 }
 
+pub mod readiness;
 pub mod testing;
 
 impl AeronDriverContext {

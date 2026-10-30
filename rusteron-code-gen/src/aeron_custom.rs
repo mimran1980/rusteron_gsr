@@ -2732,3 +2732,91 @@ impl AeronCError {
         self.kind().is_unrecoverable()
     }
 }
+
+/// Counter type id of the readiness words a media driver keeps when rusteron's readiness
+/// interceptor is installed (`AeronDriverContext::set_readiness_interceptor` in
+/// rusteron-media-driver). The key is the word index as a little-endian `i32`.
+pub const AERON_READINESS_COUNTER_TYPE_ID: i32 = 0x7275_0001;
+
+/// Which UDP streams may have new data, so a client with many subscriptions polls only
+/// those instead of every one each pass.
+///
+/// The driver's receiver sets bit `stream_id % bits()` after it writes a data frame to an
+/// image. [`Self::take`] clears the bits it returns, and the caller then polls every
+/// subscription whose stream id maps to a returned bit until it is empty. Clearing before
+/// polling means a frame that lands during the poll sets its bit again, so no frame is
+/// missed; streams that share a bit only cost an extra poll.
+///
+/// Limits:
+/// - Each bit needs a single consumer: if two clients take the same bit, one of them can
+///   miss a frame. Give each client stream ids that map to its own bits.
+/// - A frame can reach an image before the client has added that image to its
+///   subscription; poll a subscription once whenever it gains an image.
+/// - IPC streams are not covered: the publisher writes their log directly.
+///
+/// Holds a reference to the client, so the counters it reads stay mapped.
+pub struct AeronReadiness {
+    words: Vec<*const std::sync::atomic::AtomicI64>,
+    _aeron: Aeron,
+}
+
+impl AeronReadiness {
+    /// The readiness words of `aeron`'s driver, or `None` if the driver does not keep them.
+    pub fn find(aeron: &Aeron) -> Option<Self> {
+        let reader = aeron.counters_reader();
+        let mut found = Vec::new();
+        reader.foreach_counter_fn(|_value, id, type_id, key, _label| {
+            if type_id == AERON_READINESS_COUNTER_TYPE_ID && key.len() >= 4 {
+                found.push((i32::from_le_bytes([key[0], key[1], key[2], key[3]]), id));
+            }
+        });
+        found.sort_unstable();
+        // the driver allocates words 0..n together
+        if found.is_empty() || found.iter().enumerate().any(|(i, (word, _))| *word != i as i32) {
+            return None;
+        }
+        let words = found
+            .iter()
+            // SAFETY: the id is an allocated counter, so its value is in the mapped CnC file
+            .map(|(_, id)| unsafe { bindings::aeron_counters_reader_addr(reader.get_inner(), *id) }.cast_const().cast())
+            .collect();
+        Some(Self {
+            words,
+            _aeron: aeron.clone(),
+        })
+    }
+
+    /// How many streams the words tell apart: 64 per word.
+    #[inline]
+    pub fn bits(&self) -> usize {
+        self.words.len() * 64
+    }
+
+    /// The bit for `stream_id`, as `(word, bit in word)`.
+    #[inline]
+    pub fn bit_of(&self, stream_id: i32) -> (usize, u32) {
+        let bit = stream_id.rem_euclid(self.bits() as i32) as usize;
+        (bit / 64, (bit % 64) as u32)
+    }
+
+    /// Clears and returns the set bits of `word` that are also in `mask`. Poll every stream
+    /// in a returned bit until it is empty. With nothing ready this is one plain load.
+    ///
+    /// # Panics
+    ///
+    /// `word` is not below `bits() / 64`.
+    #[inline]
+    pub fn take(&self, word: usize, mask: u64) -> u64 {
+        use std::sync::atomic::{Ordering, fence};
+        // SAFETY: points at a counter value in the CnC file, mapped while `_aeron` is open
+        let word = unsafe { &*self.words[word] };
+        let ready = word.load(Ordering::Relaxed) as u64 & mask;
+        if ready != 0 {
+            word.fetch_and(!ready as i64, Ordering::SeqCst);
+            // pairs with the driver's fence between writing a frame and reading its bit, so
+            // the polls that follow see every frame whose bit this cleared
+            fence(Ordering::SeqCst);
+        }
+        ready
+    }
+}

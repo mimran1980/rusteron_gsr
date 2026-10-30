@@ -5471,4 +5471,113 @@ mod tests {
             panic!("child killed by signal {} (expected SIGABRT=6 for teardown proof)", sig);
         }
     }
+
+    /// A consumer that polls only the subscriptions its readiness bits name receives every
+    /// message a publisher on another thread sends across many streams: clearing a bit
+    /// before polling loses no wake-up.
+    #[test]
+    #[serial]
+    fn readiness_polling_misses_no_message() -> Result<(), Box<dyn Error>> {
+        const STREAMS: i32 = 16;
+        const MESSAGES: u64 = 20_000;
+        let channel = |i: i32| format!("aeron:udp?endpoint=127.0.0.1:{}", 24_600 + i).into_c_string();
+        let (aeron, driver, error_handler) = setup_aeron_for_uaf_test_with(|ctx| ctx.set_readiness_interceptor(2));
+        let readiness = AeronReadiness::find(&aeron).ok_or("driver keeps no readiness words")?;
+        let subscriptions = (0..STREAMS)
+            .map(|i| {
+                aeron.add_subscription(
+                    &channel(i),
+                    4_100 + i,
+                    Handlers::NONE,
+                    Handlers::NONE,
+                    Duration::from_secs(5),
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut mask = [0u64; 2];
+        for i in 0..STREAMS {
+            let (word, bit) = readiness.bit_of(4_100 + i);
+            mask[word] |= 1 << bit;
+        }
+
+        let dir = driver.dir().to_string();
+        let start = Arc::new(AtomicBool::new(false));
+        let publisher = {
+            let start = Arc::clone(&start);
+            std::thread::spawn(move || -> Result<(), String> {
+                let ctx = AeronContext::new().map_err(|e| e.to_string())?;
+                ctx.set_dir(&dir.into_c_string()).map_err(|e| e.to_string())?;
+                let aeron = Aeron::new(&ctx).map_err(|e| e.to_string())?;
+                aeron.start().map_err(|e| e.to_string())?;
+                let publications = (0..STREAMS)
+                    .map(|i| aeron.add_exclusive_publication(&channel(i), 4_100 + i, Duration::from_secs(5)))
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|e| e.to_string())?;
+                while !start.load(Ordering::Acquire) {
+                    sleep(Duration::from_millis(1));
+                }
+                for seq in 0..MESSAGES {
+                    // a scattered stream order, so bits are set and cleared in every pattern
+                    let stream = (seq.wrapping_mul(7_919) % STREAMS as u64) as usize;
+                    while publications[stream].offer(&seq.to_le_bytes()).is_err() {
+                        std::hint::spin_loop();
+                    }
+                }
+                // keep the publications open until the consumer is done
+                while start.load(Ordering::Acquire) {
+                    sleep(Duration::from_millis(1));
+                }
+                Ok(())
+            })
+        };
+
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while !subscriptions.iter().all(|s| s.is_connected()) {
+            assert!(Instant::now() < deadline, "streams never connected");
+            sleep(Duration::from_millis(10));
+        }
+        start.store(true, Ordering::Release);
+        let mut received = 0u64;
+        let mut last = vec![None::<u64>; STREAMS as usize];
+        while received < MESSAGES {
+            assert!(
+                Instant::now() < deadline,
+                "received {received} of {MESSAGES}: a wake-up was lost"
+            );
+            for (word, &word_mask) in mask.iter().enumerate() {
+                let mut ready = readiness.take(word, word_mask);
+                while ready != 0 {
+                    let bit = ready.trailing_zeros();
+                    ready &= ready - 1;
+                    for (i, subscription) in subscriptions.iter().enumerate() {
+                        if readiness.bit_of(4_100 + i as i32) != (word, bit) {
+                            continue;
+                        }
+                        loop {
+                            let fragments = subscription.poll_fn(
+                                |m, _| {
+                                    let seq = u64::from_le_bytes(m.try_into().expect("8-byte message"));
+                                    assert!(last[i].is_none_or(|l| seq > l), "stream {i} out of order");
+                                    last[i] = Some(seq);
+                                    received += 1;
+                                },
+                                10,
+                            )?;
+                            if fragments < 10 {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        start.store(false, Ordering::Release);
+        publisher.join().map_err(|_| "publisher panicked")??;
+        assert_eq!(MESSAGES, received);
+        drop(subscriptions);
+        drop(readiness);
+        drop(aeron);
+        teardown_aeron_after_uaf_test(driver, error_handler);
+        Ok(())
+    }
 }

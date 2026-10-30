@@ -4,6 +4,11 @@ Main changes, newest first, grouped by published crate version. Release-only
 commits, build logs, and changes later reverted or superseded are omitted.
 Early history predating the available release tags is grouped separately.
 
+## Unreleased
+
+- Added a readiness interceptor for the media driver (`AeronDriverContext::set_readiness_interceptor`) and `AeronReadiness` for clients: the receiver marks which UDP streams have new data, so a client with many subscriptions polls only those.
+- Added the `many_streams` bench: client pass and driver duty-cycle cost as the number of streams grows.
+
 ## 0.2.16
 
 - Added `AeronArchiveRecordingDescriptorPoller::new` and `AeronArchiveRecordingSubscriptionDescriptorPoller::new`, so recordings can be listed without blocking. The archive's own pollers are borrowed and refuse `reset`.
