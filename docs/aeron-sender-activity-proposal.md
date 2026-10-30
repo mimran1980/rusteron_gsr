@@ -18,15 +18,15 @@ structure, not the absolute numbers):
 | Quiet network publications | Sender cycle p50 | p99 |
 |---|---|---|
 | 1 | 0.87 µs | 0.95 µs |
-| 64 | 3.9 µs | 4.1 µs |
+| 64 | 4.4 µs | 4.6 µs |
 | 128 | 9.6 µs | 12.2 µs |
-| 256 | 21.6 µs | 24.6 µs |
+| 256 | 21.3 µs | 24.5 µs |
 
 With 128 streams each way at 10,000 msg/s in total (256 publications in one driver), round-trip
-p50 rises from 11.7 µs (1 stream) to 49.8 µs. Keeping the 255 extra publications but sending
-on one stream gives 47.6 µs, so the driver accounts for nearly all of the rise. In that run the
-sender cycle is 23 µs p50, against 5 µs for the receiver. On two hosts with 128 streams the same
-costs predict about +13 µs per round trip, and the measured rise is +12 µs.
+p50 rises from 11.7 µs (1 stream) to 49.5 µs. Keeping the 254 extra publications but sending
+on one stream each way gives 48.0 µs, so the driver accounts for nearly all of the rise. In
+that run the sender cycle is 26 µs p50, against 5 µs for the receiver. On two hosts with 128
+streams the same costs predict about +13 µs per round trip, and the measured rise is +12 µs.
 
 ## Proposal
 
@@ -67,7 +67,27 @@ The sender's per-cycle cost then scales with the active publications, not all of
 - The conductor's cycle also grows with stream count (20 µs at 256 here), but it is not on the
   data path.
 
+## Client side today
+
+rusteron's readiness interceptor (`AeronDriverContext::set_readiness_interceptor`,
+`AeronReadiness`) already takes the client's poll pass off the path without an upstream change:
+at 128 streams the pass drops from 4.1 µs to 25 ns. Round-trip p50 goes from 49.5 to 47.6 µs,
+the same as the driver-only arm (48.0 µs), so what is left is the driver's share.
+
 ## Workaround today
 
 Multiplex logical streams over fewer Aeron streams, with a key in the message. 128 logical
 streams over 1 Aeron stream each way measured 11.8 µs round-trip p50, the same as 1 stream.
+
+| Loop | 128 Aeron streams | 128 keyed logical streams on k Aeron streams |
+|---|---|---|
+| Sender | walks 128 publications | walks k |
+| Receiver slow tick | visits 128 images | visits k |
+| Client pass | polls 128 subscriptions | polls k, then dispatches on the key |
+| Conductor | tracks 128 of each | tracks k |
+
+What it costs: a loss or back-pressure on one Aeron stream holds up every logical stream on it
+until the retransmit; every subscriber receives all logical streams on the Aeron streams it
+joins and filters by key; several producers on one stream share a concurrent publication or
+need one exclusive publication each. A few Aeron streams (say 4 to 8, by key hash) keep the
+loops short and limit how many logical streams one loss stalls.
