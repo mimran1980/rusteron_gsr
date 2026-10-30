@@ -52,6 +52,7 @@ walkdir           = { workspace = true }
 criterion             = { workspace = true }
 fd-lock               = { workspace = true }
 hdrhistogram          = { workspace = true }
+libc                  = "0.2"
 proptest              = { workspace = true }
 rusteron-code-gen     = { workspace = true }
 rusteron-media-driver = { path = "../rusteron-media-driver" }
@@ -130,4 +131,8 @@ default-target  = "aarch64-apple-darwin"
 
 [[bench]]
 name    = "hot_path"
+harness = false
+
+[[bench]]
+name    = "many_streams"
 harness = false
