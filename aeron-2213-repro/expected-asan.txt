@@ -1,0 +1,70 @@
+[repro] driver started in /tmp/aeron-2213-1 (slow map 2000 ms, block 2500 ms)
+[repro] subscriptions added
+[repro] publication added, waiting for image map
+[repro] image map started: /tmp/aeron-2213-1/images/5.logbuffer (pausing 2000 ms)
+[repro] closing target subscription during image map
+[repro] blocking receiver; image map should complete while it is blocked
+[repro] receiver blocked in interceptor for 2500 ms
+[repro] image map resuming
+[repro] receiver unblocked
+=================================================================
+==1==ERROR: AddressSanitizer: heap-use-after-free on address 0x515000010298 at pc 0x7ffffe73e0b7 bp 0x7ffff7bf3530 sp 0x7ffff7bf3520
+READ of size 8 at 0x515000010298 thread T2
+    #0 0x7ffffe73e0b6 in aeron_int64_to_ptr_hash_map_get /aeron/aeron-client/src/main/c/collections/aeron_int64_to_ptr_hash_map.h:181
+    #1 0x7ffffec7d654 in aeron_data_packet_dispatcher_remove_matching_state /aeron/aeron-driver/src/main/c/aeron_data_packet_dispatcher.h:139
+    #2 0x7ffffed38f7c in aeron_receive_channel_endpoint_on_remove_matching_state /aeron/aeron-driver/src/main/c/media/aeron_receive_channel_endpoint.h:295
+    #3 0x7ffffed42c44 in aeron_driver_receiver_on_remove_matching_state /aeron/aeron-driver/src/main/c/aeron_driver_receiver.c:607
+    #4 0x7ffffed3af87 in aeron_driver_receiver_on_rb_command_queue /aeron/aeron-driver/src/main/c/aeron_driver_receiver.c:119
+    #5 0x7ffffe75fae0 in aeron_spsc_rb_read /aeron/aeron-client/src/main/c/concurrent/aeron_spsc_rb.c:250
+    #6 0x7ffffed3b60d in aeron_driver_receiver_do_work /aeron/aeron-driver/src/main/c/aeron_driver_receiver.c:134
+    #7 0x7ffffe7918ea in agent_main /aeron/aeron-client/src/main/c/aeron_agent.c:408
+    #8 0x7fffff14da41 in asan_thread_start ../../../../src/libsanitizer/asan/asan_interceptors.cpp:234
+    #9 0x7ffffdd6bb83  (/lib/x86_64-linux-gnu/libc.so.6+0x9cb83) (BuildId: a4a7992a8e66555c8141ab2a08a8465ff6e0ea65)
+    #10 0x7ffffddf8cc3 in __clone (/lib/x86_64-linux-gnu/libc.so.6+0x129cc3) (BuildId: a4a7992a8e66555c8141ab2a08a8465ff6e0ea65)
+
+0x515000010298 is located 152 bytes inside of 472-byte region [0x515000010200,0x5150000103d8)
+freed by thread T4 here:
+    #0 0x7fffff1eb4d8 in free ../../../../src/libsanitizer/asan/asan_malloc_linux.cpp:52
+    #1 0x7ffffe792a0a in aeron_free /aeron/aeron-client/src/main/c/aeron_alloc.c:120
+    #2 0x7ffffec26a0f in aeron_receive_channel_endpoint_delete /aeron/aeron-driver/src/main/c/media/aeron_receive_channel_endpoint.c:207
+    #3 0x7ffffecac5bb in aeron_receive_channel_endpoint_entry_delete /aeron/aeron-driver/src/main/c/aeron_driver_conductor.c:1584
+    #4 0x7ffffecaf25f in aeron_driver_conductor_on_check_managed_resources /aeron/aeron-driver/src/main/c/aeron_driver_conductor.c:1703
+    #5 0x7ffffecc0f89 in aeron_driver_conductor_do_work /aeron/aeron-driver/src/main/c/aeron_driver_conductor.c:3380
+    #6 0x7ffffe78e95d in aeron_agent_do_work /aeron/aeron-client/src/main/c/aeron_agent.h:102
+    #7 0x7ffffec9527d in aeron_driver_main_do_work /aeron/aeron-driver/src/main/c/aeron_driver.c:1260
+    #8 0x555555558a0c in driver_main /aeron//repro.c:78
+    #9 0x7fffff14da41 in asan_thread_start ../../../../src/libsanitizer/asan/asan_interceptors.cpp:234
+    #10 0x7ffffdd6bb83  (/lib/x86_64-linux-gnu/libc.so.6+0x9cb83) (BuildId: a4a7992a8e66555c8141ab2a08a8465ff6e0ea65)
+
+previously allocated by thread T4 here:
+    #0 0x7fffff1ec9c7 in malloc ../../../../src/libsanitizer/asan/asan_malloc_linux.cpp:69
+    #1 0x7ffffe792452 in aeron_alloc /aeron/aeron-client/src/main/c/aeron_alloc.c:41
+    #2 0x7ffffec2437e in aeron_receive_channel_endpoint_create /aeron/aeron-driver/src/main/c/media/aeron_receive_channel_endpoint.c:68
+    #3 0x7ffffecb5851 in aeron_driver_conductor_get_or_add_receive_channel_endpoint /aeron/aeron-driver/src/main/c/aeron_driver_conductor.c:2132
+    #4 0x7ffffecddb52 in aeron_driver_conductor_execute_add_network_subscription /aeron/aeron-driver/src/main/c/aeron_driver_conductor.c:5039
+    #5 0x7ffffecc0141 in aeron_driver_conductor_process_client_commands /aeron/aeron-driver/src/main/c/aeron_driver_conductor.c:3304
+    #6 0x7ffffecc1141 in aeron_driver_conductor_do_work /aeron/aeron-driver/src/main/c/aeron_driver_conductor.c:3386
+    #7 0x7ffffe78e95d in aeron_agent_do_work /aeron/aeron-client/src/main/c/aeron_agent.h:102
+    #8 0x7ffffec9527d in aeron_driver_main_do_work /aeron/aeron-driver/src/main/c/aeron_driver.c:1260
+    #9 0x555555558a0c in driver_main /aeron//repro.c:78
+    #10 0x7fffff14da41 in asan_thread_start ../../../../src/libsanitizer/asan/asan_interceptors.cpp:234
+    #11 0x7ffffdd6bb83  (/lib/x86_64-linux-gnu/libc.so.6+0x9cb83) (BuildId: a4a7992a8e66555c8141ab2a08a8465ff6e0ea65)
+
+Thread T2 created by T0 here:
+    #0 0x7fffff1e41f9 in pthread_create ../../../../src/libsanitizer/asan/asan_interceptors.cpp:245
+    #1 0x7ffffe791bc5 in aeron_agent_start /aeron/aeron-client/src/main/c/aeron_agent.c:430
+    #2 0x7ffffec94c6f in aeron_driver_start /aeron/aeron-driver/src/main/c/aeron_driver.c:1218
+    #3 0x555555559948 in main /aeron//repro.c:316
+    #4 0x7ffffdcf91c9  (/lib/x86_64-linux-gnu/libc.so.6+0x2a1c9) (BuildId: a4a7992a8e66555c8141ab2a08a8465ff6e0ea65)
+    #5 0x7ffffdcf928a in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2a28a) (BuildId: a4a7992a8e66555c8141ab2a08a8465ff6e0ea65)
+    #6 0x555555558924 in _start (/repro+0x4924) (BuildId: e2802a5d681494ecea90a73186c33515d839f7b8)
+
+Thread T4 created by T0 here:
+    #0 0x7fffff1e41f9 in pthread_create ../../../../src/libsanitizer/asan/asan_interceptors.cpp:245
+    #1 0x55555555998a in main /aeron//repro.c:322
+    #2 0x7ffffdcf91c9  (/lib/x86_64-linux-gnu/libc.so.6+0x2a1c9) (BuildId: a4a7992a8e66555c8141ab2a08a8465ff6e0ea65)
+    #3 0x7ffffdcf928a in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2a28a) (BuildId: a4a7992a8e66555c8141ab2a08a8465ff6e0ea65)
+    #4 0x555555558924 in _start (/repro+0x4924) (BuildId: e2802a5d681494ecea90a73186c33515d839f7b8)
+
+SUMMARY: AddressSanitizer: heap-use-after-free /aeron/aeron-client/src/main/c/collections/aeron_int64_to_ptr_hash_map.h:181 in aeron_int64_to_ptr_hash_map_get
+Shadow bytes around the buggy address:
