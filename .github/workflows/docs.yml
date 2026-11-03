@@ -15,7 +15,8 @@ concurrency:
   cancel-in-progress: false
 jobs:
   build:
-    if: ${{ github.event.workflow_run.event == 'push' }}
+    # Only the upstream repo publishes Pages; a fork without Pages fails the deploy with a 404.
+    if: ${{ github.repository == 'gsrxyz/rusteron' && github.event.workflow_run.event == 'push' }}
     name: Build Documentation
     timeout-minutes: 15
     runs-on: ubuntu-latest
