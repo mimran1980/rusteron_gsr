@@ -10,3 +10,10 @@ rusteron-*/artifacts/
 .DS_Store
 /package-lock.json
 .env
+
+# Plans, handovers and backlogs are working notes, never committed.
+/docs/plans/
+/docs/backlog/
+/docs/specs/
+HANDOVER*.md
+TODO-PLAN*.md

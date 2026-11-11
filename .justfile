@@ -35,6 +35,8 @@ list:
 
 # Check formatting, linting, and compile
 check:
+  bash scripts/check-no-secrets.sh
+  bash scripts/tests/test-no-secrets.sh
   cargo check --workspace
   cargo fmt --all -- --check
   cargo clippy --all-targets --all-features --all -- --deny warnings
